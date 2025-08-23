@@ -1,10 +1,13 @@
 <script lang="ts">
   import { onMount } from 'svelte';
 
+  console.log('🔧 App.svelte script executing');
+
   onMount(() => {
     console.log('🏋️ App.svelte mounted');
     console.log('User Agent:', navigator.userAgent);
     console.log('Screen Resolution:', `${screen.width}x${screen.height}`);
+    console.log('DOM app div:', document.getElementById('app'));
   });
 
   function handleSettingsClick(): void {
@@ -17,6 +20,11 @@
 </script>
 
 <div class="min-h-screen bg-main-bg flex flex-col">
+  <!-- Debug test -->
+  <div style="color: red; font-size: 24px; padding: 20px;">
+    DEBUG: If you see this, Svelte is working!
+  </div>
+
   <!-- Header -->
   <header class="container-full py-8 border-b border-border-color">
     <h1 class="text-h1 text-center text-text-primary">

@@ -13,7 +13,7 @@ export default {
         'accent-red': '#FF0040',
         
         // Background Colors
-        'main-bg': '#000000',
+        'main-bg': '#1a1a1a',
         'card-bg': '#1A1A1A',
         'element-bg': '#2C2C2C',
         

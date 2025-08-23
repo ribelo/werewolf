@@ -1,5 +1,6 @@
 import './app.css'
 import App from './App.svelte'
+import { mount } from 'svelte'
 import { initLogging } from './lib/logging'
 
 // Initialize unified logging system first
@@ -31,7 +32,7 @@ if (!target) {
 }
 
 console.log('Initializing Svelte app...')
-const app = new App({
+const app = mount(App, {
   target
 })
 
