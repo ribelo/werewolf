@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { appView } from './lib/stores';
   import ContestWizard from './lib/components/ContestWizard.svelte';
+  import ContestView from './lib/components/ContestView.svelte';
 
   console.log('🔧 App.svelte script executing');
 
@@ -16,6 +17,10 @@
 
   function handleCompetitionWizardClick(): void {
     appView.set('contestWizard');
+  }
+
+  function handleContestViewClick(): void {
+    appView.set('contestView');
   }
 </script>
 
@@ -34,7 +39,7 @@
   <main class="flex-1">
     {#if $appView === 'mainMenu'}
       <div class="container-medium py-16">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
 
           <!-- Settings Tile -->
           <div
@@ -70,10 +75,29 @@
             </div>
           </div>
 
+          <!-- Contest View Tile -->
+          <div
+            class="card cursor-pointer no-select"
+            on:click={handleContestViewClick}
+            role="button"
+            tabindex="0"
+            on:keydown={(e) => e.key === 'Enter' && handleContestViewClick()}
+          >
+            <div class="text-center">
+              <div class="text-6xl mb-6">📊</div>
+              <h2 class="text-h2 text-text-primary mb-4">Contest View</h2>
+              <p class="text-body text-text-secondary">
+                View and manage active competition progress
+              </p>
+            </div>
+          </div>
+
         </div>
       </div>
     {:else if $appView === 'contestWizard'}
       <ContestWizard />
+    {:else if $appView === 'contestView'}
+      <ContestView />
     {/if}
   </main>
 
