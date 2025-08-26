@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { invoke } from '@tauri-apps/api/tauri';
+  import { invoke } from '@tauri-apps/api/core';
   import { appView } from '../stores';
 
   // --- Types ---
@@ -25,7 +25,7 @@
   let currentStep = 1;
   let newContest: NewContest = {
     name: '',
-    date: new Date().toISOString().split('T')[0], // Default to today
+    date: new Date().toISOString().split('T')[0] || '', // Default to today
     location: '',
     discipline: Discipline.Powerlifting,
     federation_rules: '',
@@ -73,7 +73,7 @@
       // Optionally reset state here if wizard is re-used
     } catch (err) {
       console.error('Failed to create contest:', err);
-      errorMessage = `Error: ${err.toString()}`;
+      errorMessage = `Error: ${err}`;
       alert(`Failed to create competition: ${err}`);
     } finally {
       isLoading = false;

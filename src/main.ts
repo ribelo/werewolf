@@ -7,7 +7,7 @@ import { initLogging } from './lib/logging'
 initLogging()
 
 console.log('🐺 Werewolf Frontend Starting')
-console.log('Environment:', import.meta.env.MODE)
+console.log('Environment:', (import.meta as any).env?.MODE || 'unknown')
 console.log('Timestamp:', new Date().toISOString())
 
 // Test unified logging immediately after initialization
