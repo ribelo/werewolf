@@ -30,6 +30,36 @@ pub struct CreateAttemptRequest {
     pub notes: Option<String>,
 }
 
+/// Upsert an attempt's weight.
+/// Creates a new attempt if one doesn't exist for the given registration, lift type, and attempt number.
+/// Otherwise, it updates the weight of the existing attempt.
+pub async fn upsert_attempt_weight(
+    pool: &Pool<Sqlite>,
+    registration_id: &str,
+    lift_type: &str,
+    attempt_number: i32,
+    weight: f64,
+) -> Result<(), sqlx::Error> {
+    let id = uuid::Uuid::new_v4().to_string();
+    sqlx::query(
+        r#"
+        INSERT INTO attempts (id, registration_id, lift_type, attempt_number, weight, status)
+        VALUES (?1, ?2, ?3, ?4, ?5, 'Pending')
+        ON CONFLICT(registration_id, lift_type, attempt_number) DO UPDATE SET
+        weight = excluded.weight
+        "#,
+    )
+    .bind(&id)
+    .bind(registration_id)
+    .bind(lift_type)
+    .bind(attempt_number)
+    .bind(weight)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
 /// Record a new attempt
 pub async fn record_attempt(
     pool: &Pool<Sqlite>,

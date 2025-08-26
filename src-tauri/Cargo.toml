@@ -64,6 +64,7 @@ tokio = { version = "1.42", features = ["full"] }
 
 # Excel export
 rust_xlsxwriter = "0.90"
+specta = { version = "1.0", features = ["typescript"] }
 
 [dev-dependencies]
 # Testing

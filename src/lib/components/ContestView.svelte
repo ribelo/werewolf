@@ -3,6 +3,7 @@
   import { invoke } from '@tauri-apps/api/core';
   import { appView } from '../stores';
 
+  // Backend Models
   interface Contest {
     id: string;
     name: string;
@@ -11,68 +12,68 @@
     discipline: string;
   }
 
-  interface Attempt {
-    attempt: number;
-    weight: number;
-    result: 'pending' | 'good' | 'bad';
-  }
-
-  interface Lifter {
+  interface Competitor {
     id: string;
-    name: string;
-    squat: Attempt[];
-    bench: Attempt[];
-    deadlift: Attempt[];
+    firstName: string;
+    lastName: string;
+    birthDate: string;
+    gender: string;
   }
 
-  // State
+  interface Registration {
+    id: string;
+    contestId: string;
+    competitorId: string;
+    bodyweight: number;
+  }
+
+  enum LiftType {
+    Squat = 'squat',
+    Bench = 'bench',
+    Deadlift = 'deadlift',
+  }
+
+  enum AttemptStatus {
+    Pending = 'pending',
+    Good = 'good',
+    Bad = 'bad',
+  }
+
+  interface Attempt {
+    id: string;
+    registrationId: string;
+    liftType: LiftType;
+    attemptNumber: number;
+    weight: number;
+    status: AttemptStatus;
+  }
+
+  // Frontend-specific composite model
+  interface Lifter {
+    registrationId: string;
+    competitor: Competitor;
+    bodyweight: number;
+    attempts: {
+      [key in LiftType]: Attempt[];
+    };
+  }
+
+  // Component State
   let contests: Contest[] = [];
   let selectedContestId: string = '';
   let lifters: Lifter[] = [];
   let loading = false;
   let error = '';
+  let showRegistrationForm = false;
 
-  // Mock lifters for now since backend doesn't have registrations implemented yet
-  const mockLifters: Lifter[] = [
-    {
-      id: '1',
-      name: 'Andrzej',
-      squat: [
-        { attempt: 1, weight: 200, result: 'good' },
-        { attempt: 2, weight: 210, result: 'good' },
-        { attempt: 3, weight: 220, result: 'bad' },
-      ],
-      bench: [
-        { attempt: 1, weight: 140, result: 'good' },
-        { attempt: 2, weight: 150, result: 'bad' },
-        { attempt: 3, weight: 150, result: 'bad' },
-      ],
-      deadlift: [
-        { attempt: 1, weight: 250, result: 'good' },
-        { attempt: 2, weight: 260, result: 'good' },
-        { attempt: 3, weight: 270, result: 'good' },
-      ]
-    },
-    {
-      id: '2',
-      name: 'Zosia',
-      squat: [
-        { attempt: 1, weight: 100, result: 'good' },
-        { attempt: 2, weight: 110, result: 'good' },
-        { attempt: 3, weight: 120, result: 'good' },
-      ],
-      bench: [
-        { attempt: 1, weight: 70, result: 'good' },
-        { attempt: 2, weight: 75, result: 'bad' },
-        { attempt: 3, weight: 75, result: 'good' },
-      ],
-      deadlift: [
-        { attempt: 1, weight: 120, result: 'good' },
-        { attempt: 2, weight: 130, result: 'good' },
-        { attempt: 3, weight: 140, result: 'good' },
-      ]
-    }
-  ];
+  // New Competitor Form State
+  let newCompetitor = {
+    firstName: '',
+    lastName: '',
+    birthDate: '',
+    gender: 'Male',
+    bodyweight: 0,
+  };
 
   onMount(async () => {
     await loadContests();
@@ -97,15 +98,35 @@
   }
 
   async function loadLifters(): Promise<void> {
+    if (!selectedContestId) return;
+
     try {
       loading = true;
       error = '';
       
-      // TODO: Replace with real backend call when registrations are implemented
-      // lifters = await invoke<Lifter[]>('registration_list', { contestId: selectedContestId });
-      
-      // For now, use mock data
-      lifters = mockLifters;
+      const registrations = await invoke<Registration[]>('registration_list', { contestId: selectedContestId });
+      const allAttempts = await invoke<Attempt[]>('attempt_list_for_contest', { contestId: selectedContestId });
+
+      const lifterPromises = registrations.map(async (reg) => {
+        const competitor = await invoke<Competitor>('competitor_get', { competitorId: reg.competitorId });
+
+        const lifterAttempts = allAttempts.filter(a => a.registrationId === reg.id);
+
+        const attemptsByType = {
+          [LiftType.Squat]: lifterAttempts.filter(a => a.liftType === LiftType.Squat).sort((a,b) => a.attemptNumber - b.attemptNumber),
+          [LiftType.Bench]: lifterAttempts.filter(a => a.liftType === LiftType.Bench).sort((a,b) => a.attemptNumber - b.attemptNumber),
+          [LiftType.Deadlift]: lifterAttempts.filter(a => a.liftType === LiftType.Deadlift).sort((a,b) => a.attemptNumber - b.attemptNumber),
+        };
+
+        return {
+          registrationId: reg.id,
+          competitor,
+          bodyweight: reg.bodyweight,
+          attempts: attemptsByType,
+        };
+      });
+
+      lifters = await Promise.all(lifterPromises);
       
     } catch (err) {
       error = `Failed to load lifters: ${err}`;
@@ -115,31 +136,68 @@
     }
   }
 
-  async function updateAttempt(lifterId: string, liftType: 'squat' | 'bench' | 'deadlift', attemptIndex: number, weight: number): Promise<void> {
+  async function handleRegisterCompetitor(): Promise<void> {
     try {
-      // TODO: Replace with real backend call when attempts are implemented
-      // await invoke('attempt_record', { 
-      //   registrationId: lifterId, 
-      //   liftType, 
-      //   attemptNumber: attemptIndex + 1, 
-      //   weight 
-      // });
+      loading = true;
+      error = '';
+
+      const createdCompetitor = await invoke<Competitor>('competitor_create', {
+        competitor: {
+          firstName: newCompetitor.firstName,
+          lastName: newCompetitor.lastName,
+          birthDate: newCompetitor.birthDate,
+          gender: newCompetitor.gender,
+        }
+      });
+
+      await invoke('registration_create', {
+        registration: {
+          contestId: selectedContestId,
+          competitorId: createdCompetitor.id,
+          bodyweight: newCompetitor.bodyweight,
+        }
+      });
       
-      // For now, update local state
-      const lifter = lifters.find(l => l.id === lifterId);
-      if (lifter && lifter[liftType][attemptIndex]) {
-        lifter[liftType][attemptIndex].weight = weight;
-        lifters = [...lifters]; // Trigger reactivity
-      }
+      showRegistrationForm = false;
+      newCompetitor = { firstName: '', lastName: '', birthDate: '', gender: 'Male', bodyweight: 0 };
+      await loadLifters();
+
+    } catch (err) {
+      error = `Failed to register competitor: ${err}`;
+      console.error('Error registering competitor:', err);
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function updateAttempt(registrationId: string, liftType: LiftType, attemptNumber: number, weight: number): Promise<void> {
+    try {
+      await invoke('attempt_upsert_weight', {
+        attempt: {
+          registrationId,
+          liftType,
+          attemptNumber,
+          weight
+        }
+      });
+
+      // For now, just reload all lifters to see the change.
+      // A more optimized approach would be to update the local state directly.
+      await loadLifters();
+
     } catch (err) {
       error = `Failed to update attempt: ${err}`;
       console.error('Error updating attempt:', err);
     }
   }
 
+  function getAttempt(lifter: Lifter, liftType: LiftType, attemptNumber: number): Attempt | undefined {
+    return lifter.attempts[liftType].find(a => a.attemptNumber === attemptNumber);
+  }
+
   function getBestLift(attempts: Attempt[]): number {
     return attempts.reduce((max, attempt) => {
-      if (attempt.result === 'good' && attempt.weight > max) {
+      if (attempt.status === AttemptStatus.Good && attempt.weight > max) {
         return attempt.weight;
       }
       return max;
@@ -147,11 +205,11 @@
   }
 
   function getSubtotal(lifter: Lifter): number {
-    return getBestLift(lifter.squat) + getBestLift(lifter.bench);
+    return getBestLift(lifter.attempts.squat) + getBestLift(lifter.attempts.bench);
   }
 
   function getTotal(lifter: Lifter): number {
-    return getBestLift(lifter.squat) + getBestLift(lifter.bench) + getBestLift(lifter.deadlift);
+    return getBestLift(lifter.attempts.squat) + getBestLift(lifter.attempts.bench) + getBestLift(lifter.attempts.deadlift);
   }
 
   function goBack(): void {
@@ -185,19 +243,61 @@
   <main class="container-full py-8">
     <!-- Contest Selection -->
     {#if contests.length > 0}
-      <div class="mb-8">
-        <label for="contest-select" class="input-label">Select Contest</label>
-        <select 
-          id="contest-select"
-          bind:value={selectedContestId}
-          class="input-field max-w-md"
-        >
-          {#each contests as contest}
-            <option value={contest.id}>
-              {contest.name} - {contest.date} ({contest.location})
-            </option>
-          {/each}
-        </select>
+      <div class="mb-8 flex items-center justify-between">
+        <div>
+          <label for="contest-select" class="input-label">Select Contest</label>
+          <select
+            id="contest-select"
+            bind:value={selectedContestId}
+            class="input-field max-w-md"
+          >
+            {#each contests as contest}
+              <option value={contest.id}>
+                {contest.name} - {contest.date} ({contest.location})
+              </option>
+            {/each}
+          </select>
+        </div>
+        <button class="btn-primary" on:click={() => showRegistrationForm = !showRegistrationForm}>
+          {#if showRegistrationForm}Cancel{:else}Register Competitor{/if}
+        </button>
+      </div>
+    {/if}
+
+    <!-- Registration Form -->
+    {#if showRegistrationForm}
+      <div class="p-6 bg-card-bg border border-border-color mb-8">
+        <h3 class="text-h3 text-text-primary mb-4">Register New Competitor</h3>
+        <form on:submit|preventDefault={handleRegisterCompetitor} class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="col-span-1">
+            <label for="firstName" class="input-label">First Name</label>
+            <input type="text" id="firstName" bind:value={newCompetitor.firstName} class="input-field" required>
+          </div>
+          <div class="col-span-1">
+            <label for="lastName" class="input-label">Last Name</label>
+            <input type="text" id="lastName" bind:value={newCompetitor.lastName} class="input-field" required>
+          </div>
+          <div class="col-span-1">
+            <label for="birthDate" class="input-label">Birth Date</label>
+            <input type="date" id="birthDate" bind:value={newCompetitor.birthDate} class="input-field" required>
+          </div>
+          <div class="col-span-1">
+            <label for="gender" class="input-label">Gender</label>
+            <select id="gender" bind:value={newCompetitor.gender} class="input-field">
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+            </select>
+          </div>
+          <div class="col-span-1">
+            <label for="bodyweight" class="input-label">Bodyweight (kg)</label>
+            <input type="number" step="0.1" id="bodyweight" bind:value={newCompetitor.bodyweight} class="input-field" required>
+          </div>
+          <div class="col-span-3 flex justify-end">
+            <button type="submit" class="btn-primary" disabled={loading}>
+              {loading ? 'Registering...' : 'Register'}
+            </button>
+          </div>
+        </form>
       </div>
     {/if}
 
@@ -209,7 +309,7 @@
     {/if}
 
     <!-- Loading State -->
-    {#if loading}
+    {#if loading && lifters.length === 0}
       <div class="text-center py-8">
         <div class="text-text-secondary">Loading contest data...</div>
       </div>
@@ -225,11 +325,10 @@
           Create Contest
         </button>
       </div>
-    {:else if lifters.length === 0 && selectedContestId}
+    {:else if lifters.length === 0 && selectedContestId && !loading}
       <!-- No Lifters -->
       <div class="text-center py-8">
-        <div class="text-text-secondary mb-4">No lifters registered for this contest</div>
-        <p class="text-text-secondary">Note: Backend registration system is not implemented yet, showing mock data.</p>
+        <div class="text-text-secondary mb-4">No lifters registered for this contest.</div>
       </div>
     {:else if lifters.length > 0}
       <!-- Lifters Table -->
@@ -245,87 +344,55 @@
               <th rowspan="2" class="py-3 px-4 border border-border-color text-center">Total</th>
             </tr>
             <tr>
-              <!-- Squat -->
-              <th class="py-2 px-4 border border-border-color text-center text-sm">1st</th>
-              <th class="py-2 px-4 border border-border-color text-center text-sm">2nd</th>
-              <th class="py-2 px-4 border border-border-color text-center text-sm">3rd</th>
-              <!-- Bench -->
-              <th class="py-2 px-4 border border-border-color text-center text-sm">1st</th>
-              <th class="py-2 px-4 border border-border-color text-center text-sm">2nd</th>
-              <th class="py-2 px-4 border border-border-color text-center text-sm">3rd</th>
-              <!-- Deadlift -->
-              <th class="py-2 px-4 border border-border-color text-center text-sm">1st</th>
-              <th class="py-2 px-4 border border-border-color text-center text-sm">2nd</th>
-              <th class="py-2 px-4 border border-border-color text-center text-sm">3rd</th>
+              <!-- Attempt headers -->
+              {#each [1, 2, 3] as i}
+                <th class="py-2 px-4 border border-border-color text-center text-sm">{i}st</th>
+              {/each}
+              {#each [1, 2, 3] as i}
+                <th class="py-2 px-4 border border-border-color text-center text-sm">{i}nd</th>
+              {/each}
+               {#each [1, 2, 3] as i}
+                <th class="py-2 px-4 border border-border-color text-center text-sm">{i}rd</th>
+              {/each}
             </tr>
           </thead>
           <tbody>
-            {#each lifters as lifter, lifterIndex}
+            {#each lifters as lifter (lifter.registrationId)}
               <tr class="hover:bg-element-bg transition-colors">
                 <td class="py-3 px-4 border border-border-color text-text-primary font-semibold">
-                  {lifter.name}
+                  {lifter.competitor.firstName} {lifter.competitor.lastName}
                 </td>
 
-                <!-- Squat Attempts -->
-                {#each lifter.squat as attempt, attemptIndex}
-                  <td class="py-3 px-4 border border-border-color text-center">
-                    <div class="flex items-center justify-center">
-                      <input 
-                        type="number" 
-                        bind:value={attempt.weight}
-                        on:change={(e) => updateAttempt(lifter.id, 'squat', attemptIndex, parseFloat(e.currentTarget.value) || 0)}
-                        class="w-20 input-field text-center py-1 px-2"
-                        min="0"
-                        step="0.5"
-                      />
-                      <span class="ml-2 text-sm {attempt.result === 'good' ? 'text-green-400' : attempt.result === 'bad' ? 'text-red-400' : 'text-gray-400'}">
-                        {attempt.result === 'good' ? '✓' : attempt.result === 'bad' ? '✗' : '◦'}
-                      </span>
-                    </div>
-                  </td>
-                {/each}
+                <!-- Attempts -->
+                {#each [LiftType.Squat, LiftType.Bench, LiftType.Deadlift] as liftType}
+                  {#each [1, 2, 3] as attemptNumber}
+                    {@const attempt = getAttempt(lifter, liftType, attemptNumber)}
+                    <td class="py-3 px-4 border border-border-color text-center">
+                      <div class="flex items-center justify-center">
+                        <input
+                          type="number"
+                          value={attempt?.weight || ''}
+                          on:change={(e) => updateAttempt(lifter.registrationId, liftType, attemptNumber, parseFloat(e.currentTarget.value) || 0)}
+                          class="w-20 input-field text-center py-1 px-2"
+                          min="0"
+                          step="0.5"
+                          placeholder="-"
+                        />
+                        {#if attempt}
+                          <span class="ml-2 text-sm {attempt.status === 'good' ? 'text-green-400' : attempt.status === 'bad' ? 'text-red-400' : 'text-gray-400'}">
+                            {attempt.status === 'good' ? '✓' : attempt.status === 'bad' ? '✗' : '◦'}
+                          </span>
+                        {/if}
+                      </div>
+                    </td>
+                  {/each}
 
-                <!-- Bench Attempts -->
-                {#each lifter.bench as attempt, attemptIndex}
-                  <td class="py-3 px-4 border border-border-color text-center">
-                    <div class="flex items-center justify-center">
-                      <input 
-                        type="number" 
-                        bind:value={attempt.weight}
-                        on:change={(e) => updateAttempt(lifter.id, 'bench', attemptIndex, parseFloat(e.currentTarget.value) || 0)}
-                        class="w-20 input-field text-center py-1 px-2"
-                        min="0"
-                        step="0.5"
-                      />
-                      <span class="ml-2 text-sm {attempt.result === 'good' ? 'text-green-400' : attempt.result === 'bad' ? 'text-red-400' : 'text-gray-400'}">
-                        {attempt.result === 'good' ? '✓' : attempt.result === 'bad' ? '✗' : '◦'}
-                      </span>
-                    </div>
-                  </td>
-                {/each}
-
-                <!-- Subtotal -->
-                <td class="py-3 px-4 border border-border-color text-center text-text-primary font-bold">
-                  {getSubtotal(lifter)} kg
-                </td>
-
-                <!-- Deadlift Attempts -->
-                {#each lifter.deadlift as attempt, attemptIndex}
-                  <td class="py-3 px-4 border border-border-color text-center">
-                    <div class="flex items-center justify-center">
-                      <input 
-                        type="number" 
-                        bind:value={attempt.weight}
-                        on:change={(e) => updateAttempt(lifter.id, 'deadlift', attemptIndex, parseFloat(e.currentTarget.value) || 0)}
-                        class="w-20 input-field text-center py-1 px-2"
-                        min="0"
-                        step="0.5"
-                      />
-                      <span class="ml-2 text-sm {attempt.result === 'good' ? 'text-green-400' : attempt.result === 'bad' ? 'text-red-400' : 'text-gray-400'}">
-                        {attempt.result === 'good' ? '✓' : attempt.result === 'bad' ? '✗' : '◦'}
-                      </span>
-                    </div>
-                  </td>
+                  <!-- Subtotal after Bench -->
+                  {#if liftType === LiftType.Bench}
+                    <td class="py-3 px-4 border border-border-color text-center text-text-primary font-bold">
+                      {getSubtotal(lifter)} kg
+                    </td>
+                  {/if}
                 {/each}
 
                 <!-- Total -->
@@ -336,15 +403,6 @@
             {/each}
           </tbody>
         </table>
-      </div>
-
-      <!-- TODO Notice -->
-      <div class="mt-8 p-4 bg-element-bg border border-border-color">
-        <h3 class="text-text-primary font-semibold mb-2">Development Note</h3>
-        <p class="text-text-secondary text-sm">
-          This table currently uses mock data. Backend systems for competitors, registrations, and attempts are not yet implemented. 
-          Input changes will update local state but won't persist to the database.
-        </p>
       </div>
     {/if}
   </main>

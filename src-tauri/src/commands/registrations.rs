@@ -1,30 +1,74 @@
+use crate::database::queries;
 use crate::error::AppError;
+use crate::models::registration::{Registration, RegistrationCreate};
 use crate::AppState;
 use tauri::State;
 
-// TODO: Define proper Registration types and requests
-// For now, placeholder implementations
-
 #[tauri::command]
 pub async fn registration_create(
-    _state: State<'_, AppState>,
-    _contest_id: String,
-    _competitor_id: String,
-    _bodyweight: f64,
-) -> Result<String, AppError> {
-    // TODO: Implement registration creation
-    tracing::info!("registration_create called");
-    Err(AppError::Internal("Not yet implemented".to_string()))
+    state: State<'_, AppState>,
+    registration: RegistrationCreate,
+) -> Result<Registration, AppError> {
+    tracing::info!("registration_create called with: {:?}", registration);
+
+    let request = queries::registrations::CreateRegistrationRequest {
+        contest_id: registration.contest_id,
+        competitor_id: registration.competitor_id,
+        bodyweight: registration.bodyweight,
+        age_category_id: "default-age-category".to_string(),
+        weight_class_id: "default-weight-class".to_string(),
+        equipment_m: false,
+        equipment_sm: false,
+        equipment_t: false,
+        lot_number: None,
+        personal_record_at_entry: None,
+        reshel_coefficient: None,
+        mccullough_coefficient: None,
+        rack_height_squat: None,
+        rack_height_bench: None,
+    };
+
+    let db_pool = state.db.lock().await;
+    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::database("Database not initialized"))?;
+    let created =
+        queries::registrations::create_registration(db_pool, request)
+            .await?;
+
+    Ok(Registration {
+        id: created.id,
+        contest_id: created.contest_id,
+        competitor_id: created.competitor_id,
+        bodyweight: created.bodyweight,
+    })
 }
 
 #[tauri::command]
 pub async fn registration_list(
-    _state: State<'_, AppState>,
-    _contest_id: String,
-) -> Result<Vec<String>, AppError> {
-    // TODO: Implement registration listing for contest
-    tracing::info!("registration_list called");
-    Err(AppError::Internal("Not yet implemented".to_string()))
+    state: State<'_, AppState>,
+    contest_id: String,
+) -> Result<Vec<Registration>, AppError> {
+    tracing::info!("registration_list called for contest: {}", contest_id);
+
+    let db_pool = state.db.lock().await;
+    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::database("Database not initialized"))?;
+    let db_registrations =
+        queries::registrations::get_registrations_by_contest(
+            db_pool,
+            &contest_id,
+        )
+        .await?;
+
+    let registrations = db_registrations
+        .into_iter()
+        .map(|r| Registration {
+            id: r.id,
+            contest_id: r.contest_id,
+            competitor_id: r.competitor_id,
+            bodyweight: r.bodyweight,
+        })
+        .collect();
+
+    Ok(registrations)
 }
 
 #[tauri::command]

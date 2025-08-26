@@ -71,8 +71,9 @@ pub fn run() {
             commands::registration_delete,
             
             // Attempt management
-            commands::attempt_record,
+            commands::attempts::attempt_upsert_weight,
             commands::attempt_list,
+            commands::attempts::attempt_list_for_contest,
             commands::attempt_update_result,
             commands::attempt_get_current,
             commands::attempt_set_current,

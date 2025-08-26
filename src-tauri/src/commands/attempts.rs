@@ -1,43 +1,158 @@
+use crate::database::queries;
 use crate::error::AppError;
+use crate::models::attempt::{
+    Attempt, AttemptStatus, AttemptUpdateResult, AttemptUpsert, LiftType,
+};
 use crate::AppState;
+use std::str::FromStr;
 use tauri::State;
 
-// TODO: Define proper Attempt types and requests
-// For now, placeholder implementations
+impl ToString for LiftType {
+    fn to_string(&self) -> String {
+        match self {
+            LiftType::Squat => "Squat".to_string(),
+            LiftType::Bench => "Bench".to_string(),
+            LiftType::Deadlift => "Deadlift".to_string(),
+        }
+    }
+}
+
+impl FromStr for LiftType {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Squat" => Ok(LiftType::Squat),
+            "Bench" => Ok(LiftType::Bench),
+            "Deadlift" => Ok(LiftType::Deadlift),
+            _ => Err(()),
+        }
+    }
+}
+
+impl ToString for AttemptStatus {
+    fn to_string(&self) -> String {
+        match self {
+            AttemptStatus::Pending => "Pending".to_string(),
+            AttemptStatus::Good => "Good".to_string(),
+            AttemptStatus::Bad => "Bad".to_string(),
+        }
+    }
+}
+
+impl FromStr for AttemptStatus {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "Pending" => Ok(AttemptStatus::Pending),
+            "Good" => Ok(AttemptStatus::Good),
+            "Bad" => Ok(AttemptStatus::Bad),
+            _ => Err(()),
+        }
+    }
+}
 
 #[tauri::command]
-pub async fn attempt_record(
-    _state: State<'_, AppState>,
-    _registration_id: String,
-    _lift_type: String,
-    _attempt_number: i32,
-    _weight: f64,
-) -> Result<String, AppError> {
-    // TODO: Implement attempt recording
-    tracing::info!("attempt_record called");
-    Err(AppError::Internal("Not yet implemented".to_string()))
+pub async fn attempt_upsert_weight(
+    state: State<'_, AppState>,
+    attempt: AttemptUpsert,
+) -> Result<(), AppError> {
+    tracing::info!("attempt_upsert_weight called with: {:?}", attempt);
+
+    let db_pool = state.db.lock().await;
+    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::database("Database not initialized"))?;
+    queries::attempts::upsert_attempt_weight(
+        db_pool,
+        &attempt.registration_id,
+        &attempt.lift_type.to_string(),
+        attempt.attempt_number,
+        attempt.weight,
+    )
+    .await?;
+
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn attempt_list(
-    _state: State<'_, AppState>,
-    _registration_id: String,
-) -> Result<Vec<String>, AppError> {
-    // TODO: Implement attempt listing for registration
-    tracing::info!("attempt_list called");
-    Err(AppError::Internal("Not yet implemented".to_string()))
+    state: State<'_, AppState>,
+    registration_id: String,
+) -> Result<Vec<Attempt>, AppError> {
+    tracing::info!("attempt_list called for registration: {}", registration_id);
+
+    let db_pool = state.db.lock().await;
+    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::database("Database not initialized"))?;
+    let db_attempts =
+        queries::attempts::get_attempts_by_registration(
+            db_pool,
+            &registration_id,
+        )
+        .await?;
+
+    let attempts = db_attempts
+        .into_iter()
+        .map(|a| Attempt {
+            id: a.id,
+            registration_id: a.registration_id,
+            lift_type: LiftType::from_str(&a.lift_type).unwrap(),
+            attempt_number: a.attempt_number,
+            weight: a.weight,
+            status: AttemptStatus::from_str(&a.status).unwrap(),
+        })
+        .collect();
+
+    Ok(attempts)
 }
 
 #[tauri::command]
 pub async fn attempt_update_result(
-    _state: State<'_, AppState>,
-    _attempt_id: String,
-    _status: String,
-    _judge_decisions: Vec<bool>,
-) -> Result<String, AppError> {
-    // TODO: Implement attempt result update
-    tracing::info!("attempt_update_result called");
-    Err(AppError::Internal("Not yet implemented".to_string()))
+    state: State<'_, AppState>,
+    update: AttemptUpdateResult,
+) -> Result<(), AppError> {
+    tracing::info!("attempt_update_result called with: {:?}", update);
+
+    let db_pool = state.db.lock().await;
+    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::database("Database not initialized"))?;
+    queries::attempts::update_attempt_result(
+        db_pool,
+        &update.attempt_id,
+        &update.status.to_string(),
+        None,
+        None,
+        None,
+    )
+    .await?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn attempt_list_for_contest(
+    state: State<'_, AppState>,
+    contest_id: String,
+) -> Result<Vec<Attempt>, AppError> {
+    tracing::info!("attempt_list_for_contest called for contest: {}", contest_id);
+
+    let db_pool = state.db.lock().await;
+    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::database("Database not initialized"))?;
+    let db_attempts =
+        queries::attempts::get_contest_attempts(db_pool, &contest_id)
+            .await?;
+
+    let attempts = db_attempts
+        .into_iter()
+        .map(|a| Attempt {
+            id: a.id,
+            registration_id: a.registration_id,
+            lift_type: LiftType::from_str(&a.lift_type).unwrap(),
+            attempt_number: a.attempt_number,
+            weight: a.weight,
+            status: AttemptStatus::from_str(&a.status).unwrap(),
+        })
+        .collect();
+
+    Ok(attempts)
 }
 
 #[tauri::command]
