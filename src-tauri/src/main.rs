@@ -3,6 +3,7 @@
 
 use clap::{Parser, Subcommand};
 use werewolf_lib::database::{create_pool, run_migrations, reset_database, get_migration_info, get_database_path};
+use werewolf_lib::models::contest::*;
 
 #[derive(Parser)]
 #[command(name = "werewolf")]

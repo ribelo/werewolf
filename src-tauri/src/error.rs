@@ -4,6 +4,9 @@ use thiserror::Error;
 pub enum AppError {
     #[error("Database error: {0}")]
     Database(#[from] sqlx::Error),
+
+    #[error("Database not initialized")]
+    DatabaseNotInitialized,
     
     #[error("Tauri error: {0}")]
     Tauri(#[from] tauri::Error),

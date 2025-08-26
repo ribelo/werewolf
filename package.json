@@ -9,10 +9,10 @@
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
-    "tauri": "RUSTC_WRAPPER='' RUSTFLAGS='-C link-arg=--ld-path=wild -C target-cpu=native' tauri",
+    "tauri": "RUSTC_WRAPPER='' RUSTFLAGS='-C target-cpu=native' tauri",
     "tauri:dev": "./dev.sh",
-    "tauri:dev:direct": "RUSTC_WRAPPER='' RUSTFLAGS='-C link-arg=--ld-path=wild -C target-cpu=native' tauri dev",
-    "tauri:build": "RUSTC_WRAPPER='' RUSTFLAGS='-C link-arg=--ld-path=wild -C target-cpu=native' tauri build",
+    "tauri:dev:direct": "RUSTC_WRAPPER='' RUSTFLAGS='-C target-cpu=native' tauri dev",
+    "tauri:build": "RUSTC_WRAPPER='' RUSTFLAGS='-C target-cpu=native' tauri build",
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "dependencies": {

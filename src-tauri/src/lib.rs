@@ -6,6 +6,7 @@ pub mod database;
 pub mod logging;
 pub mod error;
 pub mod commands;
+pub mod models;
 
 use database::DatabasePool;
 use logging::write_log;

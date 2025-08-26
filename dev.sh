@@ -9,7 +9,7 @@ echo "   Overriding global nightly flags for stable Rust"
 
 # Disable sccache wrapper and nightly flags
 export RUSTC_WRAPPER=""
-export RUSTFLAGS="-C link-arg=--ld-path=wild -C target-cpu=native"
+export RUSTFLAGS="-C target-cpu=native"
 
 # More robust flag encoding for complex scenarios
 export CARGO_ENCODED_RUSTFLAGS=""
