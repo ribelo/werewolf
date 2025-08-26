@@ -93,16 +93,16 @@
       </p>
       <div class="space-y-6">
         <div>
-          <label for="name" class="form-label">Competition Name</label>
-          <input type="text" id="name" class="form-input" bind:value={newContest.name} placeholder="e.g., Club Championship 2024" required />
+          <label for="name" class="input-label">Competition Name</label>
+          <input type="text" id="name" class="input-field" bind:value={newContest.name} placeholder="e.g., Club Championship 2024" required />
         </div>
         <div>
-          <label for="date" class="form-label">Date</label>
-          <input type="date" id="date" class="form-input" bind:value={newContest.date} required />
+          <label for="date" class="input-label">Date</label>
+          <input type="date" id="date" class="input-field" bind:value={newContest.date} required />
         </div>
         <div>
-          <label for="location" class="form-label">Location</label>
-          <input type="text" id="location" class="form-input" bind:value={newContest.location} placeholder="e.g., City, Venue" required />
+          <label for="location" class="input-label">Location</label>
+          <input type="text" id="location" class="input-field" bind:value={newContest.location} placeholder="e.g., City, Venue" required />
         </div>
       </div>
     </div>
@@ -117,28 +117,28 @@
       </p>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label for="discipline" class="form-label">Discipline</label>
-          <select id="discipline" class="form-input" bind:value={newContest.discipline}>
+          <label for="discipline" class="input-label">Discipline</label>
+          <select id="discipline" class="input-field" bind:value={newContest.discipline}>
             {#each Object.values(Discipline) as discipline}
               <option value={discipline}>{discipline}</option>
             {/each}
           </select>
         </div>
         <div>
-          <label for="competition_type" class="form-label">Competition Type (Optional)</label>
-          <input type="text" id="competition_type" class="form-input" bind:value={newContest.competition_type} placeholder="e.g., National Qualifier" />
+          <label for="competition_type" class="input-label">Competition Type (Optional)</label>
+          <input type="text" id="competition_type" class="input-field" bind:value={newContest.competition_type} placeholder="e.g., National Qualifier" />
         </div>
         <div>
-          <label for="organizer" class="form-label">Organizer (Optional)</label>
-          <input type="text" id="organizer" class="form-input" bind:value={newContest.organizer} placeholder="e.g., Powerlifting Club" />
+          <label for="organizer" class="input-label">Organizer (Optional)</label>
+          <input type="text" id="organizer" class="input-field" bind:value={newContest.organizer} placeholder="e.g., Powerlifting Club" />
         </div>
         <div>
-          <label for="federation_rules" class="form-label">Federation/Rules (Optional)</label>
-          <input type="text" id="federation_rules" class="form-input" bind:value={newContest.federation_rules} placeholder="e.g., IPF Rules" />
+          <label for="federation_rules" class="input-label">Federation/Rules (Optional)</label>
+          <input type="text" id="federation_rules" class="input-field" bind:value={newContest.federation_rules} placeholder="e.g., IPF Rules" />
         </div>
         <div class="md:col-span-2">
-          <label for="notes" class="form-label">Notes (Optional)</label>
-          <textarea id="notes" class="form-input" bind:value={newContest.notes} rows="3" placeholder="Any additional details about the competition..."></textarea>
+          <label for="notes" class="input-label">Notes (Optional)</label>
+          <textarea id="notes" class="input-field" bind:value={newContest.notes} rows="3" placeholder="Any additional details about the competition..."></textarea>
         </div>
       </div>
     </div>
