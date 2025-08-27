@@ -29,7 +29,7 @@ pub async fn registration_create(
     };
 
     let db_pool = state.db.lock().await;
-    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::database("Database not initialized"))?;
+    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::DatabaseNotInitialized)?;
     let created =
         queries::registrations::create_registration(db_pool, request)
             .await?;
@@ -50,7 +50,7 @@ pub async fn registration_list(
     tracing::info!("registration_list called for contest: {}", contest_id);
 
     let db_pool = state.db.lock().await;
-    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::database("Database not initialized"))?;
+    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::DatabaseNotInitialized)?;
     let db_registrations =
         queries::registrations::get_registrations_by_contest(
             db_pool,

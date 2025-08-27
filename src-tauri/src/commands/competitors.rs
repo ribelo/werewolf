@@ -22,7 +22,7 @@ pub async fn competitor_create(
     };
 
     let db_pool = state.db.lock().await;
-    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::database("Database not initialized"))?;
+    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::DatabaseNotInitialized)?;
     let created =
         queries::competitors::create_competitor(db_pool, request)
             .await?;
@@ -43,7 +43,7 @@ pub async fn competitor_list(
     tracing::info!("competitor_list called");
 
     let db_pool = state.db.lock().await;
-    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::database("Database not initialized"))?;
+    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::DatabaseNotInitialized)?;
     let db_competitors =
         queries::competitors::get_all_competitors(db_pool).await?;
 
@@ -69,7 +69,7 @@ pub async fn competitor_get(
     tracing::info!("competitor_get called for id: {}", competitor_id);
 
     let db_pool = state.db.lock().await;
-    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::database("Database not initialized"))?;
+    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::DatabaseNotInitialized)?;
     let competitor = queries::competitors::get_competitor_by_id(
         db_pool,
         &competitor_id,

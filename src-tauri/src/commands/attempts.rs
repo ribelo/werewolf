@@ -61,7 +61,7 @@ pub async fn attempt_upsert_weight(
     tracing::info!("attempt_upsert_weight called with: {:?}", attempt);
 
     let db_pool = state.db.lock().await;
-    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::database("Database not initialized"))?;
+    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::DatabaseNotInitialized)?;
     queries::attempts::upsert_attempt_weight(
         db_pool,
         &attempt.registration_id,
@@ -82,7 +82,7 @@ pub async fn attempt_list(
     tracing::info!("attempt_list called for registration: {}", registration_id);
 
     let db_pool = state.db.lock().await;
-    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::database("Database not initialized"))?;
+    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::DatabaseNotInitialized)?;
     let db_attempts =
         queries::attempts::get_attempts_by_registration(
             db_pool,
@@ -113,7 +113,7 @@ pub async fn attempt_update_result(
     tracing::info!("attempt_update_result called with: {:?}", update);
 
     let db_pool = state.db.lock().await;
-    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::database("Database not initialized"))?;
+    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::DatabaseNotInitialized)?;
     queries::attempts::update_attempt_result(
         db_pool,
         &update.attempt_id,
@@ -135,7 +135,7 @@ pub async fn attempt_list_for_contest(
     tracing::info!("attempt_list_for_contest called for contest: {}", contest_id);
 
     let db_pool = state.db.lock().await;
-    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::database("Database not initialized"))?;
+    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::DatabaseNotInitialized)?;
     let db_attempts =
         queries::attempts::get_contest_attempts(db_pool, &contest_id)
             .await?;
