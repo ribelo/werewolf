@@ -48,6 +48,9 @@ pub fn run() {
             commands::initialize_app_database,
             commands::get_database_status,
             commands::test_frontend_logging,
+            commands::backup_database,
+            commands::restore_database,
+            commands::list_backups,
             // Logging
             write_log,
             // Contest management

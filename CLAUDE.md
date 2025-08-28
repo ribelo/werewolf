@@ -14,6 +14,9 @@ Werewolf is a Tauri-based desktop application for managing powerlifting contests
 - **Dual-Window Architecture**: Separate organizer and display interfaces
 - **Real-time Updates**: Synchronization between administrator and presentation views
 
+### Requirements & Roadmap
+See [REQUIREMENTS_AND_ROADMAP.md](./REQUIREMENTS_AND_ROADMAP.md) for detailed scope definition, strategic analysis, and development roadmap based on user requirements.
+
 ## Build Commands
 
 ### NixOS Development Environment

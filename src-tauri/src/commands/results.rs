@@ -79,31 +79,111 @@ impl fmt::Display for RankingType {
 
 #[tauri::command]
 pub async fn result_get_competitor_results(
-    _state: State<'_, AppState>,
-    _registration_id: String,
-) -> Result<String, AppError> {
-    // TODO: Implement individual competitor results
-    tracing::info!("result_get_competitor_results called");
-    Err(AppError::Internal("Not yet implemented".to_string()))
+    state: State<'_, AppState>,
+    registration_id: String,
+) -> Result<CompetitionResult, AppError> {
+    tracing::info!("result_get_competitor_results called for registration: {}", registration_id);
+    let db_pool = state.db.lock().await;
+    let db_pool = db_pool.as_ref().ok_or(AppError::DatabaseNotInitialized)?;
+    
+    // First try to get existing result
+    match queries::results::get_result_by_registration(db_pool, &registration_id).await {
+        Ok(result) => Ok(result),
+        Err(sqlx::Error::RowNotFound) => {
+            // If no result exists, calculate it first
+            let result = queries::results::calculate_results(db_pool, &registration_id).await?;
+            Ok(result)
+        },
+        Err(e) => Err(AppError::Database(e)),
+    }
 }
 
 #[tauri::command]
 pub async fn result_export(
-    _state: State<'_, AppState>,
-    _contest_id: String,
-    _format: String, // "excel", "csv", "json", "pdf"
+    state: State<'_, AppState>,
+    contest_id: String,
+    format: String, // "csv", "json"
 ) -> Result<String, AppError> {
-    // TODO: Implement result export
-    tracing::info!("result_export called");
-    Err(AppError::Internal("Not yet implemented".to_string()))
+    tracing::info!("result_export called for contest: {}, format: {}", contest_id, format);
+    let db_pool = state.db.lock().await;
+    let db_pool = db_pool.as_ref().ok_or(AppError::DatabaseNotInitialized)?;
+    
+    match format.as_str() {
+        "csv" => {
+            let rankings = queries::results::get_open_ranking(db_pool, &contest_id).await?;
+            export_to_csv(rankings).await
+        },
+        "json" => {
+            let rankings = queries::results::get_open_ranking(db_pool, &contest_id).await?;
+            export_to_json(rankings).await
+        },
+        _ => Err(AppError::InvalidInput {
+            field: "format".to_string(),
+            reason: format!("Unsupported export format: {}. Supported formats: csv, json", format),
+        }),
+    }
+}
+
+async fn export_to_csv(rankings: Vec<CompetitionResult>) -> Result<String, AppError> {
+    let mut csv_content = String::new();
+    
+    // Header
+    csv_content.push_str("Place,Registration ID,Best Squat,Best Bench,Best Deadlift,Total,Coefficient Points\n");
+    
+    // Data rows
+    for result in rankings {
+        csv_content.push_str(&format!(
+            "{},{},{:.1},{:.1},{:.1},{:.1},{:.2}\n",
+            result.place_open.unwrap_or(0),
+            result.registration_id,
+            result.best_squat.unwrap_or(0.0),
+            result.best_bench_press.unwrap_or(0.0),
+            result.best_deadlift.unwrap_or(0.0),
+            result.total_weight,
+            result.coefficient_points
+        ));
+    }
+    
+    Ok(csv_content)
+}
+
+async fn export_to_json(rankings: Vec<CompetitionResult>) -> Result<String, AppError> {
+    serde_json::to_string_pretty(&rankings)
+        .map_err(|e| AppError::Internal(format!("Failed to serialize results to JSON: {}", e)))
+}
+
+#[derive(serde::Serialize)]
+pub struct ScoreboardData {
+    pub rankings: Vec<CompetitionResult>,
+    pub total_competitors: usize,
+    pub contest_name: Option<String>,
+    pub updated_at: String,
 }
 
 #[tauri::command]
 pub async fn result_get_scoreboard(
-    _state: State<'_, AppState>,
-    _contest_id: String,
-) -> Result<String, AppError> {
-    // TODO: Implement scoreboard data for display window
-    tracing::info!("result_get_scoreboard called");
-    Err(AppError::Internal("Not yet implemented".to_string()))
+    state: State<'_, AppState>,
+    contest_id: String,
+) -> Result<ScoreboardData, AppError> {
+    tracing::info!("result_get_scoreboard called for contest: {}", contest_id);
+    let db_pool = state.db.lock().await;
+    let db_pool = db_pool.as_ref().ok_or(AppError::DatabaseNotInitialized)?;
+    
+    // Get current rankings (open ranking by default for scoreboard)
+    let rankings = queries::results::get_open_ranking(db_pool, &contest_id).await?;
+    let total_competitors = rankings.len();
+    
+    // Get contest name
+    let contest_name = queries::contests::get_contest_by_id(db_pool, &contest_id)
+        .await
+        .ok()
+        .flatten()
+        .map(|c| c.name);
+    
+    Ok(ScoreboardData {
+        rankings,
+        total_competitors,
+        contest_name,
+        updated_at: chrono::Utc::now().to_rfc3339(),
+    })
 }

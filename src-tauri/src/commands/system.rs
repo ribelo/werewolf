@@ -46,3 +46,54 @@ pub async fn test_frontend_logging() -> Result<String, AppError> {
     tracing::info!("Backend: test_frontend_logging command called");
     Ok("Frontend logging test command executed".to_string())
 }
+
+/// Create a backup of the database
+#[tauri::command]
+pub async fn backup_database(state: State<'_, AppState>) -> Result<String, AppError> {
+    let db_guard = state.db.lock().await;
+    
+    if db_guard.is_none() {
+        return Err(AppError::DatabaseNotInitialized);
+    }
+    
+    let backup_path = database::create_backup().await?;
+    tracing::info!("Database backup created at: {}", backup_path);
+    Ok(backup_path)
+}
+
+/// Restore database from a backup file
+#[tauri::command]
+pub async fn restore_database(
+    state: State<'_, AppState>, 
+    backup_path: String
+) -> Result<String, AppError> {
+    // Close current database connection
+    {
+        let mut db_guard = state.db.lock().await;
+        *db_guard = None;
+    }
+    
+    // Restore from backup
+    database::restore_from_backup(&backup_path).await?;
+    
+    // Reinitialize database connection
+    let mut db_guard = state.db.lock().await;
+    match database::initialize_database().await {
+        Ok(pool) => {
+            *db_guard = Some(pool);
+            tracing::info!("Database restored from backup: {}", backup_path);
+            Ok(format!("Database successfully restored from {}", backup_path))
+        }
+        Err(e) => {
+            tracing::error!("Failed to reinitialize database after restore: {}", e);
+            Err(AppError::Database(e))
+        }
+    }
+}
+
+/// List available backups
+#[tauri::command]
+pub async fn list_backups() -> Result<Vec<String>, AppError> {
+    let backups = database::list_backups().await?;
+    Ok(backups)
+}
