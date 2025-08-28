@@ -5,23 +5,23 @@ use tauri::{AppHandle, Emitter, Manager};
 #[tauri::command]
 pub async fn window_open_display(app: AppHandle) -> Result<String, AppError> {
     tracing::info!("Opening display window");
-    
+
     // Check if display window already exists
     if let Some(_window) = app.get_webview_window("display") {
         return Ok("Display window already open".to_string());
     }
-    
+
     // Create new display window
     let _window = tauri::WebviewWindowBuilder::new(
         &app,
         "display",
-        tauri::WebviewUrl::App("index.html".into())
+        tauri::WebviewUrl::App("index.html".into()),
     )
     .title("Contest Display")
     .fullscreen(true)
     .center()
     .build()?;
-    
+
     tracing::info!("Display window opened successfully");
     Ok("Display window opened".to_string())
 }
@@ -30,7 +30,7 @@ pub async fn window_open_display(app: AppHandle) -> Result<String, AppError> {
 #[tauri::command]
 pub async fn window_close_display(app: AppHandle) -> Result<String, AppError> {
     tracing::info!("Closing display window");
-    
+
     if let Some(window) = app.get_webview_window("display") {
         window.close()?;
         tracing::info!("Display window closed successfully");
@@ -47,7 +47,7 @@ pub async fn window_update_display(
     _lifter_data: String, // TODO: Define proper display data structure
 ) -> Result<String, AppError> {
     tracing::info!("Updating display window data");
-    
+
     if let Some(window) = app.get_webview_window("display") {
         // TODO: Emit event to display window with lifter data
         window.emit("display-update", &_lifter_data)?;
@@ -65,7 +65,7 @@ pub async fn window_list(app: AppHandle) -> Result<Vec<String>, AppError> {
         .keys()
         .map(|label| label.to_string())
         .collect();
-    
+
     tracing::info!("Active windows: {:?}", windows);
     Ok(windows)
 }

@@ -59,7 +59,10 @@ pub async fn contest_update(
 }
 
 #[tauri::command]
-pub async fn contest_delete(state: State<'_, AppState>, contest_id: String) -> Result<(), AppError> {
+pub async fn contest_delete(
+    state: State<'_, AppState>,
+    contest_id: String,
+) -> Result<(), AppError> {
     tracing::info!("Deleting contest with ID: {}", contest_id);
     let db_guard = state.db.lock().await;
     let pool = db_guard.as_ref().ok_or(AppError::DatabaseNotInitialized)?;

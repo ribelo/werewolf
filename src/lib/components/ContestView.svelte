@@ -28,15 +28,15 @@
   }
 
   enum LiftType {
-    Squat = 'squat',
-    Bench = 'bench',
-    Deadlift = 'deadlift',
+    Squat = 'Squat',
+    Bench = 'Bench',
+    Deadlift = 'Deadlift',
   }
 
   enum AttemptStatus {
-    Pending = 'pending',
-    Good = 'good',
-    Bad = 'bad',
+    Pending = 'Pending',
+    Good = 'Good',
+    Bad = 'Bad',
   }
 
   interface Attempt {
@@ -58,8 +58,25 @@
     };
   }
 
+  enum ContestStatus {
+    Setup = 'Setup',
+    Registration = 'Registration',
+    InProgress = 'InProgress',
+    Paused = 'Paused',
+    Complete = 'Complete',
+  }
+
+  interface ContestState {
+    contestId: string;
+    status: ContestStatus;
+    currentLift: LiftType | null;
+    currentRound: number;
+  }
+
   // Component State
   let contests: Contest[] = [];
+  let contestState: ContestState | null = null;
+  let nextUpQueue: Attempt[] = [];
   let selectedContestId: string = '';
   let lifters: Lifter[] = [];
   let loading = false;
@@ -87,7 +104,7 @@
       
       if (contests.length > 0) {
         selectedContestId = contests[0]?.id || '';
-        await loadLifters();
+        await loadContestData();
       }
     } catch (err) {
       error = `Failed to load contests: ${err}`;
@@ -97,27 +114,35 @@
     }
   }
 
-  async function loadLifters(): Promise<void> {
+  async function loadNextUpQueue(): Promise<void> {
+    if (!selectedContestId) return;
+    try {
+      nextUpQueue = await invoke<Attempt[]>('attempt_get_next_in_queue', { contestId: selectedContestId });
+    } catch (err) {
+      error = `Failed to load next up queue: ${err}`;
+      console.error('Error loading next up queue:', err);
+    }
+  }
+
+  async function loadContestData(): Promise<void> {
     if (!selectedContestId) return;
 
     try {
       loading = true;
       error = '';
       
+      // Load lifters
       const registrations = await invoke<Registration[]>('registration_list', { contestId: selectedContestId });
       const allAttempts = await invoke<Attempt[]>('attempt_list_for_contest', { contestId: selectedContestId });
 
       const lifterPromises = registrations.map(async (reg) => {
         const competitor = await invoke<Competitor>('competitor_get', { competitorId: reg.competitorId });
-
         const lifterAttempts = allAttempts.filter(a => a.registrationId === reg.id);
-
         const attemptsByType = {
           [LiftType.Squat]: lifterAttempts.filter(a => a.liftType === LiftType.Squat).sort((a,b) => a.attemptNumber - b.attemptNumber),
           [LiftType.Bench]: lifterAttempts.filter(a => a.liftType === LiftType.Bench).sort((a,b) => a.attemptNumber - b.attemptNumber),
           [LiftType.Deadlift]: lifterAttempts.filter(a => a.liftType === LiftType.Deadlift).sort((a,b) => a.attemptNumber - b.attemptNumber),
         };
-
         return {
           registrationId: reg.id,
           competitor,
@@ -125,12 +150,21 @@
           attempts: attemptsByType,
         };
       });
-
       lifters = await Promise.all(lifterPromises);
       
+      // Load contest state
+      contestState = await invoke<ContestState | null>('contest_state_get', { contestId: selectedContestId });
+
+      // Load next up queue if contest is in progress
+      if (contestState?.status === ContestStatus.InProgress) {
+        await loadNextUpQueue();
+      } else {
+        nextUpQueue = [];
+      }
+
     } catch (err) {
-      error = `Failed to load lifters: ${err}`;
-      console.error('Error loading lifters:', err);
+      error = `Failed to load contest data: ${err}`;
+      console.error('Error loading contest data:', err);
     } finally {
       loading = false;
     }
@@ -160,7 +194,7 @@
       
       showRegistrationForm = false;
       newCompetitor = { firstName: '', lastName: '', birthDate: '', gender: 'Male', bodyweight: 0 };
-      await loadLifters();
+      await loadContestData();
 
     } catch (err) {
       error = `Failed to register competitor: ${err}`;
@@ -183,7 +217,7 @@
 
       // For now, just reload all lifters to see the change.
       // A more optimized approach would be to update the local state directly.
-      await loadLifters();
+      await loadContestData();
 
     } catch (err) {
       error = `Failed to update attempt: ${err}`;
@@ -193,6 +227,23 @@
 
   function getAttempt(lifter: Lifter, liftType: LiftType, attemptNumber: number): Attempt | undefined {
     return lifter.attempts[liftType].find(a => a.attemptNumber === attemptNumber);
+  }
+
+  function getLifterName(registrationId: string): string {
+    const lifter = lifters.find(l => l.registrationId === registrationId);
+    return lifter ? `${lifter.competitor.firstName} ${lifter.competitor.lastName}` : 'Unknown';
+  }
+
+  async function callNextLifter(attemptId: string): Promise<void> {
+    if (!selectedContestId) return;
+    try {
+      await invoke('attempt_set_current', { contestId: selectedContestId, attemptId });
+      // Reload data to reflect the change in the queue and current lifter
+      await loadContestData();
+    } catch (err) {
+      error = `Failed to call next lifter: ${err}`;
+      console.error('Error calling next lifter:', err);
+    }
   }
 
   function getBestLift(attempts: Attempt[]): number {
@@ -205,11 +256,37 @@
   }
 
   function getSubtotal(lifter: Lifter): number {
-    return getBestLift(lifter.attempts.squat) + getBestLift(lifter.attempts.bench);
+    return getBestLift(lifter.attempts.Squat) + getBestLift(lifter.attempts.Bench);
   }
 
   function getTotal(lifter: Lifter): number {
-    return getBestLift(lifter.attempts.squat) + getBestLift(lifter.attempts.bench) + getBestLift(lifter.attempts.deadlift);
+    return getBestLift(lifter.attempts.Squat) + getBestLift(lifter.attempts.Bench) + getBestLift(lifter.attempts.Deadlift);
+  }
+
+  async function updateContestStatus(newStatus: ContestStatus): Promise<void> {
+    if (!contestState) return;
+
+    try {
+      loading = true;
+      error = '';
+
+      const newState: ContestState = { ...contestState, status: newStatus };
+
+      // When starting contest, set lift to Squat
+      if (newStatus === ContestStatus.InProgress && contestState.status !== ContestStatus.InProgress) {
+        newState.currentLift = LiftType.Squat;
+        newState.currentRound = 1;
+      }
+
+      await invoke('contest_state_update', { contestState: newState });
+      await loadContestData();
+
+    } catch (err) {
+      error = `Failed to update contest status: ${err}`;
+      console.error('Error updating contest status:', err);
+    } finally {
+      loading = false;
+    }
   }
 
   function goBack(): void {
@@ -217,7 +294,7 @@
   }
 
   $: if (selectedContestId) {
-    loadLifters();
+    loadContestData();
   }
 </script>
 
@@ -261,6 +338,51 @@
         <button class="btn-primary" on:click={() => showRegistrationForm = !showRegistrationForm}>
           {#if showRegistrationForm}Cancel{:else}Register Competitor{/if}
         </button>
+      </div>
+    {/if}
+
+    <!-- Contest State Management -->
+    {#if contestState}
+      <div class="mb-8 p-6 bg-card-bg border border-border-color">
+        <h3 class="text-h3 text-text-primary mb-4">Contest Status: {contestState.status}</h3>
+        <div class="flex space-x-4">
+          {#if contestState.status === ContestStatus.Setup}
+            <button class="btn-primary" on:click={() => updateContestStatus(ContestStatus.Registration)}>Open Registration</button>
+          {/if}
+          {#if contestState.status === ContestStatus.Registration}
+            <button class="btn-primary" on:click={() => updateContestStatus(ContestStatus.InProgress)}>Start Contest</button>
+          {/if}
+          {#if contestState.status === ContestStatus.InProgress}
+            <button class="btn-secondary" on:click={() => updateContestStatus(ContestStatus.Paused)}>Pause Contest</button>
+            <button class="btn-danger" on:click={() => updateContestStatus(ContestStatus.Complete)}>Finish Contest</button>
+          {/if}
+          {#if contestState.status === ContestStatus.Paused}
+            <button class="btn-primary" on:click={() => updateContestStatus(ContestStatus.InProgress)}>Resume Contest</button>
+          {/if}
+        </div>
+        {#if contestState.status === ContestStatus.InProgress}
+          <div class="mt-4">
+            <p>Current Lift: {contestState.currentLift || 'N/A'}</p>
+            <p>Current Round: {contestState.currentRound}</p>
+          </div>
+        {/if}
+      </div>
+    {/if}
+
+    <!-- Next Up Queue -->
+    {#if contestState?.status === ContestStatus.InProgress && nextUpQueue.length > 0}
+      <div class="mb-8 p-6 bg-card-bg border border-border-color">
+        <h3 class="text-h3 text-text-primary mb-4">Next Up</h3>
+        <ul>
+          {#each nextUpQueue as attempt}
+            <li class="flex items-center justify-between py-2 border-b border-border-color">
+              <span>
+                Lifter: {getLifterName(attempt.registrationId)} - Attempt {attempt.attemptNumber} - {attempt.weight} kg
+              </span>
+              <button class="btn-secondary" on:click={() => callNextLifter(attempt.id)}>Call Lifter</button>
+            </li>
+          {/each}
+        </ul>
       </div>
     {/if}
 
@@ -379,8 +501,8 @@
                           placeholder="-"
                         />
                         {#if attempt}
-                          <span class="ml-2 text-sm {attempt.status === 'good' ? 'text-green-400' : attempt.status === 'bad' ? 'text-red-400' : 'text-gray-400'}">
-                            {attempt.status === 'good' ? '✓' : attempt.status === 'bad' ? '✗' : '◦'}
+                          <span class="ml-2 text-sm {attempt.status === AttemptStatus.Good ? 'text-green-400' : attempt.status === AttemptStatus.Bad ? 'text-red-400' : 'text-gray-400'}">
+                            {attempt.status === AttemptStatus.Good ? '✓' : attempt.status === AttemptStatus.Bad ? '✗' : '◦'}
                           </span>
                         {/if}
                       </div>

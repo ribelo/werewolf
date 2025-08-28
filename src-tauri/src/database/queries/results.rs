@@ -1,5 +1,5 @@
-use sqlx::{Pool, Sqlite, FromRow, Row};
 use serde::{Deserialize, Serialize};
+use sqlx::{FromRow, Pool, Row, Sqlite};
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct CompetitionResult {
@@ -8,7 +8,7 @@ pub struct CompetitionResult {
     pub contest_id: String,
     // Best lifts
     pub best_bench_press: Option<f64>,
-    pub best_squat: Option<f64>, 
+    pub best_squat: Option<f64>,
     pub best_deadlift: Option<f64>,
     pub total_weight: f64,
     pub coefficient_points: f64,
@@ -61,14 +61,15 @@ pub async fn calculate_results(
     let best_deadlift = get_best_lift_weight(pool, registration_id, "Deadlift").await?;
 
     // Calculate total
-    let total = (best_bench.unwrap_or(0.0)) + (best_squat.unwrap_or(0.0)) + (best_deadlift.unwrap_or(0.0));
-    
+    let total =
+        (best_bench.unwrap_or(0.0)) + (best_squat.unwrap_or(0.0)) + (best_deadlift.unwrap_or(0.0));
+
     // Calculate coefficient points
     let coeff_points = total * reshel.unwrap_or(1.0) * mccullough.unwrap_or(1.0);
 
     // Create or update result
     let result_id = uuid::Uuid::new_v4().to_string();
-    
+
     sqlx::query(
         r#"
         INSERT OR REPLACE INTO results 
@@ -167,32 +168,112 @@ pub async fn get_contest_results(
             calculated_at: row.try_get("calculated_at")?,
         });
     }
-    
+
+    Ok(results)
+}
+
+pub async fn get_age_class_ranking(
+    pool: &Pool<Sqlite>,
+    contest_id: &str,
+) -> Result<Vec<CompetitionResult>, sqlx::Error> {
+    let rows = sqlx::query(
+        r#"
+        SELECT id, registration_id, contest_id, best_bench_press, best_squat, best_deadlift,
+               total_weight, coefficient_points, place_open, place_in_age_class, place_in_weight_class,
+               is_disqualified, disqualification_reason, broke_record, record_type, calculated_at
+        FROM results
+        WHERE contest_id = ?1 AND NOT is_disqualified
+        ORDER BY place_in_age_class
+        "#,
+    )
+    .bind(contest_id)
+    .fetch_all(pool)
+    .await?;
+
+    let mut results = Vec::new();
+    for row in rows {
+        results.push(CompetitionResult {
+            id: row.try_get("id")?,
+            registration_id: row.try_get("registration_id")?,
+            contest_id: row.try_get("contest_id")?,
+            best_bench_press: row.try_get("best_bench_press")?,
+            best_squat: row.try_get("best_squat")?,
+            best_deadlift: row.try_get("best_deadlift")?,
+            total_weight: row.try_get("total_weight")?,
+            coefficient_points: row.try_get("coefficient_points")?,
+            place_open: row.try_get("place_open")?,
+            place_in_age_class: row.try_get("place_in_age_class")?,
+            place_in_weight_class: row.try_get("place_in_weight_class")?,
+            is_disqualified: row.try_get("is_disqualified")?,
+            disqualification_reason: row.try_get("disqualification_reason")?,
+            broke_record: row.try_get("broke_record")?,
+            record_type: row.try_get("record_type")?,
+            calculated_at: row.try_get("calculated_at")?,
+        });
+    }
+
+    Ok(results)
+}
+
+pub async fn get_weight_class_ranking(
+    pool: &Pool<Sqlite>,
+    contest_id: &str,
+) -> Result<Vec<CompetitionResult>, sqlx::Error> {
+    let rows = sqlx::query(
+        r#"
+        SELECT id, registration_id, contest_id, best_bench_press, best_squat, best_deadlift,
+               total_weight, coefficient_points, place_open, place_in_age_class, place_in_weight_class,
+               is_disqualified, disqualification_reason, broke_record, record_type, calculated_at
+        FROM results
+        WHERE contest_id = ?1 AND NOT is_disqualified
+        ORDER BY place_in_weight_class
+        "#,
+    )
+    .bind(contest_id)
+    .fetch_all(pool)
+    .await?;
+
+    let mut results = Vec::new();
+    for row in rows {
+        results.push(CompetitionResult {
+            id: row.try_get("id")?,
+            registration_id: row.try_get("registration_id")?,
+            contest_id: row.try_get("contest_id")?,
+            best_bench_press: row.try_get("best_bench_press")?,
+            best_squat: row.try_get("best_squat")?,
+            best_deadlift: row.try_get("best_deadlift")?,
+            total_weight: row.try_get("total_weight")?,
+            coefficient_points: row.try_get("coefficient_points")?,
+            place_open: row.try_get("place_open")?,
+            place_in_age_class: row.try_get("place_in_age_class")?,
+            place_in_weight_class: row.try_get("place_in_weight_class")?,
+            is_disqualified: row.try_get("is_disqualified")?,
+            disqualification_reason: row.try_get("disqualification_reason")?,
+            broke_record: row.try_get("broke_record")?,
+            record_type: row.try_get("record_type")?,
+            calculated_at: row.try_get("calculated_at")?,
+        });
+    }
+
     Ok(results)
 }
 
 /// Update all rankings for a contest (implements triple ranking system)
-pub async fn update_all_rankings(
-    pool: &Pool<Sqlite>,
-    contest_id: &str,
-) -> Result<(), sqlx::Error> {
+pub async fn update_all_rankings(pool: &Pool<Sqlite>, contest_id: &str) -> Result<(), sqlx::Error> {
     // 1. Update open rankings (overall)
     update_open_rankings(pool, contest_id).await?;
-    
+
     // 2. Update age class rankings
     update_age_class_rankings(pool, contest_id).await?;
-    
+
     // 3. Update weight class rankings
     update_weight_class_rankings(pool, contest_id).await?;
-    
+
     Ok(())
 }
 
 /// Update open rankings (OPEN.csv equivalent)
-async fn update_open_rankings(
-    pool: &Pool<Sqlite>,
-    contest_id: &str,
-) -> Result<(), sqlx::Error> {
+async fn update_open_rankings(pool: &Pool<Sqlite>, contest_id: &str) -> Result<(), sqlx::Error> {
     sqlx::query(
         r#"
         UPDATE results 
@@ -204,7 +285,7 @@ async fn update_open_rankings(
             AND NOT r2.is_disqualified
         )
         WHERE contest_id = ?1 AND NOT is_disqualified
-        "#
+        "#,
     )
     .bind(contest_id)
     .execute(pool)
@@ -232,7 +313,7 @@ async fn update_age_class_rankings(
             AND NOT r2.is_disqualified
         )
         WHERE contest_id = ?1 AND NOT is_disqualified
-        "#
+        "#,
     )
     .bind(contest_id)
     .execute(pool)
@@ -260,7 +341,7 @@ async fn update_weight_class_rankings(
             AND NOT r2.is_disqualified
         )
         WHERE contest_id = ?1 AND NOT is_disqualified
-        "#
+        "#,
     )
     .bind(contest_id)
     .execute(pool)
@@ -309,7 +390,7 @@ pub async fn get_open_ranking(
             calculated_at: row.try_get("calculated_at")?,
         });
     }
-    
+
     Ok(results)
 }
 
@@ -324,12 +405,12 @@ async fn get_best_lift_weight(
         SELECT MAX(weight) as best_weight
         FROM attempts 
         WHERE registration_id = ?1 AND lift_type = ?2 AND status = 'Good'
-        "#
+        "#,
     )
     .bind(registration_id)
     .bind(lift_type)
     .fetch_one(pool)
     .await?;
 
-    Ok(row.try_get("best_weight")?)
+    row.try_get("best_weight")
 }

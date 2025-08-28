@@ -7,31 +7,34 @@ pub enum AppError {
 
     #[error("Database not initialized")]
     DatabaseNotInitialized,
-    
+
     #[error("Tauri error: {0}")]
     Tauri(#[from] tauri::Error),
-    
+
     #[error("Competitor not found: {id}")]
     CompetitorNotFound { id: String },
-    
+
     #[error("Contest not found: {id}")]
     ContestNotFound { id: String },
-    
+
+    #[error("Contest state not found for contest: {contest_id}")]
+    ContestStateNotFound { contest_id: String },
+
     #[error("Registration not found: {id}")]
     RegistrationNotFound { id: String },
-    
+
     #[error("Invalid attempt: {reason}")]
     InvalidAttempt { reason: String },
-    
+
     #[error("Contest is not in progress")]
     ContestNotInProgress,
-    
+
     #[error("Contest already exists: {name}")]
     ContestAlreadyExists { name: String },
-    
+
     #[error("Invalid input: {field} - {reason}")]
     InvalidInput { field: String, reason: String },
-    
+
     #[error("Internal error: {0}")]
     Internal(String),
 }

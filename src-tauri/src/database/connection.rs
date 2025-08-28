@@ -1,4 +1,7 @@
-use sqlx::{Pool, Sqlite, sqlite::{SqliteConnectOptions, SqlitePoolOptions}};
+use sqlx::{
+    sqlite::{SqliteConnectOptions, SqlitePoolOptions},
+    Pool, Sqlite,
+};
 use std::{str::FromStr, time::Duration};
 
 /// Create a new database connection pool
@@ -24,9 +27,7 @@ pub async fn create_pool(database_url: &str) -> Result<Pool<Sqlite>, sqlx::Error
 
 /// Test database connection
 pub async fn test_connection(pool: &Pool<Sqlite>) -> Result<(), sqlx::Error> {
-    sqlx::query("SELECT sqlite_version()")
-        .execute(pool)
-        .await?;
+    sqlx::query("SELECT sqlite_version()").execute(pool).await?;
 
     log::info!("Database connection test successful");
     Ok(())

@@ -1,15 +1,9 @@
-use sqlx::{Pool, Sqlite, Row};
+use sqlx::{Pool, Sqlite};
 use std::sync::Arc;
-use serde::{Deserialize, Serialize};
 
 // Import all query modules
 use crate::database::queries::*;
-use crate::models::contest::{Contest, NewContest, ContestStatus, Discipline};
-// Other models will be needed if tests are not commented out
-use crate::database::queries::competitors::CreateCompetitorRequest;
-use crate::database::queries::registrations::CreateRegistrationRequest;
-use crate::database::queries::attempts::CreateAttemptRequest;
-
+use crate::models::contest::{Contest, NewContest};
 
 /// Main database abstraction that holds the connection pool and provides
 /// high-level methods for all database operations
@@ -22,13 +16,13 @@ impl Database {
     /// Create a new Database instance with automatic migration
     pub async fn new(database_url: &str) -> Result<Self, sqlx::Error> {
         let pool = crate::database::connection::create_pool(database_url).await?;
-        
+
         // Run migrations
         crate::database::migrations::run_migrations(&pool).await?;
-        
+
         // Test connection
         crate::database::connection::test_connection(&pool).await?;
-        
+
         Ok(Self {
             pool: Arc::new(pool),
         })
@@ -79,7 +73,11 @@ impl Database {
     }
 
     /// Update an entire contest
-    pub async fn update_contest(&self, contest_id: &str, contest: Contest) -> Result<Contest, sqlx::Error> {
+    pub async fn update_contest(
+        &self,
+        contest_id: &str,
+        contest: Contest,
+    ) -> Result<Contest, sqlx::Error> {
         contests::update_contest(&self.pool, contest_id, contest).await
     }
 

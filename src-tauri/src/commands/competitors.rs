@@ -22,10 +22,10 @@ pub async fn competitor_create(
     };
 
     let db_pool = state.db.lock().await;
-    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::DatabaseNotInitialized)?;
-    let created =
-        queries::competitors::create_competitor(db_pool, request)
-            .await?;
+    let db_pool = db_pool
+        .as_ref()
+        .ok_or_else(|| AppError::DatabaseNotInitialized)?;
+    let created = queries::competitors::create_competitor(db_pool, request).await?;
 
     Ok(Competitor {
         id: created.id,
@@ -37,15 +37,14 @@ pub async fn competitor_create(
 }
 
 #[tauri::command]
-pub async fn competitor_list(
-    state: State<'_, AppState>,
-) -> Result<Vec<Competitor>, AppError> {
+pub async fn competitor_list(state: State<'_, AppState>) -> Result<Vec<Competitor>, AppError> {
     tracing::info!("competitor_list called");
 
     let db_pool = state.db.lock().await;
-    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::DatabaseNotInitialized)?;
-    let db_competitors =
-        queries::competitors::get_all_competitors(db_pool).await?;
+    let db_pool = db_pool
+        .as_ref()
+        .ok_or_else(|| AppError::DatabaseNotInitialized)?;
+    let db_competitors = queries::competitors::get_all_competitors(db_pool).await?;
 
     let competitors = db_competitors
         .into_iter()
@@ -69,12 +68,10 @@ pub async fn competitor_get(
     tracing::info!("competitor_get called for id: {}", competitor_id);
 
     let db_pool = state.db.lock().await;
-    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::DatabaseNotInitialized)?;
-    let competitor = queries::competitors::get_competitor_by_id(
-        db_pool,
-        &competitor_id,
-    )
-    .await?;
+    let db_pool = db_pool
+        .as_ref()
+        .ok_or_else(|| AppError::DatabaseNotInitialized)?;
+    let competitor = queries::competitors::get_competitor_by_id(db_pool, &competitor_id).await?;
 
     Ok(Competitor {
         id: competitor.id,

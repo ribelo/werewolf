@@ -99,10 +99,7 @@ pub async fn update_contest(
 }
 
 /// Delete a contest by its ID.
-pub async fn delete_contest(
-    pool: &Pool<Sqlite>,
-    contest_id: &str,
-) -> Result<(), sqlx::Error> {
+pub async fn delete_contest(pool: &Pool<Sqlite>, contest_id: &str) -> Result<(), sqlx::Error> {
     sqlx::query("DELETE FROM contests WHERE id = ?")
         .bind(contest_id)
         .execute(pool)

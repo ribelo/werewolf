@@ -1,5 +1,5 @@
-use sqlx::{Pool, Sqlite, FromRow, Row};
 use serde::{Deserialize, Serialize};
+use sqlx::{FromRow, Pool, Row, Sqlite};
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Competitor {
@@ -32,7 +32,7 @@ pub async fn create_competitor(
     request: CreateCompetitorRequest,
 ) -> Result<Competitor, sqlx::Error> {
     let id = uuid::Uuid::new_v4().to_string();
-    
+
     let row = sqlx::query(
         r#"
         INSERT INTO competitors (id, first_name, last_name, birth_date, gender, club, city, notes)
@@ -114,7 +114,7 @@ pub async fn get_all_competitors(pool: &Pool<Sqlite>) -> Result<Vec<Competitor>,
             updated_at: row.try_get("updated_at")?,
         });
     }
-    
+
     Ok(competitors)
 }
 
@@ -141,7 +141,7 @@ pub async fn update_competitor(
     .bind(competitor_id)
     .execute(pool)
     .await?;
-    
+
     Ok(())
 }
 
@@ -154,6 +154,6 @@ pub async fn delete_competitor(
         .bind(competitor_id)
         .execute(pool)
         .await?;
-    
+
     Ok(())
 }

@@ -16,4 +16,6 @@ pub struct RegistrationCreate {
     pub contest_id: String,
     pub competitor_id: String,
     pub bodyweight: f64,
+    pub age_category_id: Option<String>,
+    pub weight_class_id: Option<String>,
 }

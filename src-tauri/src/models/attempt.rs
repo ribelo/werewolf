@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 #[derive(Serialize, Deserialize, Type, Debug, Clone, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "PascalCase")]
 pub enum LiftType {
     Squat,
     Bench,
@@ -10,7 +10,7 @@ pub enum LiftType {
 }
 
 #[derive(Serialize, Deserialize, Type, Debug, Clone, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "PascalCase")]
 pub enum AttemptStatus {
     Pending,
     Good,

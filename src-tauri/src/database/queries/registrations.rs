@@ -1,5 +1,5 @@
-use sqlx::{Pool, Sqlite, FromRow, Row};
 use serde::{Deserialize, Serialize};
+use sqlx::{FromRow, Pool, Row, Sqlite};
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Registration {
@@ -53,7 +53,7 @@ pub async fn create_registration(
     request: CreateRegistrationRequest,
 ) -> Result<Registration, sqlx::Error> {
     let id = uuid::Uuid::new_v4().to_string();
-    
+
     let row = sqlx::query(
         r#"
         INSERT INTO registrations (
@@ -119,7 +119,7 @@ pub async fn get_registration_by_id(
                personal_record_at_entry, reshel_coefficient, mccullough_coefficient,
                rack_height_squat, rack_height_bench, created_at
         FROM registrations WHERE id = ?1
-        "#
+        "#,
     )
     .bind(registration_id)
     .fetch_one(pool)
@@ -159,7 +159,7 @@ pub async fn get_registrations_by_contest(
         FROM registrations r
         WHERE r.contest_id = ?1
         ORDER BY r.lot_number, r.bodyweight
-        "#
+        "#,
     )
     .bind(contest_id)
     .fetch_all(pool)
@@ -186,7 +186,7 @@ pub async fn get_registrations_by_contest(
             created_at: row.try_get("created_at")?,
         });
     }
-    
+
     Ok(registrations)
 }
 
@@ -204,7 +204,7 @@ pub async fn update_registration(
             reshel_coefficient = ?9, mccullough_coefficient = ?10, rack_height_squat = ?11,
             rack_height_bench = ?12
         WHERE id = ?13
-        "#
+        "#,
     )
     .bind(&request.age_category_id)
     .bind(&request.weight_class_id)
@@ -221,7 +221,7 @@ pub async fn update_registration(
     .bind(registration_id)
     .execute(pool)
     .await?;
-    
+
     Ok(())
 }
 
@@ -234,6 +234,6 @@ pub async fn delete_registration(
         .bind(registration_id)
         .execute(pool)
         .await?;
-    
+
     Ok(())
 }

@@ -15,8 +15,12 @@ pub async fn registration_create(
         contest_id: registration.contest_id,
         competitor_id: registration.competitor_id,
         bodyweight: registration.bodyweight,
-        age_category_id: "default-age-category".to_string(),
-        weight_class_id: "default-weight-class".to_string(),
+        age_category_id: registration
+            .age_category_id
+            .unwrap_or_else(|| "SENIOR".to_string()),
+        weight_class_id: registration
+            .weight_class_id
+            .unwrap_or_else(|| "M_75".to_string()),
         equipment_m: false,
         equipment_sm: false,
         equipment_t: false,
@@ -29,10 +33,10 @@ pub async fn registration_create(
     };
 
     let db_pool = state.db.lock().await;
-    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::DatabaseNotInitialized)?;
-    let created =
-        queries::registrations::create_registration(db_pool, request)
-            .await?;
+    let db_pool = db_pool
+        .as_ref()
+        .ok_or_else(|| AppError::DatabaseNotInitialized)?;
+    let created = queries::registrations::create_registration(db_pool, request).await?;
 
     Ok(Registration {
         id: created.id,
@@ -50,13 +54,11 @@ pub async fn registration_list(
     tracing::info!("registration_list called for contest: {}", contest_id);
 
     let db_pool = state.db.lock().await;
-    let db_pool = db_pool.as_ref().ok_or_else(|| AppError::DatabaseNotInitialized)?;
+    let db_pool = db_pool
+        .as_ref()
+        .ok_or_else(|| AppError::DatabaseNotInitialized)?;
     let db_registrations =
-        queries::registrations::get_registrations_by_contest(
-            db_pool,
-            &contest_id,
-        )
-        .await?;
+        queries::registrations::get_registrations_by_contest(db_pool, &contest_id).await?;
 
     let registrations = db_registrations
         .into_iter()
