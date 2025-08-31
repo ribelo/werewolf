@@ -63,15 +63,15 @@ export default {
         sans: ['Inter', 'system-ui', 'sans-serif'],
       },
       fontSize: {
-        // Display text (Bebas Neue)
-        'hero': ['128px', { lineHeight: '1', letterSpacing: '0.5rem' }],
-        'display': ['96px', { lineHeight: '1', letterSpacing: '0.25rem' }],
+        // Display text (Bebas Neue) - keep compact sizes
+        'hero': ['64px', { lineHeight: '1', letterSpacing: '0.25rem' }],
+        'display': ['48px', { lineHeight: '1', letterSpacing: '0.125rem' }],
         
-        // Weight numbers get special line-height
-        'weight-hero': ['128px', { lineHeight: '1' }],
-        'weight-large': ['96px', { lineHeight: '1' }],
-        'weight-medium': ['36px', { lineHeight: '1' }],
-        'weight-small': ['20px', { lineHeight: '1' }],
+        // Weight numbers get special line-height - reduced but readable
+        'weight-hero': ['64px', { lineHeight: '1' }],
+        'weight-large': ['48px', { lineHeight: '1' }],
+        'weight-medium': ['24px', { lineHeight: '1' }],
+        'weight-small': ['16px', { lineHeight: '1' }],
       },
       spacing: {
         '18': '4.5rem',   // 72px

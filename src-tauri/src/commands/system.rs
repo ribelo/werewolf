@@ -97,3 +97,18 @@ pub async fn list_backups() -> Result<Vec<String>, AppError> {
     let backups = database::list_backups().await?;
     Ok(backups)
 }
+
+/// Reset database - drops all tables and recreates schema
+#[tauri::command]
+pub async fn reset_database(state: State<'_, AppState>) -> Result<String, AppError> {
+    let db_guard = state.db.lock().await;
+    
+    if let Some(ref pool) = *db_guard {
+        tracing::warn!("Resetting database - all data will be lost!");
+        database::reset_database(pool).await.map_err(AppError::Database)?;
+        tracing::info!("Database reset completed successfully");
+        Ok("Database reset completed successfully".to_string())
+    } else {
+        Err(AppError::DatabaseNotInitialized)
+    }
+}

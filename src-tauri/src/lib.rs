@@ -8,6 +8,9 @@ pub mod error;
 pub mod logging;
 pub mod models;
 
+#[cfg(test)]
+mod integration_tests;
+
 use database::DatabasePool;
 use logging::write_log;
 
@@ -51,6 +54,7 @@ pub fn run() {
             commands::backup_database,
             commands::restore_database,
             commands::list_backups,
+            commands::reset_database,
             // Logging
             write_log,
             // Contest management
@@ -68,6 +72,9 @@ pub fn run() {
             commands::competitor_get,
             commands::competitor_update,
             commands::competitor_delete,
+            commands::competitor_upload_photo,
+            commands::competitor_remove_photo,
+            commands::competitor_get_photo,
             // Registration management
             commands::registration_create,
             commands::registration_list,

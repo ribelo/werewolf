@@ -7,7 +7,7 @@ pub struct CompetitionResult {
     pub registration_id: String,
     pub contest_id: String,
     // Best lifts
-    pub best_bench_press: Option<f64>,
+    pub best_bench: Option<f64>,
     pub best_squat: Option<f64>,
     pub best_deadlift: Option<f64>,
     pub total_weight: f64,
@@ -29,7 +29,7 @@ pub struct CompetitionResult {
 pub struct CreateResultRequest {
     pub registration_id: String,
     pub contest_id: String,
-    pub best_bench_press: Option<f64>,
+    pub best_bench: Option<f64>,
     pub best_squat: Option<f64>,
     pub best_deadlift: Option<f64>,
     pub is_disqualified: Option<bool>,
@@ -56,7 +56,7 @@ pub async fn calculate_results(
     let mccullough: Option<f64> = reg_row.try_get("mccullough_coefficient")?;
 
     // Get best lifts from attempts
-    let best_bench = get_best_lift_weight(pool, registration_id, "BenchPress").await?;
+    let best_bench = get_best_lift_weight(pool, registration_id, "Bench").await?;
     let best_squat = get_best_lift_weight(pool, registration_id, "Squat").await?;
     let best_deadlift = get_best_lift_weight(pool, registration_id, "Deadlift").await?;
 
@@ -73,7 +73,7 @@ pub async fn calculate_results(
     sqlx::query(
         r#"
         INSERT OR REPLACE INTO results 
-        (id, registration_id, contest_id, best_bench_press, best_squat, best_deadlift, total_weight, coefficient_points)
+        (id, registration_id, contest_id, best_bench, best_squat, best_deadlift, total_weight, coefficient_points)
         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
         "#
     )
@@ -98,7 +98,7 @@ pub async fn get_result_by_registration(
 ) -> Result<CompetitionResult, sqlx::Error> {
     let row = sqlx::query(
         r#"
-        SELECT id, registration_id, contest_id, best_bench_press, best_squat, best_deadlift,
+        SELECT id, registration_id, contest_id, best_bench, best_squat, best_deadlift,
                total_weight, coefficient_points, place_open, place_in_age_class, place_in_weight_class,
                is_disqualified, disqualification_reason, broke_record, record_type, calculated_at
         FROM results WHERE registration_id = ?1
@@ -112,7 +112,7 @@ pub async fn get_result_by_registration(
         id: row.try_get("id")?,
         registration_id: row.try_get("registration_id")?,
         contest_id: row.try_get("contest_id")?,
-        best_bench_press: row.try_get("best_bench_press")?,
+        best_bench: row.try_get("best_bench")?,
         best_squat: row.try_get("best_squat")?,
         best_deadlift: row.try_get("best_deadlift")?,
         total_weight: row.try_get("total_weight")?,
@@ -135,7 +135,7 @@ pub async fn get_contest_results(
 ) -> Result<Vec<CompetitionResult>, sqlx::Error> {
     let rows = sqlx::query(
         r#"
-        SELECT id, registration_id, contest_id, best_bench_press, best_squat, best_deadlift,
+        SELECT id, registration_id, contest_id, best_bench, best_squat, best_deadlift,
                total_weight, coefficient_points, place_open, place_in_age_class, place_in_weight_class,
                is_disqualified, disqualification_reason, broke_record, record_type, calculated_at
         FROM results 
@@ -153,7 +153,7 @@ pub async fn get_contest_results(
             id: row.try_get("id")?,
             registration_id: row.try_get("registration_id")?,
             contest_id: row.try_get("contest_id")?,
-            best_bench_press: row.try_get("best_bench_press")?,
+            best_bench: row.try_get("best_bench")?,
             best_squat: row.try_get("best_squat")?,
             best_deadlift: row.try_get("best_deadlift")?,
             total_weight: row.try_get("total_weight")?,
@@ -178,7 +178,7 @@ pub async fn get_age_class_ranking(
 ) -> Result<Vec<CompetitionResult>, sqlx::Error> {
     let rows = sqlx::query(
         r#"
-        SELECT id, registration_id, contest_id, best_bench_press, best_squat, best_deadlift,
+        SELECT id, registration_id, contest_id, best_bench, best_squat, best_deadlift,
                total_weight, coefficient_points, place_open, place_in_age_class, place_in_weight_class,
                is_disqualified, disqualification_reason, broke_record, record_type, calculated_at
         FROM results
@@ -196,7 +196,7 @@ pub async fn get_age_class_ranking(
             id: row.try_get("id")?,
             registration_id: row.try_get("registration_id")?,
             contest_id: row.try_get("contest_id")?,
-            best_bench_press: row.try_get("best_bench_press")?,
+            best_bench: row.try_get("best_bench")?,
             best_squat: row.try_get("best_squat")?,
             best_deadlift: row.try_get("best_deadlift")?,
             total_weight: row.try_get("total_weight")?,
@@ -221,7 +221,7 @@ pub async fn get_weight_class_ranking(
 ) -> Result<Vec<CompetitionResult>, sqlx::Error> {
     let rows = sqlx::query(
         r#"
-        SELECT id, registration_id, contest_id, best_bench_press, best_squat, best_deadlift,
+        SELECT id, registration_id, contest_id, best_bench, best_squat, best_deadlift,
                total_weight, coefficient_points, place_open, place_in_age_class, place_in_weight_class,
                is_disqualified, disqualification_reason, broke_record, record_type, calculated_at
         FROM results
@@ -239,7 +239,7 @@ pub async fn get_weight_class_ranking(
             id: row.try_get("id")?,
             registration_id: row.try_get("registration_id")?,
             contest_id: row.try_get("contest_id")?,
-            best_bench_press: row.try_get("best_bench_press")?,
+            best_bench: row.try_get("best_bench")?,
             best_squat: row.try_get("best_squat")?,
             best_deadlift: row.try_get("best_deadlift")?,
             total_weight: row.try_get("total_weight")?,
@@ -357,7 +357,7 @@ pub async fn get_open_ranking(
 ) -> Result<Vec<CompetitionResult>, sqlx::Error> {
     let rows = sqlx::query(
         r#"
-        SELECT id, registration_id, contest_id, best_bench_press, best_squat, best_deadlift,
+        SELECT id, registration_id, contest_id, best_bench, best_squat, best_deadlift,
                total_weight, coefficient_points, place_open, place_in_age_class, place_in_weight_class,
                is_disqualified, disqualification_reason, broke_record, record_type, calculated_at
         FROM results 
@@ -375,7 +375,7 @@ pub async fn get_open_ranking(
             id: row.try_get("id")?,
             registration_id: row.try_get("registration_id")?,
             contest_id: row.try_get("contest_id")?,
-            best_bench_press: row.try_get("best_bench_press")?,
+            best_bench: row.try_get("best_bench")?,
             best_squat: row.try_get("best_squat")?,
             best_deadlift: row.try_get("best_deadlift")?,
             total_weight: row.try_get("total_weight")?,

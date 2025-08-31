@@ -10,7 +10,7 @@ CREATE TABLE contests (
     name TEXT NOT NULL,
     date TEXT NOT NULL, -- ISO 8601 format
     location TEXT NOT NULL,
-    discipline TEXT NOT NULL CHECK(discipline IN ('BenchPress','Squat','Deadlift','Powerlifting')),
+    discipline TEXT NOT NULL CHECK(discipline IN ('Bench','Squat','Deadlift','Powerlifting')),
     status TEXT NOT NULL DEFAULT 'Setup' CHECK(status IN ('Setup','InProgress','Paused','Completed')),
     federation_rules TEXT, -- Nullable - not every competition needs federation
     competition_type TEXT, -- Local/Regional/National/International
@@ -134,7 +134,7 @@ CREATE TABLE registrations (
 CREATE TABLE attempts (
     id TEXT PRIMARY KEY,
     registration_id TEXT NOT NULL, -- Changed from competitor_id to registration_id
-    lift_type TEXT NOT NULL CHECK(lift_type IN ('BenchPress','Squat','Deadlift')),
+    lift_type TEXT NOT NULL CHECK(lift_type IN ('Bench','Squat','Deadlift')),
     attempt_number INTEGER NOT NULL CHECK(attempt_number IN (1,2,3,4)), -- Added 4th for record attempts
     weight REAL NOT NULL CHECK(weight > 0), -- Always positive, use status for success/failure
     status TEXT NOT NULL DEFAULT 'Pending' CHECK(status IN ('Pending','Good','Failed','Skipped')),
@@ -153,7 +153,7 @@ CREATE TABLE current_lifts (
     id INTEGER PRIMARY KEY CHECK (id = 1), -- Only one current lift at a time
     contest_id TEXT NOT NULL,
     registration_id TEXT NOT NULL, -- Changed from competitor_id to registration_id
-    lift_type TEXT NOT NULL CHECK(lift_type IN ('BenchPress','Squat','Deadlift')),
+    lift_type TEXT NOT NULL CHECK(lift_type IN ('Bench','Squat','Deadlift')),
     attempt_number INTEGER NOT NULL CHECK(attempt_number IN (1,2,3,4)),
     weight REAL NOT NULL,
     timer_start TEXT, -- ISO 8601 timestamp when timer started
@@ -173,7 +173,7 @@ CREATE TABLE results (
     contest_id TEXT NOT NULL,
     
     -- Best lifts for each discipline
-    best_bench_press REAL DEFAULT 0,
+    best_bench REAL DEFAULT 0,
     best_squat REAL DEFAULT 0,
     best_deadlift REAL DEFAULT 0,
     total_weight REAL NOT NULL DEFAULT 0, -- Sum of best lifts

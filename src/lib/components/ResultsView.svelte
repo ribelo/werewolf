@@ -1,13 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
+  import { _ } from 'svelte-i18n';
+  import { Calculator, FileDown, FileText } from 'lucide-svelte';
 
   // Backend Models
   interface CompetitionResult {
     id: string;
     registrationId: string;
     contestId: string;
-    bestBenchPress?: number;
+    bestBench?: number;
     bestSquat?: number;
     bestDeadlift?: number;
     totalWeight: number;
@@ -140,10 +142,12 @@
     {/if}
     <div class="results-actions">
       <button on:click={calculateResults} disabled={loading || !contestId}>
-        Calculate Results
+        <Calculator size={16} strokeWidth={2} class="inline mr-2" />
+        {$_('results.calculate_results')}
       </button>
       <button on:click={() => exportResults('csv')} disabled={loading || !contestId}>
-        Export CSV
+        <FileDown size={16} strokeWidth={2} class="inline mr-2" />
+        {$_('results.export_csv')}
       </button>
       <button on:click={() => exportResults('json')} disabled={loading || !contestId}>
         Export JSON
@@ -209,7 +213,7 @@
               </td>
               <td>{result.registrationId}</td>
               <td>{result.bestSquat ? result.bestSquat.toFixed(1) : '-'}</td>
-              <td>{result.bestBenchPress ? result.bestBenchPress.toFixed(1) : '-'}</td>
+              <td>{result.bestBench ? result.bestBench.toFixed(1) : '-'}</td>
               <td>{result.bestDeadlift ? result.bestDeadlift.toFixed(1) : '-'}</td>
               <td class="total">{result.totalWeight.toFixed(1)}</td>
               <td>{result.coefficientPoints.toFixed(2)}</td>
@@ -229,11 +233,11 @@
     </div>
   {:else if !loading && contestId}
     <div class="no-results">
-      <p>No results available. Click "Calculate Results" to generate rankings.</p>
+      <p>{$_('results.no_results_available')}</p>
     </div>
   {:else if !contestId}
     <div class="no-contest">
-      <p>Select a contest to view results.</p>
+      <p>{$_('results.select_contest_to_view')}</p>
     </div>
   {/if}
 </div>

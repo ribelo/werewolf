@@ -155,3 +155,121 @@ fn get_backup_directory() -> String {
         "./backups".to_string()
     }
 }
+
+
+/// Photo quality assessment result
+#[derive(Debug, Clone)]
+pub struct PhotoQuality {
+    pub level: PhotoQualityLevel,
+    pub message: String,
+    pub original_width: u32,
+    pub original_height: u32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum PhotoQualityLevel {
+    Excellent, // > 800x1000px
+    Good,      // 400-800x500-1000px  
+    Fair,      // 200-400x250-500px
+    Poor,      // < 200x250px
+}
+
+/// Photo processing result containing processed image data and quality assessment
+#[derive(Debug, Clone)]
+pub struct PhotoProcessResult {
+    pub webp_data: Vec<u8>,
+    pub quality: PhotoQuality,
+    pub metadata: PhotoMetadata,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PhotoMetadata {
+    pub original_width: u32,
+    pub original_height: u32,
+    pub processed_width: u32,
+    pub processed_height: u32,
+    pub original_format: String,
+    pub file_size_bytes: usize,
+    pub compression_quality: u8,
+    pub processed_at: String,
+}
+
+/// Process a competitor photo from base64 data
+/// Converts to WebP format at 400x500px with quality assessment
+pub fn process_competitor_photo(
+    base64_data: &str,
+    original_filename: &str,
+) -> Result<PhotoProcessResult, Box<dyn std::error::Error>> {
+    use base64::{engine::general_purpose, Engine as _};
+    use image::{ImageFormat, ImageReader};
+    use std::io::Cursor;
+
+    // Decode base64 data
+    let image_data = general_purpose::STANDARD.decode(base64_data)?;
+    
+    // Load image
+    let img = ImageReader::new(Cursor::new(&image_data))
+        .with_guessed_format()?
+        .decode()?;
+    
+    let original_width = img.width();
+    let original_height = img.height();
+    
+    // Assess quality
+    let quality = assess_photo_quality(original_width, original_height);
+    
+    // Convert to RGB if needed and resize to exact 400x500px
+    let processed = img
+        .to_rgb8()
+        .resize_exact(400, 500, image::imageops::FilterType::Lanczos3);
+    
+    // Convert to WebP with 85% quality
+    let mut webp_data = Vec::new();
+    let encoder = webp::Encoder::from_rgb(&processed, 400, 500);
+    let encoded = encoder.encode(85.0);
+    webp_data.extend_from_slice(&encoded);
+    
+    // Extract original format from filename or image data
+    let original_format = std::path::Path::new(original_filename)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("unknown")
+        .to_lowercase();
+    
+    let metadata = PhotoMetadata {
+        original_width,
+        original_height,
+        processed_width: 400,
+        processed_height: 500,
+        original_format,
+        file_size_bytes: webp_data.len(),
+        compression_quality: 85,
+        processed_at: chrono::Utc::now().to_rfc3339(),
+    };
+    
+    Ok(PhotoProcessResult {
+        webp_data,
+        quality,
+        metadata,
+    })
+}
+
+/// Assess photo quality based on dimensions
+fn assess_photo_quality(width: u32, height: u32) -> PhotoQuality {
+    let (level, message) = if width >= 800 && height >= 1000 {
+        (PhotoQualityLevel::Excellent, "Excellent quality - perfect for professional use".to_string())
+    } else if width >= 400 && height >= 500 {
+        (PhotoQualityLevel::Good, "Good quality - suitable for competition use".to_string()) 
+    } else if width >= 200 && height >= 250 {
+        (PhotoQualityLevel::Fair, "Fair quality - acceptable but could be better".to_string())
+    } else {
+        (PhotoQualityLevel::Poor, "Poor quality - image is very small and may appear pixelated".to_string())
+    };
+    
+    PhotoQuality {
+        level,
+        message,
+        original_width: width,
+        original_height: height,
+    }
+}

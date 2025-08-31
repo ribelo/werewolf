@@ -1,8 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { _ } from 'svelte-i18n';
   import { appView } from './lib/stores';
   import ContestWizard from './lib/components/ContestWizard.svelte';
   import ContestView from './lib/components/ContestView.svelte';
+  import LanguageSwitcher from './lib/components/LanguageSwitcher.svelte';
+  import CustomTitlebar from './lib/components/CustomTitlebar.svelte';
+  import SettingsView from './lib/components/SettingsView.svelte';
+  import { Settings, Trophy, BarChart3 } from 'lucide-svelte';
+  import './lib/i18n';
 
   console.log('🔧 App.svelte script executing');
 
@@ -11,8 +17,8 @@
   });
 
   function handleSettingsClick(): void {
-    console.log("⚙️ Settings clicked - not implemented yet");
-    alert("Settings not implemented yet.");
+    console.log("⚙️ Settings clicked");
+    appView.set('settings');
   }
 
   function handleCompetitionWizardClick(): void {
@@ -24,22 +30,31 @@
   }
 </script>
 
-<div class="min-h-screen bg-main-bg flex flex-col">
+<!-- Custom Titlebar -->
+<CustomTitlebar />
+
+<div class="min-h-screen bg-main-bg flex flex-col" style="padding-top: 40px;">
   <!-- Header -->
-  <header class="container-full py-8 border-b border-border-color">
-    <h1 class="text-h1 text-center text-text-primary">
-      WEREWOLF
-    </h1>
-    <p class="text-caption text-center text-text-secondary mt-2">
-      Powerlifting Contest Management
-    </p>
+  <header class="container-full py-3 border-b-2 border-border-color">
+    <div class="flex justify-between items-center">
+      <div class="flex-1"></div>
+      <div class="text-center">
+        <h1 class="text-h1 text-text-primary">
+          {$_('app.title')}
+        </h1>
+        <p class="text-caption text-text-secondary mt-2">
+          {$_('app.subtitle')}
+        </p>
+      </div>
+      <div class="flex-1"></div>
+    </div>
   </header>
 
   <!-- Main Content -->
   <main class="flex-1">
     {#if $appView === 'mainMenu'}
-      <div class="container-medium py-16">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+      <div class="container-medium py-8">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 
           <!-- Settings Tile -->
           <div
@@ -50,10 +65,12 @@
             on:keydown={(e) => e.key === 'Enter' && handleSettingsClick()}
           >
             <div class="text-center">
-              <div class="text-6xl mb-6">⚙️</div>
-              <h2 class="text-h2 text-text-primary mb-4">Settings</h2>
+              <div class="mb-4">
+                <Settings size={48} class="mx-auto text-accent-red icon-shine" strokeWidth={1.5} />
+              </div>
+              <h2 class="text-h2 text-text-primary mb-2">{$_('menu.settings')}</h2>
               <p class="text-body text-text-secondary">
-                Configure application preferences and database settings
+                {$_('menu.settings_description')}
               </p>
             </div>
           </div>
@@ -67,10 +84,12 @@
             on:keydown={(e) => e.key === 'Enter' && handleCompetitionWizardClick()}
           >
             <div class="text-center">
-              <div class="text-6xl mb-6">🏋️</div>
-              <h2 class="text-h2 text-text-primary mb-4">Competition Wizard</h2>
+              <div class="mb-4">
+                <Trophy size={48} class="mx-auto text-accent-red icon-shine" strokeWidth={1.5} />
+              </div>
+              <h2 class="text-h2 text-text-primary mb-2">{$_('menu.create_competition')}</h2>
               <p class="text-body text-text-secondary">
-                Create and manage powerlifting competitions
+                {$_('menu.create_competition_description')}
               </p>
             </div>
           </div>
@@ -84,10 +103,12 @@
             on:keydown={(e) => e.key === 'Enter' && handleContestViewClick()}
           >
             <div class="text-center">
-              <div class="text-6xl mb-6">📊</div>
-              <h2 class="text-h2 text-text-primary mb-4">Contest View</h2>
+              <div class="mb-4">
+                <BarChart3 size={48} class="mx-auto text-accent-red icon-shine" strokeWidth={1.5} />
+              </div>
+              <h2 class="text-h2 text-text-primary mb-2">{$_('menu.manage_competition')}</h2>
               <p class="text-body text-text-secondary">
-                View and manage active competition progress
+                {$_('menu.manage_competition_description')}
               </p>
             </div>
           </div>
@@ -98,13 +119,15 @@
       <ContestWizard />
     {:else if $appView === 'contestView'}
       <ContestView />
+    {:else if $appView === 'settings'}
+      <SettingsView />
     {/if}
   </main>
 
   <!-- Footer -->
-  <footer class="container-full py-4 border-t border-border-color">
+  <footer class="container-full py-3 border-t-2 border-border-color">
     <p class="text-caption text-center text-text-secondary">
-      Built for Andrzej's Powerlifting Club
+      {$_('messages.built_for_club')}
     </p>
   </footer>
 </div>

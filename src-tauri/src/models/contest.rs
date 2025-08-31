@@ -8,7 +8,7 @@ use strum::{Display, EnumString};
 #[strum(serialize_all = "PascalCase")]
 #[sqlx(rename_all = "PascalCase")]
 pub enum Discipline {
-    BenchPress,
+    Bench,
     Squat,
     Deadlift,
     Powerlifting,

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
+  import { _ } from 'svelte-i18n';
   import { appView } from '../stores';
 
   // Backend Models
@@ -81,16 +82,6 @@
   let lifters: Lifter[] = [];
   let loading = false;
   let error = '';
-  let showRegistrationForm = false;
-
-  // New Competitor Form State
-  let newCompetitor = {
-    firstName: '',
-    lastName: '',
-    birthDate: '',
-    gender: 'Male',
-    bodyweight: 0,
-  };
 
   onMount(async () => {
     await loadContests();
@@ -170,39 +161,6 @@
     }
   }
 
-  async function handleRegisterCompetitor(): Promise<void> {
-    try {
-      loading = true;
-      error = '';
-
-      const createdCompetitor = await invoke<Competitor>('competitor_create', {
-        competitor: {
-          firstName: newCompetitor.firstName,
-          lastName: newCompetitor.lastName,
-          birthDate: newCompetitor.birthDate,
-          gender: newCompetitor.gender,
-        }
-      });
-
-      await invoke('registration_create', {
-        registration: {
-          contestId: selectedContestId,
-          competitorId: createdCompetitor.id,
-          bodyweight: newCompetitor.bodyweight,
-        }
-      });
-      
-      showRegistrationForm = false;
-      newCompetitor = { firstName: '', lastName: '', birthDate: '', gender: 'Male', bodyweight: 0 };
-      await loadContestData();
-
-    } catch (err) {
-      error = `Failed to register competitor: ${err}`;
-      console.error('Error registering competitor:', err);
-    } finally {
-      loading = false;
-    }
-  }
 
   async function updateAttempt(registrationId: string, liftType: LiftType, attemptNumber: number, weight: number): Promise<void> {
     try {
@@ -247,6 +205,9 @@
   }
 
   function getBestLift(attempts: Attempt[]): number {
+    if (!attempts || attempts.length === 0) {
+      return 0;
+    }
     return attempts.reduce((max, attempt) => {
       if (attempt.status === AttemptStatus.Good && attempt.weight > max) {
         return attempt.weight;
@@ -256,10 +217,12 @@
   }
 
   function getSubtotal(lifter: Lifter): number {
+    if (!lifter || !lifter.attempts) return 0;
     return getBestLift(lifter.attempts.Squat) + getBestLift(lifter.attempts.Bench);
   }
 
   function getTotal(lifter: Lifter): number {
+    if (!lifter || !lifter.attempts) return 0;
     return getBestLift(lifter.attempts.Squat) + getBestLift(lifter.attempts.Bench) + getBestLift(lifter.attempts.Deadlift);
   }
 
@@ -293,7 +256,10 @@
     appView.set('mainMenu');
   }
 
-  $: if (selectedContestId) {
+  let lastLoadedContestId: string = '';
+  
+  $: if (selectedContestId && selectedContestId !== lastLoadedContestId) {
+    lastLoadedContestId = selectedContestId;
     loadContestData();
   }
 </script>
@@ -303,9 +269,9 @@
   <header class="container-full py-6 border-b border-border-color">
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-h2 text-text-primary">Contest Management</h1>
+        <h1 class="text-h2 text-text-primary">{$_('contest_view.title')}</h1>
         <p class="text-caption text-text-secondary mt-1">
-          Manage lifters and attempts for powerlifting contests
+          {$_('contest_view.subtitle')}
         </p>
       </div>
       <button 
@@ -322,7 +288,7 @@
     {#if contests.length > 0}
       <div class="mb-8 flex items-center justify-between">
         <div>
-          <label for="contest-select" class="input-label">Select Contest</label>
+          <label for="contest-select" class="input-label">{$_('contest_view.select_contest')}</label>
           <select
             id="contest-select"
             bind:value={selectedContestId}
@@ -335,35 +301,32 @@
             {/each}
           </select>
         </div>
-        <button class="btn-primary" on:click={() => showRegistrationForm = !showRegistrationForm}>
-          {#if showRegistrationForm}Cancel{:else}Register Competitor{/if}
-        </button>
       </div>
     {/if}
 
     <!-- Contest State Management -->
     {#if contestState}
       <div class="mb-8 p-6 bg-card-bg border border-border-color">
-        <h3 class="text-h3 text-text-primary mb-4">Contest Status: {contestState.status}</h3>
+        <h3 class="text-h3 text-text-primary mb-4">{$_('contest_view.contest_status')} {contestState.status}</h3>
         <div class="flex space-x-4">
           {#if contestState.status === ContestStatus.Setup}
-            <button class="btn-primary" on:click={() => updateContestStatus(ContestStatus.Registration)}>Open Registration</button>
+            <button class="btn-primary" on:click={() => updateContestStatus(ContestStatus.Registration)}>{$_('contest_view.open_registration')}</button>
           {/if}
           {#if contestState.status === ContestStatus.Registration}
-            <button class="btn-primary" on:click={() => updateContestStatus(ContestStatus.InProgress)}>Start Contest</button>
+            <button class="btn-primary" on:click={() => updateContestStatus(ContestStatus.InProgress)}>{$_('contest_view.start_contest')}</button>
           {/if}
           {#if contestState.status === ContestStatus.InProgress}
-            <button class="btn-secondary" on:click={() => updateContestStatus(ContestStatus.Paused)}>Pause Contest</button>
-            <button class="btn-danger" on:click={() => updateContestStatus(ContestStatus.Complete)}>Finish Contest</button>
+            <button class="btn-secondary" on:click={() => updateContestStatus(ContestStatus.Paused)}>{$_('contest_view.pause_contest')}</button>
+            <button class="btn-danger" on:click={() => updateContestStatus(ContestStatus.Complete)}>{$_('contest_view.finish_contest')}</button>
           {/if}
           {#if contestState.status === ContestStatus.Paused}
-            <button class="btn-primary" on:click={() => updateContestStatus(ContestStatus.InProgress)}>Resume Contest</button>
+            <button class="btn-primary" on:click={() => updateContestStatus(ContestStatus.InProgress)}>{$_('contest_view.resume_contest')}</button>
           {/if}
         </div>
         {#if contestState.status === ContestStatus.InProgress}
           <div class="mt-4">
-            <p>Current Lift: {contestState.currentLift || 'N/A'}</p>
-            <p>Current Round: {contestState.currentRound}</p>
+            <p>{$_('contest_view.current_lift')} {contestState.currentLift || $_('contest_view.na')}</p>
+            <p>{$_('contest_view.current_round')} {contestState.currentRound}</p>
           </div>
         {/if}
       </div>
@@ -372,56 +335,20 @@
     <!-- Next Up Queue -->
     {#if contestState?.status === ContestStatus.InProgress && nextUpQueue.length > 0}
       <div class="mb-8 p-6 bg-card-bg border border-border-color">
-        <h3 class="text-h3 text-text-primary mb-4">Next Up</h3>
+        <h3 class="text-h3 text-text-primary mb-4">{$_('contest_view.next_up')}</h3>
         <ul>
           {#each nextUpQueue as attempt}
             <li class="flex items-center justify-between py-2 border-b border-border-color">
               <span>
                 Lifter: {getLifterName(attempt.registrationId)} - Attempt {attempt.attemptNumber} - {attempt.weight} kg
               </span>
-              <button class="btn-secondary" on:click={() => callNextLifter(attempt.id)}>Call Lifter</button>
+              <button class="btn-secondary" on:click={() => callNextLifter(attempt.id)}>{$_('contest_view.call_lifter')}</button>
             </li>
           {/each}
         </ul>
       </div>
     {/if}
 
-    <!-- Registration Form -->
-    {#if showRegistrationForm}
-      <div class="p-6 bg-card-bg border border-border-color mb-8">
-        <h3 class="text-h3 text-text-primary mb-4">Register New Competitor</h3>
-        <form on:submit|preventDefault={handleRegisterCompetitor} class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div class="col-span-1">
-            <label for="firstName" class="input-label">First Name</label>
-            <input type="text" id="firstName" bind:value={newCompetitor.firstName} class="input-field" required>
-          </div>
-          <div class="col-span-1">
-            <label for="lastName" class="input-label">Last Name</label>
-            <input type="text" id="lastName" bind:value={newCompetitor.lastName} class="input-field" required>
-          </div>
-          <div class="col-span-1">
-            <label for="birthDate" class="input-label">Birth Date</label>
-            <input type="date" id="birthDate" bind:value={newCompetitor.birthDate} class="input-field" required>
-          </div>
-          <div class="col-span-1">
-            <label for="gender" class="input-label">Gender</label>
-            <select id="gender" bind:value={newCompetitor.gender} class="input-field">
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-            </select>
-          </div>
-          <div class="col-span-1">
-            <label for="bodyweight" class="input-label">Bodyweight (kg)</label>
-            <input type="number" step="0.1" id="bodyweight" bind:value={newCompetitor.bodyweight} class="input-field" required>
-          </div>
-          <div class="col-span-3 flex justify-end">
-            <button type="submit" class="btn-primary" disabled={loading}>
-              {loading ? 'Registering...' : 'Register'}
-            </button>
-          </div>
-        </form>
-      </div>
-    {/if}
 
     <!-- Error Display -->
     {#if error}
@@ -433,13 +360,13 @@
     <!-- Loading State -->
     {#if loading && lifters.length === 0}
       <div class="text-center py-8">
-        <div class="text-text-secondary">Loading contest data...</div>
+        <div class="text-text-secondary">{$_('contest_view.loading_contest_data')}</div>
       </div>
     {:else if contests.length === 0 && !error}
       <!-- No Contests -->
       <div class="text-center py-8">
-        <div class="text-text-secondary mb-4">No contests found</div>
-        <p class="text-text-secondary">Create a contest using the Competition Wizard first.</p>
+        <div class="text-text-secondary mb-4">{$_('contest_view.no_contests_found')}</div>
+        <p class="text-text-secondary">{$_('contest_view.create_contest_first')}</p>
         <button 
           class="btn-primary mt-4"
           on:click={() => appView.set('contestWizard')}
@@ -450,7 +377,7 @@
     {:else if lifters.length === 0 && selectedContestId && !loading}
       <!-- No Lifters -->
       <div class="text-center py-8">
-        <div class="text-text-secondary mb-4">No lifters registered for this contest.</div>
+        <div class="text-text-secondary mb-4">{$_('contest_view.no_lifters_registered')}</div>
       </div>
     {:else if lifters.length > 0}
       <!-- Lifters Table -->
@@ -458,23 +385,23 @@
         <table class="min-w-full border-collapse bg-card-bg">
           <thead class="bg-element-bg text-text-primary">
             <tr>
-              <th rowspan="2" class="py-3 px-4 border border-border-color text-left">Lifter</th>
-              <th colspan="3" class="py-3 px-4 border border-border-color text-center">Squat</th>
-              <th colspan="3" class="py-3 px-4 border border-border-color text-center">Bench</th>
-              <th rowspan="2" class="py-3 px-4 border border-border-color text-center">Subtotal</th>
-              <th colspan="3" class="py-3 px-4 border border-border-color text-center">Deadlift</th>
-              <th rowspan="2" class="py-3 px-4 border border-border-color text-center">Total</th>
+              <th rowspan="2" class="py-3 px-4 border border-border-color text-left">{$_('contest_view.lifter')}</th>
+              <th colspan="3" class="py-3 px-4 border border-border-color text-center">{$_('contest_view.squat')}</th>
+              <th colspan="3" class="py-3 px-4 border border-border-color text-center">{$_('contest_view.bench')}</th>
+              <th rowspan="2" class="py-3 px-4 border border-border-color text-center">{$_('contest_view.subtotal')}</th>
+              <th colspan="3" class="py-3 px-4 border border-border-color text-center">{$_('contest_view.deadlift')}</th>
+              <th rowspan="2" class="py-3 px-4 border border-border-color text-center">{$_('contest_view.total')}</th>
             </tr>
             <tr>
               <!-- Attempt headers -->
               {#each [1, 2, 3] as i}
-                <th class="py-2 px-4 border border-border-color text-center text-sm">{i}st</th>
+                <th class="py-2 px-4 border border-border-color text-center text-sm">{$_('contest_view.attempt_ordinal_' + i)}</th>
               {/each}
               {#each [1, 2, 3] as i}
-                <th class="py-2 px-4 border border-border-color text-center text-sm">{i}nd</th>
+                <th class="py-2 px-4 border border-border-color text-center text-sm">{$_('contest_view.attempt_ordinal_' + i)}</th>
               {/each}
                {#each [1, 2, 3] as i}
-                <th class="py-2 px-4 border border-border-color text-center text-sm">{i}rd</th>
+                <th class="py-2 px-4 border border-border-color text-center text-sm">{$_('contest_view.attempt_ordinal_' + i)}</th>
               {/each}
             </tr>
           </thead>

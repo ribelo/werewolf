@@ -9,6 +9,12 @@ pub struct Competitor {
     pub last_name: String,
     pub birth_date: String,
     pub gender: String,
+    pub club: Option<String>,
+    pub city: Option<String>,
+    pub notes: Option<String>,
+    pub photo_base64: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 #[derive(Serialize, Deserialize, Type, Debug, Clone)]
@@ -18,4 +24,6 @@ pub struct CompetitorCreate {
     pub last_name: String,
     pub birth_date: String,
     pub gender: String,
+    pub photo_base64: Option<String>,
+    pub photo_filename: Option<String>,
 }

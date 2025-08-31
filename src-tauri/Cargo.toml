@@ -35,6 +35,11 @@ strum = { version = "0.27", features = ["derive"] }
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+base64 = "0.22"
+
+# Image processing
+image = { version = "0.25", features = ["webp", "jpeg", "png"] }
+webp = "0.3"
 
 # Error handling
 thiserror = "2.0"

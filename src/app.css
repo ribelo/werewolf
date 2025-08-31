@@ -23,38 +23,38 @@
   }
 }
 
-/* Blood Theme Design System Components */
+/* Blood Theme Design System Components - COMPACT DATA-FRIENDLY VERSION */
 @layer components {
-  /* Typography Classes */
-  .text-hero { @apply text-hero font-display font-normal tracking-[0.5rem]; }
-  .text-display { @apply text-display font-display font-normal tracking-[0.25rem]; }
-  .text-h1 { @apply text-6xl font-display font-normal tracking-[0.125rem]; }
-  .text-h2 { @apply text-4xl font-display font-normal tracking-wider; }
-  .text-h3 { @apply text-2xl font-display font-normal tracking-wide; }
+  /* Typography Classes - Compact but Stylish */
+  .text-hero { @apply text-hero font-display font-normal tracking-[0.25rem]; }
+  .text-display { @apply text-display font-display font-normal tracking-[0.125rem]; }
+  .text-h1 { @apply text-3xl font-display font-normal tracking-wider; }
+  .text-h2 { @apply text-2xl font-display font-normal tracking-wide; }
+  .text-h3 { @apply text-xl font-display font-normal tracking-wide; }
   
   .weight-hero { @apply text-weight-hero font-mono font-bold leading-none; }
   .weight-large { @apply text-weight-large font-mono font-bold leading-none; }
   .weight-medium { @apply text-weight-medium font-mono font-semibold leading-none; }
   .weight-small { @apply text-weight-small font-mono font-semibold leading-none; }
   
-  .text-body { @apply text-base font-body font-normal leading-relaxed; }
+  .text-body { @apply text-sm font-body font-normal leading-relaxed; }
   .text-label { @apply text-xs font-body font-semibold uppercase tracking-widest; }
-  .text-caption { @apply text-sm font-body font-medium leading-tight; }
+  .text-caption { @apply text-xs font-body font-medium leading-tight; }
 
-  /* Layout Containers */
-  .container-narrow { @apply max-w-2xl mx-auto px-4 md:px-8; }
-  .container-medium { @apply max-w-4xl mx-auto px-4 md:px-8; }
-  .container-wide { @apply max-w-6xl mx-auto px-4 md:px-8; }
-  .container-full { @apply max-w-7xl mx-auto px-4 md:px-8; }
+  /* Layout Containers - Full Width for Data Density */
+  .container-narrow { @apply max-w-2xl mx-auto px-3; }
+  .container-medium { @apply max-w-4xl mx-auto px-3; }
+  .container-wide { @apply max-w-6xl mx-auto px-3; }
+  .container-full { @apply max-w-7xl mx-auto px-3; }
 
-  /* Card Components */
+  /* Card Components - Compact with Blood Theme */
   .card {
-    @apply bg-card-bg border-2 border-border-color p-8 shadow-card relative 
+    @apply bg-card-bg border-2 border-border-color p-4 shadow-card relative 
            transition-all duration-300 ease-in-out;
   }
   
   .card:hover {
-    @apply border-primary-red transform -translate-y-1;
+    @apply border-primary-red;
     box-shadow: 0 8px 32px rgba(220, 20, 60, 0.3);
   }
   
@@ -64,12 +64,12 @@
            bg-gradient-to-r from-transparent via-primary-red to-transparent;
   }
   
-  .card-header { @apply border-b-2 border-border-color pb-6 mb-6; }
+  .card-header { @apply border-b-2 border-border-color pb-3 mb-3; }
 
-  /* Button Components */
+  /* Button Components - Compact Blood Theme */
   .btn-primary {
     @apply bg-primary-red text-black border-2 border-primary-red 
-           px-8 py-4 font-display text-lg tracking-wider uppercase
+           px-4 py-2 font-display text-sm tracking-wider uppercase
            transition-all duration-300 ease-in-out cursor-pointer
            hover:bg-accent-red hover:border-accent-red hover:-translate-y-0.5;
     box-shadow: 0 0 20px rgba(255, 0, 64, 0.5);
@@ -77,22 +77,22 @@
   
   .btn-secondary {
     @apply bg-transparent text-text-secondary border-2 border-border-color
-           px-8 py-4 font-display text-lg tracking-wider uppercase
+           px-4 py-2 font-display text-sm tracking-wider uppercase
            transition-all duration-300 ease-in-out cursor-pointer
            hover:text-text-primary hover:border-primary-red hover:bg-red-500/10;
   }
   
   .btn-ghost {
     @apply bg-transparent text-text-secondary border-2 border-transparent
-           px-8 py-4 font-display text-lg tracking-wider uppercase
+           px-4 py-2 font-display text-sm tracking-wider uppercase
            transition-all duration-300 ease-in-out cursor-pointer
            hover:text-text-primary hover:border-border-color;
   }
 
-  /* Form Elements */
+  /* Form Elements - Blood Theme with Proper Colors */
   .input-field {
-    @apply bg-element-bg border-2 border-border-color text-text-primary px-4 py-4
-           font-body text-base transition-all duration-300 ease-in-out
+    @apply bg-element-bg border-2 border-border-color text-text-primary px-3 py-2
+           font-body text-sm transition-all duration-300 ease-in-out
            focus:border-primary-red focus:outline-none focus:ring-0;
     box-shadow: 0 0 0 0 transparent;
   }
@@ -101,10 +101,10 @@
     box-shadow: 0 0 0 3px rgba(220, 20, 60, 0.2);
   }
 
-  /* Specific styling for select elements */
+  /* Specific styling for select elements - Blood Theme */
   select.input-field {
-    @apply bg-element-bg border-2 border-border-color text-text-primary px-4 py-4
-           font-body text-base transition-all duration-300 ease-in-out
+    @apply bg-element-bg border-2 border-border-color text-text-primary px-3 py-2
+           font-body text-sm transition-all duration-300 ease-in-out
            focus:border-primary-red focus:outline-none focus:ring-0;
     box-shadow: 0 0 0 0 transparent;
     -webkit-appearance: none;
@@ -115,19 +115,23 @@
     background-repeat: no-repeat;
     background-size: 1.25em 1.25em;
     padding-right: 2.5rem;
+    /* Force dark theme in dropdown */
+    color-scheme: dark;
   }
 
   select.input-field option {
     @apply bg-element-bg text-text-primary;
+    background-color: #2C2C2C !important;
+    color: #FFFFFF !important;
   }
   
   .input-label {
-    @apply block text-label text-text-secondary mb-2;
+    @apply block text-label text-text-secondary mb-1;
   }
 
-  /* Status Components */
+  /* Status Components - Blood Theme */
   .status-badge {
-    @apply inline-flex items-center px-6 py-3 font-display text-base 
+    @apply inline-flex items-center px-3 py-1 font-display text-xs 
            tracking-wider uppercase;
   }
   
@@ -136,24 +140,24 @@
   .status-error { @apply bg-status-error text-red-100; }
   .status-neutral { @apply bg-element-bg text-text-secondary; }
 
-  /* Attempt Status */
-  .attempt-pending { @apply text-gray-400 bg-element-bg px-3 py-2 font-mono text-sm; }
-  .attempt-good { @apply text-green-100 bg-status-success px-3 py-2 font-mono text-sm font-bold; }
-  .attempt-failed { @apply text-red-100 bg-status-error px-3 py-2 font-mono text-sm line-through; }
+  /* Attempt Status - Blood Theme */
+  .attempt-pending { @apply text-gray-400 bg-element-bg px-2 py-1 font-mono text-xs; }
+  .attempt-good { @apply text-green-100 bg-status-success px-2 py-1 font-mono text-xs font-bold; }
+  .attempt-failed { @apply text-red-100 bg-status-error px-2 py-1 font-mono text-xs line-through; }
 
-  /* Weight Display Components */
+  /* Weight Display Components - Blood Theme */
   .weight-display { @apply text-center; }
   .weight-value { @apply font-mono font-bold text-text-primary; }
   .weight-unit { @apply font-mono font-normal text-text-secondary ml-2; }
   
-  .weight-hero .weight-unit { @apply text-4xl; }
-  .weight-large .weight-unit { @apply text-3xl; }
-  .weight-medium .weight-unit { @apply text-xl; }
-  .weight-small .weight-unit { @apply text-base; }
+  .weight-hero .weight-unit { @apply text-2xl; }
+  .weight-large .weight-unit { @apply text-xl; }
+  .weight-medium .weight-unit { @apply text-base; }
+  .weight-small .weight-unit { @apply text-sm; }
 
-  /* Timer Components */
+  /* Timer Components - Blood Theme */
   .timer-display {
-    @apply weight-hero text-center p-8 bg-main-bg text-text-primary;
+    @apply weight-large text-center p-4 bg-main-bg text-text-primary;
   }
   
   .timer-bar {
@@ -163,39 +167,48 @@
   .timer-warning { @apply animate-pulse-slow bg-status-warning; }
   .timer-critical { @apply animate-ping bg-status-error; }
 
-  /* Display Window (Big Screen) */
+  /* Display Window (Big Screen) - Blood Theme */
   .display-view { @apply bg-main-bg text-text-primary min-h-screen; }
-  .display-title { @apply text-hero text-center text-text-primary mb-12; }
-  .display-competitor { @apply text-h1 text-center text-text-primary mb-8; }
+  .display-title { @apply text-hero text-center text-text-primary mb-8; }
+  .display-competitor { @apply text-h1 text-center text-text-primary mb-6; }
   .display-weight { @apply weight-hero text-center text-accent-red; }
 
-  /* Leaderboard */
+  /* Leaderboard - Blood Theme */
   .leaderboard-row {
     @apply border-b-2 border-border-color hover:bg-card-bg transition-colors duration-200;
   }
   
   .leaderboard-place {
-    @apply text-h3 font-bold text-text-primary w-16 text-center;
+    @apply text-h3 font-bold text-text-primary w-12 text-center;
   }
   
   .leaderboard-place.first { @apply text-yellow-400; }
   .leaderboard-place.second { @apply text-gray-300; }
   .leaderboard-place.third { @apply text-amber-600; }
 
-  /* Grid Layouts */
-  .stats-grid { @apply grid gap-4 grid-cols-1 md:grid-cols-3; }
-  .leaderboard-grid { @apply grid gap-6 grid-cols-1 lg:grid-cols-2; }
+  /* Grid Layouts - Compact */
+  .stats-grid { @apply grid gap-3 grid-cols-1 md:grid-cols-3; }
+  .leaderboard-grid { @apply grid gap-4 grid-cols-1 lg:grid-cols-2; }
   .attempt-grid { @apply grid gap-2 grid-cols-3; }
 
-  /* Visual Effects */
+  /* Visual Effects - Blood Theme */
   .glow-effect { @apply shadow-glow; }
   .glow-active { @apply animate-pulse-glow; }
   
-  .divider { @apply h-0.5 bg-border-color my-8; }
-  .divider-accent { @apply h-1 bg-gradient-to-r from-transparent via-primary-red to-transparent my-8; }
+  /* Heartbeat Icon Animation - Blood Theme */
+  .icon-shine {
+    animation: heartbeat-pulse 2.5s ease-in-out infinite;
+  }
+  
+  .icon-shine:hover {
+    animation: heartbeat-pulse 1.2s ease-in-out;
+  }
+  
+  .divider { @apply h-0.5 bg-border-color my-4; }
+  .divider-accent { @apply h-1 bg-gradient-to-r from-transparent via-primary-red to-transparent my-4; }
 
   /* Mobile Responsive Helpers */
-  .mobile-stack { @apply flex flex-col md:flex-row gap-4 md:gap-8; }
+  .mobile-stack { @apply flex flex-col md:flex-row gap-2 md:gap-4; }
   .mobile-center { @apply text-center md:text-left; }
   .mobile-full { @apply w-full md:w-auto; }
 }
@@ -210,21 +223,53 @@
   .transition-smooth {
     @apply transition-all duration-300 ease-in-out;
   }
+  
+  /* Heartbeat pulse animation keyframes */
+  @keyframes heartbeat-pulse {
+    0%, 70% { 
+      transform: scale(1);
+      filter: brightness(1) hue-rotate(0deg) drop-shadow(0 0 0 transparent);
+    }
+    10% { 
+      transform: scale(1.02);
+      filter: brightness(1.15) hue-rotate(5deg) drop-shadow(0 0 3px rgba(255, 0, 64, 0.4)); 
+    }
+    20% { 
+      transform: scale(1);
+      filter: brightness(1) hue-rotate(0deg) drop-shadow(0 0 0 transparent); 
+    }
+    30% { 
+      transform: scale(1.01);
+      filter: brightness(1.1) hue-rotate(3deg) drop-shadow(0 0 2px rgba(255, 0, 64, 0.3)); 
+    }
+    40% { 
+      transform: scale(1);
+      filter: brightness(1) hue-rotate(0deg) drop-shadow(0 0 0 transparent); 
+    }
+  }
 
-  /* Mobile font size adjustments - reduce by ~25% */
+  /* Mobile font size adjustments - compact but readable */
   @media (max-width: 768px) {
-    .text-hero { @apply text-7xl; }        /* 128px → 96px */
-    .text-display { @apply text-6xl; }     /* 96px → 72px */
-    .text-h1 { @apply text-5xl; }          /* 60px → 48px */
-    .text-h2 { @apply text-3xl; }          /* 36px → 30px */
+    .text-hero { @apply text-5xl; }        /* 64px → 48px */
+    .text-display { @apply text-4xl; }     /* 48px → 36px */
+    .text-h1 { @apply text-2xl; }          /* 24px → 20px */
+    .text-h2 { @apply text-xl; }           /* 20px → 18px */
     
-    .weight-hero { @apply text-7xl; }      /* 128px → 96px */
-    .weight-large { @apply text-6xl; }     /* 96px → 72px */
+    .weight-hero { @apply text-5xl; }      /* 64px → 48px */
+    .weight-large { @apply text-4xl; }     /* 48px → 36px */
     
     /* Reduce card padding on mobile */
-    .card { @apply p-6; }                  /* 32px → 24px */
+    .card { @apply p-3; }                  /* 16px → 12px */
     
     /* Stack button groups vertically on mobile */
-    .mobile-stack { @apply flex-col gap-4; }
+    .mobile-stack { @apply flex-col gap-2; }
+    
+    /* Adjust containers on mobile */
+    .container-narrow,
+    .container-medium,
+    .container-wide,
+    .container-full {
+      @apply px-2;
+    }
   }
 }

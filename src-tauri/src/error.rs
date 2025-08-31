@@ -37,6 +37,9 @@ pub enum AppError {
 
     #[error("Internal error: {0}")]
     Internal(String),
+
+    #[error("Photo processing error: {0}")]
+    PhotoProcessing(#[from] crate::database::queries::competitors::PhotoProcessError),
 }
 
 impl serde::Serialize for AppError {

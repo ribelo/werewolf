@@ -2,9 +2,17 @@ import './app.css'
 import App from './App.svelte'
 import { mount } from 'svelte'
 import { initLogging } from './lib/logging'
+import { locale } from 'svelte-i18n'
+import './lib/i18n'
 
 // Initialize unified logging system first
 initLogging()
+
+// Initialize language from localStorage
+const savedLanguage = localStorage.getItem('werewolf-language')
+if (savedLanguage) {
+  locale.set(savedLanguage)
+}
 
 console.log('🐺 Werewolf Frontend Starting')
 console.log('Environment:', (import.meta as any).env?.MODE || 'unknown')
