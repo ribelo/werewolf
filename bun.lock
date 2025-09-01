@@ -6,7 +6,7 @@
       "dependencies": {
         "@tauri-apps/api": "2.8",
         "@tauri-apps/plugin-opener": "2.5",
-        "cropperjs": "^2.0.1",
+        "cropperjs": "1.6.2",
         "lucide-svelte": "^0.542.0",
         "svelte": "5.38",
         "svelte-i18n": "^4.0.1",
@@ -28,28 +28,6 @@
   },
   "packages": {
     "@alloc/quick-lru": ["@alloc/quick-lru@5.2.0", "", {}, "sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw=="],
-
-    "@cropper/element": ["@cropper/element@2.0.1", "", { "dependencies": { "@cropper/utils": "^2.0.1" } }, "sha512-Jn1hR7XWzWQM/QfXRGMGzdkJ2gG/UcLdQPZQ7OKs0JiFfRzKpzu4u/nYrXHeH3MM2iOslLqh2kqYju6mjZLMJQ=="],
-
-    "@cropper/element-canvas": ["@cropper/element-canvas@2.0.1", "", { "dependencies": { "@cropper/element": "^2.0.1", "@cropper/utils": "^2.0.1" } }, "sha512-OKxq/O0HL9W2JegOsc2zh1NRpERZcLM5+M8aQ/eXdmMcfi1lzosPftag3Irp6pTsVpwV6B6ypIxKESzJ4ci9Fw=="],
-
-    "@cropper/element-crosshair": ["@cropper/element-crosshair@2.0.1", "", { "dependencies": { "@cropper/element": "^2.0.1", "@cropper/utils": "^2.0.1" } }, "sha512-bS5msU9cTU/jf1/kDw+QJmEM9/rw8IgOdpolR85iMVUCR8sRcLa0wgom42MBHcpBYB6hvL5YfiOeXZ7lHIYMpw=="],
-
-    "@cropper/element-grid": ["@cropper/element-grid@2.0.1", "", { "dependencies": { "@cropper/element": "^2.0.1", "@cropper/utils": "^2.0.1" } }, "sha512-ayqCvYQJ+GVT31HhFpttzHabW1T/LsIwLJY5PLTMG0cEZLw/E8ihg8mxctjZbo852D7oEePbz6/2SeuCb1018Q=="],
-
-    "@cropper/element-handle": ["@cropper/element-handle@2.0.1", "", { "dependencies": { "@cropper/element": "^2.0.1", "@cropper/utils": "^2.0.1" } }, "sha512-fdifyyPIaR9S2eQ7qPHuM8fX8uToAfBsi8vQlR9EM+oJkDNil0uO4rWyArLWEtlr0/q7U0OvsufcuJ7ffqfmpg=="],
-
-    "@cropper/element-image": ["@cropper/element-image@2.0.1", "", { "dependencies": { "@cropper/element": "^2.0.1", "@cropper/element-canvas": "^2.0.1", "@cropper/utils": "^2.0.1" } }, "sha512-gPj5Sl2T8Cno198Cz3F3TDfcYoALW3yJ3fV6PHXmhMnX8sBkL7J441do7Vwkg0mEd2CogCtTLAf+p7ljdV0kgA=="],
-
-    "@cropper/element-selection": ["@cropper/element-selection@2.0.1", "", { "dependencies": { "@cropper/element": "^2.0.1", "@cropper/element-canvas": "^2.0.1", "@cropper/element-image": "^2.0.1", "@cropper/utils": "^2.0.1" } }, "sha512-atv+Aeq2N2eWawelIRPGh1kYFdNrpb0QkUPPheGxz1ImfxpLdcHO9gb9T5noQijizUW2G0pNvts4ZaITQ0I71Q=="],
-
-    "@cropper/element-shade": ["@cropper/element-shade@2.0.1", "", { "dependencies": { "@cropper/element": "^2.0.1", "@cropper/element-canvas": "^2.0.1", "@cropper/element-selection": "^2.0.1", "@cropper/utils": "^2.0.1" } }, "sha512-YIYgJ690NdFQ6wJLRFh/EySNVxGFKArncQ4FrsJ3yHU+ShgtOKz4FpjFLpqJRJB9swoVbD3WKTimGyzXrwjZrQ=="],
-
-    "@cropper/element-viewer": ["@cropper/element-viewer@2.0.1", "", { "dependencies": { "@cropper/element": "^2.0.1", "@cropper/element-canvas": "^2.0.1", "@cropper/element-image": "^2.0.1", "@cropper/element-selection": "^2.0.1", "@cropper/utils": "^2.0.1" } }, "sha512-HDj25l08pWi/AO6El/OqfQHBpBC4Lh5NEnQN1SOldsmxEwt27Ubv6ndDsF8LkTK7XPwjjZRpyQPyfig4w8L2JQ=="],
-
-    "@cropper/elements": ["@cropper/elements@2.0.1", "", { "dependencies": { "@cropper/element": "^2.0.1", "@cropper/element-canvas": "^2.0.1", "@cropper/element-crosshair": "^2.0.1", "@cropper/element-grid": "^2.0.1", "@cropper/element-handle": "^2.0.1", "@cropper/element-image": "^2.0.1", "@cropper/element-selection": "^2.0.1", "@cropper/element-shade": "^2.0.1", "@cropper/element-viewer": "^2.0.1" } }, "sha512-paFbBLXTKXNngn1yDi2ZIf+FO1pIEQXyBntmqOjuxqtG73KuEKv633wsJPFpj958bgcfSakgBbF80j+3nHbPug=="],
-
-    "@cropper/utils": ["@cropper/utils@2.0.1", "", {}, "sha512-A9RnAFmgNF5aZk5q2VZnFnHtXWu1kPyEN0LVsX8wJ2LBRu2nyETKwz+ZXVsVWliktToCaYojHKrS+6/HODyEZA=="],
 
     "@esbuild/aix-ppc64": ["@esbuild/aix-ppc64@0.25.9", "", { "os": "aix", "cpu": "ppc64" }, "sha512-OaGtL73Jck6pBKjNIe24BnFE6agGl+6KxDtTfHhy1HmhthfKouEcOhqpSL64K4/0WCtbKFLOdzD/44cJ4k9opA=="],
 
@@ -259,7 +237,7 @@
 
     "commander": ["commander@4.1.1", "", {}, "sha512-NOKm8xhkzAjzFx8B2v5OAHT+u5pRQc2UCa2Vq9jYL/31o2wi9mxBA7LIFs3sV5VSC49z6pEhfbMULvShKj26WA=="],
 
-    "cropperjs": ["cropperjs@2.0.1", "", { "dependencies": { "@cropper/elements": "^2.0.1", "@cropper/utils": "^2.0.1" } }, "sha512-hiJwk2SCPZqxMA7aR3byzLpYUqOrQo+ihMk8k/WRm/xe/LX8wNzAIzMwEB/NEGJYA6sbewxW9TUlrRUYi/2Ipg=="],
+    "cropperjs": ["cropperjs@1.6.2", "", {}, "sha512-nhymn9GdnV3CqiEHJVai54TULFAE3VshJTXSqSJKa8yXAKyBKDWdhHarnlIPrshJ0WMFTGuFvG02YjLXfPiuOA=="],
 
     "cross-spawn": ["cross-spawn@7.0.6", "", { "dependencies": { "path-key": "^3.1.0", "shebang-command": "^2.0.0", "which": "^2.0.1" } }, "sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA=="],
 

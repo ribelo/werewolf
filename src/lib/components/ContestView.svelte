@@ -3,6 +3,7 @@
   import { invoke } from '@tauri-apps/api/core';
   import { _ } from 'svelte-i18n';
   import { appView } from '../stores';
+  import CompetitorThumbnail from './CompetitorThumbnail.svelte';
 
   // Backend Models
   interface Contest {
@@ -19,6 +20,12 @@
     lastName: string;
     birthDate: string;
     gender: string;
+    club?: string;
+    city?: string;
+    notes?: string;
+    photoBase64?: string; // Base64 encoded photo data from backend
+    createdAt: string;
+    updatedAt: string;
   }
 
   interface Registration {
@@ -80,8 +87,10 @@
   let nextUpQueue: Attempt[] = [];
   let selectedContestId: string = '';
   let lifters: Lifter[] = [];
+  let results: LifterResult[] = [];
   let loading = false;
   let error = '';
+
 
   onMount(async () => {
     await loadContests();
@@ -116,32 +125,65 @@
   }
 
   async function loadContestData(): Promise<void> {
-    if (!selectedContestId) return;
+    console.log('🚀 loadContestData called with selectedContestId:', selectedContestId);
+    if (!selectedContestId) {
+      console.log('❌ No selectedContestId, returning early');
+      return;
+    }
 
     try {
       loading = true;
       error = '';
+      console.log('📥 Starting data loading process...');
       
       // Load lifters
       const registrations = await invoke<Registration[]>('registration_list', { contestId: selectedContestId });
       const allAttempts = await invoke<Attempt[]>('attempt_list_for_contest', { contestId: selectedContestId });
 
+      console.log('🔍 Registrations found:', registrations.length, registrations);
+      
       const lifterPromises = registrations.map(async (reg) => {
-        const competitor = await invoke<Competitor>('competitor_get', { competitorId: reg.competitorId });
-        const lifterAttempts = allAttempts.filter(a => a.registrationId === reg.id);
-        const attemptsByType = {
-          [LiftType.Squat]: lifterAttempts.filter(a => a.liftType === LiftType.Squat).sort((a,b) => a.attemptNumber - b.attemptNumber),
-          [LiftType.Bench]: lifterAttempts.filter(a => a.liftType === LiftType.Bench).sort((a,b) => a.attemptNumber - b.attemptNumber),
-          [LiftType.Deadlift]: lifterAttempts.filter(a => a.liftType === LiftType.Deadlift).sort((a,b) => a.attemptNumber - b.attemptNumber),
-        };
-        return {
-          registrationId: reg.id,
-          competitor,
-          bodyweight: reg.bodyweight,
-          attempts: attemptsByType,
-        };
+        try {
+          const competitor = await invoke<Competitor>('competitor_get', { competitorId: reg.competitorId });
+          console.log('👤 Raw competitor data:', competitor);
+          
+          console.log('📄 Processing attempts for registration:', reg.id);
+          const lifterAttempts = allAttempts.filter(a => a.registrationId === reg.id);
+          console.log('🎯 Found', lifterAttempts.length, 'attempts for this registration');
+          
+          const attemptsByType = {
+            [LiftType.Squat]: lifterAttempts.filter(a => a.liftType === LiftType.Squat).sort((a,b) => a.attemptNumber - b.attemptNumber),
+            [LiftType.Bench]: lifterAttempts.filter(a => a.liftType === LiftType.Bench).sort((a,b) => a.attemptNumber - b.attemptNumber),
+            [LiftType.Deadlift]: lifterAttempts.filter(a => a.liftType === LiftType.Deadlift).sort((a,b) => a.attemptNumber - b.attemptNumber),
+          };
+          
+          console.log('🔢 Attempts by type:', {
+            squat: attemptsByType[LiftType.Squat].length,
+            bench: attemptsByType[LiftType.Bench].length,
+            deadlift: attemptsByType[LiftType.Deadlift].length
+          });
+          
+          const lifter = {
+            registrationId: reg.id,
+            competitor,
+            bodyweight: reg.bodyweight,
+            attempts: attemptsByType,
+          };
+          
+          console.log('🏋️‍♂️ Created lifter:', lifter);
+          return lifter;
+        } catch (mapError) {
+          console.error('💥 Error processing registration:', reg.id, mapError);
+          throw mapError;
+        }
       });
-      lifters = await Promise.all(lifterPromises);
+      
+      console.log('⏳ About to resolve', lifterPromises.length, 'promises');
+      const resolvedLifters = await Promise.all(lifterPromises);
+      console.log('✅ Resolved lifters:', resolvedLifters.length, resolvedLifters);
+      
+      lifters = resolvedLifters;
+      console.log('🎯 Assigned to lifters variable:', lifters.length, lifters);
       
       // Load contest state
       contestState = await invoke<ContestState | null>('contest_state_get', { contestId: selectedContestId });
@@ -155,9 +197,11 @@
 
     } catch (err) {
       error = `Failed to load contest data: ${err}`;
-      console.error('Error loading contest data:', err);
+      console.error('💥 Error loading contest data:', err);
+      console.error('💥 Error details:', JSON.stringify(err, null, 2));
     } finally {
       loading = false;
+      console.log('🏁 loadContestData finished, loading =', loading);
     }
   }
 
@@ -224,6 +268,86 @@
   function getTotal(lifter: Lifter): number {
     if (!lifter || !lifter.attempts) return 0;
     return getBestLift(lifter.attempts.Squat) + getBestLift(lifter.attempts.Bench) + getBestLift(lifter.attempts.Deadlift);
+  }
+
+  // Results calculation and ranking functions
+  interface LifterResult {
+    lifter: Lifter;
+    total: number;
+    subtotal: number;
+    squatBest: number;
+    benchBest: number;
+    deadliftBest: number;
+    rank: number;
+    bombed: boolean; // Failed all attempts in any lift
+  }
+
+  function calculateResults(): LifterResult[] {
+    console.log('🧮 calculateResults called with lifters:', lifters.length);
+    if (!lifters || lifters.length === 0) {
+      console.log('❌ No lifters to calculate results for');
+      return [];
+    }
+
+    // Calculate results for each lifter
+    const results = lifters.map((lifter): LifterResult => {
+      const squatBest = getBestLift(lifter.attempts.Squat);
+      const benchBest = getBestLift(lifter.attempts.Bench);
+      const deadliftBest = getBestLift(lifter.attempts.Deadlift);
+      
+      const total = squatBest + benchBest + deadliftBest;
+      const subtotal = squatBest + benchBest;
+      
+      // Check if bombed (zero in any lift means bombed)
+      const bombed = squatBest === 0 || benchBest === 0 || deadliftBest === 0;
+      
+      return {
+        lifter,
+        total,
+        subtotal,
+        squatBest,
+        benchBest,
+        deadliftBest,
+        rank: 0, // Will be calculated below
+        bombed
+      };
+    });
+
+    // Sort by total (descending), bombed lifters go to bottom
+    results.sort((a, b) => {
+      if (a.bombed && !b.bombed) return 1;
+      if (!a.bombed && b.bombed) return -1;
+      if (a.bombed && b.bombed) return 0; // Both bombed, keep original order
+      
+      return b.total - a.total; // Higher total wins
+    });
+
+    // Assign ranks (handle ties)
+    let currentRank = 1;
+    for (let i = 0; i < results.length; i++) {
+      if (results[i].bombed) {
+        results[i].rank = 0; // Bombed lifters get no rank
+      } else {
+        if (i > 0 && !results[i-1].bombed && results[i].total === results[i-1].total) {
+          // Same total as previous, same rank
+          results[i].rank = results[i-1].rank;
+        } else {
+          // Different total or first non-bombed lifter
+          results[i].rank = currentRank;
+        }
+        currentRank++;
+      }
+    }
+
+    console.log('📊 Calculated results:', results.length, 'results');
+    return results;
+  }
+
+  // Reactive statement to calculate results
+  $: {
+    console.log('⚡ Reactive statement triggered, lifters.length =', lifters.length);
+    results = calculateResults();
+    console.log('🎯 Results updated:', results.length);
   }
 
   async function updateContestStatus(newStatus: ContestStatus): Promise<void> {
@@ -385,7 +509,8 @@
         <table class="min-w-full border-collapse bg-card-bg">
           <thead class="bg-element-bg text-text-primary">
             <tr>
-              <th rowspan="2" class="py-3 px-4 border border-border-color text-left">{$_('contest_view.lifter')}</th>
+              <th rowspan="2" class="py-3 px-4 border border-border-color text-center w-16">{$_('contest_view.rank')}</th>
+              <th rowspan="2" class="py-3 px-4 border border-border-color text-left min-w-[200px]">{$_('contest_view.lifter')}</th>
               <th colspan="3" class="py-3 px-4 border border-border-color text-center">{$_('contest_view.squat')}</th>
               <th colspan="3" class="py-3 px-4 border border-border-color text-center">{$_('contest_view.bench')}</th>
               <th rowspan="2" class="py-3 px-4 border border-border-color text-center">{$_('contest_view.subtotal')}</th>
@@ -408,8 +533,22 @@
           <tbody>
             {#each lifters as lifter (lifter.registrationId)}
               <tr class="hover:bg-element-bg transition-colors">
+                <!-- Rank Column -->
+                <td class="py-3 px-4 border border-border-color text-center font-bold">
+                  <span class="text-text-primary">-</span>
+                </td>
+                
+                <!-- Lifter Info -->
                 <td class="py-3 px-4 border border-border-color text-text-primary font-semibold">
-                  {lifter.competitor.firstName} {lifter.competitor.lastName}
+                  <div class="flex items-center space-x-3">
+                    <CompetitorThumbnail competitor={lifter.competitor} size="small" />
+                    <div class="flex flex-col">
+                      <span class="font-semibold">{lifter.competitor.firstName} {lifter.competitor.lastName}</span>
+                      {#if lifter.competitor.club}
+                        <span class="text-xs text-text-secondary">{lifter.competitor.club}</span>
+                      {/if}
+                    </div>
+                  </div>
                 </td>
 
                 <!-- Attempts -->
@@ -445,7 +584,7 @@
                 {/each}
 
                 <!-- Total -->
-                <td class="py-3 px-4 border border-border-color text-center text-primary-red font-bold text-lg">
+                <td class="py-3 px-4 border border-border-color text-center font-bold text-lg text-primary-red">
                   {getTotal(lifter)} kg
                 </td>
               </tr>
@@ -454,5 +593,91 @@
         </table>
       </div>
     {/if}
+    <!-- Results Summary -->
+    {#if results.length > 0 && contestState?.status === ContestStatus.Complete}
+      <div class="mt-8 p-6 bg-card-bg border border-border-color rounded-lg">
+        <h3 class="text-h3 text-text-primary mb-4">Competition Results Summary</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <!-- Top 3 Finishers -->
+          <div>
+            <h4 class="text-h4 text-text-primary mb-3">Top 3 Finishers</h4>
+            {#each results.slice(0, 3).filter(r => !r.bombed) as result, i}
+              <div class="flex items-center justify-between py-2 border-b border-border-color">
+                <div class="flex items-center space-x-2">
+                  <span class="text-lg">
+                    {result.rank === 1 ? '🥇' : result.rank === 2 ? '🥈' : '🥉'}
+                  </span>
+                  <span class="font-semibold">
+                    {result.lifter.competitor.firstName} {result.lifter.competitor.lastName}
+                  </span>
+                </div>
+                <span class="font-bold text-primary-red">{result.total} kg</span>
+              </div>
+            {/each}
+          </div>
+
+          <!-- Competition Stats -->
+          <div>
+            <h4 class="text-h4 text-text-primary mb-3">Competition Stats</h4>
+            <div class="space-y-2">
+              <div class="flex justify-between">
+                <span>Total Competitors:</span>
+                <span class="font-semibold">{results.length}</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Successful Finishers:</span>
+                <span class="font-semibold">{results.filter(r => !r.bombed).length}</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Bombed Out:</span>
+                <span class="font-semibold text-red-400">{results.filter(r => r.bombed).length}</span>
+              </div>
+              {#if results.filter(r => !r.bombed).length > 0}
+                <div class="flex justify-between">
+                  <span>Winning Total:</span>
+                  <span class="font-semibold text-primary-red">{results.find(r => !r.bombed)?.total || 0} kg</span>
+                </div>
+              {/if}
+            </div>
+          </div>
+
+          <!-- Best Lifts -->
+          <div>
+            <h4 class="text-h4 text-text-primary mb-3">Best Lifts</h4>
+            <div class="space-y-2">
+              {#if results.length > 0}
+                {@const bestSquat = Math.max(...results.map(r => r.squatBest).filter(w => w > 0))}
+                {@const bestBench = Math.max(...results.map(r => r.benchBest).filter(w => w > 0))}
+                {@const bestDeadlift = Math.max(...results.map(r => r.deadliftBest).filter(w => w > 0))}
+                
+                <div class="flex justify-between">
+                  <span>Best Squat:</span>
+                  <span class="font-semibold">{isFinite(bestSquat) ? bestSquat : 0} kg</span>
+                </div>
+                <div class="flex justify-between">
+                  <span>Best Bench:</span>
+                  <span class="font-semibold">{isFinite(bestBench) ? bestBench : 0} kg</span>
+                </div>
+                <div class="flex justify-between">
+                  <span>Best Deadlift:</span>
+                  <span class="font-semibold">{isFinite(bestDeadlift) ? bestDeadlift : 0} kg</span>
+                </div>
+              {/if}
+            </div>
+          </div>
+        </div>
+      </div>
+    {/if}
   </main>
 </div>
+
+<style>
+  .bombed {
+    background-color: rgba(220, 38, 38, 0.1);
+    opacity: 0.7;
+  }
+  
+  .bombed:hover {
+    background-color: rgba(220, 38, 38, 0.15);
+  }
+</style>

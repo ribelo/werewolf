@@ -17,12 +17,25 @@ pub async fn initialize_app_database(state: State<'_, AppState>) -> Result<Strin
         return Ok("Database already initialized".to_string());
     }
 
-    match database::initialize_database().await {
+    // Get settings manager to use for database initialization
+    let settings_guard = state.settings.lock().await;
+    
+    match database::initialize_database_with_settings(&*settings_guard).await {
         Ok(pool) => {
             *db_guard = Some(pool);
-            Ok("Database initialized successfully".to_string())
+            Ok("Database initialized successfully with settings".to_string())
         }
-        Err(e) => Err(AppError::Database(e)),
+        Err(e) => {
+            // Fallback to default initialization
+            tracing::warn!("Failed to initialize with settings, using defaults: {}", e);
+            match database::initialize_database().await {
+                Ok(pool) => {
+                    *db_guard = Some(pool);
+                    Ok("Database initialized successfully with defaults".to_string())
+                }
+                Err(e) => Err(AppError::Database(e)),
+            }
+        }
     }
 }
 

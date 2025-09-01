@@ -4,11 +4,9 @@
   import { appView } from './lib/stores';
   import ContestWizard from './lib/components/ContestWizard.svelte';
   import ContestView from './lib/components/ContestView.svelte';
-  import LanguageSwitcher from './lib/components/LanguageSwitcher.svelte';
   import CustomTitlebar from './lib/components/CustomTitlebar.svelte';
   import SettingsView from './lib/components/SettingsView.svelte';
   import { Settings, Trophy, BarChart3 } from 'lucide-svelte';
-  import './lib/i18n';
 
   console.log('🔧 App.svelte script executing');
 

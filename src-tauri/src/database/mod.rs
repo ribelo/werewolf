@@ -1,5 +1,6 @@
 use directories::ProjectDirs;
 use sqlx::{migrate::MigrateDatabase, Pool, Sqlite, SqlitePool};
+use crate::settings::SettingsManager;
 
 pub mod connection;
 pub mod db;
@@ -13,7 +14,29 @@ pub use migrations::*;
 /// Database connection type alias
 pub type DatabasePool = Pool<Sqlite>;
 
-/// Initialize the database for the application
+/// Initialize the database for the application with settings
+pub async fn initialize_database_with_settings(settings_manager: &SettingsManager) -> Result<DatabasePool, sqlx::Error> {
+    let db_path = get_database_path();
+    let db_url = format!("sqlite:{db_path}");
+
+    // Create database file if it doesn't exist
+    if !Sqlite::database_exists(&db_url).await.unwrap_or(false) {
+        log::info!("Creating database at: {db_path}");
+        Sqlite::create_database(&db_url).await?;
+    }
+
+    // Create connection pool using settings
+    let pool = create_pool_with_settings(&db_url, settings_manager).await?;
+
+    // Run migrations automatically
+    log::info!("Running database migrations...");
+    run_migrations(&pool).await?;
+
+    log::info!("Database initialized successfully with settings");
+    Ok(pool)
+}
+
+/// Initialize the database for the application (fallback with default settings)
 pub async fn initialize_database() -> Result<DatabasePool, sqlx::Error> {
     let db_path = get_database_path();
     let db_url = format!("sqlite:{db_path}");
@@ -24,8 +47,8 @@ pub async fn initialize_database() -> Result<DatabasePool, sqlx::Error> {
         Sqlite::create_database(&db_url).await?;
     }
 
-    // Create connection pool
-    let pool = SqlitePool::connect(&db_url).await?;
+    // Create connection pool with defaults
+    let pool = create_pool(&db_url).await?;
 
     // Run migrations automatically
     log::info!("Running database migrations...");
@@ -201,7 +224,7 @@ pub fn process_competitor_photo(
     original_filename: &str,
 ) -> Result<PhotoProcessResult, Box<dyn std::error::Error>> {
     use base64::{engine::general_purpose, Engine as _};
-    use image::{ImageFormat, ImageReader};
+    use image::ImageReader;
     use std::io::Cursor;
 
     // Decode base64 data
@@ -218,10 +241,10 @@ pub fn process_competitor_photo(
     // Assess quality
     let quality = assess_photo_quality(original_width, original_height);
     
-    // Convert to RGB if needed and resize to exact 400x500px
+    // Resize to exact 400x500px then convert to RGB
     let processed = img
-        .to_rgb8()
-        .resize_exact(400, 500, image::imageops::FilterType::Lanczos3);
+        .resize_exact(400, 500, image::imageops::FilterType::Lanczos3)
+        .to_rgb8();
     
     // Convert to WebP with 85% quality
     let mut webp_data = Vec::new();

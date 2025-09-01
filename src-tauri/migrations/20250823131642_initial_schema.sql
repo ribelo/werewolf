@@ -89,6 +89,9 @@ CREATE TABLE competitors (
     club TEXT, -- KLUB - can change over time, but stored here for simplicity
     city TEXT, -- MIEJSCOWOŚĆ - hometown
     notes TEXT, -- Additional notes about the competitor
+    photo_data BLOB, -- Photo stored as BLOB
+    photo_format TEXT DEFAULT 'webp', -- Photo format (webp, jpeg, png)
+    photo_metadata TEXT, -- JSON with original dimensions, file size, etc.
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -199,6 +202,15 @@ CREATE TABLE results (
     UNIQUE(registration_id) -- One result per registration
 );
 
+-- Contest states table for tracking competition progress
+CREATE TABLE contest_states (
+    contest_id TEXT PRIMARY KEY,
+    status TEXT NOT NULL DEFAULT 'Setup',
+    current_lift TEXT,
+    current_round INTEGER NOT NULL DEFAULT 1,
+    FOREIGN KEY (contest_id) REFERENCES contests(id) ON DELETE CASCADE
+);
+
 -- Indexes for performance
 CREATE INDEX idx_registrations_contest ON registrations(contest_id);
 CREATE INDEX idx_registrations_competitor ON registrations(competitor_id);
@@ -208,6 +220,8 @@ CREATE INDEX idx_attempts_registration ON attempts(registration_id);
 CREATE INDEX idx_attempts_lift_type ON attempts(lift_type);
 CREATE INDEX idx_results_contest ON results(contest_id);
 CREATE INDEX idx_results_registration ON results(registration_id);
+CREATE INDEX idx_competitors_has_photo ON competitors(photo_data IS NOT NULL);
+CREATE INDEX idx_competitors_photo_format ON competitors(photo_format);
 
 -- Triggers to update timestamps
 CREATE TRIGGER update_competitors_timestamp 

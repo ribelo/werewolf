@@ -14,6 +14,11 @@ Werewolf is a Tauri-based desktop application for managing powerlifting contests
 - **Dual-Window Architecture**: Separate organizer and display interfaces
 - **Real-time Updates**: Synchronization between administrator and presentation views
 
+### Database Location
+- **SQLite Database**: `~/.local/share/werewolf/werewolf.db` (Linux XDG data directory)
+- **Backup Directory**: `~/.local/share/werewolf/backups/`
+- **Debug Database**: `sqlite3 ~/.local/share/werewolf/werewolf.db "SELECT * FROM competitors;"`
+
 ### Requirements & Roadmap
 See [REQUIREMENTS_AND_ROADMAP.md](./REQUIREMENTS_AND_ROADMAP.md) for detailed scope definition, strategic analysis, and development roadmap based on user requirements.
 
@@ -32,12 +37,17 @@ nix-shell
 ```bash
 # Start development server (runs both frontend and Tauri)
 bun run tauri dev
+# Or use the development script
+./dev.sh
 
 # Frontend development only
 bun run dev
 
 # Install dependencies
 bun install
+
+# Run Rust checks (check, clippy, fmt)
+./check.sh
 ```
 
 ### Building
@@ -54,7 +64,10 @@ bun run preview
 
 ### Rust Backend
 ```bash
-# Work in Rust backend
+# Run all Rust checks (recommended)
+./check.sh
+
+# Or run individual commands in src-tauri directory:
 cd src-tauri
 
 # Run Rust tests
@@ -158,6 +171,13 @@ The application features two distinct windows:
 - Serde for JSON serialization between frontend and backend
 - Simple data models for competitors, attempts, and contest state
 - Event system for window synchronization
+
+### Database Development with SQLx
+- **ALWAYS use compile-time safe SQLx macros**: `query!()`, `query_as!()`, `query_scalar!()`
+- **NEVER use runtime-only functions**: `query()`, `query_as()`, `query_scalar()`
+- Compile-time macros provide SQL validation, type checking, and automatic result mapping
+- Runtime functions are error-prone and lack compile-time safety guarantees
+- Example: Use `sqlx::query!("SELECT id, name FROM competitors WHERE id = ?", id)` instead of `sqlx::query("SELECT id, name FROM competitors WHERE id = ?").bind(id)`
 
 ## Configuration Files
 

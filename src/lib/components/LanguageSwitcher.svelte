@@ -1,21 +1,48 @@
 <script lang="ts">
   import { locale, _ } from 'svelte-i18n';
-  import { availableLocales } from '../i18n/index';
+  import { availableLocales, changeLanguage } from '../i18n/index';
   import { Globe } from 'lucide-svelte';
+  import { onMount } from 'svelte';
+  import { invoke } from '@tauri-apps/api/core';
 
   let currentLocale: string = 'pl';
+  let isChanging: boolean = false;
   
-  // Subscribe to locale changes
-  locale.subscribe((value) => {
-    if (value) {
-      currentLocale = value;
-      // Save to localStorage for persistence
-      localStorage.setItem('werewolf-language', value);
+  onMount(async () => {
+    // Load current language from backend settings
+    try {
+      const savedLanguage = await invoke<string>('settings_get_language');
+      if (savedLanguage && savedLanguage !== currentLocale) {
+        currentLocale = savedLanguage;
+        locale.set(savedLanguage);
+        console.log('✅ Loaded language from settings:', savedLanguage);
+      }
+    } catch (error) {
+      console.error('❌ Failed to load language from settings:', error);
     }
+
+    // Subscribe to locale changes from svelte-i18n
+    const unsubscribeLocale = locale.subscribe((value) => {
+      if (value) {
+        currentLocale = value;
+      }
+    });
+    
+    return unsubscribeLocale;
   });
 
-  function switchLanguage(newLocale: string) {
-    locale.set(newLocale);
+  async function switchLanguage(newLocale: string) {
+    if (isChanging || currentLocale === newLocale) return;
+    
+    isChanging = true;
+    try {
+      await changeLanguage(newLocale);
+    } catch (error) {
+      console.error('Failed to switch language:', error);
+      // Show error to user if needed
+    } finally {
+      isChanging = false;
+    }
   }
 
   // Get the flag emoji for each locale
@@ -37,6 +64,8 @@
       <button
         class="language-button"
         class:active={currentLocale === localeOption.code}
+        class:changing={isChanging}
+        disabled={isChanging}
         on:click={() => switchLanguage(localeOption.code)}
         title={localeOption.nativeName}
       >
@@ -90,5 +119,15 @@
   .language-button.active:hover {
     background-color: #FF0040;
     border-color: #FF0040;
+  }
+
+  .language-button.changing {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .language-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 </style>

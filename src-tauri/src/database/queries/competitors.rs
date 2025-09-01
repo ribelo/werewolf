@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, Pool, Row, Sqlite};
+use sqlx::{FromRow, Pool, Sqlite};
 use crate::database::{process_competitor_photo, PhotoProcessResult};
 
 #[derive(Debug, thiserror::Error)]
@@ -89,42 +89,28 @@ pub async fn create_competitor(
         request.photo_filename.as_deref()
     ).map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
 
-    let row = sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO competitors (id, first_name, last_name, birth_date, gender, club, city, notes, photo_data, photo_format, photo_metadata)
-        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
-        RETURNING id, first_name, last_name, birth_date, gender, club, city, notes, photo_data, photo_format, photo_metadata, created_at, updated_at
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
+        id,
+        request.first_name,
+        request.last_name,
+        request.birth_date,
+        request.gender,
+        request.club,
+        request.city,
+        request.notes,
+        photo_data,
+        photo_format,
+        photo_metadata
     )
-    .bind(&id)
-    .bind(&request.first_name)
-    .bind(&request.last_name)
-    .bind(&request.birth_date)
-    .bind(&request.gender)
-    .bind(&request.club)
-    .bind(&request.city)
-    .bind(&request.notes)
-    .bind(&photo_data)
-    .bind(&photo_format)
-    .bind(&photo_metadata)
-    .fetch_one(pool)
+    .execute(pool)
     .await?;
-
-    Ok(Competitor {
-        id: row.try_get("id")?,
-        first_name: row.try_get("first_name")?,
-        last_name: row.try_get("last_name")?,
-        birth_date: row.try_get("birth_date")?,
-        gender: row.try_get("gender")?,
-        club: row.try_get("club")?,
-        city: row.try_get("city")?,
-        notes: row.try_get("notes")?,
-        photo_data: row.try_get("photo_data")?,
-        photo_format: row.try_get("photo_format")?,
-        photo_metadata: row.try_get("photo_metadata")?,
-        created_at: row.try_get("created_at")?,
-        updated_at: row.try_get("updated_at")?,
-    })
+    
+    // Fetch the created competitor
+    get_competitor_by_id(pool, &id).await
 }
 
 /// Get competitor by ID
@@ -132,58 +118,51 @@ pub async fn get_competitor_by_id(
     pool: &Pool<Sqlite>,
     competitor_id: &str,
 ) -> Result<Competitor, sqlx::Error> {
-    let row = sqlx::query(
-        "SELECT id, first_name, last_name, birth_date, gender, club, city, notes, photo_data, photo_format, photo_metadata, created_at, updated_at FROM competitors WHERE id = ?1"
+    sqlx::query_as!(
+        Competitor,
+        r#"SELECT 
+            id as "id!", 
+            first_name as "first_name!", 
+            last_name as "last_name!", 
+            birth_date as "birth_date!", 
+            gender as "gender!",
+            club, 
+            city, 
+            notes, 
+            photo_data, 
+            photo_format, 
+            photo_metadata, 
+            created_at as "created_at!", 
+            updated_at as "updated_at!"
+        FROM competitors WHERE id = ?"#,
+        competitor_id
     )
-    .bind(competitor_id)
     .fetch_one(pool)
-    .await?;
-
-    Ok(Competitor {
-        id: row.try_get("id")?,
-        first_name: row.try_get("first_name")?,
-        last_name: row.try_get("last_name")?,
-        birth_date: row.try_get("birth_date")?,
-        gender: row.try_get("gender")?,
-        club: row.try_get("club")?,
-        city: row.try_get("city")?,
-        notes: row.try_get("notes")?,
-        photo_data: row.try_get("photo_data")?,
-        photo_format: row.try_get("photo_format")?,
-        photo_metadata: row.try_get("photo_metadata")?,
-        created_at: row.try_get("created_at")?,
-        updated_at: row.try_get("updated_at")?,
-    })
+    .await
 }
 
 /// Get all competitors
 pub async fn get_all_competitors(pool: &Pool<Sqlite>) -> Result<Vec<Competitor>, sqlx::Error> {
-    let rows = sqlx::query(
-        "SELECT id, first_name, last_name, birth_date, gender, club, city, notes, photo_data, photo_format, photo_metadata, created_at, updated_at FROM competitors ORDER BY last_name, first_name"
+    sqlx::query_as!(
+        Competitor,
+        r#"SELECT 
+            id as "id!", 
+            first_name as "first_name!", 
+            last_name as "last_name!", 
+            birth_date as "birth_date!", 
+            gender as "gender!",
+            club, 
+            city, 
+            notes, 
+            photo_data, 
+            photo_format, 
+            photo_metadata, 
+            created_at as "created_at!", 
+            updated_at as "updated_at!"
+        FROM competitors ORDER BY last_name, first_name"#
     )
     .fetch_all(pool)
-    .await?;
-
-    let mut competitors = Vec::new();
-    for row in rows {
-        competitors.push(Competitor {
-            id: row.try_get("id")?,
-            first_name: row.try_get("first_name")?,
-            last_name: row.try_get("last_name")?,
-            birth_date: row.try_get("birth_date")?,
-            gender: row.try_get("gender")?,
-            club: row.try_get("club")?,
-            city: row.try_get("city")?,
-            notes: row.try_get("notes")?,
-            photo_data: row.try_get("photo_data")?,
-            photo_format: row.try_get("photo_format")?,
-            photo_metadata: row.try_get("photo_metadata")?,
-            created_at: row.try_get("created_at")?,
-            updated_at: row.try_get("updated_at")?,
-        });
-    }
-
-    Ok(competitors)
+    .await
 }
 
 /// Update competitor
@@ -198,24 +177,24 @@ pub async fn update_competitor(
         request.photo_filename.as_deref()
     ).map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
 
-    sqlx::query(
+    sqlx::query!(
         r#"
         UPDATE competitors 
-        SET first_name = ?1, last_name = ?2, birth_date = ?3, gender = ?4, club = ?5, city = ?6, notes = ?7, photo_data = ?8, photo_format = ?9, photo_metadata = ?10
-        WHERE id = ?11
-        "#
+        SET first_name = ?, last_name = ?, birth_date = ?, gender = ?, club = ?, city = ?, notes = ?, photo_data = ?, photo_format = ?, photo_metadata = ?
+        WHERE id = ?
+        "#,
+        request.first_name,
+        request.last_name,
+        request.birth_date,
+        request.gender,
+        request.club,
+        request.city,
+        request.notes,
+        photo_data,
+        photo_format,
+        photo_metadata,
+        competitor_id
     )
-    .bind(&request.first_name)
-    .bind(&request.last_name)
-    .bind(&request.birth_date)
-    .bind(&request.gender)
-    .bind(&request.club)
-    .bind(&request.city)
-    .bind(&request.notes)
-    .bind(&photo_data)
-    .bind(&photo_format)
-    .bind(&photo_metadata)
-    .bind(competitor_id)
     .execute(pool)
     .await?;
 
@@ -235,13 +214,13 @@ pub async fn update_competitor_photo(
         Some(filename)
     ).map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
     
-    sqlx::query(
-        "UPDATE competitors SET photo_data = ?1, photo_format = ?2, photo_metadata = ?3 WHERE id = ?4"
+    sqlx::query!(
+        "UPDATE competitors SET photo_data = ?, photo_format = ?, photo_metadata = ? WHERE id = ?",
+        photo_data,
+        photo_format,
+        photo_metadata,
+        competitor_id
     )
-    .bind(&photo_data)
-    .bind(&photo_format) 
-    .bind(&photo_metadata)
-    .bind(competitor_id)
     .execute(pool)
     .await?;
 
@@ -253,10 +232,10 @@ pub async fn remove_competitor_photo(
     pool: &Pool<Sqlite>,
     competitor_id: &str,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query(
-        "UPDATE competitors SET photo_data = NULL, photo_format = NULL, photo_metadata = NULL WHERE id = ?1"
+    sqlx::query!(
+        "UPDATE competitors SET photo_data = NULL, photo_format = NULL, photo_metadata = NULL WHERE id = ?",
+        competitor_id
     )
-    .bind(competitor_id)
     .execute(pool)
     .await?;
 
@@ -268,14 +247,14 @@ pub async fn get_competitor_photo(
     pool: &Pool<Sqlite>,
     competitor_id: &str,
 ) -> Result<Option<Vec<u8>>, sqlx::Error> {
-    let row = sqlx::query(
-        "SELECT photo_data FROM competitors WHERE id = ?1"
+    let result = sqlx::query_scalar!(
+        "SELECT photo_data FROM competitors WHERE id = ?",
+        competitor_id
     )
-    .bind(competitor_id)
     .fetch_optional(pool)
     .await?;
 
-    Ok(row.map(|r| r.try_get("photo_data")).transpose()?)
+    Ok(result.flatten())
 }
 
 /// Delete competitor
@@ -283,10 +262,12 @@ pub async fn delete_competitor(
     pool: &Pool<Sqlite>,
     competitor_id: &str,
 ) -> Result<(), sqlx::Error> {
-    sqlx::query("DELETE FROM competitors WHERE id = ?1")
-        .bind(competitor_id)
-        .execute(pool)
-        .await?;
+    sqlx::query!(
+        "DELETE FROM competitors WHERE id = ?",
+        competitor_id
+    )
+    .execute(pool)
+    .await?;
 
     Ok(())
 }

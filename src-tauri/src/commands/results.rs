@@ -137,7 +137,7 @@ async fn export_to_csv(rankings: Vec<CompetitionResult>) -> Result<String, AppEr
             result.place_open.unwrap_or(0),
             result.registration_id,
             result.best_squat.unwrap_or(0.0),
-            result.best_bench_press.unwrap_or(0.0),
+            result.best_bench.unwrap_or(0.0),
             result.best_deadlift.unwrap_or(0.0),
             result.total_weight,
             result.coefficient_points

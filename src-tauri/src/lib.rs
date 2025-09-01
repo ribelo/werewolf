@@ -7,16 +7,19 @@ pub mod database;
 pub mod error;
 pub mod logging;
 pub mod models;
+pub mod settings;
 
 #[cfg(test)]
 mod integration_tests;
 
 use database::DatabasePool;
 use logging::write_log;
+use settings::SettingsManager;
 
-// Application state to hold the database connection
+// Application state to hold the database connection and settings
 pub struct AppState {
     pub db: Arc<Mutex<Option<DatabasePool>>>,
+    pub settings: Arc<Mutex<SettingsManager>>,
 }
 
 // All commands are now defined in the commands module
@@ -38,8 +41,21 @@ pub fn run() {
         }
     };
 
+    let settings_manager = match SettingsManager::new() {
+        Ok(settings) => {
+            tracing::info!("Settings loaded from: {:?}", settings.get_config_file_path());
+            settings
+        }
+        Err(e) => {
+            tracing::error!("Failed to initialize settings manager: {e}");
+            tracing::info!("Using default settings");
+            SettingsManager::new().unwrap_or_else(|_| panic!("Cannot create settings manager"))
+        }
+    };
+
     let app_state = AppState {
         db: Arc::new(Mutex::new(None)),
+        settings: Arc::new(Mutex::new(settings_manager)),
     };
 
     tauri::Builder::default()
@@ -55,6 +71,17 @@ pub fn run() {
             commands::restore_database,
             commands::list_backups,
             commands::reset_database,
+            // Settings commands
+            commands::settings_get_all,
+            commands::settings_get_ui,
+            commands::settings_get_language,
+            commands::settings_update_all,
+            commands::settings_update_ui,
+            commands::settings_set_language,
+            commands::settings_update_competition,
+            commands::settings_update_database,
+            commands::settings_reset_to_defaults,
+            commands::settings_get_config_path,
             // Logging
             write_log,
             // Contest management

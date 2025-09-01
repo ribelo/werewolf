@@ -6,6 +6,9 @@ pub mod contests;
 pub mod registrations;
 pub mod results;
 
+#[cfg(test)]
+mod tests;
+
 // Re-export all query modules
 pub use attempts::*;
 pub use categories::*;
