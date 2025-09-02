@@ -45,7 +45,7 @@
   .container-narrow { @apply max-w-2xl mx-auto px-3; }
   .container-medium { @apply max-w-4xl mx-auto px-3; }
   .container-wide { @apply max-w-6xl mx-auto px-3; }
-  .container-full { @apply max-w-7xl mx-auto px-3; }
+  .container-full { @apply w-full px-4 md:px-6 lg:px-8; }
 
   /* Card Components - Compact with Blood Theme */
   .card {
@@ -99,6 +99,36 @@
   
   .input-field:focus {
     box-shadow: 0 0 0 3px rgba(220, 20, 60, 0.2);
+  }
+
+  /* Table input fields that blend with background */
+  .table-input-field {
+    @apply bg-transparent border-0 text-text-primary px-1 py-0
+           font-body text-inherit transition-colors duration-200 ease-in-out
+           focus:bg-element-bg focus:outline-none focus:ring-0;
+    box-shadow: none;
+  }
+  
+  .table-input-field:focus {
+    box-shadow: 0 0 0 2px rgba(220, 20, 60, 0.3);
+    border-radius: 2px;
+  }
+
+  /* Remove number input arrows */
+  .table-input-field::-webkit-outer-spin-button,
+  .table-input-field::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  .table-input-field[type=number] {
+    -moz-appearance: textfield;
+  }
+
+  /* Extra small text size for very compact tables */
+  .text-xxs {
+    font-size: 0.6875rem; /* 11px */
+    line-height: 1rem;
   }
 
   /* Specific styling for select elements - Blood Theme */
@@ -267,7 +297,10 @@
     /* Adjust containers on mobile */
     .container-narrow,
     .container-medium,
-    .container-wide,
+    .container-wide {
+      @apply px-2;
+    }
+    
     .container-full {
       @apply px-2;
     }

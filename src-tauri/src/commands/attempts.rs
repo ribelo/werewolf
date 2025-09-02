@@ -35,8 +35,8 @@ impl fmt::Display for AttemptStatus {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             AttemptStatus::Pending => write!(f, "Pending"),
-            AttemptStatus::Good => write!(f, "Good"),
-            AttemptStatus::Bad => write!(f, "Bad"),
+            AttemptStatus::Successful => write!(f, "Successful"),
+            AttemptStatus::Failed => write!(f, "Failed"),
         }
     }
 }
@@ -47,8 +47,8 @@ impl FromStr for AttemptStatus {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "Pending" => Ok(AttemptStatus::Pending),
-            "Good" => Ok(AttemptStatus::Good),
-            "Bad" => Ok(AttemptStatus::Bad),
+            "Successful" => Ok(AttemptStatus::Successful),
+            "Failed" => Ok(AttemptStatus::Failed),
             _ => Err(()),
         }
     }
@@ -62,9 +62,7 @@ pub async fn attempt_upsert_weight(
     tracing::info!("attempt_upsert_weight called with: {:?}", attempt);
 
     let db_pool = state.db.lock().await;
-    let db_pool = db_pool
-        .as_ref()
-        .ok_or_else(|| AppError::DatabaseNotInitialized)?;
+    let db_pool = &*db_pool;
     queries::attempts::upsert_attempt_weight(
         db_pool,
         &attempt.registration_id,
@@ -85,9 +83,7 @@ pub async fn attempt_list(
     tracing::info!("attempt_list called for registration: {}", registration_id);
 
     let db_pool = state.db.lock().await;
-    let db_pool = db_pool
-        .as_ref()
-        .ok_or_else(|| AppError::DatabaseNotInitialized)?;
+    let db_pool = &*db_pool;
     let db_attempts =
         queries::attempts::get_attempts_by_registration(db_pool, &registration_id).await?;
 
@@ -104,7 +100,7 @@ pub async fn attempt_list(
                 attempt_number: a.attempt_number,
                 weight: a.weight,
                 status: AttemptStatus::from_str(&a.status).map_err(|_| {
-                    AppError::Internal(format!("Invalid attempt status '{}' in database for attempt {}. Expected 'Pending', 'Good', or 'Bad'", a.status, attempt_id))
+                    AppError::Internal(format!("Invalid attempt status '{}' in database for attempt {}. Expected 'Pending', 'Successful', or 'Failed'", a.status, attempt_id))
                 })?,
             })
         })
@@ -121,9 +117,7 @@ pub async fn attempt_update_result(
     tracing::info!("attempt_update_result called with: {:?}", update);
 
     let db_pool = state.db.lock().await;
-    let db_pool = db_pool
-        .as_ref()
-        .ok_or_else(|| AppError::DatabaseNotInitialized)?;
+    let db_pool = &*db_pool;
     queries::attempts::update_attempt_result(
         db_pool,
         &update.attempt_id,
@@ -148,9 +142,7 @@ pub async fn attempt_list_for_contest(
     );
 
     let db_pool = state.db.lock().await;
-    let db_pool = db_pool
-        .as_ref()
-        .ok_or_else(|| AppError::DatabaseNotInitialized)?;
+    let db_pool = &*db_pool;
     let db_attempts = queries::attempts::get_contest_attempts(db_pool, &contest_id).await?;
 
     let attempts = db_attempts
@@ -166,7 +158,7 @@ pub async fn attempt_list_for_contest(
                 attempt_number: a.attempt_number,
                 weight: a.weight,
                 status: AttemptStatus::from_str(&a.status).map_err(|_| {
-                    AppError::Internal(format!("Invalid attempt status '{}' in database for attempt {}. Expected 'Pending', 'Good', or 'Bad'", a.status, attempt_id))
+                    AppError::Internal(format!("Invalid attempt status '{}' in database for attempt {}. Expected 'Pending', 'Successful', or 'Failed'", a.status, attempt_id))
                 })?,
             })
         })
@@ -182,19 +174,21 @@ pub async fn attempt_get_current(
 ) -> Result<Option<Attempt>, AppError> {
     tracing::info!("attempt_get_current called for contest: {}", contest_id);
     let db_pool = state.db.lock().await;
-    let db_pool = db_pool.as_ref().ok_or(AppError::DatabaseNotInitialized)?;
+    let db_pool = &*db_pool;
     let attempt = queries::attempts::get_current_attempt(db_pool, &contest_id).await?;
 
     if let Some(db_attempt) = attempt {
         Ok(Some(Attempt {
             id: db_attempt.id,
             registration_id: db_attempt.registration_id,
-            lift_type: LiftType::from_str(&db_attempt.lift_type)
-                .map_err(|_| AppError::Internal(format!("Invalid lift type: {}", db_attempt.lift_type)))?,
+            lift_type: LiftType::from_str(&db_attempt.lift_type).map_err(|_| {
+                AppError::Internal(format!("Invalid lift type: {}", db_attempt.lift_type))
+            })?,
             attempt_number: db_attempt.attempt_number,
             weight: db_attempt.weight,
-            status: AttemptStatus::from_str(&db_attempt.status)
-                .map_err(|_| AppError::Internal(format!("Invalid status: {}", db_attempt.status)))?,
+            status: AttemptStatus::from_str(&db_attempt.status).map_err(|_| {
+                AppError::Internal(format!("Invalid status: {}", db_attempt.status))
+            })?,
         }))
     } else {
         Ok(None)
@@ -213,17 +207,19 @@ pub async fn attempt_set_current(
         attempt_id
     );
     let db_pool = state.db.lock().await;
-    let db_pool = db_pool.as_ref().ok_or(AppError::DatabaseNotInitialized)?;
-    
+    let db_pool = &*db_pool;
+
     // Check if contest is in progress before setting current attempt
     let contest_state = queries::contest_states::get_contest_state(db_pool, &contest_id)
         .await?
-        .ok_or_else(|| AppError::ContestStateNotFound { contest_id: contest_id.clone() })?;
-    
+        .ok_or_else(|| AppError::ContestStateNotFound {
+            contest_id: contest_id.clone(),
+        })?;
+
     if contest_state.status != crate::models::contest_state::ContestStatus::InProgress {
         return Err(AppError::ContestNotInProgress);
     }
-    
+
     queries::attempts::set_current_attempt(db_pool, &contest_id, &attempt_id).await?;
     Ok(())
 }
@@ -234,15 +230,14 @@ pub async fn attempt_get_next_in_queue(
     contest_id: String,
 ) -> Result<Vec<Attempt>, AppError> {
     let db_pool = state.db.lock().await;
-    let db_pool = db_pool.as_ref().ok_or(AppError::DatabaseNotInitialized)?;
+    let db_pool = &*db_pool;
 
     // 1. Get current contest state
-    let contest_state =
-        queries::contest_states::get_contest_state(db_pool, &contest_id)
-            .await?
+    let contest_state = queries::contest_states::get_contest_state(db_pool, &contest_id)
+        .await?
         .ok_or_else(|| AppError::ContestStateNotFound {
             contest_id: contest_id.clone(),
-            })?;
+        })?;
 
     if let Some(lift_type) = contest_state.current_lift {
         // 2. Get next attempts from the queue
@@ -266,9 +261,8 @@ pub async fn attempt_get_next_in_queue(
                     })?,
                     attempt_number: a.attempt_number,
                     weight: a.weight,
-                    status: AttemptStatus::from_str(&a.status).map_err(|_| {
-                        AppError::Internal(format!("Invalid status: {}", a.status))
-                    })?,
+                    status: AttemptStatus::from_str(&a.status)
+                        .map_err(|_| AppError::Internal(format!("Invalid status: {}", a.status)))?,
                 })
             })
             .collect::<Result<Vec<Attempt>, AppError>>()?;
@@ -288,7 +282,7 @@ mod tests {
     #[test]
     fn test_lift_type_to_string() {
         assert_eq!(LiftType::Squat.to_string(), "Squat");
-        assert_eq!(LiftType::Bench.to_string(), "Bench"); 
+        assert_eq!(LiftType::Bench.to_string(), "Bench");
         assert_eq!(LiftType::Deadlift.to_string(), "Deadlift");
     }
 
@@ -310,22 +304,28 @@ mod tests {
     #[test]
     fn test_attempt_status_to_string() {
         assert_eq!(AttemptStatus::Pending.to_string(), "Pending");
-        assert_eq!(AttemptStatus::Good.to_string(), "Good");
-        assert_eq!(AttemptStatus::Bad.to_string(), "Bad");
+        assert_eq!(AttemptStatus::Successful.to_string(), "Successful");
+        assert_eq!(AttemptStatus::Failed.to_string(), "Failed");
     }
 
     #[test]
     fn test_attempt_status_from_str_valid() {
-        assert_eq!(AttemptStatus::from_str("Pending"), Ok(AttemptStatus::Pending));
-        assert_eq!(AttemptStatus::from_str("Good"), Ok(AttemptStatus::Good));
-        assert_eq!(AttemptStatus::from_str("Bad"), Ok(AttemptStatus::Bad));
+        assert_eq!(
+            AttemptStatus::from_str("Pending"),
+            Ok(AttemptStatus::Pending)
+        );
+        assert_eq!(
+            AttemptStatus::from_str("Successful"),
+            Ok(AttemptStatus::Successful)
+        );
+        assert_eq!(AttemptStatus::from_str("Failed"), Ok(AttemptStatus::Failed));
     }
 
-    #[test]  
+    #[test]
     fn test_attempt_status_from_str_invalid() {
         assert!(AttemptStatus::from_str("invalid").is_err());
         assert!(AttemptStatus::from_str("pending").is_err()); // Case sensitive
-        assert!(AttemptStatus::from_str("GOOD").is_err());
+        assert!(AttemptStatus::from_str("SUCCESSFUL").is_err());
         assert!(AttemptStatus::from_str("").is_err());
     }
 }

@@ -15,7 +15,7 @@ pub enum SettingsError {
     NoConfigDir,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppSettings {
     pub ui: UiSettings,
     pub competition: CompetitionSettings,
@@ -45,16 +45,6 @@ pub struct DatabaseSettings {
     pub connection_timeout_seconds: u32,
     pub max_connections: u32,
     pub enable_wal_mode: bool,
-}
-
-impl Default for AppSettings {
-    fn default() -> Self {
-        Self {
-            ui: UiSettings::default(),
-            competition: CompetitionSettings::default(),
-            database: DatabaseSettings::default(),
-        }
-    }
 }
 
 impl Default for UiSettings {
@@ -100,7 +90,7 @@ impl SettingsManager {
     /// Create new settings manager and load existing config or create default
     pub fn new() -> Result<Self, SettingsError> {
         let config_path = Self::get_config_path()?;
-        
+
         // Ensure config directory exists
         if let Some(parent) = config_path.parent() {
             fs::create_dir_all(parent)?;
@@ -114,7 +104,10 @@ impl SettingsManager {
             default_settings
         };
 
-        Ok(Self { config_path, settings })
+        Ok(Self {
+            config_path,
+            settings,
+        })
     }
 
     /// Get the XDG config path for the settings file
@@ -170,14 +163,20 @@ impl SettingsManager {
     }
 
     /// Update only competition settings
-    pub fn update_competition_settings(&mut self, competition_settings: CompetitionSettings) -> Result<(), SettingsError> {
+    pub fn update_competition_settings(
+        &mut self,
+        competition_settings: CompetitionSettings,
+    ) -> Result<(), SettingsError> {
         self.settings.competition = competition_settings;
         self.save()?;
         Ok(())
     }
 
     /// Update only database settings
-    pub fn update_database_settings(&mut self, database_settings: DatabaseSettings) -> Result<(), SettingsError> {
+    pub fn update_database_settings(
+        &mut self,
+        database_settings: DatabaseSettings,
+    ) -> Result<(), SettingsError> {
         self.settings.database = database_settings;
         self.save()?;
         Ok(())
@@ -204,15 +203,15 @@ impl SettingsManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
     use std::env;
+    use tempfile::tempdir;
 
     #[test]
     fn test_settings_serialization() {
         let settings = AppSettings::default();
         let toml_str = toml::to_string_pretty(&settings).expect("Failed to serialize");
         let parsed: AppSettings = toml::from_str(&toml_str).expect("Failed to deserialize");
-        
+
         assert_eq!(settings.ui.language, parsed.ui.language);
         assert_eq!(settings.ui.theme, parsed.ui.theme);
     }
@@ -221,10 +220,10 @@ mod tests {
     fn test_settings_file_operations() {
         let temp_dir = tempdir().expect("Failed to create temp dir");
         let config_path = temp_dir.path().join("test_settings.toml");
-        
+
         let settings = AppSettings::default();
         SettingsManager::save_to_file(&config_path, &settings).expect("Failed to save");
-        
+
         let loaded = SettingsManager::load_from_file(&config_path).expect("Failed to load");
         assert_eq!(settings.ui.language, loaded.ui.language);
     }
@@ -233,14 +232,14 @@ mod tests {
     fn test_language_setting() {
         let temp_dir = tempdir().expect("Failed to create temp dir");
         let config_path = temp_dir.path().join("test_settings.toml");
-        
+
         // Mock config path for testing
         let mut settings = AppSettings::default();
         settings.ui.language = "en".to_string();
-        
+
         SettingsManager::save_to_file(&config_path, &settings).expect("Failed to save");
         let loaded = SettingsManager::load_from_file(&config_path).expect("Failed to load");
-        
+
         assert_eq!(loaded.ui.language, "en");
     }
 }

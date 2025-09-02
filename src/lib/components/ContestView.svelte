@@ -23,16 +23,48 @@
     club?: string;
     city?: string;
     notes?: string;
+    competitionOrder: number;
     photoBase64?: string; // Base64 encoded photo data from backend
     createdAt: string;
     updatedAt: string;
+  }
+
+  interface AgeCategory {
+    id: string;
+    name: string;
+    minAge?: number;
+    maxAge?: number;
+  }
+
+  interface WeightClass {
+    id: string;
+    gender: string;
+    name: string;
+    weightMin?: number;
+    weightMax?: number;
   }
 
   interface Registration {
     id: string;
     contestId: string;
     competitorId: string;
+    ageCategoryId: string;
+    weightClassId: string;
+    // Equipment flags
+    equipmentM: boolean;
+    equipmentSm: boolean;
+    equipmentT: boolean;
+    // Day-of data
     bodyweight: number;
+    lotNumber?: string;
+    personalRecordAtEntry?: number;
+    // Calculated coefficients
+    reshelCoefficient?: number;
+    mcculloughCoefficient?: number;
+    // Rack heights
+    rackHeightSquat?: number;
+    rackHeightBench?: number;
+    createdAt: string;
   }
 
   enum LiftType {
@@ -43,8 +75,8 @@
 
   enum AttemptStatus {
     Pending = 'Pending',
-    Good = 'Good',
-    Bad = 'Bad',
+    Successful = 'Successful',
+    Failed = 'Failed',
   }
 
   interface Attempt {
@@ -60,7 +92,7 @@
   interface Lifter {
     registrationId: string;
     competitor: Competitor;
-    bodyweight: number;
+    registration: Registration; // Include full registration data
     attempts: {
       [key in LiftType]: Attempt[];
     };
@@ -81,6 +113,28 @@
     currentRound: number;
   }
 
+  interface PlateSet {
+    id: string;
+    contestId: string;
+    plateWeight: number;
+    quantity: number;
+    createdAt: string;
+    updatedAt: string;
+  }
+
+  interface CreatePlateSet {
+    contestId: string;
+    plateWeight: number;
+    quantity: number;
+  }
+
+  interface PlateCalculation {
+    plates: Array<[number, number]>; // [weight, count] pairs
+    exact: boolean;
+    total: number;
+    increment: number;
+  }
+
   // Component State
   let contests: Contest[] = [];
   let contestState: ContestState | null = null;
@@ -90,6 +144,19 @@
   let results: LifterResult[] = [];
   let loading = false;
   let error = '';
+  
+  // Plate management state
+  let plateSets: PlateSet[] = [];
+  let weightIncrement: number = 5.0; // Default 5kg (2.5kg smallest plate × 2)
+
+  // Sorting and Drag & Drop State
+  type SortBy = 'order' | 'name' | 'age' | 'weight' | 'category' | 'points' | 'squat_best' | 'bench_best' | 'deadlift_best' | 'total';
+  type SortDirection = 'asc' | 'desc';
+  
+  let sortBy: SortBy = 'order';
+  let sortDirection: SortDirection = 'asc';
+  let draggedIndex: number = -1;
+  let dragOverIndex: number = -1;
 
 
   onMount(async () => {
@@ -166,7 +233,7 @@
           const lifter = {
             registrationId: reg.id,
             competitor,
-            bodyweight: reg.bodyweight,
+            registration: reg,
             attempts: attemptsByType,
           };
           
@@ -187,6 +254,18 @@
       
       // Load contest state
       contestState = await invoke<ContestState | null>('contest_state_get', { contestId: selectedContestId });
+
+      // Load plate sets and get weight increment from calculation
+      plateSets = await invoke<PlateSet[]>('plate_set_list', { contestId: selectedContestId });
+      
+      // Get weight increment by calculating plates for any weight (e.g., 100kg)
+      const plateCalc = await invoke<PlateCalculation>('calculate_plates', { 
+        contestId: selectedContestId, 
+        targetWeight: 100 
+      });
+      weightIncrement = plateCalc.increment;
+      
+      console.log('🏋️‍♀️ Loaded', plateSets.length, 'plate sets, increment:', weightIncrement);
 
       // Load next up queue if contest is in progress
       if (contestState?.status === ContestStatus.InProgress) {
@@ -227,8 +306,102 @@
     }
   }
 
+  // Handle mouse wheel scrolling on attempt weight inputs
+  function handleAttemptWheel(event: WheelEvent, registrationId: string, liftType: LiftType, attemptNumber: number, currentWeight: number) {
+    event.preventDefault();
+    const delta = event.deltaY > 0 ? -weightIncrement : weightIncrement; // Reverse direction for intuitive scrolling
+    const newWeight = Math.max(0, currentWeight + delta);
+    updateAttempt(registrationId, liftType, attemptNumber, newWeight);
+  }
+
   function getAttempt(lifter: Lifter, liftType: LiftType, attemptNumber: number): Attempt | undefined {
     return lifter.attempts[liftType].find(a => a.attemptNumber === attemptNumber);
+  }
+
+  async function updateAttemptStatus(attemptId: string, status: AttemptStatus): Promise<void> {
+    try {
+      await invoke('attempt_update_result', {
+        update: {
+          attemptId,
+          status
+        }
+      });
+      await loadContestData();
+    } catch (error) {
+      console.error('Failed to update attempt status:', error);
+    }
+  }
+
+  function cycleAttemptStatus(currentStatus: AttemptStatus): AttemptStatus {
+    switch (currentStatus) {
+      case AttemptStatus.Pending:
+        return AttemptStatus.Successful;
+      case AttemptStatus.Successful:
+        return AttemptStatus.Failed;
+      case AttemptStatus.Failed:
+        return AttemptStatus.Pending;
+      default:
+        return AttemptStatus.Pending;
+    }
+  }
+
+  async function handleStatusClick(attempt: Attempt): Promise<void> {
+    const newStatus = cycleAttemptStatus(attempt.status);
+    await updateAttemptStatus(attempt.id, newStatus);
+  }
+
+  async function handleCellRightClick(event: MouseEvent, attempt: Attempt): Promise<void> {
+    event.preventDefault();
+    await updateAttemptStatus(attempt.id, AttemptStatus.Successful);
+  }
+
+  function incrementWeight(registrationId: string, liftType: LiftType, attemptNumber: number, currentWeight: number) {
+    const newWeight = currentWeight + weightIncrement;
+    updateAttempt(registrationId, liftType, attemptNumber, newWeight);
+  }
+
+  function decrementWeight(registrationId: string, liftType: LiftType, attemptNumber: number, currentWeight: number) {
+    const newWeight = Math.max(0, currentWeight - weightIncrement);
+    updateAttempt(registrationId, liftType, attemptNumber, newWeight);
+  }
+
+  let dragState = {
+    isDragging: false,
+    startY: 0,
+    startValue: 0,
+    registrationId: '',
+    liftType: null,
+    attemptNumber: 0
+  };
+
+  function handleWeightDragStart(event: MouseEvent, registrationId: string, liftType: LiftType, attemptNumber: number, currentWeight: number) {
+    dragState = {
+      isDragging: true,
+      startY: event.clientY,
+      startValue: currentWeight,
+      registrationId,
+      liftType,
+      attemptNumber
+    };
+    document.addEventListener('mousemove', handleWeightDragMove);
+    document.addEventListener('mouseup', handleWeightDragEnd);
+    event.preventDefault();
+  }
+
+  function handleWeightDragMove(event: MouseEvent) {
+    if (!dragState.isDragging) return;
+    
+    const deltaY = dragState.startY - event.clientY; // Inverted so dragging up increases
+    const steps = Math.floor(deltaY / 5); // Every 5 pixels = one increment step
+    const newValue = Math.max(0, dragState.startValue + (steps * weightIncrement));
+    
+    updateAttempt(dragState.registrationId, dragState.liftType, dragState.attemptNumber, newValue);
+  }
+
+  function handleWeightDragEnd() {
+    dragState.isDragging = false;
+    document.removeEventListener('mousemove', handleWeightDragMove);
+    document.removeEventListener('mouseup', handleWeightDragEnd);
   }
 
   function getLifterName(registrationId: string): string {
@@ -253,7 +426,7 @@
       return 0;
     }
     return attempts.reduce((max, attempt) => {
-      if (attempt.status === AttemptStatus.Good && attempt.weight > max) {
+      if (attempt.status === AttemptStatus.Successful && attempt.weight > max) {
         return attempt.weight;
       }
       return max;
@@ -348,6 +521,213 @@
     console.log('⚡ Reactive statement triggered, lifters.length =', lifters.length);
     results = calculateResults();
     console.log('🎯 Results updated:', results.length);
+  }
+
+  // Sorting functions
+  function sortLifters(liftersToSort: Lifter[]): Lifter[] {
+    const sorted = [...liftersToSort];
+    
+    sorted.sort((a, b) => {
+      let valueA: any, valueB: any;
+      
+      switch (sortBy) {
+        case 'order':
+          // Ensure numeric comparison
+          valueA = Number(a.competitor.competitionOrder);
+          valueB = Number(b.competitor.competitionOrder);
+          break;
+          
+        case 'name':
+          valueA = `${a.competitor.lastName} ${a.competitor.firstName}`.toLowerCase();
+          valueB = `${b.competitor.lastName} ${b.competitor.firstName}`.toLowerCase();
+          break;
+          
+        case 'age':
+          valueA = getAge(a);
+          valueB = getAge(b);
+          break;
+          
+        case 'weight':
+          valueA = Number(a.registration.bodyweight);
+          valueB = Number(b.registration.bodyweight);
+          break;
+          
+        case 'category':
+          valueA = getWeightClassName(a.registration.weightClassId);
+          valueB = getWeightClassName(b.registration.weightClassId);
+          break;
+          
+        case 'points':
+          valueA = calculatePoints(a);
+          valueB = calculatePoints(b);
+          break;
+          
+        case 'squat_best':
+          valueA = getBestLift(a.attempts.Squat);
+          valueB = getBestLift(b.attempts.Squat);
+          break;
+          
+        case 'bench_best':
+          valueA = getBestLift(a.attempts.Bench);
+          valueB = getBestLift(b.attempts.Bench);
+          break;
+          
+        case 'deadlift_best':
+          valueA = getBestLift(a.attempts.Deadlift);
+          valueB = getBestLift(b.attempts.Deadlift);
+          break;
+          
+        case 'total':
+          valueA = getTotal(a);
+          valueB = getTotal(b);
+          break;
+          
+        default:
+          return 0;
+      }
+      
+      // Handle different data types
+      if (typeof valueA === 'string' && typeof valueB === 'string') {
+        // String comparison
+        const comparison = valueA.localeCompare(valueB);
+        return sortDirection === 'asc' ? comparison : -comparison;
+      } else {
+        // Numeric comparison
+        const numA = Number(valueA) || 0;
+        const numB = Number(valueB) || 0;
+        return sortDirection === 'asc' ? numA - numB : numB - numA;
+      }
+    });
+    
+    return sorted;
+  }
+
+  function handleSort(column: SortBy) {
+    if (sortBy === column) {
+      sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortBy = column;
+      sortDirection = 'asc';
+    }
+  }
+
+  // Helper functions for display
+  function getAge(lifter: Lifter): number {
+    const birthDate = new Date(lifter.competitor.birthDate);
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age;
+  }
+
+  function getWeightClassName(weightClassId: string): string {
+    // Convert weight class ID to display name
+    // e.g. "M_82_5" -> "82.5 KG", "M_140_PLUS" -> "+140 KG"
+    if (weightClassId.endsWith('_PLUS')) {
+      const weight = weightClassId.split('_')[1];
+      return `+${weight} KG`;
+    } else {
+      const parts = weightClassId.split('_');
+      if (parts.length >= 3) {
+        return `${parts[1]}.${parts[2]} KG`;
+      } else {
+        return `${parts[1]} KG`;
+      }
+    }
+  }
+
+  function getAgeCategoryName(ageCategoryId: string): string {
+    // Convert age category ID to display name
+    // e.g. "SENIOR" -> "Senior", "JUNIOR23" -> "Junior 23"
+    const categoryMap: {[key: string]: string} = {
+      'JUNIOR13': 'Junior 13',
+      'JUNIOR16': 'Junior 16', 
+      'JUNIOR19': 'Junior 19',
+      'JUNIOR23': 'Junior 23',
+      'SENIOR': 'Senior',
+      'VETERAN40': 'Veteran 40',
+      'VETERAN50': 'Veteran 50',
+      'VETERAN60': 'Veteran 60',
+      'VETERAN70': 'Veteran 70',
+    };
+    return categoryMap[ageCategoryId] || ageCategoryId;
+  }
+
+  function calculatePoints(lifter: Lifter): number {
+    const total = getTotal(lifter);
+    const reshel = lifter.registration.reshelCoefficient || 1.0;
+    const mccullough = lifter.registration.mcculloughCoefficient || 1.0;
+    
+    return total > 0 ? Math.round(total * reshel * mccullough * 100) / 100 : 0;
+  }
+
+  // Get sorted lifters for display
+  $: sortedLifters = sortLifters(lifters);
+
+  // Drag & Drop functions
+  function handleDragStart(event: DragEvent, index: number) {
+    if (sortBy !== 'order') return; // Only allow reordering when sorted by order
+    
+    draggedIndex = index;
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/html', '');
+    }
+  }
+
+  function handleDragOver(event: DragEvent, index: number) {
+    event.preventDefault();
+    if (draggedIndex === -1 || sortBy !== 'order') return;
+    
+    dragOverIndex = index;
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'move';
+    }
+  }
+
+  function handleDragLeave() {
+    dragOverIndex = -1;
+  }
+
+  async function handleDrop(event: DragEvent, dropIndex: number) {
+    event.preventDefault();
+    
+    if (draggedIndex === -1 || draggedIndex === dropIndex || sortBy !== 'order') {
+      resetDragState();
+      return;
+    }
+
+    try {
+      const sourceLifter = sortedLifters[draggedIndex];
+      const targetOrder = dropIndex + 1; // Convert 0-indexed array to 1-indexed database order
+      
+      // Move the competitor to the new order
+      await invoke('competitor_move_order', {
+        competitorId: sourceLifter.competitor.id,
+        newOrder: targetOrder
+      });
+      
+      // Reload contest data to reflect the new order
+      await loadContestData();
+      
+    } catch (err) {
+      error = `Failed to reorder competitor: ${err}`;
+      console.error('Error reordering competitor:', err);
+    } finally {
+      resetDragState();
+    }
+  }
+
+  function handleDragEnd() {
+    resetDragState();
+  }
+
+  function resetDragState() {
+    draggedIndex = -1;
+    dragOverIndex = -1;
   }
 
   async function updateContestStatus(newStatus: ContestStatus): Promise<void> {
@@ -495,7 +875,7 @@
           class="btn-primary mt-4"
           on:click={() => appView.set('contestWizard')}
         >
-          Create Contest
+{$_('buttons.create_contest')}
         </button>
       </div>
     {:else if lifters.length === 0 && selectedContestId && !loading}
@@ -506,41 +886,185 @@
     {:else if lifters.length > 0}
       <!-- Lifters Table -->
       <div class="overflow-x-auto">
-        <table class="min-w-full border-collapse bg-card-bg">
+        <table class="min-w-full border-collapse bg-card-bg text-xs lg:text-sm">
           <thead class="bg-element-bg text-text-primary">
             <tr>
-              <th rowspan="2" class="py-3 px-4 border border-border-color text-center w-16">{$_('contest_view.rank')}</th>
-              <th rowspan="2" class="py-3 px-4 border border-border-color text-left min-w-[200px]">{$_('contest_view.lifter')}</th>
-              <th colspan="3" class="py-3 px-4 border border-border-color text-center">{$_('contest_view.squat')}</th>
-              <th colspan="3" class="py-3 px-4 border border-border-color text-center">{$_('contest_view.bench')}</th>
-              <th rowspan="2" class="py-3 px-4 border border-border-color text-center">{$_('contest_view.subtotal')}</th>
-              <th colspan="3" class="py-3 px-4 border border-border-color text-center">{$_('contest_view.deadlift')}</th>
-              <th rowspan="2" class="py-3 px-4 border border-border-color text-center">{$_('contest_view.total')}</th>
+              <!-- Order Column - Sortable -->
+              <th 
+                rowspan="2" 
+                class="py-1 px-2 border border-border-color text-center w-16 cursor-pointer hover:bg-slate-600 {sortBy === 'order' ? 'bg-slate-700' : ''}"
+                on:click={() => handleSort('order')}
+              >
+                <div class="flex items-center justify-center gap-1">
+                  Order
+                  {#if sortBy === 'order'}
+                    <span class="text-xs">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                  {/if}
+                </div>
+              </th>
+              <!-- Lifter Column - Sortable -->
+              <th 
+                rowspan="2" 
+                class="py-1 px-2 border border-border-color text-left min-w-[200px] cursor-pointer hover:bg-slate-600 {sortBy === 'name' ? 'bg-slate-700' : ''}"
+                on:click={() => handleSort('name')}
+              >
+                <div class="flex items-center gap-1">
+                  {$_('contest_view.lifter')}
+                  {#if sortBy === 'name'}
+                    <span class="text-xs">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                  {/if}
+                </div>
+              </th>
+              <!-- Age Column - Sortable -->
+              <th 
+                rowspan="2" 
+                class="py-1 px-2 border border-border-color text-center w-16 cursor-pointer hover:bg-slate-600 {sortBy === 'age' ? 'bg-slate-700' : ''}"
+                on:click={() => handleSort('age')}
+              >
+                <div class="flex items-center justify-center gap-1">
+                  Wiek
+                  {#if sortBy === 'age'}
+                    <span class="text-xs">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                  {/if}
+                </div>
+              </th>
+              <!-- Weight Column - Sortable -->
+              <th 
+                rowspan="2" 
+                class="py-1 px-2 border border-border-color text-center w-20 cursor-pointer hover:bg-slate-600 {sortBy === 'weight' ? 'bg-slate-700' : ''}"
+                on:click={() => handleSort('weight')}
+              >
+                <div class="flex items-center justify-center gap-1">
+                  Waga
+                  {#if sortBy === 'weight'}
+                    <span class="text-xs">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                  {/if}
+                </div>
+              </th>
+              <!-- Category Column - Sortable -->
+              <th 
+                rowspan="2" 
+                class="py-1 px-2 border border-border-color text-center min-w-[120px] cursor-pointer hover:bg-slate-600 {sortBy === 'category' ? 'bg-slate-700' : ''}"
+                on:click={() => handleSort('category')}
+              >
+                <div class="flex items-center justify-center gap-1">
+                  Kategoria
+                  {#if sortBy === 'category'}
+                    <span class="text-xs">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                  {/if}
+                </div>
+              </th>
+              <!-- Points Column - Sortable -->
+              <th 
+                rowspan="2" 
+                class="py-1 px-2 border border-border-color text-center w-24 cursor-pointer hover:bg-slate-600 {sortBy === 'points' ? 'bg-slate-700' : ''}"
+                on:click={() => handleSort('points')}
+              >
+                <div class="flex items-center justify-center gap-1">
+                  Punkty
+                  {#if sortBy === 'points'}
+                    <span class="text-xs">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                  {/if}
+                </div>
+              </th>
+              <!-- Squat Header - Sortable by best squat -->
+              <th 
+                colspan="3" 
+                class="py-1 px-2 border border-border-color text-center cursor-pointer hover:bg-slate-600 {sortBy === 'squat_best' ? 'bg-slate-700' : ''}"
+                on:click={() => handleSort('squat_best')}
+              >
+                <div class="flex items-center justify-center gap-1">
+                  {$_('contest_view.squat')}
+                  {#if sortBy === 'squat_best'}
+                    <span class="text-xs">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                  {/if}
+                </div>
+              </th>
+              <!-- Bench Header - Sortable by best bench -->
+              <th 
+                colspan="3" 
+                class="py-1 px-2 border border-border-color text-center cursor-pointer hover:bg-slate-600 {sortBy === 'bench_best' ? 'bg-slate-700' : ''}"
+                on:click={() => handleSort('bench_best')}
+              >
+                <div class="flex items-center justify-center gap-1">
+                  {$_('contest_view.bench')}
+                  {#if sortBy === 'bench_best'}
+                    <span class="text-xs">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                  {/if}
+                </div>
+              </th>
+              <!-- Deadlift Header - Sortable by best deadlift -->
+              <th 
+                colspan="3" 
+                class="py-1 px-2 border border-border-color text-center cursor-pointer hover:bg-slate-600 {sortBy === 'deadlift_best' ? 'bg-slate-700' : ''}"
+                on:click={() => handleSort('deadlift_best')}
+              >
+                <div class="flex items-center justify-center gap-1">
+                  {$_('contest_view.deadlift')}
+                  {#if sortBy === 'deadlift_best'}
+                    <span class="text-xs">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                  {/if}
+                </div>
+              </th>
+              <!-- Total Column - Sortable -->
+              <th 
+                rowspan="2" 
+                class="py-1 px-2 border border-border-color text-center cursor-pointer hover:bg-slate-600 {sortBy === 'total' ? 'bg-slate-700' : ''}"
+                on:click={() => handleSort('total')}
+              >
+                <div class="flex items-center justify-center gap-1">
+                  {$_('contest_view.total')}
+                  {#if sortBy === 'total'}
+                    <span class="text-xs">{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                  {/if}
+                </div>
+              </th>
             </tr>
             <tr>
               <!-- Attempt headers -->
               {#each [1, 2, 3] as i}
-                <th class="py-2 px-4 border border-border-color text-center text-sm">{$_('contest_view.attempt_ordinal_' + i)}</th>
+                <th class="py-1 px-2 border border-border-color text-center text-sm">{$_('contest_view.attempt_ordinal_' + i)}</th>
               {/each}
               {#each [1, 2, 3] as i}
-                <th class="py-2 px-4 border border-border-color text-center text-sm">{$_('contest_view.attempt_ordinal_' + i)}</th>
+                <th class="py-1 px-2 border border-border-color text-center text-sm">{$_('contest_view.attempt_ordinal_' + i)}</th>
               {/each}
                {#each [1, 2, 3] as i}
-                <th class="py-2 px-4 border border-border-color text-center text-sm">{$_('contest_view.attempt_ordinal_' + i)}</th>
+                <th class="py-1 px-2 border border-border-color text-center text-sm">{$_('contest_view.attempt_ordinal_' + i)}</th>
               {/each}
             </tr>
           </thead>
           <tbody>
-            {#each lifters as lifter (lifter.registrationId)}
-              <tr class="hover:bg-element-bg transition-colors">
-                <!-- Rank Column -->
-                <td class="py-3 px-4 border border-border-color text-center font-bold">
-                  <span class="text-text-primary">-</span>
+            {#each sortedLifters as lifter, index (lifter.registrationId)}
+              <tr 
+                class="hover:bg-element-bg transition-colors {
+                  draggedIndex === index ? 'opacity-50' : ''
+                } {
+                  dragOverIndex === index ? 'bg-blue-100 dark:bg-blue-900' : ''
+                }"
+                on:dragover={(e) => handleDragOver(e, index)}
+                on:dragleave={handleDragLeave}
+                on:drop={(e) => handleDrop(e, index)}
+              >
+                <!-- Order Column -->
+                <td class="py-1 px-2 border border-border-color text-center font-bold">
+                  <div 
+                    class="flex items-center justify-center gap-2 {sortBy === 'order' ? 'cursor-move' : ''}"
+                    draggable={sortBy === 'order'}
+                    on:dragstart={(e) => handleDragStart(e, index)}
+                    on:dragend={handleDragEnd}
+                  >
+                    <span class="text-text-primary">{lifter.competitor.competitionOrder}</span>
+                  </div>
                 </td>
                 
                 <!-- Lifter Info -->
-                <td class="py-3 px-4 border border-border-color text-text-primary font-semibold">
-                  <div class="flex items-center space-x-3">
+                <td class="py-1 px-2 border border-border-color text-text-primary font-semibold">
+                  <div 
+                    class="flex items-center space-x-3 {sortBy === 'order' ? 'cursor-move' : ''}" 
+                    draggable={sortBy === 'order'}
+                    on:dragstart={(e) => handleDragStart(e, index)}
+                    on:dragend={handleDragEnd}
+                  >
                     <CompetitorThumbnail competitor={lifter.competitor} size="small" />
                     <div class="flex flex-col">
                       <span class="font-semibold">{lifter.competitor.firstName} {lifter.competitor.lastName}</span>
@@ -551,40 +1075,80 @@
                   </div>
                 </td>
 
+                <!-- Age -->
+                <td class="py-1 px-2 border border-border-color text-center text-text-primary">
+                  {getAge(lifter)}
+                </td>
+
+                <!-- Body Weight -->
+                <td class="py-1 px-2 border border-border-color text-center text-text-primary">
+                  {lifter.registration.bodyweight} kg
+                </td>
+
+                <!-- Category -->
+                <td class="py-1 px-2 border border-border-color text-center text-text-primary">
+                  <div class="flex flex-col text-xs">
+                    <span>{getWeightClassName(lifter.registration.weightClassId)}</span>
+                    <span class="text-text-secondary">{getAgeCategoryName(lifter.registration.ageCategoryId)}</span>
+                  </div>
+                </td>
+
+                <!-- Points -->
+                <td class="py-1 px-2 border border-border-color text-center text-text-primary font-bold">
+                  {calculatePoints(lifter).toFixed(2)}
+                </td>
+
                 <!-- Attempts -->
                 {#each [LiftType.Squat, LiftType.Bench, LiftType.Deadlift] as liftType}
                   {#each [1, 2, 3] as attemptNumber}
                     {@const attempt = getAttempt(lifter, liftType, attemptNumber)}
-                    <td class="py-3 px-4 border border-border-color text-center">
+                    <td 
+                      class="py-1 px-2 border border-border-color text-center"
+                      on:contextmenu={(e) => attempt && handleCellRightClick(e, attempt)}
+                    >
                       <div class="flex items-center justify-center">
+                        <button
+                          on:click={() => decrementWeight(lifter.registrationId, liftType, attemptNumber, attempt?.weight || 0)}
+                          class="w-4 h-4 flex items-center justify-center text-xs text-gray-400 hover:text-text-primary transition-colors"
+                          title={`Decrease weight by ${weightIncrement}kg`}
+                        >
+                          −
+                        </button>
                         <input
                           type="number"
                           value={attempt?.weight || ''}
                           on:change={(e) => updateAttempt(lifter.registrationId, liftType, attemptNumber, parseFloat(e.currentTarget.value) || 0)}
-                          class="w-20 input-field text-center py-1 px-2"
+                          on:wheel={(e) => handleAttemptWheel(e, lifter.registrationId, liftType, attemptNumber, attempt?.weight || 0)}
+                          on:mousedown={(e) => handleWeightDragStart(e, lifter.registrationId, liftType, attemptNumber, attempt?.weight || 0)}
+                          class="w-8 table-input-field text-center font-mono cursor-ns-resize select-none"
                           min="0"
-                          step="0.5"
+                          step={weightIncrement}
                           placeholder="-"
+                          title="Drag up/down to change weight or scroll with mouse wheel"
                         />
+                        <button
+                          on:click={() => incrementWeight(lifter.registrationId, liftType, attemptNumber, attempt?.weight || 0)}
+                          class="w-4 h-4 flex items-center justify-center text-xs text-gray-400 hover:text-text-primary transition-colors"
+                          title={`Increase weight by ${weightIncrement}kg`}
+                        >
+                          +
+                        </button>
                         {#if attempt}
-                          <span class="ml-2 text-sm {attempt.status === AttemptStatus.Good ? 'text-green-400' : attempt.status === AttemptStatus.Bad ? 'text-red-400' : 'text-gray-400'}">
-                            {attempt.status === AttemptStatus.Good ? '✓' : attempt.status === AttemptStatus.Bad ? '✗' : '◦'}
-                          </span>
+                          <button
+                            on:click={() => handleStatusClick(attempt)}
+                            class="ml-2 text-lg hover:scale-110 transition-transform cursor-pointer {attempt.status === AttemptStatus.Successful ? 'text-green-400' : attempt.status === AttemptStatus.Failed ? 'text-red-400' : 'text-gray-400'}"
+                            title="Click to cycle status (Pending → Success → Failed → Pending)"
+                          >
+                            {attempt.status === AttemptStatus.Successful ? '✓' : attempt.status === AttemptStatus.Failed ? '✗' : '●'}
+                          </button>
                         {/if}
                       </div>
                     </td>
                   {/each}
-
-                  <!-- Subtotal after Bench -->
-                  {#if liftType === LiftType.Bench}
-                    <td class="py-3 px-4 border border-border-color text-center text-text-primary font-bold">
-                      {getSubtotal(lifter)} kg
-                    </td>
-                  {/if}
                 {/each}
 
                 <!-- Total -->
-                <td class="py-3 px-4 border border-border-color text-center font-bold text-lg text-primary-red">
+                <td class="py-1 px-2 border border-border-color text-center font-bold text-lg text-primary-red">
                   {getTotal(lifter)} kg
                 </td>
               </tr>

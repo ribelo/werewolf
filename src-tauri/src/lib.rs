@@ -1,7 +1,8 @@
 use std::sync::Arc;
-use tauri::{Manager, State};
+// Tauri imports - removed unused Manager and State
 use tokio::sync::Mutex;
 
+pub mod coefficients;
 pub mod commands;
 pub mod database;
 pub mod error;
@@ -18,14 +19,14 @@ use settings::SettingsManager;
 
 // Application state to hold the database connection and settings
 pub struct AppState {
-    pub db: Arc<Mutex<Option<DatabasePool>>>,
+    pub db: Arc<Mutex<DatabasePool>>, // No Option! Database always ready or app exits!
     pub settings: Arc<Mutex<SettingsManager>>,
 }
 
 // All commands are now defined in the commands module
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
+pub async fn run() {
     // Initialize unified logging system
     let _guard = match logging::init_tracing() {
         Ok((log_path, guard)) => {
@@ -43,7 +44,10 @@ pub fn run() {
 
     let settings_manager = match SettingsManager::new() {
         Ok(settings) => {
-            tracing::info!("Settings loaded from: {:?}", settings.get_config_file_path());
+            tracing::info!(
+                "Settings loaded from: {:?}",
+                settings.get_config_file_path()
+            );
             settings
         }
         Err(e) => {
@@ -53,8 +57,21 @@ pub fn run() {
         }
     };
 
+    // Initialize database properly in async function
+    tracing::info!("Initializing database before app startup");
+    let database_pool = match database::initialize_database().await {
+        Ok(pool) => {
+            tracing::info!("Database initialized successfully");
+            pool
+        }
+        Err(e) => {
+            tracing::error!("Failed to initialize database: {}", e);
+            std::process::exit(1);
+        }
+    };
+
     let app_state = AppState {
-        db: Arc::new(Mutex::new(None)),
+        db: Arc::new(Mutex::new(database_pool)),
         settings: Arc::new(Mutex::new(settings_manager)),
     };
 
@@ -102,6 +119,7 @@ pub fn run() {
             commands::competitor_upload_photo,
             commands::competitor_remove_photo,
             commands::competitor_get_photo,
+            commands::competitor_move_order,
             // Registration management
             commands::registration_create,
             commands::registration_list,
@@ -122,30 +140,23 @@ pub fn run() {
             commands::result_get_competitor_results,
             commands::result_export,
             commands::result_get_scoreboard,
+            // Plate set management
+            commands::plate_set_create,
+            commands::plate_set_update_quantity,
+            commands::plate_set_list,
+            commands::plate_set_delete,
+            commands::calculate_plates,
             // Window management
             commands::window_open_display,
             commands::window_close_display,
             commands::window_update_display,
             commands::window_list
         ])
-        .setup(|app| {
+        .setup(|_app| {
             tracing::info!("Starting Werewolf application");
             tracing::info!("Version: {}", env!("CARGO_PKG_VERSION"));
             tracing::info!("Authors: {}", env!("CARGO_PKG_AUTHORS"));
-            tracing::info!("Tauri app setup starting");
-
-            // Initialize database on app startup
-            let app_handle = app.handle().clone();
-            tokio::spawn(async move {
-                let state: State<AppState> = app_handle.state();
-                tracing::info!("Attempting to initialize database");
-                if let Err(e) = commands::initialize_app_database(state).await {
-                    tracing::error!("Failed to initialize database on startup: {}", e);
-                } else {
-                    tracing::info!("Database initialized successfully on startup");
-                }
-            });
-
+            tracing::info!("Tauri app setup starting - database already initialized");
             tracing::info!("Tauri app setup completed");
             Ok(())
         })

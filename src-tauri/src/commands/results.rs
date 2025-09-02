@@ -14,10 +14,11 @@ pub async fn result_calculate(
 ) -> Result<(), AppError> {
     tracing::info!("result_calculate called for contest: {}", contest_id);
     let db_pool = state.db.lock().await;
-    let db_pool = db_pool.as_ref().ok_or(AppError::DatabaseNotInitialized)?;
+    let db_pool = &*db_pool;
 
     // 1. Get all registrations for the contest
-    let registrations = queries::registrations::get_registrations_by_contest(db_pool, &contest_id).await?;
+    let registrations =
+        queries::registrations::get_registrations_by_contest(db_pool, &contest_id).await?;
 
     // 2. Calculate results for each registration
     for reg in registrations {
@@ -52,7 +53,7 @@ pub async fn result_get_rankings(
         ranking_type.to_string()
     );
     let db_pool = state.db.lock().await;
-    let db_pool = db_pool.as_ref().ok_or(AppError::DatabaseNotInitialized)?;
+    let db_pool = &*db_pool;
 
     let results = match ranking_type {
         RankingType::Open => queries::results::get_open_ranking(db_pool, &contest_id).await?,
@@ -82,10 +83,13 @@ pub async fn result_get_competitor_results(
     state: State<'_, AppState>,
     registration_id: String,
 ) -> Result<CompetitionResult, AppError> {
-    tracing::info!("result_get_competitor_results called for registration: {}", registration_id);
+    tracing::info!(
+        "result_get_competitor_results called for registration: {}",
+        registration_id
+    );
     let db_pool = state.db.lock().await;
-    let db_pool = db_pool.as_ref().ok_or(AppError::DatabaseNotInitialized)?;
-    
+    let db_pool = &*db_pool;
+
     // First try to get existing result
     match queries::results::get_result_by_registration(db_pool, &registration_id).await {
         Ok(result) => Ok(result),
@@ -93,7 +97,7 @@ pub async fn result_get_competitor_results(
             // If no result exists, calculate it first
             let result = queries::results::calculate_results(db_pool, &registration_id).await?;
             Ok(result)
-        },
+        }
         Err(e) => Err(AppError::Database(e)),
     }
 }
@@ -104,32 +108,41 @@ pub async fn result_export(
     contest_id: String,
     format: String, // "csv", "json"
 ) -> Result<String, AppError> {
-    tracing::info!("result_export called for contest: {}, format: {}", contest_id, format);
+    tracing::info!(
+        "result_export called for contest: {}, format: {}",
+        contest_id,
+        format
+    );
     let db_pool = state.db.lock().await;
-    let db_pool = db_pool.as_ref().ok_or(AppError::DatabaseNotInitialized)?;
-    
+    let db_pool = &*db_pool;
+
     match format.as_str() {
         "csv" => {
             let rankings = queries::results::get_open_ranking(db_pool, &contest_id).await?;
             export_to_csv(rankings).await
-        },
+        }
         "json" => {
             let rankings = queries::results::get_open_ranking(db_pool, &contest_id).await?;
             export_to_json(rankings).await
-        },
+        }
         _ => Err(AppError::InvalidInput {
             field: "format".to_string(),
-            reason: format!("Unsupported export format: {}. Supported formats: csv, json", format),
+            reason: format!(
+                "Unsupported export format: {}. Supported formats: csv, json",
+                format
+            ),
         }),
     }
 }
 
 async fn export_to_csv(rankings: Vec<CompetitionResult>) -> Result<String, AppError> {
     let mut csv_content = String::new();
-    
+
     // Header
-    csv_content.push_str("Place,Registration ID,Best Squat,Best Bench,Best Deadlift,Total,Coefficient Points\n");
-    
+    csv_content.push_str(
+        "Place,Registration ID,Best Squat,Best Bench,Best Deadlift,Total,Coefficient Points\n",
+    );
+
     // Data rows
     for result in rankings {
         csv_content.push_str(&format!(
@@ -143,7 +156,7 @@ async fn export_to_csv(rankings: Vec<CompetitionResult>) -> Result<String, AppEr
             result.coefficient_points
         ));
     }
-    
+
     Ok(csv_content)
 }
 
@@ -167,19 +180,19 @@ pub async fn result_get_scoreboard(
 ) -> Result<ScoreboardData, AppError> {
     tracing::info!("result_get_scoreboard called for contest: {}", contest_id);
     let db_pool = state.db.lock().await;
-    let db_pool = db_pool.as_ref().ok_or(AppError::DatabaseNotInitialized)?;
-    
+    let db_pool = &*db_pool;
+
     // Get current rankings (open ranking by default for scoreboard)
     let rankings = queries::results::get_open_ranking(db_pool, &contest_id).await?;
     let total_competitors = rankings.len();
-    
+
     // Get contest name
     let contest_name = queries::contests::get_contest_by_id(db_pool, &contest_id)
         .await
         .ok()
         .flatten()
         .map(|c| c.name);
-    
+
     Ok(ScoreboardData {
         rankings,
         total_competitors,

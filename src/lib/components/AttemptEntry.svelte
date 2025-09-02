@@ -13,8 +13,8 @@
 
   enum AttemptStatus {
     Pending = 'Pending',
-    Good = 'Good',
-    Bad = 'Bad',
+    Successful = 'Successful',
+    Failed = 'Failed',
   }
 
   interface Attempt {
@@ -85,7 +85,7 @@
   }
 
   // Mark attempt as good
-  async function markGood() {
+  async function markSuccessful() {
     if (!weight || submitting) return;
     
     const numericWeight = parseFloat(weight as string);
@@ -100,7 +100,7 @@
       await invoke('attempt_update_result', {
         update: {
           attemptId: `${registrationId}_${liftType}_${attemptNumber}`, // This might need adjustment based on actual ID format
-          status: AttemptStatus.Good,
+          status: AttemptStatus.Successful,
         }
       });
       
@@ -114,7 +114,7 @@
   }
 
   // Mark attempt as bad
-  async function markBad() {
+  async function markFailed() {
     if (!weight || submitting) return;
     
     const numericWeight = parseFloat(weight as string);
@@ -129,7 +129,7 @@
       await invoke('attempt_update_result', {
         update: {
           attemptId: `${registrationId}_${liftType}_${attemptNumber}`,
-          status: AttemptStatus.Bad,
+          status: AttemptStatus.Failed,
         }
       });
       
@@ -149,11 +149,11 @@
       switch (event.key) {
         case 'Enter':
           event.preventDefault();
-          markGood();
+          markSuccessful();
           break;
         case 'x':
           event.preventDefault();
-          markBad();
+          markFailed();
           break;
         case 's':
           event.preventDefault();
@@ -189,6 +189,15 @@
     focusInput();
   }
 
+  // Handle mouse wheel scrolling on weight input
+  function handleWheel(event: WheelEvent) {
+    if (submitting) return;
+    
+    event.preventDefault();
+    const delta = event.deltaY > 0 ? -0.5 : 0.5; // Reverse direction for intuitive scrolling
+    incrementWeight(delta);
+  }
+
   // Clear weight
   function clearWeight() {
     weight = '';
@@ -206,8 +215,8 @@
   // Get status color class
   function getStatusClass(status: AttemptStatus): string {
     switch (status) {
-      case AttemptStatus.Good: return 'status-good';
-      case AttemptStatus.Bad: return 'status-bad';
+      case AttemptStatus.Successful: return 'status-good';
+      case AttemptStatus.Failed: return 'status-bad';
       default: return 'status-pending';
     }
   }
@@ -236,6 +245,7 @@
       bind:value={weight}
       on:keydown={handleKeydown}
       on:blur={submitWeight}
+      on:wheel={handleWheel}
       type="number"
       step="0.5"
       min="0.5"
@@ -267,9 +277,9 @@
 
   <!-- Status Display -->
   <div class="attempt-status {getStatusClass(currentStatus)}">
-    {#if currentStatus === AttemptStatus.Good}
+    {#if currentStatus === AttemptStatus.Successful}
       {$_('attempt.status_good')}
-    {:else if currentStatus === AttemptStatus.Bad}
+    {:else if currentStatus === AttemptStatus.Failed}
       {$_('attempt.status_bad')}
     {:else if submitting}
       {$_('attempt.status_saving')}
@@ -282,7 +292,7 @@
   <div class="action-buttons">
     <button
       class="btn-good"
-      on:click={markGood}
+      on:click={markSuccessful}
       disabled={submitting || !weight}
       title="{$_('buttons.good')} (Ctrl+Enter)"
     >
@@ -310,7 +320,7 @@
 
     <button
       class="btn-bad"
-      on:click={markBad}
+      on:click={markFailed}
       disabled={submitting || !weight}
       title="{$_('buttons.bad')} (Ctrl+X)"
     >

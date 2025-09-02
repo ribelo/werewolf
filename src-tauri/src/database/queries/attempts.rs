@@ -221,7 +221,7 @@ pub async fn get_best_attempt(
         r#"
         SELECT MAX(weight) as best_weight
         FROM attempts 
-        WHERE registration_id = ?1 AND lift_type = ?2 AND status = 'Good'
+        WHERE registration_id = ?1 AND lift_type = ?2 AND status = 'Successful'
         "#,
     )
     .bind(registration_id)
@@ -335,7 +335,6 @@ pub async fn get_next_attempts_in_queue(
     .await
 }
 
-
 /// Sets the current attempt for a contest. This uses the singleton `current_lifts` table.
 pub async fn set_current_attempt(
     pool: &Pool<Sqlite>,
@@ -363,7 +362,6 @@ pub async fn set_current_attempt(
 
     Ok(())
 }
-
 
 /// Delete attempt
 pub async fn delete_attempt(pool: &Pool<Sqlite>, attempt_id: &str) -> Result<(), sqlx::Error> {

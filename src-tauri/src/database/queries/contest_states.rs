@@ -32,12 +32,11 @@ pub async fn get_contest_state(
     pool: &Pool<Sqlite>,
     contest_id: &str,
 ) -> Result<Option<ContestState>, sqlx::Error> {
-    let db_state = sqlx::query_as::<_, DbContestState>(
-        "SELECT * FROM contest_states WHERE contest_id = ?",
-    )
-    .bind(contest_id)
-    .fetch_optional(pool)
-    .await?;
+    let db_state =
+        sqlx::query_as::<_, DbContestState>("SELECT * FROM contest_states WHERE contest_id = ?")
+            .bind(contest_id)
+            .fetch_optional(pool)
+            .await?;
 
     match db_state {
         Some(db_state) => Ok(Some(db_state.try_into()?)),

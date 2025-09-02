@@ -2,6 +2,7 @@
   import Cropper from 'cropperjs';
   import 'cropperjs/dist/cropper.css';
   import { onMount, onDestroy } from 'svelte';
+  import { _ } from 'svelte-i18n';
 
   export let src: string = '';
   export let onCrop: (croppedBase64: string) => void = () => {};
@@ -121,7 +122,7 @@
     {#if !isLoaded}
       <div class="flex justify-center items-center py-8">
         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span class="ml-2">Loading...</span>
+        <span class="ml-2">{$_('common.loading')}</span>
       </div>
     {/if}
 
@@ -131,7 +132,7 @@
         class="px-4 py-2 border border-gray-300 rounded-md shadow-sm bg-white text-gray-700 hover:bg-gray-50"
         on:click={handleCancel}
       >
-        Cancel
+{$_('buttons.cancel')}
       </button>
       <button
         type="button"
@@ -139,7 +140,7 @@
         disabled={!isLoaded}
         on:click={handleCrop}
       >
-        Crop & Save
+{$_('buttons.crop_save')}
       </button>
     </div>
   </div>

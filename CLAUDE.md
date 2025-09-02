@@ -48,6 +48,9 @@ bun install
 
 # Run Rust checks (check, clippy, fmt)
 ./check.sh
+
+# Prepare SQLx queries for offline mode (after adding new queries)
+./prepare.sh
 ```
 
 ### Building
@@ -178,6 +181,63 @@ The application features two distinct windows:
 - Compile-time macros provide SQL validation, type checking, and automatic result mapping
 - Runtime functions are error-prone and lack compile-time safety guarantees
 - Example: Use `sqlx::query!("SELECT id, name FROM competitors WHERE id = ?", id)` instead of `sqlx::query("SELECT id, name FROM competitors WHERE id = ?").bind(id)`
+
+### Database Migrations - CRITICAL RULES
+- **NEVER modify existing migration files** once they've been applied to any database (local, staging, production)
+- **ALWAYS create new migration files** for schema changes, even small ones
+- **Use descriptive names** with timestamp prefix: `YYYYMMDDHHMMSS_descriptive_name.sql`
+- **Test migrations locally** before committing to ensure they work correctly
+- **Include rollback strategy** in migration comments when possible
+
+#### Migration Best Practices:
+1. **Check migration status** before making changes:
+   ```bash
+   sqlite3 ~/.local/share/werewolf/werewolf.db "SELECT version, installed_on FROM _sqlx_migrations ORDER BY version;"
+   ```
+
+2. **Create new migrations** for any schema changes:
+   ```bash
+   # Example: Adding a new column
+   sqlx migrate add add_new_column_to_table
+   ```
+
+3. **For development environment conflicts**:
+   ```bash
+   # ONLY for local development - deletes all data!
+   rm ~/.local/share/werewolf/werewolf.db
+   # Application will recreate database on next startup
+   ```
+
+#### Common Migration Errors:
+- **"migration was previously applied but has been modified"**: Someone edited an already-applied migration file
+- **Solution**: Delete local database for development, or create a new migration file for production
+- **Prevention**: Never edit files in `migrations/` directory once they've been applied
+
+#### Migration Troubleshooting:
+```bash
+# Check which migrations are applied
+sqlite3 ~/.local/share/werewolf/werewolf.db "SELECT version, hex(checksum), installed_on FROM _sqlx_migrations;"
+
+# Check current migration files
+ls -la src-tauri/migrations/
+
+# Calculate checksum of specific migration
+sha256sum src-tauri/migrations/MIGRATION_FILE.sql
+```
+
+### Internationalization (i18n) Requirements
+- **NEVER use hardcoded strings in HTML/Svelte templates**
+- **ALL user-visible text must use i18n translation keys**
+- Use `$t('key.name')` syntax for all displayed text
+- Store translation keys in appropriate JSON files
+- Support Polish (primary) and English languages
+- Examples:
+  - ❌ Bad: `<button>Save</button>`
+  - ✅ Good: `<button>{$t('common.save')}</button>`
+  - ❌ Bad: `error = "Failed to save competitor"`
+  - ✅ Good: `error = $t('errors.competitor.save_failed')`
+- **Console/debug messages can remain in English**
+- **Database content and API responses are separate from UI i18n**
 
 ## Configuration Files
 

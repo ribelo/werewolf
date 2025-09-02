@@ -3,6 +3,7 @@ pub mod categories;
 pub mod competitors;
 pub mod contest_states;
 pub mod contests;
+pub mod plate_sets;
 pub mod registrations;
 pub mod results;
 
@@ -14,5 +15,6 @@ pub use attempts::*;
 pub use categories::*;
 pub use competitors::*;
 pub use contests::*;
+pub use plate_sets::*;
 pub use registrations::*;
 pub use results::*;

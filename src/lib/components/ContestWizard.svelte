@@ -152,6 +152,15 @@
     }
   }
 
+  // Handle mouse wheel scrolling on bodyweight input
+  function handleBodyweightWheel(event: WheelEvent) {
+    event.preventDefault();
+    const currentValue = parseFloat(newCompetitor.bodyweight) || 0;
+    const delta = event.deltaY > 0 ? -0.1 : 0.1; // Reverse direction for intuitive scrolling
+    const newValue = Math.max(0, currentValue + delta);
+    newCompetitor.bodyweight = newValue.toFixed(1);
+  }
+
   async function createContest() {
     // Final validation
     if (!validateCurrentStep()) {
@@ -421,6 +430,7 @@
             id="competitor-bodyweight" 
             class="input-field" 
             bind:value={newCompetitor.bodyweight}
+            on:wheel={handleBodyweightWheel}
             placeholder="75.0"
           />
         </div>

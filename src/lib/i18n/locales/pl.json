@@ -54,14 +54,26 @@
     "create_contest": "Stwórz Zawody",
     "creating_contest": "Tworzenie Zawodów...",
     "save": "Zapisz",
-    "good": "DOBRA",
-    "bad": "ZŁA",
+    "good": "UDANA",
+    "bad": "NIEUDANA",
     "create_backup": "Stwórz Kopię Zapasową",
     "refresh_list": "Odśwież Listę",
     "restore": "Przywróć",
     "create_first_backup": "Stwórz Pierwszą Kopię Zapasową",
     "reset_database": "Resetuj Bazę Danych",
-    "resetting": "Resetowanie..."
+    "resetting": "Resetowanie...",
+    "crop_save": "Przytnij i Zapisz"
+  },
+  "common": {
+    "loading": "Ładowanie..."
+  },
+  "errors": {
+    "load_contests": "Nie udało się wczytać zawodów",
+    "load_contest_data": "Nie udało się wczytać danych zawodów", 
+    "update_attempt": "Nie udało się zaktualizować próby",
+    "reorder_competitor": "Nie udało się zmienić kolejności zawodnika",
+    "load_results": "Nie udało się wczytać wyników",
+    "calculate_results": "Nie udało się obliczyć wyników"
   },
   "backup": {
     "title": "Kopia Zapasowa i Przywracanie Bazy Danych",
@@ -87,17 +99,17 @@
     "competitor_label": "Zawodnik",
     "lift_attempt": "- Próba",
     "weight_placeholder": "Waga (kg)",
-    "status_good": "✓ DOBRA",
-    "status_bad": "✗ ZŁA", 
+    "status_good": "✓ UDANA",
+    "status_bad": "✗ NIEUDANA", 
     "status_pending": "◦ OCZEKUJE",
     "status_saving": "⏳ ZAPISYWANIE...",
     "shortcuts_help": "⌨️ Skróty:",
-    "shortcuts_text": "Enter=Zapisz | Ctrl+Enter=Dobra | Ctrl+X=Zła | +=Dodaj 2.5kg | -=Odejmij 2.5kg | Esc=Wyczyść",
+    "shortcuts_text": "Enter=Zapisz | Ctrl+Enter=Udana | Ctrl+X=Nieudana | +=Dodaj 2.5kg | -=Odejmij 2.5kg | Esc=Wyczyść",
     "increment_add": "Dodaj 2.5kg (+)",
     "increment_remove": "Odejmij 2.5kg (-)",
     "failed_update_weight": "Nie udało się zaktualizować wagi:",
-    "failed_mark_good": "Nie udało się oznaczyć jako dobra:",
-    "failed_mark_bad": "Nie udało się oznaczyć jako zła:"
+    "failed_mark_good": "Nie udało się oznaczyć jako udana:",
+    "failed_mark_bad": "Nie udało się oznaczyć jako nieudana:"
   },
   "disciplines": {
     "Bench": "Wyciskanie",
@@ -179,7 +191,8 @@
     "reset_database": "Zresetuj Bazę Danych",
     "export_csv": "Eksportuj CSV",
     "export_pdf": "Eksportuj PDF",
-    "select_contest_to_view": "Wybierz zawody aby zobaczyć wyniki."
+    "select_contest_to_view": "Wybierz zawody aby zobaczyć wyniki.",
+    "loading": "Ładowanie wyników..."
   },
   "settings": {
     "title": "Ustawienia",

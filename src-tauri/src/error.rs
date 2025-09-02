@@ -40,6 +40,15 @@ pub enum AppError {
 
     #[error("Photo processing error: {0}")]
     PhotoProcessing(#[from] crate::database::queries::competitors::PhotoProcessError),
+
+    #[error("Validation error: {0}")]
+    ValidationError(String),
+
+    #[error("Concurrent modification error: {0}")]
+    ConcurrentModificationError(String),
+
+    #[error("Database error: {0}")]
+    DatabaseError(String),
 }
 
 impl serde::Serialize for AppError {

@@ -1,14 +1,17 @@
+use crate::settings::SettingsManager;
 use sqlx::{
-    sqlite::{SqliteConnectOptions, SqlitePoolOptions, SqliteJournalMode},
+    sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions},
     Pool, Sqlite,
 };
 use std::{str::FromStr, time::Duration};
-use crate::settings::{SettingsManager, DatabaseSettings};
 
 /// Create a new database connection pool using settings
-pub async fn create_pool_with_settings(database_url: &str, settings_manager: &SettingsManager) -> Result<Pool<Sqlite>, sqlx::Error> {
+pub async fn create_pool_with_settings(
+    database_url: &str,
+    settings_manager: &SettingsManager,
+) -> Result<Pool<Sqlite>, sqlx::Error> {
     let db_settings = &settings_manager.get_settings().database;
-    
+
     let journal_mode = if db_settings.enable_wal_mode {
         SqliteJournalMode::Wal
     } else {
@@ -20,12 +23,16 @@ pub async fn create_pool_with_settings(database_url: &str, settings_manager: &Se
         .journal_mode(journal_mode)
         .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
         .foreign_keys(true)
-        .busy_timeout(Duration::from_secs(db_settings.connection_timeout_seconds as u64));
+        .busy_timeout(Duration::from_secs(
+            db_settings.connection_timeout_seconds as u64,
+        ));
 
     let pool = SqlitePoolOptions::new()
         .max_connections(db_settings.max_connections)
         .min_connections(1)
-        .acquire_timeout(Duration::from_secs(db_settings.connection_timeout_seconds as u64))
+        .acquire_timeout(Duration::from_secs(
+            db_settings.connection_timeout_seconds as u64,
+        ))
         .idle_timeout(Duration::from_secs(60))
         .max_lifetime(Duration::from_secs(3600))
         .connect_with(options)

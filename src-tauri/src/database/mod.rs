@@ -1,9 +1,10 @@
-use directories::ProjectDirs;
-use sqlx::{migrate::MigrateDatabase, Pool, Sqlite, SqlitePool};
 use crate::settings::SettingsManager;
+use directories::ProjectDirs;
+use sqlx::{migrate::MigrateDatabase, Pool, Sqlite};
 
 pub mod connection;
 pub mod db;
+pub mod demo_data;
 pub mod migrations;
 pub mod queries;
 
@@ -15,7 +16,9 @@ pub use migrations::*;
 pub type DatabasePool = Pool<Sqlite>;
 
 /// Initialize the database for the application with settings
-pub async fn initialize_database_with_settings(settings_manager: &SettingsManager) -> Result<DatabasePool, sqlx::Error> {
+pub async fn initialize_database_with_settings(
+    settings_manager: &SettingsManager,
+) -> Result<DatabasePool, sqlx::Error> {
     let db_path = get_database_path();
     let db_url = format!("sqlite:{db_path}");
 
@@ -86,40 +89,40 @@ pub async fn check_database_health(pool: &DatabasePool) -> Result<(), sqlx::Erro
 pub async fn create_backup() -> Result<String, sqlx::Error> {
     let db_path = get_database_path();
     let backup_dir = get_backup_directory();
-    
+
     // Create backup directory if it doesn't exist
     std::fs::create_dir_all(&backup_dir).map_err(|e| {
         log::error!("Failed to create backup directory: {e}");
         sqlx::Error::Io(e)
     })?;
-    
+
     // Generate timestamped backup filename
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
     let backup_filename = format!("werewolf_backup_{}.db", timestamp);
     let backup_path = std::path::Path::new(&backup_dir).join(backup_filename);
-    
+
     // Copy database file to backup location
     std::fs::copy(&db_path, &backup_path).map_err(|e| {
         log::error!("Failed to create backup: {e}");
         sqlx::Error::Io(e)
     })?;
-    
+
     Ok(backup_path.to_string_lossy().to_string())
 }
 
 /// Restore database from a backup file
 pub async fn restore_from_backup(backup_path: &str) -> Result<(), sqlx::Error> {
     let db_path = get_database_path();
-    
+
     // Verify backup file exists
     if !std::path::Path::new(backup_path).exists() {
         log::error!("Backup file not found: {}", backup_path);
         return Err(sqlx::Error::Io(std::io::Error::new(
             std::io::ErrorKind::NotFound,
-            "Backup file not found"
+            "Backup file not found",
         )));
     }
-    
+
     // Create backup of current database before restoring
     if std::path::Path::new(&db_path).exists() {
         let safety_backup = format!("{}.before_restore", db_path);
@@ -127,44 +130,42 @@ pub async fn restore_from_backup(backup_path: &str) -> Result<(), sqlx::Error> {
             log::warn!("Failed to create safety backup: {e}");
         }
     }
-    
+
     // Copy backup file to database location
     std::fs::copy(backup_path, &db_path).map_err(|e| {
         log::error!("Failed to restore from backup: {e}");
         sqlx::Error::Io(e)
     })?;
-    
+
     Ok(())
 }
 
 /// List available backup files
 pub async fn list_backups() -> Result<Vec<String>, sqlx::Error> {
     let backup_dir = get_backup_directory();
-    
+
     if !std::path::Path::new(&backup_dir).exists() {
         return Ok(vec![]);
     }
-    
+
     let entries = std::fs::read_dir(&backup_dir).map_err(|e| {
         log::error!("Failed to read backup directory: {e}");
         sqlx::Error::Io(e)
     })?;
-    
+
     let mut backups = Vec::new();
-    for entry in entries {
-        if let Ok(entry) = entry {
-            if let Some(filename) = entry.file_name().to_str() {
-                if filename.starts_with("werewolf_backup_") && filename.ends_with(".db") {
-                    backups.push(entry.path().to_string_lossy().to_string());
-                }
+    for entry in entries.flatten() {
+        if let Some(filename) = entry.file_name().to_str() {
+            if filename.starts_with("werewolf_backup_") && filename.ends_with(".db") {
+                backups.push(entry.path().to_string_lossy().to_string());
             }
         }
     }
-    
+
     // Sort by filename (which includes timestamp)
     backups.sort();
     backups.reverse(); // Most recent first
-    
+
     Ok(backups)
 }
 
@@ -179,7 +180,6 @@ fn get_backup_directory() -> String {
     }
 }
 
-
 /// Photo quality assessment result
 #[derive(Debug, Clone)]
 pub struct PhotoQuality {
@@ -192,7 +192,7 @@ pub struct PhotoQuality {
 #[derive(Debug, Clone, PartialEq)]
 pub enum PhotoQualityLevel {
     Excellent, // > 800x1000px
-    Good,      // 400-800x500-1000px  
+    Good,      // 400-800x500-1000px
     Fair,      // 200-400x250-500px
     Poor,      // < 200x250px
 }
@@ -229,36 +229,36 @@ pub fn process_competitor_photo(
 
     // Decode base64 data
     let image_data = general_purpose::STANDARD.decode(base64_data)?;
-    
+
     // Load image
     let img = ImageReader::new(Cursor::new(&image_data))
         .with_guessed_format()?
         .decode()?;
-    
+
     let original_width = img.width();
     let original_height = img.height();
-    
+
     // Assess quality
     let quality = assess_photo_quality(original_width, original_height);
-    
+
     // Resize to exact 400x500px then convert to RGB
     let processed = img
         .resize_exact(400, 500, image::imageops::FilterType::Lanczos3)
         .to_rgb8();
-    
+
     // Convert to WebP with 85% quality
     let mut webp_data = Vec::new();
     let encoder = webp::Encoder::from_rgb(&processed, 400, 500);
     let encoded = encoder.encode(85.0);
     webp_data.extend_from_slice(&encoded);
-    
+
     // Extract original format from filename or image data
     let original_format = std::path::Path::new(original_filename)
         .extension()
         .and_then(|ext| ext.to_str())
         .unwrap_or("unknown")
         .to_lowercase();
-    
+
     let metadata = PhotoMetadata {
         original_width,
         original_height,
@@ -269,7 +269,7 @@ pub fn process_competitor_photo(
         compression_quality: 85,
         processed_at: chrono::Utc::now().to_rfc3339(),
     };
-    
+
     Ok(PhotoProcessResult {
         webp_data,
         quality,
@@ -280,15 +280,27 @@ pub fn process_competitor_photo(
 /// Assess photo quality based on dimensions
 fn assess_photo_quality(width: u32, height: u32) -> PhotoQuality {
     let (level, message) = if width >= 800 && height >= 1000 {
-        (PhotoQualityLevel::Excellent, "Excellent quality - perfect for professional use".to_string())
+        (
+            PhotoQualityLevel::Excellent,
+            "Excellent quality - perfect for professional use".to_string(),
+        )
     } else if width >= 400 && height >= 500 {
-        (PhotoQualityLevel::Good, "Good quality - suitable for competition use".to_string()) 
+        (
+            PhotoQualityLevel::Good,
+            "Good quality - suitable for competition use".to_string(),
+        )
     } else if width >= 200 && height >= 250 {
-        (PhotoQualityLevel::Fair, "Fair quality - acceptable but could be better".to_string())
+        (
+            PhotoQualityLevel::Fair,
+            "Fair quality - acceptable but could be better".to_string(),
+        )
     } else {
-        (PhotoQualityLevel::Poor, "Poor quality - image is very small and may appear pixelated".to_string())
+        (
+            PhotoQualityLevel::Poor,
+            "Poor quality - image is very small and may appear pixelated".to_string(),
+        )
     };
-    
+
     PhotoQuality {
         level,
         message,

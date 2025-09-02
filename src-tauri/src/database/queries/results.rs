@@ -50,7 +50,7 @@ pub async fn calculate_results(
     )
     .fetch_one(pool)
     .await?;
-    
+
     let contest_id = reg_data.contest_id;
     let reshel = reg_data.reshel_coefficient;
     let mccullough = reg_data.mccullough_coefficient;
@@ -364,7 +364,7 @@ async fn get_best_lift_weight(
         r#"
         SELECT MAX(weight) as "max_weight: f64"
         FROM attempts 
-        WHERE registration_id = ? AND lift_type = ? AND status = 'Good'
+        WHERE registration_id = ? AND lift_type = ? AND status = 'Successful'
         "#,
         registration_id,
         lift_type

@@ -139,8 +139,8 @@ CREATE TABLE attempts (
     registration_id TEXT NOT NULL, -- Changed from competitor_id to registration_id
     lift_type TEXT NOT NULL CHECK(lift_type IN ('Bench','Squat','Deadlift')),
     attempt_number INTEGER NOT NULL CHECK(attempt_number IN (1,2,3,4)), -- Added 4th for record attempts
-    weight REAL NOT NULL CHECK(weight > 0), -- Always positive, use status for success/failure
-    status TEXT NOT NULL DEFAULT 'Pending' CHECK(status IN ('Pending','Good','Failed','Skipped')),
+    weight REAL NOT NULL CHECK(weight >= 0), -- Allow 0 for not-yet-attempted lifts
+    status TEXT NOT NULL DEFAULT 'Pending' CHECK(status IN ('Pending','Successful','Failed','Skipped')),
     timestamp TEXT, -- When attempt was completed
     judge1_decision BOOLEAN, -- First judge decision (NULL = not judged yet)
     judge2_decision BOOLEAN, -- Second judge decision

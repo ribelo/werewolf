@@ -13,8 +13,8 @@ pub enum LiftType {
 #[serde(rename_all = "PascalCase")]
 pub enum AttemptStatus {
     Pending,
-    Good,
-    Bad,
+    Successful,
+    Failed,
 }
 
 #[derive(Serialize, Deserialize, Type, Debug, Clone)]

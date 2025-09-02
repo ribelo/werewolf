@@ -1,4 +1,4 @@
-use crate::settings::{AppSettings, UiSettings, CompetitionSettings, DatabaseSettings};
+use crate::settings::{AppSettings, CompetitionSettings, DatabaseSettings, UiSettings};
 use crate::AppState;
 use tauri::State;
 
@@ -57,8 +57,11 @@ pub async fn settings_set_language(
     settings_manager
         .set_language(language)
         .map_err(|e| format!("Failed to set language: {}", e))?;
-    
-    tracing::info!("Language setting updated to: {}", settings_manager.get_language());
+
+    tracing::info!(
+        "Language setting updated to: {}",
+        settings_manager.get_language()
+    );
     Ok(())
 }
 
@@ -93,7 +96,7 @@ pub async fn settings_reset_to_defaults(state: State<'_, AppState>) -> Result<()
     settings_manager
         .reset_to_defaults()
         .map_err(|e| format!("Failed to reset settings: {}", e))?;
-    
+
     tracing::info!("Settings reset to defaults");
     Ok(())
 }
@@ -102,5 +105,8 @@ pub async fn settings_reset_to_defaults(state: State<'_, AppState>) -> Result<()
 #[tauri::command]
 pub async fn settings_get_config_path(state: State<'_, AppState>) -> Result<String, String> {
     let settings_manager = state.settings.lock().await;
-    Ok(settings_manager.get_config_file_path().to_string_lossy().to_string())
+    Ok(settings_manager
+        .get_config_file_path()
+        .to_string_lossy()
+        .to_string())
 }

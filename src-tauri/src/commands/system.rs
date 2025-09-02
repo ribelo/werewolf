@@ -8,35 +8,11 @@ pub fn greet(name: &str) -> String {
     format!("Hello, {name}! You've been greeted from Rust!")
 }
 
-/// Initialize the database
+/// Initialize the database (always succeeds since database is initialized at startup)
 #[tauri::command]
-pub async fn initialize_app_database(state: State<'_, AppState>) -> Result<String, AppError> {
-    let mut db_guard = state.db.lock().await;
-
-    if db_guard.is_some() {
-        return Ok("Database already initialized".to_string());
-    }
-
-    // Get settings manager to use for database initialization
-    let settings_guard = state.settings.lock().await;
-    
-    match database::initialize_database_with_settings(&*settings_guard).await {
-        Ok(pool) => {
-            *db_guard = Some(pool);
-            Ok("Database initialized successfully with settings".to_string())
-        }
-        Err(e) => {
-            // Fallback to default initialization
-            tracing::warn!("Failed to initialize with settings, using defaults: {}", e);
-            match database::initialize_database().await {
-                Ok(pool) => {
-                    *db_guard = Some(pool);
-                    Ok("Database initialized successfully with defaults".to_string())
-                }
-                Err(e) => Err(AppError::Database(e)),
-            }
-        }
-    }
+pub async fn initialize_app_database(_state: State<'_, AppState>) -> Result<String, AppError> {
+    // Database is always initialized at app startup now
+    Ok("Database already initialized at startup".to_string())
 }
 
 /// Get database health status
@@ -44,12 +20,9 @@ pub async fn initialize_app_database(state: State<'_, AppState>) -> Result<Strin
 pub async fn get_database_status(state: State<'_, AppState>) -> Result<String, AppError> {
     let db_guard = state.db.lock().await;
 
-    match db_guard.as_ref() {
-        Some(pool) => match database::check_database_health(pool).await {
-            Ok(_) => Ok("Database is healthy".to_string()),
-            Err(e) => Err(AppError::Database(e)),
-        },
-        None => Err(AppError::Internal("Database not initialized".to_string())),
+    match database::check_database_health(&db_guard).await {
+        Ok(_) => Ok("Database is healthy".to_string()),
+        Err(e) => Err(AppError::Database(e)),
     }
 }
 
@@ -63,12 +36,8 @@ pub async fn test_frontend_logging() -> Result<String, AppError> {
 /// Create a backup of the database
 #[tauri::command]
 pub async fn backup_database(state: State<'_, AppState>) -> Result<String, AppError> {
-    let db_guard = state.db.lock().await;
-    
-    if db_guard.is_none() {
-        return Err(AppError::DatabaseNotInitialized);
-    }
-    
+    let _db_guard = state.db.lock().await; // Database always ready now
+
     let backup_path = database::create_backup().await?;
     tracing::info!("Database backup created at: {}", backup_path);
     Ok(backup_path)
@@ -77,25 +46,28 @@ pub async fn backup_database(state: State<'_, AppState>) -> Result<String, AppEr
 /// Restore database from a backup file
 #[tauri::command]
 pub async fn restore_database(
-    state: State<'_, AppState>, 
-    backup_path: String
+    state: State<'_, AppState>,
+    backup_path: String,
 ) -> Result<String, AppError> {
-    // Close current database connection
+    // Close current database connection properly
     {
-        let mut db_guard = state.db.lock().await;
-        *db_guard = None;
+        let db_guard = state.db.lock().await;
+        db_guard.close().await;
     }
-    
+
     // Restore from backup
     database::restore_from_backup(&backup_path).await?;
-    
+
     // Reinitialize database connection
     let mut db_guard = state.db.lock().await;
     match database::initialize_database().await {
         Ok(pool) => {
-            *db_guard = Some(pool);
+            *db_guard = pool;
             tracing::info!("Database restored from backup: {}", backup_path);
-            Ok(format!("Database successfully restored from {}", backup_path))
+            Ok(format!(
+                "Database successfully restored from {}",
+                backup_path
+            ))
         }
         Err(e) => {
             tracing::error!("Failed to reinitialize database after restore: {}", e);
@@ -115,13 +87,11 @@ pub async fn list_backups() -> Result<Vec<String>, AppError> {
 #[tauri::command]
 pub async fn reset_database(state: State<'_, AppState>) -> Result<String, AppError> {
     let db_guard = state.db.lock().await;
-    
-    if let Some(ref pool) = *db_guard {
-        tracing::warn!("Resetting database - all data will be lost!");
-        database::reset_database(pool).await.map_err(AppError::Database)?;
-        tracing::info!("Database reset completed successfully");
-        Ok("Database reset completed successfully".to_string())
-    } else {
-        Err(AppError::DatabaseNotInitialized)
-    }
+
+    tracing::warn!("Resetting database - all data will be lost!");
+    database::reset_database(&db_guard)
+        .await
+        .map_err(AppError::Database)?;
+    tracing::info!("Database reset completed successfully");
+    Ok("Database reset completed successfully".to_string())
 }

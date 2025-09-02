@@ -54,14 +54,26 @@
     "create_contest": "Create Contest",
     "creating_contest": "Creating Contest...",
     "save": "Save",
-    "good": "GOOD",
-    "bad": "BAD",
+    "good": "SUCCESSFUL",
+    "bad": "FAILED",
     "create_backup": "Create Backup",
     "refresh_list": "Refresh List",
     "restore": "Restore",
     "create_first_backup": "Create First Backup",
     "reset_database": "Reset Database",
-    "resetting": "Resetting..."
+    "resetting": "Resetting...",
+    "crop_save": "Crop & Save"
+  },
+  "common": {
+    "loading": "Loading..."
+  },
+  "errors": {
+    "load_contests": "Failed to load contests",
+    "load_contest_data": "Failed to load contest data",
+    "update_attempt": "Failed to update attempt",
+    "reorder_competitor": "Failed to reorder competitor",
+    "load_results": "Failed to load results",
+    "calculate_results": "Failed to calculate results"
   },
   "backup": {
     "title": "Database Backup & Restore",
@@ -87,17 +99,17 @@
     "competitor_label": "Competitor",
     "lift_attempt": "- Attempt",
     "weight_placeholder": "Weight (kg)",
-    "status_good": "✓ GOOD",
-    "status_bad": "✗ BAD", 
+    "status_good": "✓ SUCCESSFUL",
+    "status_bad": "✗ FAILED", 
     "status_pending": "◦ PENDING",
     "status_saving": "⏳ SAVING...",
     "shortcuts_help": "⌨️ Shortcuts:",
-    "shortcuts_text": "Enter=Save | Ctrl+Enter=Good | Ctrl+X=Bad | +=Add 2.5kg | -=Remove 2.5kg | Esc=Clear",
+    "shortcuts_text": "Enter=Save | Ctrl+Enter=Successful | Ctrl+X=Failed | +=Add 2.5kg | -=Remove 2.5kg | Esc=Clear",
     "increment_add": "Add 2.5kg (+)",
     "increment_remove": "Remove 2.5kg (-)",
     "failed_update_weight": "Failed to update weight:",
-    "failed_mark_good": "Failed to mark as good:",
-    "failed_mark_bad": "Failed to mark as bad:"
+    "failed_mark_good": "Failed to mark as successful:",
+    "failed_mark_bad": "Failed to mark as failed:"
   },
   "disciplines": {
     "Bench": "Bench Press",
@@ -179,7 +191,8 @@
     "reset_database": "Reset Database",
     "export_csv": "Export CSV",
     "export_pdf": "Export PDF",
-    "select_contest_to_view": "Select a contest to view results."
+    "select_contest_to_view": "Select a contest to view results.",
+    "loading": "Loading results..."
   },
   "settings": {
     "title": "Settings",

@@ -12,6 +12,7 @@ pub struct Competitor {
     pub club: Option<String>,
     pub city: Option<String>,
     pub notes: Option<String>,
+    pub competition_order: i64,
     pub photo_base64: Option<String>,
     pub created_at: String,
     pub updated_at: String,

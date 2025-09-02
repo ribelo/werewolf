@@ -3,7 +3,8 @@
 
 use clap::{Parser, Subcommand};
 use werewolf_lib::database::{
-    create_pool, get_database_path, get_migration_info, reset_database, run_migrations,
+    create_pool, demo_data::generate_demo_data, get_database_path, get_migration_info,
+    reset_database, run_migrations,
 };
 
 #[derive(Parser)]
@@ -31,6 +32,11 @@ enum Commands {
         format: ExportFormat,
         #[arg(short, long)]
         output: Option<String>,
+    },
+    /// Generate demo competition data with 10 competitors
+    Demo {
+        #[arg(long)]
+        force: bool,
     },
     /// Test logging functionality
     TestLogging,
@@ -85,6 +91,12 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+        Some(Commands::Demo { force }) => {
+            if let Err(e) = handle_demo_command(force).await {
+                eprintln!("Demo data generation error: {e}");
+                std::process::exit(1);
+            }
+        }
         Some(Commands::TestLogging) => {
             if let Err(e) = test_logging().await {
                 eprintln!("Logging test error: {e}");
@@ -93,7 +105,7 @@ async fn main() {
         }
         _ => {
             // Default: start Tauri GUI
-            werewolf_lib::run();
+            werewolf_lib::run().await;
         }
     }
 }
@@ -155,6 +167,19 @@ async fn handle_export_command(
     _output: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("Export functionality will be implemented in a future version");
+    Ok(())
+}
+
+async fn handle_demo_command(force: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let db_path = get_database_path();
+    let db_url = format!("sqlite:{db_path}");
+
+    println!("🐺 Werewolf Demo Data Generator");
+    println!("================================");
+
+    let pool = create_pool(&db_url).await?;
+    generate_demo_data(&pool, force).await?;
+
     Ok(())
 }
 

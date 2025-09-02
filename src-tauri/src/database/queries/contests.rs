@@ -1,4 +1,4 @@
-use crate::models::contest::{Contest, NewContest, Discipline, ContestStatus};
+use crate::models::contest::{Contest, ContestStatus, Discipline, NewContest};
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, Pool, Sqlite};
 use std::str::FromStr;
@@ -11,8 +11,8 @@ pub struct DbContest {
     pub name: String,
     pub date: String, // SQLite stores as TEXT
     pub location: String,
-    pub discipline: String, // SQLite stores as TEXT 
-    pub status: String, // SQLite stores as TEXT
+    pub discipline: String, // SQLite stores as TEXT
+    pub status: String,     // SQLite stores as TEXT
     pub federation_rules: Option<String>,
     pub competition_type: Option<String>,
     pub organizer: Option<String>,
@@ -33,8 +33,7 @@ impl From<DbContest> for Contest {
             location: db_contest.location,
             discipline: Discipline::from_str(&db_contest.discipline)
                 .unwrap_or(Discipline::Powerlifting),
-            status: ContestStatus::from_str(&db_contest.status)
-                .unwrap_or(ContestStatus::Setup),
+            status: ContestStatus::from_str(&db_contest.status).unwrap_or(ContestStatus::Setup),
             federation_rules: db_contest.federation_rules,
             competition_type: db_contest.competition_type,
             organizer: db_contest.organizer,
@@ -106,7 +105,7 @@ pub async fn get_contest_by_id(
     )
     .fetch_optional(pool)
     .await?;
-    
+
     Ok(db_contest.map(|c| c.into()))
 }
 
@@ -135,7 +134,7 @@ pub async fn get_all_contests(pool: &Pool<Sqlite>) -> Result<Vec<Contest>, sqlx:
     )
     .fetch_all(pool)
     .await?;
-    
+
     Ok(db_contests.into_iter().map(|c| c.into()).collect())
 }
 
@@ -176,11 +175,8 @@ pub async fn update_contest(
 
 /// Delete a contest by its ID.
 pub async fn delete_contest(pool: &Pool<Sqlite>, contest_id: &str) -> Result<(), sqlx::Error> {
-    sqlx::query!(
-        "DELETE FROM contests WHERE id = ?",
-        contest_id
-    )
-    .execute(pool)
-    .await?;
+    sqlx::query!("DELETE FROM contests WHERE id = ?", contest_id)
+        .execute(pool)
+        .await?;
     Ok(())
 }

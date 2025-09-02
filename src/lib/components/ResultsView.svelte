@@ -177,7 +177,7 @@
   </div>
 
   {#if loading}
-    <div class="loading">Loading results...</div>
+    <div class="loading">{$_('results.loading')}</div>
   {/if}
 
   {#if error}
