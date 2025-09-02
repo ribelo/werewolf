@@ -3,6 +3,11 @@ use crate::models::plate_set::{CreatePlateSet, PlateCalculation, PlateSet};
 use sqlx::{Pool, Sqlite};
 use uuid::Uuid;
 
+// Validation constants for bar weights
+const WEIGHT_INCREMENT: f64 = 0.25;
+const MAX_BAR_WEIGHT: f64 = 100.0;
+const MIN_BAR_WEIGHT: f64 = 0.0;
+
 pub async fn create_plate_set(
     pool: &Pool<Sqlite>,
     request: CreatePlateSet,
@@ -122,15 +127,16 @@ pub async fn delete_plate_set(pool: &Pool<Sqlite>, id: &str) -> Result<(), AppEr
     Ok(())
 }
 
-// Inline plate calculation logic - no separate utils module needed
-pub async fn calculate_plates_and_increment(
+// New function that accepts gender parameter
+pub async fn calculate_plates_and_increment_with_gender(
     pool: &Pool<Sqlite>,
     contest_id: &str,
     target_weight: f64,
+    gender: Option<&str>,
 ) -> Result<PlateCalculation, AppError> {
-    // Get plate sets and bar weight in one go
+    // Get plate sets and appropriate bar weight based on gender
     let plate_sets = get_plate_sets_by_contest(pool, contest_id).await?;
-    let bar_weight = get_contest_bar_weight(pool, contest_id).await?;
+    let bar_weight = get_contest_bar_weight_by_gender(pool, contest_id, gender).await?;
 
     // Calculate minimum increment (smallest plate × 2)
     let increment = plate_sets
@@ -183,13 +189,27 @@ pub async fn calculate_plates_and_increment(
     })
 }
 
-pub async fn get_contest_bar_weight(
+// Keep original function for backward compatibility
+pub async fn calculate_plates_and_increment(
     pool: &Pool<Sqlite>,
     contest_id: &str,
+    target_weight: f64,
+) -> Result<PlateCalculation, AppError> {
+    // Default to men's bar weight for backward compatibility
+    calculate_plates_and_increment_with_gender(pool, contest_id, target_weight, Some("Male")).await
+}
+
+// New function that supports gender-specific bar weights
+pub async fn get_contest_bar_weight_by_gender(
+    pool: &Pool<Sqlite>,
+    contest_id: &str,
+    gender: Option<&str>,
 ) -> Result<f64, AppError> {
     let row = sqlx::query!(
         r#"
-        SELECT COALESCE(bar_weight, 20.0) as "bar_weight!: f64"
+        SELECT 
+            COALESCE(mens_bar_weight, bar_weight, 20.0) as "mens_bar_weight!: f64",
+            COALESCE(womens_bar_weight, 15.0) as "womens_bar_weight!: f64"
         FROM contests
         WHERE id = ?
         "#,
@@ -200,11 +220,110 @@ pub async fn get_contest_bar_weight(
     .map_err(|e| AppError::DatabaseError(format!("Failed to get contest bar weight: {}", e)))?;
 
     match row {
-        Some(row) => Ok(row.bar_weight),
+        Some(row) => {
+            let bar_weight = match gender {
+                Some("Female") => row.womens_bar_weight,
+                _ => row.mens_bar_weight, // Default to men's bar for Male or unknown gender
+            };
+            Ok(bar_weight)
+        },
         None => Err(AppError::ContestNotFound {
             id: contest_id.to_string(),
         }),
     }
+}
+
+// Keep the original function for backward compatibility
+pub async fn get_contest_bar_weight(
+    pool: &Pool<Sqlite>,
+    contest_id: &str,
+) -> Result<f64, AppError> {
+    // Default to men's bar weight for backward compatibility
+    get_contest_bar_weight_by_gender(pool, contest_id, Some("Male")).await
+}
+
+// Function to get both bar weights for UI configuration
+pub async fn get_contest_bar_weights(
+    pool: &Pool<Sqlite>,
+    contest_id: &str,
+) -> Result<(f64, f64), AppError> {
+    let row = sqlx::query!(
+        r#"
+        SELECT 
+            COALESCE(mens_bar_weight, bar_weight, 20.0) as "mens_bar_weight!: f64",
+            COALESCE(womens_bar_weight, 15.0) as "womens_bar_weight!: f64"
+        FROM contests
+        WHERE id = ?
+        "#,
+        contest_id
+    )
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| AppError::DatabaseError(format!("Failed to get contest bar weights: {}", e)))?;
+
+    match row {
+        Some(row) => Ok((row.mens_bar_weight, row.womens_bar_weight)),
+        None => Err(AppError::ContestNotFound {
+            id: contest_id.to_string(),
+        }),
+    }
+}
+
+// Function to update both bar weights for a contest
+pub async fn update_contest_bar_weights(
+    pool: &Pool<Sqlite>,
+    contest_id: &str,
+    mens_bar_weight: f64,
+    womens_bar_weight: f64,
+) -> Result<(), AppError> {
+    // Validate input using constants
+    if mens_bar_weight <= MIN_BAR_WEIGHT || womens_bar_weight <= MIN_BAR_WEIGHT {
+        return Err(AppError::ValidationError(
+            "Bar weights must be positive".to_string(),
+        ));
+    }
+    
+    if mens_bar_weight > MAX_BAR_WEIGHT || womens_bar_weight > MAX_BAR_WEIGHT {
+        return Err(AppError::ValidationError(
+            format!("Bar weights cannot exceed {}kg", MAX_BAR_WEIGHT),
+        ));
+    }
+
+    // Check increment validation using proper floating point arithmetic
+    let increment_multiplier = 1.0 / WEIGHT_INCREMENT;
+    let mens_check = (mens_bar_weight * increment_multiplier).fract().abs() < f64::EPSILON;
+    let womens_check = (womens_bar_weight * increment_multiplier).fract().abs() < f64::EPSILON;
+    
+    if !mens_check || !womens_check {
+        return Err(AppError::ValidationError(
+            format!("Bar weights must be in {}kg increments", WEIGHT_INCREMENT),
+        ));
+    }
+
+    let now = chrono::Utc::now().to_rfc3339();
+    
+    let result = sqlx::query!(
+        r#"
+        UPDATE contests
+        SET mens_bar_weight = ?, womens_bar_weight = ?, updated_at = ?
+        WHERE id = ?
+        "#,
+        mens_bar_weight,
+        womens_bar_weight,
+        now,
+        contest_id
+    )
+    .execute(pool)
+    .await
+    .map_err(|e| AppError::DatabaseError(format!("Failed to update bar weights: {}", e)))?;
+
+    if result.rows_affected() == 0 {
+        return Err(AppError::ContestNotFound {
+            id: contest_id.to_string(),
+        });
+    }
+
+    Ok(())
 }
 
 pub async fn create_default_plate_sets_for_contest(

@@ -4,6 +4,7 @@
   import { _ } from 'svelte-i18n';
   import { appView } from '../stores';
   import CompetitorThumbnail from './CompetitorThumbnail.svelte';
+  import EditContestModal from './EditContestModal.svelte';
 
   // Backend Models
   interface Contest {
@@ -145,6 +146,10 @@
   let loading = false;
   let error = '';
   
+  // Edit Modal State
+  let showEditModal = false;
+  let selectedContest: Contest | null = null;
+  
   // Plate management state
   let plateSets: PlateSet[] = [];
   let weightIncrement: number = 5.0; // Default 5kg (2.5kg smallest plate × 2)
@@ -261,7 +266,8 @@
       // Get weight increment by calculating plates for any weight (e.g., 100kg)
       const plateCalc = await invoke<PlateCalculation>('calculate_plates', { 
         contestId: selectedContestId, 
-        targetWeight: 100 
+        targetWeight: 100,
+        gender: null // Use default (men's bar) for increment calculation
       });
       weightIncrement = plateCalc.increment;
       
@@ -407,6 +413,23 @@
   function getLifterName(registrationId: string): string {
     const lifter = lifters.find(l => l.registrationId === registrationId);
     return lifter ? `${lifter.competitor.firstName} ${lifter.competitor.lastName}` : 'Unknown';
+  }
+
+  // Function to calculate plates for a specific competitor's attempt
+  async function calculatePlatesForLifter(registrationId: string, targetWeight: number): Promise<PlateCalculation | null> {
+    const lifter = lifters.find(l => l.registrationId === registrationId);
+    if (!lifter || !selectedContestId) return null;
+
+    try {
+      return await invoke<PlateCalculation>('calculate_plates', {
+        contestId: selectedContestId,
+        targetWeight,
+        gender: lifter.competitor.gender // Use the competitor's actual gender
+      });
+    } catch (err) {
+      console.error('Error calculating plates for lifter:', err);
+      return null;
+    }
   }
 
   async function callNextLifter(attemptId: string): Promise<void> {
@@ -791,19 +814,36 @@
     <!-- Contest Selection -->
     {#if contests.length > 0}
       <div class="mb-8 flex items-center justify-between">
-        <div>
-          <label for="contest-select" class="input-label">{$_('contest_view.select_contest')}</label>
-          <select
-            id="contest-select"
-            bind:value={selectedContestId}
-            class="input-field max-w-md"
-          >
-            {#each contests as contest}
-              <option value={contest.id}>
-                {contest.name} - {contest.date} ({contest.location})
-              </option>
-            {/each}
-          </select>
+        <div class="flex items-end gap-3">
+          <div>
+            <label for="contest-select" class="input-label">{$_('contest_view.select_contest')}</label>
+            <select
+              id="contest-select"
+              bind:value={selectedContestId}
+              class="input-field max-w-md"
+            >
+              {#each contests as contest}
+                <option value={contest.id}>
+                  {contest.name} - {contest.date} ({contest.location})
+                </option>
+              {/each}
+            </select>
+          </div>
+          {#if selectedContestId}
+            <button
+              on:click={() => {
+                selectedContest = contests.find(c => c.id === selectedContestId) || null;
+                showEditModal = true;
+              }}
+              class="btn-secondary flex items-center gap-2"
+              title={$_('contest.edit_button')}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+              </svg>
+              {$_('contest.edit_button')}
+            </button>
+          {/if}
         </div>
       </div>
     {/if}
@@ -1139,7 +1179,7 @@
                             class="ml-2 text-lg hover:scale-110 transition-transform cursor-pointer {attempt.status === AttemptStatus.Successful ? 'text-green-400' : attempt.status === AttemptStatus.Failed ? 'text-red-400' : 'text-gray-400'}"
                             title="Click to cycle status (Pending → Success → Failed → Pending)"
                           >
-                            {attempt.status === AttemptStatus.Successful ? '✓' : attempt.status === AttemptStatus.Failed ? '✗' : '●'}
+                            ●
                           </button>
                         {/if}
                       </div>
@@ -1148,7 +1188,7 @@
                 {/each}
 
                 <!-- Total -->
-                <td class="py-1 px-2 border border-border-color text-center font-bold text-lg text-primary-red">
+                <td class="py-1 px-2 border border-border-color text-center font-bold text-lg text-primary-red weight-cell-fixed whitespace-nowrap">
                   {getTotal(lifter)} kg
                 </td>
               </tr>
@@ -1234,6 +1274,21 @@
     {/if}
   </main>
 </div>
+
+<!-- Edit Contest Modal -->
+{#if showEditModal && selectedContest}
+  <EditContestModal
+    contest={selectedContest}
+    onClose={() => {
+      showEditModal = false;
+      selectedContest = null;
+    }}
+    onSave={() => {
+      loadContestData();
+      loadContests();
+    }}
+  />
+{/if}
 
 <style>
   .bombed {

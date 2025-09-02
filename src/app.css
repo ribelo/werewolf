@@ -125,6 +125,13 @@
     -moz-appearance: textfield;
   }
 
+  /* Fixed width for weight cells to prevent layout shifting */
+  .weight-cell-fixed {
+    width: 110px; /* Accommodates "9999.99 kg" in text-lg with padding */
+    min-width: 110px;
+    max-width: 110px;
+  }
+
   /* Extra small text size for very compact tables */
   .text-xxs {
     font-size: 0.6875rem; /* 11px */

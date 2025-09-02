@@ -146,6 +146,8 @@ pub async fn run() {
             commands::plate_set_list,
             commands::plate_set_delete,
             commands::calculate_plates,
+            commands::get_contest_bar_weights,
+            commands::update_contest_bar_weights,
             // Window management
             commands::window_open_display,
             commands::window_close_display,
