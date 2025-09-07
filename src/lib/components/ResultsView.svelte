@@ -136,7 +136,7 @@
 
 <div class="results-view">
   <div class="results-header">
-    <h2>Contest Results</h2>
+    <h2>{$_('results.contest_results')}</h2>
     {#if scoreboardData?.contestName}
       <h3>{scoreboardData.contestName}</h3>
     {/if}
@@ -150,7 +150,7 @@
         {$_('results.export_csv')}
       </button>
       <button on:click={() => exportResults('json')} disabled={loading || !contestId}>
-        Export JSON
+{$_('results.export_json')}
       </button>
     </div>
   </div>
@@ -189,14 +189,14 @@
       <table>
         <thead>
           <tr>
-            <th>Place</th>
-            <th>Registration</th>
-            <th>Squat</th>
-            <th>Bench</th>
-            <th>Deadlift</th>
-            <th>Total</th>
-            <th>Points</th>
-            <th>Status</th>
+            <th>{$_('results.place')}</th>
+            <th>{$_('results.registration')}</th>
+            <th>{$_('contest_view.squat')}</th>
+            <th>{$_('contest_view.bench')}</th>
+            <th>{$_('contest_view.deadlift')}</th>
+            <th>{$_('contest_view.total')}</th>
+            <th>{$_('results.points')}</th>
+            <th>{$_('results.status')}</th>
           </tr>
         </thead>
         <tbody>
@@ -219,9 +219,9 @@
               <td>{result.coefficientPoints.toFixed(2)}</td>
               <td>
                 {#if result.isDisqualified}
-                  <span class="status disqualified">DQ</span>
+                  <span class="status disqualified">{$_('results.disqualified')}</span>
                 {:else if result.brokeRecord}
-                  <span class="status record">RECORD</span>
+                  <span class="status record">{$_('results.record')}</span>
                 {:else}
                   <span class="status qualified">✓</span>
                 {/if}

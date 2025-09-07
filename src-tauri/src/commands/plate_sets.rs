@@ -76,11 +76,12 @@ pub async fn calculate_plates(
     );
     with_db!(state, |pool| {
         queries::plate_sets::calculate_plates_and_increment_with_gender(
-            pool, 
-            &contest_id, 
-            target_weight, 
-            gender.as_deref()
-        ).await
+            pool,
+            &contest_id,
+            target_weight,
+            gender.as_deref(),
+        )
+        .await
     })
 }
 
@@ -103,10 +104,32 @@ pub async fn update_contest_bar_weights(
     womens_bar_weight: f64,
 ) -> Result<(), AppError> {
     tracing::info!(
-        "update_contest_bar_weights called for contest: {}, men: {}kg, women: {}kg", 
-        contest_id, mens_bar_weight, womens_bar_weight
+        "update_contest_bar_weights called for contest: {}, men: {}kg, women: {}kg",
+        contest_id,
+        mens_bar_weight,
+        womens_bar_weight
     );
     with_db!(state, |pool| {
-        queries::plate_sets::update_contest_bar_weights(pool, &contest_id, mens_bar_weight, womens_bar_weight).await
+        queries::plate_sets::update_contest_bar_weights(
+            pool,
+            &contest_id,
+            mens_bar_weight,
+            womens_bar_weight,
+        )
+        .await
+    })
+}
+
+#[tauri::command]
+pub async fn get_plate_colors_for_contest(
+    state: State<'_, AppState>,
+    contest_id: String,
+) -> Result<std::collections::HashMap<String, String>, AppError> {
+    tracing::info!(
+        "get_plate_colors_for_contest called for contest: {}",
+        contest_id
+    );
+    with_db!(state, |pool| {
+        queries::plate_sets::get_plate_colors_for_contest(pool, &contest_id).await
     })
 }

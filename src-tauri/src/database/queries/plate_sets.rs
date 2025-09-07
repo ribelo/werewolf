@@ -17,14 +17,15 @@ pub async fn create_plate_set(
 
     let row = sqlx::query!(
         r#"
-        INSERT INTO plate_sets (id, contest_id, plate_weight, quantity, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        RETURNING id, contest_id, plate_weight, quantity, created_at, updated_at
+        INSERT INTO plate_sets (id, contest_id, plate_weight, quantity, color, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        RETURNING id, contest_id, plate_weight, quantity, color, created_at, updated_at
         "#,
         id,
         request.contest_id,
         request.plate_weight,
         request.quantity,
+        request.color,
         now,
         now
     )
@@ -37,6 +38,7 @@ pub async fn create_plate_set(
         contest_id: row.contest_id,
         plate_weight: row.plate_weight,
         quantity: row.quantity as i32,
+        color: row.color.unwrap_or_else(|| "#374151".to_string()), // Fallback for existing NULL colors
         created_at: row.created_at,
         updated_at: row.updated_at,
     })
@@ -79,7 +81,7 @@ pub async fn get_plate_sets_by_contest(
 ) -> Result<Vec<PlateSet>, AppError> {
     let rows = sqlx::query!(
         r#"
-        SELECT id, contest_id, plate_weight, quantity, created_at, updated_at
+        SELECT id, contest_id, plate_weight, quantity, color, created_at, updated_at
         FROM plate_sets
         WHERE contest_id = ?
         ORDER BY plate_weight DESC
@@ -97,6 +99,7 @@ pub async fn get_plate_sets_by_contest(
             contest_id: row.contest_id,
             plate_weight: row.plate_weight,
             quantity: row.quantity as i32,
+            color: row.color.unwrap_or_else(|| "#374151".to_string()), // Fallback for existing NULL colors
             created_at: row.created_at,
             updated_at: row.updated_at,
         })
@@ -155,6 +158,8 @@ pub async fn calculate_plates_and_increment_with_gender(
             exact: true,
             total: bar_weight,
             increment,
+            target_weight,
+            bar_weight,
         });
     }
 
@@ -186,6 +191,8 @@ pub async fn calculate_plates_and_increment_with_gender(
         exact: is_exact,
         total: actual_total,
         increment,
+        target_weight,
+        bar_weight,
     })
 }
 
@@ -226,7 +233,7 @@ pub async fn get_contest_bar_weight_by_gender(
                 _ => row.mens_bar_weight, // Default to men's bar for Male or unknown gender
             };
             Ok(bar_weight)
-        },
+        }
         None => Err(AppError::ContestNotFound {
             id: contest_id.to_string(),
         }),
@@ -282,26 +289,28 @@ pub async fn update_contest_bar_weights(
             "Bar weights must be positive".to_string(),
         ));
     }
-    
+
     if mens_bar_weight > MAX_BAR_WEIGHT || womens_bar_weight > MAX_BAR_WEIGHT {
-        return Err(AppError::ValidationError(
-            format!("Bar weights cannot exceed {}kg", MAX_BAR_WEIGHT),
-        ));
+        return Err(AppError::ValidationError(format!(
+            "Bar weights cannot exceed {}kg",
+            MAX_BAR_WEIGHT
+        )));
     }
 
     // Check increment validation using proper floating point arithmetic
     let increment_multiplier = 1.0 / WEIGHT_INCREMENT;
     let mens_check = (mens_bar_weight * increment_multiplier).fract().abs() < f64::EPSILON;
     let womens_check = (womens_bar_weight * increment_multiplier).fract().abs() < f64::EPSILON;
-    
+
     if !mens_check || !womens_check {
-        return Err(AppError::ValidationError(
-            format!("Bar weights must be in {}kg increments", WEIGHT_INCREMENT),
-        ));
+        return Err(AppError::ValidationError(format!(
+            "Bar weights must be in {}kg increments",
+            WEIGHT_INCREMENT
+        )));
     }
 
     let now = chrono::Utc::now().to_rfc3339();
-    
+
     let result = sqlx::query!(
         r#"
         UPDATE contests
@@ -349,6 +358,7 @@ pub async fn create_default_plate_sets_for_contest(
             contest_id: contest_id.to_string(),
             plate_weight: *weight,
             quantity: *quantity,
+            color: "#DC2626".to_string(), // Red for 25kg
         };
 
         let created = create_plate_set(pool, create_request).await?;
@@ -356,6 +366,36 @@ pub async fn create_default_plate_sets_for_contest(
     }
 
     Ok(created_plates)
+}
+
+pub async fn get_plate_colors_for_contest(
+    pool: &Pool<Sqlite>,
+    contest_id: &str,
+) -> Result<std::collections::HashMap<String, String>, AppError> {
+    let plate_sets = sqlx::query!(
+        r#"
+        SELECT plate_weight, COALESCE(color, '#374151') as "color!: String"
+        FROM plate_sets
+        WHERE contest_id = ?
+        ORDER BY plate_weight DESC
+        "#,
+        contest_id
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|e| AppError::DatabaseError(format!("Failed to get plate colors: {}", e)))?;
+
+    let mut colors = std::collections::HashMap::new();
+    for row in plate_sets {
+        let weight_key = if row.plate_weight.fract() == 0.0 {
+            format!("{}", row.plate_weight as i32)
+        } else {
+            format!("{}", row.plate_weight)
+        };
+        colors.insert(weight_key, row.color);
+    }
+
+    Ok(colors)
 }
 
 #[cfg(test)]
@@ -397,21 +437,25 @@ mod tests {
                 contest_id: contest_id.clone(),
                 plate_weight: 25.0,
                 quantity: 4,
+                color: "#DC2626".to_string(), // Test color
             },
             CreatePlateSet {
                 contest_id: contest_id.clone(),
                 plate_weight: 10.0,
                 quantity: 4,
+                color: "#DC2626".to_string(), // Test color
             },
             CreatePlateSet {
                 contest_id: contest_id.clone(),
                 plate_weight: 5.0,
                 quantity: 4,
+                color: "#DC2626".to_string(), // Test color
             },
             CreatePlateSet {
                 contest_id: contest_id.clone(),
                 plate_weight: 2.5,
                 quantity: 4,
+                color: "#DC2626".to_string(), // Test color
             },
         ];
 
@@ -446,6 +490,7 @@ mod tests {
                 contest_id: contest_id.clone(),
                 plate_weight: 25.0,
                 quantity: 2,
+                color: "#DC2626".to_string(), // Test color
             },
         )
         .await
@@ -475,6 +520,7 @@ mod tests {
                 contest_id: contest_id.clone(),
                 plate_weight: 25.0,
                 quantity: 2,
+                color: "#DC2626".to_string(), // Test color
             },
             CreatePlateSet {
                 contest_id: contest_id.clone(),
@@ -508,6 +554,7 @@ mod tests {
                 contest_id: contest_id.clone(),
                 plate_weight: 25.0,
                 quantity: 2,
+                color: "#DC2626".to_string(), // Test color
             },
         )
         .await

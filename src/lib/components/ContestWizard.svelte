@@ -3,6 +3,7 @@
   import { _ } from 'svelte-i18n';
   import { appView } from '../stores';
   import PhotoUpload from './PhotoUpload.svelte';
+  import CompetitorThumbnail from './CompetitorThumbnail.svelte';
 
   // --- Types ---
   enum Discipline {
@@ -77,32 +78,32 @@
     
     if (currentStep === 1) {
       // Validate basic information
-      if (!newContest.name.trim()) {
-        validationErrors.name = $_('validation.name_required');
-      } else if (newContest.name.trim().length < 3) {
-        validationErrors.name = $_('validation.name_min_length');
+      if (!newContest['name'].trim()) {
+        validationErrors['name'] = $_('validation.name_required');
+      } else if (newContest['name'].trim().length < 3) {
+        validationErrors['name'] = $_('validation.name_min_length');
       }
       
-      if (!newContest.date) {
-        validationErrors.date = $_('validation.date_required');
+      if (!newContest['date']) {
+        validationErrors['date'] = $_('validation.date_required');
       } else {
-        const selectedDate = new Date(newContest.date + 'T00:00:00'); // Ensure local timezone
+        const selectedDate = new Date(newContest['date'] + 'T00:00:00'); // Ensure local timezone
         const today = new Date();
         today.setHours(0, 0, 0, 0); // Reset time for comparison
         if (selectedDate < today) {
-          validationErrors.date = $_('validation.date_past');
+          validationErrors['date'] = $_('validation.date_past');
         }
       }
       
-      if (!newContest.location.trim()) {
-        validationErrors.location = $_('validation.location_required');
-      } else if (newContest.location.trim().length < 2) {
-        validationErrors.location = $_('validation.location_min_length');
+      if (!newContest['location'].trim()) {
+        validationErrors['location'] = $_('validation.location_required');
+      } else if (newContest['location'].trim().length < 2) {
+        validationErrors['location'] = $_('validation.location_min_length');
       }
     } else if (currentStep === 3) {
       // Validate that at least one competitor is registered
       if (competitors.length === 0) {
-        validationErrors.competitors = $_('contest.no_competitors_message');
+        validationErrors['competitors'] = $_('contest.no_competitors_message');
       }
     }
     
@@ -141,8 +142,8 @@
   }
 
   function handlePhotoRemoved() {
-    newCompetitor.photoBase64 = undefined;
-    newCompetitor.photoFilename = undefined;
+    delete newCompetitor.photoBase64;
+    delete newCompetitor.photoFilename;
     newCompetitor = { ...newCompetitor }; // Trigger reactivity
   }
 
@@ -155,10 +156,10 @@
   // Handle mouse wheel scrolling on bodyweight input
   function handleBodyweightWheel(event: WheelEvent) {
     event.preventDefault();
-    const currentValue = parseFloat(newCompetitor.bodyweight) || 0;
+    const currentValue = parseFloat(newCompetitor.bodyweight.toString()) || 0;
     const delta = event.deltaY > 0 ? -0.1 : 0.1; // Reverse direction for intuitive scrolling
     const newValue = Math.max(0, currentValue + delta);
-    newCompetitor.bodyweight = newValue.toFixed(1);
+    newCompetitor.bodyweight = parseFloat(newValue.toFixed(1));
   }
 
   async function createContest() {
@@ -206,11 +207,11 @@
             console.log(`✅ Created competitor:`, createdCompetitor);
             
             // Step 2: Create the registration
-            console.log(`📋 Creating registration for competitor ${createdCompetitor.id} in contest ${contest.id}`);
+            console.log(`📋 Creating registration for competitor ${(createdCompetitor as any).id} in contest ${(contest as any).id}`);
             const registration = await invoke('registration_create', {
               registration: {
-                contestId: contest.id,
-                competitorId: createdCompetitor.id,
+                contestId: (contest as any).id,
+                competitorId: (createdCompetitor as any).id,
                 bodyweight: competitor.bodyweight,
               }
             });
@@ -393,7 +394,7 @@
             id="competitor-firstName" 
             class="input-field" 
             bind:value={newCompetitor.firstName}
-            placeholder="Jan"
+            placeholder={$_('general.first_name_placeholder')}
           />
         </div>
         <div>
@@ -403,7 +404,7 @@
             id="competitor-lastName" 
             class="input-field" 
             bind:value={newCompetitor.lastName}
-            placeholder="Kowalski"
+            placeholder={$_('general.last_name_placeholder')}
           />
         </div>
         <div>
@@ -431,13 +432,13 @@
             class="input-field" 
             bind:value={newCompetitor.bodyweight}
             on:wheel={handleBodyweightWheel}
-            placeholder="75.0"
+            placeholder={$_('general.bodyweight_placeholder')}
           />
         </div>
         <div>
-          <label class="input-label">{$_('contest_view.photo')} (Optional)</label>
+          <label for="competitor-photo" class="input-label">{$_('contest_view.photo')} (Optional)</label>
           <PhotoUpload
-            currentPhoto={newCompetitor.photoBase64}
+            currentPhoto={newCompetitor.photoBase64 ?? null}
             on:photoSelected={handlePhotoSelected}
             on:photoRemoved={handlePhotoRemoved}
           />
@@ -456,11 +457,23 @@
           <div class="space-y-2">
             {#each competitors as competitor, index}
               <div class="competitor-item">
-                <div class="competitor-info">
-                  <strong>{competitor.firstName} {competitor.lastName}</strong>
-                  <span class="competitor-details">
-                    {competitor.gender} • {competitor.bodyweight}kg • {competitor.birthDate}
-                  </span>
+                <div class="competitor-display">
+                  <CompetitorThumbnail 
+                    competitor={{
+                      id: `temp-${index}`,
+                      firstName: competitor.firstName,
+                      lastName: competitor.lastName,
+                      ...(competitor.photoBase64 ? { photoBase64: competitor.photoBase64 } : {}),
+                      gender: competitor.gender
+                    }} 
+                    size="medium" 
+                  />
+                  <div class="competitor-info">
+                    <strong>{competitor.firstName} {competitor.lastName}</strong>
+                    <span class="competitor-details">
+                      {competitor.gender} • {competitor.bodyweight}kg • {competitor.birthDate}
+                    </span>
+                  </div>
                 </div>
                 <button type="button" class="btn-remove" on:click={() => removeCompetitor(index)}>
                   ✕
@@ -657,6 +670,12 @@
   .competitor-item:hover {
     border-color: #dc2626;
     background-color: #1f1f1f;
+  }
+
+  .competitor-display {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
   }
 
   .competitor-info {

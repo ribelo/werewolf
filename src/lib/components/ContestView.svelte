@@ -1,10 +1,14 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
   import { _ } from 'svelte-i18n';
   import { appView } from '../stores';
   import CompetitorThumbnail from './CompetitorThumbnail.svelte';
+  import CompetitorTable from './CompetitorTable.svelte';
   import EditContestModal from './EditContestModal.svelte';
+  import EditCompetitorModal from './EditCompetitorModal.svelte';
+  import DeleteConfirmationModal from './DeleteConfirmationModal.svelte';
+  import PhotoViewerModal from './PhotoViewerModal.svelte';
 
   // Backend Models
   interface Contest {
@@ -33,16 +37,15 @@
   interface AgeCategory {
     id: string;
     name: string;
-    minAge?: number;
-    maxAge?: number;
+    minAge: number | null;
+    maxAge: number | null;
   }
 
   interface WeightClass {
     id: string;
-    gender: string;
     name: string;
-    weightMin?: number;
-    weightMax?: number;
+    minWeight: number | null;
+    maxWeight: number | null;
   }
 
   interface Registration {
@@ -78,25 +81,58 @@
     Pending = 'Pending',
     Successful = 'Successful',
     Failed = 'Failed',
+    Skipped = 'Skipped',
   }
 
   interface Attempt {
     id: string;
     registrationId: string;
-    liftType: LiftType;
+    liftType: string; // Backend compatibility - comes as string
     attemptNumber: number;
     weight: number;
-    status: AttemptStatus;
+    status: string; // Backend compatibility - comes as string
+    createdAt: string;
+    updatedAt: string;
   }
 
   // Frontend-specific composite model
   interface Lifter {
     registrationId: string;
-    competitor: Competitor;
-    registration: Registration; // Include full registration data
-    attempts: {
-      [key in LiftType]: Attempt[];
+    competitor: {
+      id: string;
+      firstName: string;
+      lastName: string;
+      birthDate: string;
+      gender: string;
+      club?: string;
+      city?: string;
+      notes?: string;
+      photoBase64?: string;
+      competitionOrder: number;
     };
+    registration: {
+      bodyweight: number;
+      weightClassId: string;
+      ageCategoryId: string;
+      reshelCoefficient?: number;
+      mcculloughCoefficient?: number;
+    };
+    attempts: {
+      [key in LiftType]: Array<{
+        id: string;
+        registrationId: string;
+        liftType: string;
+        attemptNumber: number;
+        weight: number;
+        status: string;
+        createdAt: string;
+        updatedAt: string;
+      }>;
+    };
+    squatBest: number | null;
+    benchBest: number | null;
+    deadliftBest: number | null;
+    total: number | null;
   }
 
   enum ContestStatus {
@@ -134,6 +170,8 @@
     exact: boolean;
     total: number;
     increment: number;
+    targetWeight: number;
+    barWeight: number;
   }
 
   // Component State
@@ -145,27 +183,72 @@
   let results: LifterResult[] = [];
   let loading = false;
   let error = '';
+  let weightClasses: WeightClass[] = [];
+  let ageCategories: AgeCategory[] = [];
   
-  // Edit Modal State
-  let showEditModal = false;
-  let selectedContest: Contest | null = null;
+  // Single Modal State Object - Grug approved simplicity!
+  let modalState = {
+    // Contest editing
+    contestEdit: false,
+    selectedContest: null as Contest | null,
+    
+    // Attempt context menu
+    attemptContext: false,
+    attemptContextPosition: { x: 0, y: 0 },
+    selectedAttempt: null as Attempt | null,
+    
+    // Competitor modals
+    competitorContext: false,
+    competitorContextPosition: { x: 0, y: 0 },
+    competitorEdit: false,
+    competitorDelete: false,
+    competitorPhoto: false,
+    selectedCompetitor: null as Competitor | null,
+    isDeleting: false
+  };
+  
+  // Plate Calculator Popup State
+  let showPlatePopup = false;
+  let platePopupPosition = { x: 0, y: 0 };
+  let plateCalculation: PlateCalculation | null = null;
+  let hoverTimeout: number | null = null;
+  
+  // Interaction state for smart tooltip management
+  let interactionState = {
+    isHovering: false,
+    isDragging: false,
+    isScrolling: false,
+    lastMouseMove: 0
+  };
+  
+  // Smart tooltip state
+  let smartTooltip = {
+    show: false,
+    text: '',
+    position: { x: 0, y: 0 }
+  };
   
   // Plate management state
   let plateSets: PlateSet[] = [];
   let weightIncrement: number = 5.0; // Default 5kg (2.5kg smallest plate × 2)
 
-  // Sorting and Drag & Drop State
-  type SortBy = 'order' | 'name' | 'age' | 'weight' | 'category' | 'points' | 'squat_best' | 'bench_best' | 'deadlift_best' | 'total';
-  type SortDirection = 'asc' | 'desc';
-  
-  let sortBy: SortBy = 'order';
-  let sortDirection: SortDirection = 'asc';
-  let draggedIndex: number = -1;
-  let dragOverIndex: number = -1;
+  // Table state moved to CompetitorTable component
 
 
   onMount(async () => {
     await loadContests();
+  });
+
+  // Clean up event listeners on component destroy - Grug approved cleanup!
+  onDestroy(() => {
+    if (dragState.isDragging) {
+      document.removeEventListener('mousemove', handleWeightDragMove);
+      document.removeEventListener('mouseup', handleWeightDragEnd);
+    }
+    
+    if (hoverTimeout) {
+      clearTimeout(hoverTimeout);
+    }
   });
 
   async function loadContests(): Promise<void> {
@@ -208,6 +291,10 @@
       error = '';
       console.log('📥 Starting data loading process...');
       
+      // Load weight classes and age categories first
+      weightClasses = await invoke<WeightClass[]>('weight_class_list');
+      ageCategories = await invoke<AgeCategory[]>('age_category_list');
+      
       // Load lifters
       const registrations = await invoke<Registration[]>('registration_list', { contestId: selectedContestId });
       const allAttempts = await invoke<Attempt[]>('attempt_list_for_contest', { contestId: selectedContestId });
@@ -240,6 +327,10 @@
             competitor,
             registration: reg,
             attempts: attemptsByType,
+            squatBest: null,
+            benchBest: null,
+            deadliftBest: null,
+            total: null,
           };
           
           console.log('🏋️‍♂️ Created lifter:', lifter);
@@ -315,9 +406,25 @@
   // Handle mouse wheel scrolling on attempt weight inputs
   function handleAttemptWheel(event: WheelEvent, registrationId: string, liftType: LiftType, attemptNumber: number, currentWeight: number) {
     event.preventDefault();
+    
+    // Mark as scrolling and hide all tooltips/popups
+    interactionState.isScrolling = true;
+    showPlatePopup = false;
+    plateCalculation = null;
+    smartTooltip.show = false;
+    if (hoverTimeout) {
+      clearTimeout(hoverTimeout);
+      hoverTimeout = null;
+    }
+    
     const delta = event.deltaY > 0 ? -weightIncrement : weightIncrement; // Reverse direction for intuitive scrolling
     const newWeight = Math.max(0, currentWeight + delta);
     updateAttempt(registrationId, liftType, attemptNumber, newWeight);
+    
+    // Reset scrolling state after a short delay
+    setTimeout(() => {
+      interactionState.isScrolling = false;
+    }, 300);
   }
 
   function getAttempt(lifter: Lifter, liftType: LiftType, attemptNumber: number): Attempt | undefined {
@@ -345,6 +452,8 @@
       case AttemptStatus.Successful:
         return AttemptStatus.Failed;
       case AttemptStatus.Failed:
+        return AttemptStatus.Skipped;
+      case AttemptStatus.Skipped:
         return AttemptStatus.Pending;
       default:
         return AttemptStatus.Pending;
@@ -352,13 +461,231 @@
   }
 
   async function handleStatusClick(attempt: Attempt): Promise<void> {
-    const newStatus = cycleAttemptStatus(attempt.status);
+    const currentStatus = attempt.status as AttemptStatus;
+    const newStatus = cycleAttemptStatus(currentStatus);
     await updateAttemptStatus(attempt.id, newStatus);
   }
 
   async function handleCellRightClick(event: MouseEvent, attempt: Attempt): Promise<void> {
     event.preventDefault();
-    await updateAttemptStatus(attempt.id, AttemptStatus.Successful);
+    modalState.selectedAttempt = attempt;
+    modalState.attemptContextPosition = { x: event.clientX, y: event.clientY };
+    modalState.attemptContext = true;
+  }
+
+  function closeContextMenu() {
+    modalState.attemptContext = false;
+    modalState.selectedAttempt = null;
+  }
+
+  async function setAttemptStatus(status: AttemptStatus): Promise<void> {
+    if (modalState.selectedAttempt) {
+      await updateAttemptStatus(modalState.selectedAttempt.id, status);
+      closeContextMenu();
+    }
+  }
+
+  // Competitor modal functions - Grug approved simplicity!
+  function openCompetitorContext(event: MouseEvent, competitor: Competitor) {
+    event.preventDefault();
+    modalState.selectedCompetitor = competitor;
+    modalState.competitorContextPosition = { x: event.clientX, y: event.clientY };
+    modalState.competitorContext = true;
+  }
+
+  function closeCompetitorContext() {
+    modalState.competitorContext = false;
+    modalState.selectedCompetitor = null;
+  }
+
+  function openCompetitorEdit() {
+    modalState.competitorEdit = true;
+    closeCompetitorContext();
+  }
+
+  function closeCompetitorEdit() {
+    modalState.competitorEdit = false;
+  }
+
+  function openCompetitorDelete() {
+    modalState.competitorDelete = true;
+    closeCompetitorContext();
+  }
+
+  function closeCompetitorDelete() {
+    modalState.competitorDelete = false;
+  }
+
+  function openCompetitorPhoto(competitor: Competitor) {
+    modalState.selectedCompetitor = competitor;
+    modalState.competitorPhoto = true;
+  }
+
+  function closeCompetitorPhoto() {
+    modalState.competitorPhoto = false;
+    modalState.selectedCompetitor = null;
+  }
+
+  async function handleCompetitorUpdate() {
+    // Reload contest data to reflect changes
+    await loadContestData();
+  }
+
+  async function confirmCompetitorDelete() {
+    if (!modalState.selectedCompetitor) return;
+    
+    modalState.isDeleting = true;
+    try {
+      // Delete the competitor (this will also delete associated registrations)
+      await invoke('competitor_delete', { competitorId: modalState.selectedCompetitor.id });
+      
+      // Reload contest data to reflect changes
+      await loadContestData();
+      closeCompetitorDelete();
+    } catch (err) {
+      console.error('Failed to delete competitor:', err);
+      error = `${$_('competitor.delete_error')}: ${err}`;
+    } finally {
+      modalState.isDeleting = false;
+    }
+  }
+
+  // Reorder function for CompetitorTable - Grug approved!
+  async function handleReorderCompetitor(fromIndex: number, toIndex: number): Promise<void> {
+    if (fromIndex === toIndex) return;
+    
+    try {
+      const sourceLifter = lifters[fromIndex];
+      if (!sourceLifter) {
+        console.error('Source lifter not found at index:', fromIndex);
+        return;
+      }
+      const targetOrder = toIndex + 1; // Convert 0-indexed array to 1-indexed database order
+      
+      // Move the competitor to the new order
+      await invoke('competitor_move_order', {
+        competitorId: sourceLifter.competitor.id,
+        newOrder: targetOrder
+      });
+      
+      // Reload contest data to reflect the new order
+      await loadContestData();
+    } catch (err) {
+      error = `Failed to reorder competitor: ${err}`;
+      console.error('Error reordering competitor:', err);
+    }
+  }
+
+  function getStatusDisplayName(status: AttemptStatus): string {
+    switch (status) {
+      case AttemptStatus.Pending:
+        return $_('attempt.status_pending');
+      case AttemptStatus.Successful:
+        return $_('attempt.status_successful');
+      case AttemptStatus.Failed:
+        return $_('attempt.status_failed');
+      case AttemptStatus.Skipped:
+        return $_('attempt.status_skipped');
+      default:
+        return $_('attempt.status_pending');
+    }
+  }
+
+  function getStatusIcon(status: AttemptStatus): string {
+    switch (status) {
+      case AttemptStatus.Pending:
+        return '●';
+      case AttemptStatus.Successful:
+        return '✓';
+      case AttemptStatus.Failed:
+        return '✗';
+      case AttemptStatus.Skipped:
+        return '—';
+      default:
+        return '●';
+    }
+  }
+
+  function getStatusColor(status: AttemptStatus): string {
+    switch (status) {
+      case AttemptStatus.Pending:
+        return 'text-gray-400';
+      case AttemptStatus.Successful:
+        return 'text-green-400';
+      case AttemptStatus.Failed:
+        return 'text-red-400';
+      case AttemptStatus.Skipped:
+        return 'text-blue-400';
+      default:
+        return 'text-gray-400';
+    }
+  }
+
+  async function handleWeightInputHover(event: MouseEvent, registrationId: string, weight: number): Promise<void> {
+    if (!selectedContestId) return;
+
+    interactionState.isHovering = true;
+    interactionState.lastMouseMove = Date.now();
+
+    // Clear any existing timeout
+    if (hoverTimeout) {
+      clearTimeout(hoverTimeout);
+    }
+
+    // Show quick help tooltip immediately
+    if (!interactionState.isDragging && !interactionState.isScrolling) {
+      smartTooltip = {
+        show: true,
+        text: 'Drag ↕ | Scroll wheel | +/- buttons',
+        position: { x: event.clientX, y: event.clientY }
+      };
+    }
+
+    // Only show plate popup for valid weights if we're in a pure hover state
+    if (weight > 0) {
+      hoverTimeout = Number(setTimeout(async () => {
+        // Check if user is still hovering and not doing other interactions
+        const timeSinceLastMove = Date.now() - interactionState.lastMouseMove;
+        const isStillHovering = interactionState.isHovering && !interactionState.isDragging && !interactionState.isScrolling && timeSinceLastMove > 200;
+        
+        if (!isStillHovering) return;
+
+        // Hide smart tooltip and show plate popup
+        smartTooltip.show = false;
+
+        const lifter = lifters.find(l => l.registrationId === registrationId);
+        if (!lifter) return;
+
+        try {
+          const calc = await calculatePlatesForLifter(registrationId, weight);
+          if (calc) {
+            plateCalculation = calc;
+            platePopupPosition = { x: event.clientX, y: event.clientY };
+            showPlatePopup = true;
+          }
+        } catch (err) {
+          console.error('Error calculating plates for popup:', err);
+        }
+      }, 1200)); // Longer delay for plate popup - user must really want to see it
+    }
+  }
+
+  function handleWeightInputMouseMove(event: MouseEvent): void {
+    // Update last mouse move time to detect if user is actively moving vs. settled hover
+    interactionState.lastMouseMove = Date.now();
+  }
+
+  function handleWeightInputLeave(): void {
+    interactionState.isHovering = false;
+    
+    // Clear timeout and hide all tooltips/popups
+    if (hoverTimeout) {
+      clearTimeout(hoverTimeout);
+      hoverTimeout = null;
+    }
+    showPlatePopup = false;
+    plateCalculation = null;
+    smartTooltip.show = false;
   }
 
   function incrementWeight(registrationId: string, liftType: LiftType, attemptNumber: number, currentWeight: number) {
@@ -376,11 +703,23 @@
     startY: 0,
     startValue: 0,
     registrationId: '',
-    liftType: null,
+    liftType: null as LiftType | null,
     attemptNumber: 0
   };
 
   function handleWeightDragStart(event: MouseEvent, registrationId: string, liftType: LiftType, attemptNumber: number, currentWeight: number) {
+    // Update interaction state - dragging takes priority
+    interactionState.isDragging = true;
+    
+    // Hide all tooltips/popups immediately when drag starts
+    showPlatePopup = false;
+    plateCalculation = null;
+    smartTooltip.show = false;
+    if (hoverTimeout) {
+      clearTimeout(hoverTimeout);
+      hoverTimeout = null;
+    }
+    
     dragState = {
       isDragging: true,
       startY: event.clientY,
@@ -395,7 +734,7 @@
   }
 
   function handleWeightDragMove(event: MouseEvent) {
-    if (!dragState.isDragging) return;
+    if (!dragState.isDragging || !dragState.liftType) return;
     
     const deltaY = dragState.startY - event.clientY; // Inverted so dragging up increases
     const steps = Math.floor(deltaY / 5); // Every 5 pixels = one increment step
@@ -405,14 +744,17 @@
   }
 
   function handleWeightDragEnd() {
-    dragState.isDragging = false;
-    document.removeEventListener('mousemove', handleWeightDragMove);
-    document.removeEventListener('mouseup', handleWeightDragEnd);
+    if (dragState.isDragging) {
+      dragState.isDragging = false;
+      interactionState.isDragging = false;
+      document.removeEventListener('mousemove', handleWeightDragMove);
+      document.removeEventListener('mouseup', handleWeightDragEnd);
+    }
   }
 
   function getLifterName(registrationId: string): string {
     const lifter = lifters.find(l => l.registrationId === registrationId);
-    return lifter ? `${lifter.competitor.firstName} ${lifter.competitor.lastName}` : 'Unknown';
+    return lifter ? `${lifter.competitor.firstName} ${lifter.competitor.lastName}` : $_('general.unknown');
   }
 
   // Function to calculate plates for a specific competitor's attempt
@@ -449,7 +791,7 @@
       return 0;
     }
     return attempts.reduce((max, attempt) => {
-      if (attempt.status === AttemptStatus.Successful && attempt.weight > max) {
+      if (attempt.status === 'Successful' && attempt.weight > max) {
         return attempt.weight;
       }
       return max;
@@ -521,15 +863,18 @@
     // Assign ranks (handle ties)
     let currentRank = 1;
     for (let i = 0; i < results.length; i++) {
-      if (results[i].bombed) {
-        results[i].rank = 0; // Bombed lifters get no rank
-      } else {
-        if (i > 0 && !results[i-1].bombed && results[i].total === results[i-1].total) {
+      const currentResult = results[i];
+      const previousResult = i > 0 ? results[i-1] : null;
+      
+      if (currentResult?.bombed) {
+        currentResult.rank = 0; // Bombed lifters get no rank
+      } else if (currentResult) {
+        if (previousResult && !previousResult.bombed && currentResult.total === previousResult.total) {
           // Same total as previous, same rank
-          results[i].rank = results[i-1].rank;
+          currentResult.rank = previousResult.rank;
         } else {
           // Different total or first non-bombed lifter
-          results[i].rank = currentRank;
+          currentResult.rank = currentRank;
         }
         currentRank++;
       }
@@ -546,93 +891,7 @@
     console.log('🎯 Results updated:', results.length);
   }
 
-  // Sorting functions
-  function sortLifters(liftersToSort: Lifter[]): Lifter[] {
-    const sorted = [...liftersToSort];
-    
-    sorted.sort((a, b) => {
-      let valueA: any, valueB: any;
-      
-      switch (sortBy) {
-        case 'order':
-          // Ensure numeric comparison
-          valueA = Number(a.competitor.competitionOrder);
-          valueB = Number(b.competitor.competitionOrder);
-          break;
-          
-        case 'name':
-          valueA = `${a.competitor.lastName} ${a.competitor.firstName}`.toLowerCase();
-          valueB = `${b.competitor.lastName} ${b.competitor.firstName}`.toLowerCase();
-          break;
-          
-        case 'age':
-          valueA = getAge(a);
-          valueB = getAge(b);
-          break;
-          
-        case 'weight':
-          valueA = Number(a.registration.bodyweight);
-          valueB = Number(b.registration.bodyweight);
-          break;
-          
-        case 'category':
-          valueA = getWeightClassName(a.registration.weightClassId);
-          valueB = getWeightClassName(b.registration.weightClassId);
-          break;
-          
-        case 'points':
-          valueA = calculatePoints(a);
-          valueB = calculatePoints(b);
-          break;
-          
-        case 'squat_best':
-          valueA = getBestLift(a.attempts.Squat);
-          valueB = getBestLift(b.attempts.Squat);
-          break;
-          
-        case 'bench_best':
-          valueA = getBestLift(a.attempts.Bench);
-          valueB = getBestLift(b.attempts.Bench);
-          break;
-          
-        case 'deadlift_best':
-          valueA = getBestLift(a.attempts.Deadlift);
-          valueB = getBestLift(b.attempts.Deadlift);
-          break;
-          
-        case 'total':
-          valueA = getTotal(a);
-          valueB = getTotal(b);
-          break;
-          
-        default:
-          return 0;
-      }
-      
-      // Handle different data types
-      if (typeof valueA === 'string' && typeof valueB === 'string') {
-        // String comparison
-        const comparison = valueA.localeCompare(valueB);
-        return sortDirection === 'asc' ? comparison : -comparison;
-      } else {
-        // Numeric comparison
-        const numA = Number(valueA) || 0;
-        const numB = Number(valueB) || 0;
-        return sortDirection === 'asc' ? numA - numB : numB - numA;
-      }
-    });
-    
-    return sorted;
-  }
-
-  function handleSort(column: SortBy) {
-    if (sortBy === column) {
-      sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-    } else {
-      sortBy = column;
-      sortDirection = 'asc';
-    }
-  }
+  // Sorting functions moved to CompetitorTable component
 
   // Helper functions for display
   function getAge(lifter: Lifter): number {
@@ -687,71 +946,9 @@
     return total > 0 ? Math.round(total * reshel * mccullough * 100) / 100 : 0;
   }
 
-  // Get sorted lifters for display
-  $: sortedLifters = sortLifters(lifters);
+  // Sorted lifters now handled by CompetitorTable component
 
-  // Drag & Drop functions
-  function handleDragStart(event: DragEvent, index: number) {
-    if (sortBy !== 'order') return; // Only allow reordering when sorted by order
-    
-    draggedIndex = index;
-    if (event.dataTransfer) {
-      event.dataTransfer.effectAllowed = 'move';
-      event.dataTransfer.setData('text/html', '');
-    }
-  }
-
-  function handleDragOver(event: DragEvent, index: number) {
-    event.preventDefault();
-    if (draggedIndex === -1 || sortBy !== 'order') return;
-    
-    dragOverIndex = index;
-    if (event.dataTransfer) {
-      event.dataTransfer.dropEffect = 'move';
-    }
-  }
-
-  function handleDragLeave() {
-    dragOverIndex = -1;
-  }
-
-  async function handleDrop(event: DragEvent, dropIndex: number) {
-    event.preventDefault();
-    
-    if (draggedIndex === -1 || draggedIndex === dropIndex || sortBy !== 'order') {
-      resetDragState();
-      return;
-    }
-
-    try {
-      const sourceLifter = sortedLifters[draggedIndex];
-      const targetOrder = dropIndex + 1; // Convert 0-indexed array to 1-indexed database order
-      
-      // Move the competitor to the new order
-      await invoke('competitor_move_order', {
-        competitorId: sourceLifter.competitor.id,
-        newOrder: targetOrder
-      });
-      
-      // Reload contest data to reflect the new order
-      await loadContestData();
-      
-    } catch (err) {
-      error = `Failed to reorder competitor: ${err}`;
-      console.error('Error reordering competitor:', err);
-    } finally {
-      resetDragState();
-    }
-  }
-
-  function handleDragEnd() {
-    resetDragState();
-  }
-
-  function resetDragState() {
-    draggedIndex = -1;
-    dragOverIndex = -1;
-  }
+  // Drag & Drop functions moved to CompetitorTable component
 
   async function updateContestStatus(newStatus: ContestStatus): Promise<void> {
     if (!contestState) return;
@@ -832,8 +1029,8 @@
           {#if selectedContestId}
             <button
               on:click={() => {
-                selectedContest = contests.find(c => c.id === selectedContestId) || null;
-                showEditModal = true;
+                modalState.selectedContest = contests.find(c => c.id === selectedContestId) || null;
+                modalState.contestEdit = true;
               }}
               class="btn-secondary flex items-center gap-2"
               title={$_('contest.edit_button')}
@@ -924,287 +1121,36 @@
         <div class="text-text-secondary mb-4">{$_('contest_view.no_lifters_registered')}</div>
       </div>
     {:else if lifters.length > 0}
-      <!-- Lifters Table -->
-      <div class="overflow-x-auto">
-        <table class="min-w-full border-collapse bg-card-bg text-xs lg:text-sm">
-          <thead class="bg-element-bg text-text-primary">
-            <tr>
-              <!-- Order Column - Sortable -->
-              <th 
-                rowspan="2" 
-                class="py-1 px-2 border border-border-color text-center w-16 cursor-pointer hover:bg-slate-600 {sortBy === 'order' ? 'bg-slate-700' : ''}"
-                on:click={() => handleSort('order')}
-              >
-                <div class="flex items-center justify-center gap-1">
-                  Order
-                  {#if sortBy === 'order'}
-                    <span class="text-xs">{sortDirection === 'asc' ? '▲' : '▼'}</span>
-                  {/if}
-                </div>
-              </th>
-              <!-- Lifter Column - Sortable -->
-              <th 
-                rowspan="2" 
-                class="py-1 px-2 border border-border-color text-left min-w-[200px] cursor-pointer hover:bg-slate-600 {sortBy === 'name' ? 'bg-slate-700' : ''}"
-                on:click={() => handleSort('name')}
-              >
-                <div class="flex items-center gap-1">
-                  {$_('contest_view.lifter')}
-                  {#if sortBy === 'name'}
-                    <span class="text-xs">{sortDirection === 'asc' ? '▲' : '▼'}</span>
-                  {/if}
-                </div>
-              </th>
-              <!-- Age Column - Sortable -->
-              <th 
-                rowspan="2" 
-                class="py-1 px-2 border border-border-color text-center w-16 cursor-pointer hover:bg-slate-600 {sortBy === 'age' ? 'bg-slate-700' : ''}"
-                on:click={() => handleSort('age')}
-              >
-                <div class="flex items-center justify-center gap-1">
-                  Wiek
-                  {#if sortBy === 'age'}
-                    <span class="text-xs">{sortDirection === 'asc' ? '▲' : '▼'}</span>
-                  {/if}
-                </div>
-              </th>
-              <!-- Weight Column - Sortable -->
-              <th 
-                rowspan="2" 
-                class="py-1 px-2 border border-border-color text-center w-20 cursor-pointer hover:bg-slate-600 {sortBy === 'weight' ? 'bg-slate-700' : ''}"
-                on:click={() => handleSort('weight')}
-              >
-                <div class="flex items-center justify-center gap-1">
-                  Waga
-                  {#if sortBy === 'weight'}
-                    <span class="text-xs">{sortDirection === 'asc' ? '▲' : '▼'}</span>
-                  {/if}
-                </div>
-              </th>
-              <!-- Category Column - Sortable -->
-              <th 
-                rowspan="2" 
-                class="py-1 px-2 border border-border-color text-center min-w-[120px] cursor-pointer hover:bg-slate-600 {sortBy === 'category' ? 'bg-slate-700' : ''}"
-                on:click={() => handleSort('category')}
-              >
-                <div class="flex items-center justify-center gap-1">
-                  Kategoria
-                  {#if sortBy === 'category'}
-                    <span class="text-xs">{sortDirection === 'asc' ? '▲' : '▼'}</span>
-                  {/if}
-                </div>
-              </th>
-              <!-- Points Column - Sortable -->
-              <th 
-                rowspan="2" 
-                class="py-1 px-2 border border-border-color text-center w-24 cursor-pointer hover:bg-slate-600 {sortBy === 'points' ? 'bg-slate-700' : ''}"
-                on:click={() => handleSort('points')}
-              >
-                <div class="flex items-center justify-center gap-1">
-                  Punkty
-                  {#if sortBy === 'points'}
-                    <span class="text-xs">{sortDirection === 'asc' ? '▲' : '▼'}</span>
-                  {/if}
-                </div>
-              </th>
-              <!-- Squat Header - Sortable by best squat -->
-              <th 
-                colspan="3" 
-                class="py-1 px-2 border border-border-color text-center cursor-pointer hover:bg-slate-600 {sortBy === 'squat_best' ? 'bg-slate-700' : ''}"
-                on:click={() => handleSort('squat_best')}
-              >
-                <div class="flex items-center justify-center gap-1">
-                  {$_('contest_view.squat')}
-                  {#if sortBy === 'squat_best'}
-                    <span class="text-xs">{sortDirection === 'asc' ? '▲' : '▼'}</span>
-                  {/if}
-                </div>
-              </th>
-              <!-- Bench Header - Sortable by best bench -->
-              <th 
-                colspan="3" 
-                class="py-1 px-2 border border-border-color text-center cursor-pointer hover:bg-slate-600 {sortBy === 'bench_best' ? 'bg-slate-700' : ''}"
-                on:click={() => handleSort('bench_best')}
-              >
-                <div class="flex items-center justify-center gap-1">
-                  {$_('contest_view.bench')}
-                  {#if sortBy === 'bench_best'}
-                    <span class="text-xs">{sortDirection === 'asc' ? '▲' : '▼'}</span>
-                  {/if}
-                </div>
-              </th>
-              <!-- Deadlift Header - Sortable by best deadlift -->
-              <th 
-                colspan="3" 
-                class="py-1 px-2 border border-border-color text-center cursor-pointer hover:bg-slate-600 {sortBy === 'deadlift_best' ? 'bg-slate-700' : ''}"
-                on:click={() => handleSort('deadlift_best')}
-              >
-                <div class="flex items-center justify-center gap-1">
-                  {$_('contest_view.deadlift')}
-                  {#if sortBy === 'deadlift_best'}
-                    <span class="text-xs">{sortDirection === 'asc' ? '▲' : '▼'}</span>
-                  {/if}
-                </div>
-              </th>
-              <!-- Total Column - Sortable -->
-              <th 
-                rowspan="2" 
-                class="py-1 px-2 border border-border-color text-center cursor-pointer hover:bg-slate-600 {sortBy === 'total' ? 'bg-slate-700' : ''}"
-                on:click={() => handleSort('total')}
-              >
-                <div class="flex items-center justify-center gap-1">
-                  {$_('contest_view.total')}
-                  {#if sortBy === 'total'}
-                    <span class="text-xs">{sortDirection === 'asc' ? '▲' : '▼'}</span>
-                  {/if}
-                </div>
-              </th>
-            </tr>
-            <tr>
-              <!-- Attempt headers -->
-              {#each [1, 2, 3] as i}
-                <th class="py-1 px-2 border border-border-color text-center text-sm">{$_('contest_view.attempt_ordinal_' + i)}</th>
-              {/each}
-              {#each [1, 2, 3] as i}
-                <th class="py-1 px-2 border border-border-color text-center text-sm">{$_('contest_view.attempt_ordinal_' + i)}</th>
-              {/each}
-               {#each [1, 2, 3] as i}
-                <th class="py-1 px-2 border border-border-color text-center text-sm">{$_('contest_view.attempt_ordinal_' + i)}</th>
-              {/each}
-            </tr>
-          </thead>
-          <tbody>
-            {#each sortedLifters as lifter, index (lifter.registrationId)}
-              <tr 
-                class="hover:bg-element-bg transition-colors {
-                  draggedIndex === index ? 'opacity-50' : ''
-                } {
-                  dragOverIndex === index ? 'bg-blue-100 dark:bg-blue-900' : ''
-                }"
-                on:dragover={(e) => handleDragOver(e, index)}
-                on:dragleave={handleDragLeave}
-                on:drop={(e) => handleDrop(e, index)}
-              >
-                <!-- Order Column -->
-                <td class="py-1 px-2 border border-border-color text-center font-bold">
-                  <div 
-                    class="flex items-center justify-center gap-2 {sortBy === 'order' ? 'cursor-move' : ''}"
-                    draggable={sortBy === 'order'}
-                    on:dragstart={(e) => handleDragStart(e, index)}
-                    on:dragend={handleDragEnd}
-                  >
-                    <span class="text-text-primary">{lifter.competitor.competitionOrder}</span>
-                  </div>
-                </td>
-                
-                <!-- Lifter Info -->
-                <td class="py-1 px-2 border border-border-color text-text-primary font-semibold">
-                  <div 
-                    class="flex items-center space-x-3 {sortBy === 'order' ? 'cursor-move' : ''}" 
-                    draggable={sortBy === 'order'}
-                    on:dragstart={(e) => handleDragStart(e, index)}
-                    on:dragend={handleDragEnd}
-                  >
-                    <CompetitorThumbnail competitor={lifter.competitor} size="small" />
-                    <div class="flex flex-col">
-                      <span class="font-semibold">{lifter.competitor.firstName} {lifter.competitor.lastName}</span>
-                      {#if lifter.competitor.club}
-                        <span class="text-xs text-text-secondary">{lifter.competitor.club}</span>
-                      {/if}
-                    </div>
-                  </div>
-                </td>
-
-                <!-- Age -->
-                <td class="py-1 px-2 border border-border-color text-center text-text-primary">
-                  {getAge(lifter)}
-                </td>
-
-                <!-- Body Weight -->
-                <td class="py-1 px-2 border border-border-color text-center text-text-primary">
-                  {lifter.registration.bodyweight} kg
-                </td>
-
-                <!-- Category -->
-                <td class="py-1 px-2 border border-border-color text-center text-text-primary">
-                  <div class="flex flex-col text-xs">
-                    <span>{getWeightClassName(lifter.registration.weightClassId)}</span>
-                    <span class="text-text-secondary">{getAgeCategoryName(lifter.registration.ageCategoryId)}</span>
-                  </div>
-                </td>
-
-                <!-- Points -->
-                <td class="py-1 px-2 border border-border-color text-center text-text-primary font-bold">
-                  {calculatePoints(lifter).toFixed(2)}
-                </td>
-
-                <!-- Attempts -->
-                {#each [LiftType.Squat, LiftType.Bench, LiftType.Deadlift] as liftType}
-                  {#each [1, 2, 3] as attemptNumber}
-                    {@const attempt = getAttempt(lifter, liftType, attemptNumber)}
-                    <td 
-                      class="py-1 px-2 border border-border-color text-center"
-                      on:contextmenu={(e) => attempt && handleCellRightClick(e, attempt)}
-                    >
-                      <div class="flex items-center justify-center">
-                        <button
-                          on:click={() => decrementWeight(lifter.registrationId, liftType, attemptNumber, attempt?.weight || 0)}
-                          class="w-4 h-4 flex items-center justify-center text-xs text-gray-400 hover:text-text-primary transition-colors"
-                          title={`Decrease weight by ${weightIncrement}kg`}
-                        >
-                          −
-                        </button>
-                        <input
-                          type="number"
-                          value={attempt?.weight || ''}
-                          on:change={(e) => updateAttempt(lifter.registrationId, liftType, attemptNumber, parseFloat(e.currentTarget.value) || 0)}
-                          on:wheel={(e) => handleAttemptWheel(e, lifter.registrationId, liftType, attemptNumber, attempt?.weight || 0)}
-                          on:mousedown={(e) => handleWeightDragStart(e, lifter.registrationId, liftType, attemptNumber, attempt?.weight || 0)}
-                          class="w-8 table-input-field text-center font-mono cursor-ns-resize select-none"
-                          min="0"
-                          step={weightIncrement}
-                          placeholder="-"
-                          title="Drag up/down to change weight or scroll with mouse wheel"
-                        />
-                        <button
-                          on:click={() => incrementWeight(lifter.registrationId, liftType, attemptNumber, attempt?.weight || 0)}
-                          class="w-4 h-4 flex items-center justify-center text-xs text-gray-400 hover:text-text-primary transition-colors"
-                          title={`Increase weight by ${weightIncrement}kg`}
-                        >
-                          +
-                        </button>
-                        {#if attempt}
-                          <button
-                            on:click={() => handleStatusClick(attempt)}
-                            class="ml-2 text-lg hover:scale-110 transition-transform cursor-pointer {attempt.status === AttemptStatus.Successful ? 'text-green-400' : attempt.status === AttemptStatus.Failed ? 'text-red-400' : 'text-gray-400'}"
-                            title="Click to cycle status (Pending → Success → Failed → Pending)"
-                          >
-                            ●
-                          </button>
-                        {/if}
-                      </div>
-                    </td>
-                  {/each}
-                {/each}
-
-                <!-- Total -->
-                <td class="py-1 px-2 border border-border-color text-center font-bold text-lg text-primary-red weight-cell-fixed whitespace-nowrap">
-                  {getTotal(lifter)} kg
-                </td>
-              </tr>
-            {/each}
-          </tbody>
-        </table>
-      </div>
+      <!-- Competitor Table - Grug approved extraction! -->
+      <CompetitorTable
+        {lifters}
+        {weightClasses}
+        {ageCategories}
+        {weightIncrement}
+        onCompetitorContextMenu={openCompetitorContext}
+        onCompetitorPhotoClick={openCompetitorPhoto}
+        onAttemptClick={handleCellRightClick}
+        onReorderCompetitor={handleReorderCompetitor}
+        onUpdateAttempt={updateAttempt}
+        onIncrementWeight={incrementWeight}
+        onDecrementWeight={decrementWeight}
+        onStatusClick={handleStatusClick}
+        onWeightWheel={handleAttemptWheel}
+        onWeightDragStart={handleWeightDragStart}
+        onWeightInputHover={handleWeightInputHover}
+        onWeightInputMouseMove={handleWeightInputMouseMove}
+        onWeightInputLeave={handleWeightInputLeave}
+      />
     {/if}
+    
     <!-- Results Summary -->
     {#if results.length > 0 && contestState?.status === ContestStatus.Complete}
       <div class="mt-8 p-6 bg-card-bg border border-border-color rounded-lg">
-        <h3 class="text-h3 text-text-primary mb-4">Competition Results Summary</h3>
+        <h3 class="text-h3 text-text-primary mb-4">{$_('results.competition_summary')}</h3>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
           <!-- Top 3 Finishers -->
           <div>
-            <h4 class="text-h4 text-text-primary mb-3">Top 3 Finishers</h4>
+            <h4 class="text-h4 text-text-primary mb-3">{$_('results.top_3_finishers')}</h4>
             {#each results.slice(0, 3).filter(r => !r.bombed) as result, i}
               <div class="flex items-center justify-between py-2 border-b border-border-color">
                 <div class="flex items-center space-x-2">
@@ -1222,23 +1168,23 @@
 
           <!-- Competition Stats -->
           <div>
-            <h4 class="text-h4 text-text-primary mb-3">Competition Stats</h4>
+            <h4 class="text-h4 text-text-primary mb-3">{$_('results.competition_stats')}</h4>
             <div class="space-y-2">
               <div class="flex justify-between">
-                <span>Total Competitors:</span>
+                <span>{$_('results.total_competitors')}:</span>
                 <span class="font-semibold">{results.length}</span>
               </div>
               <div class="flex justify-between">
-                <span>Successful Finishers:</span>
+                <span>{$_('results.successful_finishers')}:</span>
                 <span class="font-semibold">{results.filter(r => !r.bombed).length}</span>
               </div>
               <div class="flex justify-between">
-                <span>Bombed Out:</span>
+                <span>{$_('results.bombed_out')}:</span>
                 <span class="font-semibold text-red-400">{results.filter(r => r.bombed).length}</span>
               </div>
               {#if results.filter(r => !r.bombed).length > 0}
                 <div class="flex justify-between">
-                  <span>Winning Total:</span>
+                  <span>{$_('results.winning_total')}:</span>
                   <span class="font-semibold text-primary-red">{results.find(r => !r.bombed)?.total || 0} kg</span>
                 </div>
               {/if}
@@ -1247,7 +1193,7 @@
 
           <!-- Best Lifts -->
           <div>
-            <h4 class="text-h4 text-text-primary mb-3">Best Lifts</h4>
+            <h4 class="text-h4 text-text-primary mb-3">{$_('results.best_lifts')}</h4>
             <div class="space-y-2">
               {#if results.length > 0}
                 {@const bestSquat = Math.max(...results.map(r => r.squatBest).filter(w => w > 0))}
@@ -1255,15 +1201,15 @@
                 {@const bestDeadlift = Math.max(...results.map(r => r.deadliftBest).filter(w => w > 0))}
                 
                 <div class="flex justify-between">
-                  <span>Best Squat:</span>
+                  <span>{$_('results.best_squat')}:</span>
                   <span class="font-semibold">{isFinite(bestSquat) ? bestSquat : 0} kg</span>
                 </div>
                 <div class="flex justify-between">
-                  <span>Best Bench:</span>
+                  <span>{$_('results.best_bench')}:</span>
                   <span class="font-semibold">{isFinite(bestBench) ? bestBench : 0} kg</span>
                 </div>
                 <div class="flex justify-between">
-                  <span>Best Deadlift:</span>
+                  <span>{$_('results.best_deadlift')}:</span>
                   <span class="font-semibold">{isFinite(bestDeadlift) ? bestDeadlift : 0} kg</span>
                 </div>
               {/if}
@@ -1276,17 +1222,202 @@
 </div>
 
 <!-- Edit Contest Modal -->
-{#if showEditModal && selectedContest}
+{#if modalState.contestEdit && modalState.selectedContest}
   <EditContestModal
-    contest={selectedContest}
+    contest={modalState.selectedContest}
     onClose={() => {
-      showEditModal = false;
-      selectedContest = null;
+      modalState.contestEdit = false;
+      modalState.selectedContest = null;
     }}
     onSave={() => {
       loadContestData();
       loadContests();
     }}
+  />
+{/if}
+
+<!-- Context Menu for Attempt Status -->
+{#if modalState.attemptContext}
+  <div 
+    class="fixed inset-0 z-40" 
+    role="presentation"
+    tabindex="-1"
+    on:click={closeContextMenu}
+    on:keydown={(e) => { if (e.key === 'Escape') closeContextMenu(); }}
+    on:contextmenu|preventDefault={closeContextMenu}
+  ></div>
+  <div
+    class="fixed z-50 bg-card-bg border border-border-color rounded shadow-lg py-1 min-w-[140px]"
+    style="left: {modalState.attemptContextPosition.x}px; top: {modalState.attemptContextPosition.y}px;"
+  >
+    <button
+      class="w-full px-3 py-2 text-left hover:bg-element-bg transition-colors flex items-center gap-2"
+      on:click={() => setAttemptStatus(AttemptStatus.Pending)}
+    >
+      <span class="text-gray-400">{getStatusIcon(AttemptStatus.Pending)}</span>
+      {getStatusDisplayName(AttemptStatus.Pending)}
+    </button>
+    <button
+      class="w-full px-3 py-2 text-left hover:bg-element-bg transition-colors flex items-center gap-2"
+      on:click={() => setAttemptStatus(AttemptStatus.Successful)}
+    >
+      <span class="text-green-400">{getStatusIcon(AttemptStatus.Successful)}</span>
+      {getStatusDisplayName(AttemptStatus.Successful)}
+    </button>
+    <button
+      class="w-full px-3 py-2 text-left hover:bg-element-bg transition-colors flex items-center gap-2"
+      on:click={() => setAttemptStatus(AttemptStatus.Failed)}
+    >
+      <span class="text-red-400">{getStatusIcon(AttemptStatus.Failed)}</span>
+      {getStatusDisplayName(AttemptStatus.Failed)}
+    </button>
+  </div>
+{/if}
+
+<!-- Plate Calculator Popup -->
+{#if showPlatePopup && plateCalculation}
+  <div
+    class="fixed z-50 bg-card-bg border border-border-color rounded-lg shadow-xl p-4 min-w-[300px] max-w-[400px]"
+    style="left: {platePopupPosition.x + 10}px; top: {platePopupPosition.y - 100}px;"
+  >
+    <!-- Weight Info -->
+    <div class="text-center mb-4">
+      <div class="text-lg font-bold text-primary-red">{plateCalculation.targetWeight} kg</div>
+      <div class="text-sm text-text-secondary">
+        {$_('plates.bar_weight')}: {plateCalculation.barWeight} kg
+      </div>
+    </div>
+
+    <!-- Barbell Visualization -->
+    <div class="relative flex items-center justify-center mb-4 h-16">
+      <!-- Left Plates (reversed order - heaviest closest to bar) -->
+      <div class="flex items-center justify-end space-x-0.5">
+        {#each plateCalculation.plates.slice().reverse() as [plateWeight, plateCount]}
+          {#each Array(plateCount) as _, i}
+            <div 
+              class="plate plate-{plateWeight.toString().replace('.', '_')}"
+              title="{plateWeight}kg × {plateCount}"
+              style="width: {Math.max(plateWeight * 0.4 + 4, 6)}px; height: {Math.max(plateWeight * 2 + 20, 24)}px;"
+            >
+              <div class="plate-label">
+                {plateWeight}
+              </div>
+            </div>
+          {/each}
+        {/each}
+      </div>
+
+      <!-- Barbell -->
+      <div class="barbell">
+        <div class="barbell-collar-left"></div>
+        <div class="barbell-bar"></div>
+        <div class="barbell-collar-right"></div>
+      </div>
+
+      <!-- Right Plates (mirrored) -->
+      <div class="flex items-center justify-start space-x-0.5">
+        {#each plateCalculation.plates as [plateWeight, plateCount]}
+          {#each Array(plateCount) as _, i}
+            <div 
+              class="plate plate-{plateWeight.toString().replace('.', '_')}"
+              title="{plateWeight}kg × {plateCount}"
+              style="width: {Math.max(plateWeight * 0.4 + 4, 6)}px; height: {Math.max(plateWeight * 2 + 20, 24)}px;"
+            >
+              <div class="plate-label">
+                {plateWeight}
+              </div>
+            </div>
+          {/each}
+        {/each}
+      </div>
+    </div>
+
+    <!-- Plate Loading List -->
+    <div class="text-xs text-text-secondary">
+      <div class="font-semibold mb-1">{$_('plates.per_side')}:</div>
+      {#each plateCalculation.plates as [plateWeight, plateCount]}
+        <div class="flex justify-between">
+          <span>{plateWeight}kg:</span>
+          <span>{plateCount} {plateCount === 1 ? $_('plates.plate') : $_('plates.plates')}</span>
+        </div>
+      {/each}
+      {#if plateCalculation.plates.length === 0}
+        <div class="text-center italic">{$_('plates.bar_only')}</div>
+      {/if}
+    </div>
+  </div>
+{/if}
+
+<!-- Smart Tooltip for Weight Inputs -->
+{#if smartTooltip.show}
+  <div
+    class="fixed z-40 bg-gray-800 text-white text-xs px-2 py-1 rounded shadow-lg pointer-events-none"
+    style="left: {smartTooltip.position.x + 10}px; top: {smartTooltip.position.y - 30}px;"
+  >
+    {smartTooltip.text}
+  </div>
+{/if}
+
+<!-- Competitor Context Menu -->
+{#if modalState.competitorContext}
+  <div 
+    class="fixed inset-0 z-40" 
+    role="presentation"
+    tabindex="-1"
+    on:click={closeCompetitorContext}
+    on:keydown={(e) => { if (e.key === 'Escape') closeCompetitorContext(); }}
+    on:contextmenu|preventDefault={closeCompetitorContext}
+  ></div>
+  <div
+    class="fixed z-50 bg-card-bg border border-border-color rounded shadow-lg py-1 min-w-[140px]"
+    style="left: {modalState.competitorContextPosition.x}px; top: {modalState.competitorContextPosition.y}px;"
+  >
+    <button
+      class="w-full px-3 py-2 text-left hover:bg-element-bg transition-colors flex items-center gap-2 text-text-primary"
+      on:click={openCompetitorEdit}
+    >
+{$_('competitor.edit')}
+    </button>
+    <button
+      class="w-full px-3 py-2 text-left hover:bg-element-bg transition-colors flex items-center gap-2 text-red-400"
+      on:click={openCompetitorDelete}
+    >
+{$_('competitor.delete')}
+    </button>
+  </div>
+{/if}
+
+<!-- Edit Competitor Modal -->
+{#if modalState.competitorEdit && modalState.selectedCompetitor}
+  <EditCompetitorModal
+    competitor={modalState.selectedCompetitor}
+    onClose={closeCompetitorEdit}
+    onSave={() => {
+      loadContestData();
+      closeCompetitorEdit();
+    }}
+  />
+{/if}
+
+<!-- Delete Confirmation Modal -->
+{#if modalState.competitorDelete && modalState.selectedCompetitor}
+  <DeleteConfirmationModal
+    title={$_('competitor.delete_title')}
+    message={$_('competitor.delete_message', { values: { name: `${modalState.selectedCompetitor.firstName} ${modalState.selectedCompetitor.lastName}` } })}
+    confirmText={$_('buttons.delete')}
+    cancelText={$_('buttons.cancel')}
+    onConfirm={confirmCompetitorDelete}
+    onCancel={closeCompetitorDelete}
+    isDestructive={true}
+    isLoading={modalState.isDeleting}
+  />
+{/if}
+
+<!-- Photo Viewer Modal -->
+{#if modalState.competitorPhoto && modalState.selectedCompetitor}
+  <PhotoViewerModal
+    competitor={modalState.selectedCompetitor}
+    onClose={closeCompetitorPhoto}
   />
 {/if}
 
@@ -1298,5 +1429,73 @@
   
   .bombed:hover {
     background-color: rgba(220, 38, 38, 0.15);
+  }
+
+  /* Barbell and Plate Visualization Styles */
+  .barbell {
+    display: flex;
+    align-items: center;
+    z-index: 10;
+    position: relative;
+  }
+
+  .barbell-bar {
+    width: 80px;
+    height: 8px;
+    background: linear-gradient(to bottom, #e5e7eb, #9ca3af, #6b7280);
+    border-radius: 4px;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);
+  }
+
+  .barbell-collar-left,
+  .barbell-collar-right {
+    width: 12px;
+    height: 16px;
+    background: linear-gradient(to bottom, #374151, #1f2937);
+    border-radius: 2px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  }
+
+  .plate {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 2px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3), inset 0 1px 2px rgba(255,255,255,0.1);
+    position: relative;
+    z-index: 5;
+    border: 1px solid rgba(0,0,0,0.2);
+    margin: 0 1px;
+  }
+
+  .plate-label {
+    font-size: 7px;
+    font-weight: bold;
+    color: white;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+    pointer-events: none;
+    writing-mode: vertical-lr;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+  }
+
+  /* Eleiko standard plate colors */
+  .plate-25 { background: linear-gradient(135deg, #dc2626, #b91c1c); } /* Red - 25kg */
+  .plate-20 { background: linear-gradient(135deg, #2563eb, #1d4ed8); } /* Blue - 20kg */
+  .plate-15 { background: linear-gradient(135deg, #eab308, #ca8a04); } /* Yellow - 15kg */
+  .plate-10 { background: linear-gradient(135deg, #16a34a, #15803d); } /* Green - 10kg */
+  .plate-5 { background: linear-gradient(135deg, #f8fafc, #e2e8f0); } /* White - 5kg */
+  .plate-5 .plate-label { color: #1f2937; text-shadow: none; }
+  .plate-2_5 { background: linear-gradient(135deg, #dc2626, #b91c1c); } /* Red - 2.5kg */
+  .plate-2 { background: linear-gradient(135deg, #2563eb, #1d4ed8); } /* Blue - 2kg */
+  .plate-1_5 { background: linear-gradient(135deg, #eab308, #ca8a04); } /* Yellow - 1.5kg */
+  .plate-1_25 { background: linear-gradient(135deg, #16a34a, #15803d); } /* Green - 1.25kg */
+  .plate-1 { background: linear-gradient(135deg, #f8fafc, #e2e8f0); } /* White - 1kg */
+  .plate-1 .plate-label { color: #1f2937; text-shadow: none; }
+  .plate-0_5 { background: linear-gradient(135deg, #a3a3a3, #737373); } /* Gray - 0.5kg */
+  
+  /* Default for other weights */
+  .plate:not([class*="plate-"]) { 
+    background: linear-gradient(135deg, #374151, #1f2937); 
   }
 </style>

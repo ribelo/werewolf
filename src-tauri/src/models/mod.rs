@@ -1,4 +1,5 @@
 pub mod attempt;
+pub mod category;
 pub mod competitor;
 pub mod contest;
 pub mod contest_state;

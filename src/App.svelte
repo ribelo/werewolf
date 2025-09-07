@@ -1,18 +1,49 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { _ } from 'svelte-i18n';
-  import { appView } from './lib/stores';
+  import { invoke } from '@tauri-apps/api/core';
+  import { appView, showHealthWarning, systemHealth } from './lib/stores';
   import ContestWizard from './lib/components/ContestWizard.svelte';
   import ContestView from './lib/components/ContestView.svelte';
   import CustomTitlebar from './lib/components/CustomTitlebar.svelte';
   import SettingsView from './lib/components/SettingsView.svelte';
-  import { Settings, Trophy, BarChart3 } from 'lucide-svelte';
+  import SystemStatusView from './lib/components/SystemStatusView.svelte';
+  import { Settings, Trophy, BarChart3, AlertTriangle } from 'lucide-svelte';
 
   console.log('🔧 App.svelte script executing');
 
-  onMount(() => {
+  onMount(async () => {
     console.log('🏋️ App.svelte mounted');
+    await checkSystemHealth();
   });
+
+  interface HealthCheckResponse {
+    config_health: string;
+    database_health: string;
+  }
+
+  async function checkSystemHealth(): Promise<void> {
+    try {
+      const health = await invoke('system_health_check') as HealthCheckResponse;
+      console.log('System health status:', health);
+      systemHealth.set(health);
+      
+      // System is operational only if both config and database are Ok
+      const isOperational = health.config_health === 'Ok' && health.database_health === 'Ok';
+      
+      if (!isOperational) {
+        console.warn('System is not operational, showing system status view');
+        appView.set('systemStatus');
+      } else {
+        console.log('System is healthy, showing main menu');
+        appView.set('mainMenu');
+      }
+    } catch (e) {
+      console.error('Failed to check system health:', e);
+      // If health check fails, assume system issues and show status view
+      appView.set('systemStatus');
+    }
+  }
 
   function handleSettingsClick(): void {
     console.log("⚙️ Settings clicked");
@@ -48,9 +79,29 @@
     </div>
   </header>
 
+  <!-- Health Warning Banner -->
+  {#if $showHealthWarning && $appView !== 'systemStatus'}
+    <div class="container-full bg-orange-50 border-b border-orange-200 py-2">
+      <div class="flex items-center justify-center text-orange-800">
+        <AlertTriangle size={16} class="mr-2" />
+        <span class="text-caption">
+          {$_('system.not_operational_desc')}
+          <button 
+            class="ml-2 underline hover:no-underline"
+            on:click={() => appView.set('systemStatus')}
+          >
+            {$_('system.actions.refresh')}
+          </button>
+        </span>
+      </div>
+    </div>
+  {/if}
+
   <!-- Main Content -->
   <main class="flex-1">
-    {#if $appView === 'mainMenu'}
+    {#if $appView === 'systemStatus'}
+      <SystemStatusView />
+    {:else if $appView === 'mainMenu'}
       <div class="container-medium py-8">
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 

@@ -79,10 +79,79 @@
     "create_first_backup": "Create First Backup",
     "reset_database": "Reset Database",
     "resetting": "Resetting...",
-    "crop_save": "Crop & Save"
+    "crop_save": "Crop & Save",
+    "delete": "Delete",
+    "saving": "Saving...",
+    "deleting": "Deleting...",
+    "close": "Close"
   },
   "common": {
     "loading": "Loading..."
+  },
+  "general": {
+    "action_irreversible": "This action cannot be undone",
+    "male": "Male",
+    "female": "Female",
+    "first_name": "First Name",
+    "last_name": "Last Name",
+    "birth_date": "Birth Date",
+    "gender": "Gender",
+    "club": "Club",
+    "city": "City",
+    "notes": "Notes",
+    "unknown": "Unknown",
+    "first_name_placeholder": "John",
+    "last_name_placeholder": "Smith",
+    "bodyweight_placeholder": "75.0"
+  },
+  "ui": {
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "restore": "Restore", 
+    "close": "Close",
+    "crop_area": "Crop area",
+    "current_upload": "Current upload"
+  },
+  "competitor": {
+    "edit": "Edit Competitor",
+    "delete": "Delete Competitor",
+    "delete_title": "Delete Competitor",
+    "delete_message": "Are you sure you want to delete {name}? This will remove all their attempts and results from the contest.",
+    "update_success": "Competitor updated successfully",
+    "update_error": "Failed to update competitor",
+    "validation_error": "Please fill in all required fields",
+    "photo": "Photo",
+    "photo_error": "Failed to load photo",
+    "photo_error_desc": "There was an error loading this competitor's photo",
+    "no_photo": "No Photo Available",
+    "no_photo_desc": "This competitor doesn't have a photo uploaded",
+    "photo_modal_instructions": "Press ESC or click outside to close"
+  },
+  "photo": {
+    "crop_title": "Crop Photo",
+    "crop_instructions": "Crop to 4:5 aspect ratio (400×500px)",
+    "crop_loading": "Loading..."
+  },
+  "results": {
+    "competition_summary": "Competition Results Summary",
+    "competition_stats": "Competition Stats",
+    "total_competitors": "Total Competitors",
+    "successful_finishers": "Successful Finishers",
+    "bombed_out": "Bombed Out",
+    "winning_total": "Winning Total",
+    "best_lifts": "Best Lifts",
+    "best_squat": "Best Squat",
+    "best_bench": "Best Bench",
+    "best_deadlift": "Best Deadlift",
+    "top_3_finishers": "Top 3 Finishers",
+    "contest_results": "Contest Results",
+    "place": "Place",
+    "registration": "Registration",
+    "points": "Points",
+    "status": "Status",
+    "disqualified": "DQ",
+    "record": "RECORD",
+    "export_json": "Export JSON"
   },
   "errors": {
     "load_contests": "Failed to load contests",
@@ -162,11 +231,54 @@
     "delete_success": "Plate removed successfully",
     "delete_error": "Failed to remove plate",
     "load_error": "Failed to load plates",
-    "bar_weight_save_error": "Failed to save bar weights"
+    "bar_weight_save_error": "Failed to save bar weights",
+    "bar_weight": "Bar weight",
+    "per_side": "Per side",
+    "plate": "plate",
+    "plates": "plates", 
+    "bar_only": "Bar only"
   },
   "attempt_extra": {
     "failed_mark_good": "Failed to mark as successful:",
     "failed_mark_bad": "Failed to mark as failed:"
+  },
+  "system": {
+    "title": "System Status",
+    "subtitle": "Application health monitoring and recovery",
+    "checking": "Checking system health...",
+    "check_failed": "Failed to check system health",
+    "retry": "Retry",
+    "config": {
+      "title": "Configuration"
+    },
+    "database": {
+      "title": "Database",
+      "temporary": "Using temporary in-memory database"
+    },
+    "status": {
+      "healthy": "Healthy",
+      "missing": "Missing",
+      "corrupted": "Corrupted",
+      "migration_failed": "Migration Failed",
+      "permission_denied": "Permission Denied", 
+      "using_fallback": "Using Fallback",
+      "unknown": "Unknown"
+    },
+    "error": "Error",
+    "backup_location": "Backup location",
+    "recommendations": {
+      "title": "Recommendations"
+    },
+    "actions": {
+      "title": "Recovery Actions",
+      "refresh": "Refresh Status",
+      "reset_config": "Reset Configuration",
+      "reset_database": "Reset Database"
+    },
+    "not_operational": "System is not fully operational",
+    "not_operational_desc": "Some features may not work correctly. Please try the recovery actions below.",
+    "continue": "Continue to Application",
+    "continue_desc": "The system is operational. You can continue using the application normally."
   },
   "disciplines": {
     "Bench": "Bench Press",
@@ -186,7 +298,13 @@
     "organizer": "Organizer:", 
     "federation_rules": "Federation/Rules:",
     "notes": "Notes:",
-    "not_available": "N/A"
+    "not_available": "N/A",
+    "saving": "Saving..."
+  },
+  "attempt": {
+    "status_pending": "Pending",
+    "status_successful": "Success",
+    "status_failed": "Failed"
   },
   "help": {
     "best_practices": "💡 Best Practices",

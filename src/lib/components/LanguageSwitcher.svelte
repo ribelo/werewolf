@@ -8,18 +8,20 @@
   let currentLocale: string = 'pl';
   let isChanging: boolean = false;
   
-  onMount(async () => {
+  onMount(() => {
     // Load current language from backend settings
-    try {
-      const savedLanguage = await invoke<string>('settings_get_language');
-      if (savedLanguage && savedLanguage !== currentLocale) {
-        currentLocale = savedLanguage;
-        locale.set(savedLanguage);
-        console.log('✅ Loaded language from settings:', savedLanguage);
+    (async () => {
+      try {
+        const savedLanguage = await invoke<string>('settings_get_language');
+        if (savedLanguage && savedLanguage !== currentLocale) {
+          currentLocale = savedLanguage;
+          locale.set(savedLanguage);
+          console.log('✅ Loaded language from settings:', savedLanguage);
+        }
+      } catch (error) {
+        console.error('❌ Failed to load language from settings:', error);
       }
-    } catch (error) {
-      console.error('❌ Failed to load language from settings:', error);
-    }
+    })();
 
     // Subscribe to locale changes from svelte-i18n
     const unsubscribeLocale = locale.subscribe((value) => {

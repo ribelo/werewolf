@@ -405,27 +405,70 @@
   }
 
   .btn-primary {
-    @apply bg-blue-600 text-white border border-blue-600
-           px-3 py-1.5 text-sm font-medium rounded
-           transition-colors duration-200 cursor-pointer
-           hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed;
+    background-color: #2563eb;
+    color: white;
+    border: 1px solid #2563eb;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-radius: 0.25rem;
+    transition: background-color 0.2s;
+    cursor: pointer;
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
   }
+  
+  .btn-primary:hover {
+    background-color: #1d4ed8;
+  }
+  
+  .btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 
   .btn-secondary {
-    @apply bg-gray-100 text-gray-700 border border-gray-300
-           px-3 py-1.5 text-sm font-medium rounded
-           transition-colors duration-200 cursor-pointer
-           hover:bg-gray-200 disabled:opacity-60 disabled:cursor-not-allowed;
+    background-color: #f3f4f6;
+    color: #374151;
+    border: 1px solid #d1d5db;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-radius: 0.25rem;
+    transition: background-color 0.2s;
+    cursor: pointer;
+  }
+  
+  .btn-secondary:hover {
+    background-color: #e5e7eb;
+  }
+  
+  .btn-secondary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 
   .btn-outline {
-    @apply bg-transparent text-blue-600 border border-blue-600
-           px-2 py-1 text-xs font-medium rounded
-           transition-colors duration-200 cursor-pointer
-           hover:bg-blue-600 hover:text-white disabled:opacity-60 disabled:cursor-not-allowed;
+    background-color: transparent;
+    color: #2563eb;
+    border: 1px solid #2563eb;
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border-radius: 0.25rem;
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+  
+  .btn-outline:hover {
+    background-color: #2563eb;
+    color: white;
+  }
+  
+  .btn-outline:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 
   .btn-sm {

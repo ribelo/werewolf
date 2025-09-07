@@ -31,6 +31,7 @@ chrono = { version = "0.4", features = ["serde"] }
 
 # Enums
 strum = { version = "0.27", features = ["derive"] }
+strum_macros = "0.27"
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }

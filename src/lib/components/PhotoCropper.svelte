@@ -83,8 +83,12 @@
       
       const croppedBase64 = canvas.toDataURL('image/webp', 0.85);
       // Remove the data:image/webp;base64, prefix to get just the base64 data
-      const base64Data = croppedBase64.split(',')[1];
-      onCrop(base64Data);
+      if (croppedBase64) {
+        const base64Data = croppedBase64.split(',')[1];
+        if (base64Data) {
+          onCrop(base64Data);
+        }
+      }
     }
   }
 
@@ -101,9 +105,9 @@
 <div class="photo-cropper-modal fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
   <div class="bg-white rounded-lg p-6 max-w-4xl max-h-screen w-full mx-4 flex flex-col">
     <div class="flex items-center justify-between mb-4">
-      <h2 class="text-xl font-bold">Crop Photo</h2>
+      <h2 class="text-xl font-bold">{$_('photo.crop_title')}</h2>
       <div class="text-sm text-gray-600">
-        Crop to 4:5 aspect ratio (400×500px)
+        {$_('photo.crop_instructions')}
       </div>
     </div>
     
@@ -112,7 +116,7 @@
         <img
           bind:this={imageElement}
           {src}
-          alt="Photo to crop"
+          alt={$_('ui.crop_area')}
           class="max-w-full max-h-full"
           style="display: block;"
         />

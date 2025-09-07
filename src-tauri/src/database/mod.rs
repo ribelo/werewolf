@@ -39,26 +39,267 @@ pub async fn initialize_database_with_settings(
     Ok(pool)
 }
 
-/// Initialize the database for the application (fallback with default settings)
-pub async fn initialize_database() -> Result<DatabasePool, sqlx::Error> {
+/// Initialize the database for the application - INFALLIBLE
+/// Always returns a valid database pool, even if using in-memory fallback
+pub async fn initialize_database() -> (DatabasePool, crate::system_health::DatabaseHealth) {
+    use crate::system_health::DatabaseHealth;
+    use std::time::SystemTime;
+
     let db_path = get_database_path();
     let db_url = format!("sqlite:{db_path}");
 
-    // Create database file if it doesn't exist
-    if !Sqlite::database_exists(&db_url).await.unwrap_or(false) {
-        log::info!("Creating database at: {db_path}");
-        Sqlite::create_database(&db_url).await?;
+    // Try to create database file if it doesn't exist
+    let database_exists = match Sqlite::database_exists(&db_url).await {
+        Ok(exists) => exists,
+        Err(e) => {
+            tracing::error!("Failed to check if database exists: {}", e);
+            false
+        }
+    };
+
+    if !database_exists {
+        tracing::info!("Creating database at: {}", db_path);
+        match Sqlite::create_database(&db_url).await {
+            Ok(_) => {
+                tracing::info!("Database created successfully");
+            }
+            Err(e) => {
+                tracing::error!("Failed to create database at {}: {}", db_path, e);
+
+                // Check if it's a permission issue using proper error types
+                if let sqlx::Error::Io(io_error) = &e {
+                    if matches!(
+                        io_error.kind(),
+                        std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::NotFound
+                    ) {
+                        return create_fallback_database(DatabaseHealth::Error {
+                            backup_path: None,
+                            message: format!("Permission denied accessing: {}", db_path),
+                            using_fallback: false,
+                        })
+                        .await;
+                    }
+                }
+
+                // Try in-memory fallback for other creation errors
+                return create_fallback_database(DatabaseHealth::Error {
+                    backup_path: None,
+                    message: format!("Failed to create database file: {}", e),
+                    using_fallback: true,
+                })
+                .await;
+            }
+        }
     }
 
-    // Create connection pool with defaults
-    let pool = create_pool(&db_url).await?;
+    // Try to create connection pool
+    let pool = match create_pool(&db_url).await {
+        Ok(pool) => pool,
+        Err(e) => {
+            tracing::error!("Failed to create database connection pool: {}", e);
 
-    // Run migrations automatically
-    log::info!("Running database migrations...");
+            // Check for database corruption using proper error types
+            if let sqlx::Error::Database(db_error) = &e {
+                // SQLite corruption typically has error code 11 (SQLITE_CORRUPT)
+                // or code 26 (SQLITE_NOTADB) for malformed database files
+                if let Some(code) = db_error.code() {
+                    if code == "11"
+                        || code == "26"
+                        || code == "SQLITE_CORRUPT"
+                        || code == "SQLITE_NOTADB"
+                    {
+                        return handle_corrupted_database(&db_path, &db_url, e).await;
+                    }
+                }
+            }
+
+            // For other connection errors, use fallback
+            return create_fallback_database(DatabaseHealth::Error {
+                backup_path: None,
+                message: format!("Failed to connect to database: {}", e),
+                using_fallback: true,
+            })
+            .await;
+        }
+    };
+
+    // Try to run migrations
+    match run_migrations(&pool).await {
+        Ok(_) => {
+            tracing::info!("Database migrations completed successfully");
+            (pool, DatabaseHealth::Ok)
+        }
+        Err(e) => {
+            tracing::error!("Database migration failed: {}", e);
+
+            // Migration failure is critical - try to backup and recreate
+            let timestamp = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            let backup_path =
+                std::path::PathBuf::from(format!("{}.migration_failed.{}", db_path, timestamp));
+
+            // Try to backup the problematic database
+            match std::fs::copy(&db_path, &backup_path) {
+                Ok(_) => {
+                    tracing::info!(
+                        "Backed up database with migration issues to {:?}",
+                        backup_path
+                    );
+                }
+                Err(backup_err) => {
+                    tracing::error!(
+                        "Failed to backup database with migration issues: {}",
+                        backup_err
+                    );
+                }
+            }
+
+            // Try to create a fresh database
+            match recreate_fresh_database(&db_url).await {
+                Ok(new_pool) => (
+                    new_pool,
+                    DatabaseHealth::Error {
+                        backup_path: Some(backup_path),
+                        message: format!("Migration failed: {}", e),
+                        using_fallback: false,
+                    },
+                ),
+                Err(recreate_err) => {
+                    tracing::error!(
+                        "Failed to recreate database after migration failure: {}",
+                        recreate_err
+                    );
+                    create_fallback_database(DatabaseHealth::Error {
+                        backup_path: None,
+                        message: format!(
+                            "Migration failed: {}, Recreation failed: {}",
+                            e, recreate_err
+                        ),
+                        using_fallback: true,
+                    })
+                    .await
+                }
+            }
+        }
+    }
+}
+
+async fn handle_corrupted_database(
+    db_path: &str,
+    db_url: &str,
+    corruption_error: sqlx::Error,
+) -> (DatabasePool, crate::system_health::DatabaseHealth) {
+    use crate::system_health::DatabaseHealth;
+    use std::time::SystemTime;
+
+    tracing::error!("Database appears to be corrupted: {}", corruption_error);
+
+    // Create backup with timestamp
+    let timestamp = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let backup_path = std::path::PathBuf::from(format!("{}.corrupted.{}", db_path, timestamp));
+
+    // Try to backup corrupted database
+    match std::fs::copy(db_path, &backup_path) {
+        Ok(_) => {
+            tracing::info!("Backed up corrupted database to {:?}", backup_path);
+        }
+        Err(backup_err) => {
+            tracing::error!("Failed to backup corrupted database: {}", backup_err);
+        }
+    }
+
+    // Try to create fresh database
+    match recreate_fresh_database(db_url).await {
+        Ok(pool) => (
+            pool,
+            DatabaseHealth::Error {
+                backup_path: Some(backup_path),
+                message: corruption_error.to_string(),
+                using_fallback: false,
+            },
+        ),
+        Err(e) => {
+            tracing::error!("Failed to recreate database after corruption: {}", e);
+            create_fallback_database(DatabaseHealth::Error {
+                backup_path: None,
+                message: format!("Database corrupted and recreation failed: {}", e),
+                using_fallback: true,
+            })
+            .await
+        }
+    }
+}
+
+async fn recreate_fresh_database(db_url: &str) -> Result<DatabasePool, sqlx::Error> {
+    // Remove the old database file
+    if let Some(path) = db_url.strip_prefix("sqlite:") {
+        if let Err(e) = std::fs::remove_file(path) {
+            tracing::warn!("Could not remove corrupted database file: {}", e);
+        }
+    }
+
+    // Create fresh database
+    Sqlite::create_database(db_url).await?;
+    let pool = create_pool(db_url).await?;
     run_migrations(&pool).await?;
 
-    log::info!("Database initialized successfully");
+    tracing::info!("Successfully created fresh database");
     Ok(pool)
+}
+
+async fn create_fallback_database(
+    health: crate::system_health::DatabaseHealth,
+) -> (DatabasePool, crate::system_health::DatabaseHealth) {
+    tracing::warn!("Using in-memory SQLite database as fallback");
+
+    let fallback_url = "sqlite::memory:";
+
+    match create_pool(fallback_url).await {
+        Ok(pool) => {
+            match run_migrations(&pool).await {
+                Ok(_) => {
+                    tracing::info!("In-memory fallback database ready");
+                    (pool, health)
+                }
+                Err(e) => {
+                    tracing::error!("Even in-memory database migration failed: {}", e);
+                    // This should never happen, but if it does, we still return a pool
+                    // The app will start but may be very broken
+                    (
+                        pool,
+                        crate::system_health::DatabaseHealth::Error {
+                            backup_path: None,
+                            message: format!("In-memory migration failed: {}", e),
+                            using_fallback: true,
+                        },
+                    )
+                }
+            }
+        }
+        Err(e) => {
+            tracing::error!("Failed to create even in-memory database: {}", e);
+            // This is truly critical - we cannot create any database at all
+            // Return a database handle that will fail on all operations
+            // but at least allow the app to show an error dialog
+            let pool = sqlx::Pool::<sqlx::Sqlite>::connect("sqlite::memory:")
+                .await
+                .expect("Even basic SQLite connection failed - system is broken");
+
+            (
+                pool,
+                crate::system_health::DatabaseHealth::Error {
+                    backup_path: None,
+                    message: format!("Critical: Cannot create any database connection: {}", e),
+                    using_fallback: false,
+                },
+            )
+        }
+    }
 }
 
 /// Get the path where the database should be stored

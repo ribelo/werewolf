@@ -2,24 +2,30 @@
   import { onMount } from 'svelte';
   import { getCurrentWindow } from '@tauri-apps/api/window';
   import { Minus, Square, Copy, X } from 'lucide-svelte';
+  import { _ } from 'svelte-i18n';
   
   let appWindow: any;
   let isMaximized = false;
   
-  onMount(async () => {
+  onMount(() => {
     appWindow = getCurrentWindow();
     
-    // Listen for maximize/unmaximize events
-    const unlistenMaximize = await appWindow.onResized(() => {
-      checkMaximized();
-    });
+    let unlistenMaximize: (() => void) | null = null;
     
-    // Initial check
-    await checkMaximized();
+    // Setup async listeners
+    (async () => {
+      // Listen for maximize/unmaximize events
+      unlistenMaximize = await appWindow.onResized(() => {
+        checkMaximized();
+      });
+      
+      // Initial check
+      await checkMaximized();
+    })();
     
     // Cleanup
     return () => {
-      unlistenMaximize();
+      unlistenMaximize?.();
     };
   });
   
@@ -60,7 +66,7 @@
       <button 
         class="window-control minimize-btn" 
         on:click={minimizeWindow}
-        title="Minimize"
+        title={$_('ui.minimize')}
       >
         <Minus size={14} strokeWidth={2} />
       </button>
@@ -68,7 +74,7 @@
       <button 
         class="window-control maximize-btn" 
         on:click={toggleMaximize}
-        title={isMaximized ? "Restore" : "Maximize"}
+        title={isMaximized ? $_('ui.restore') : $_('ui.maximize')}
       >
         {#if isMaximized}
           <Copy size={14} strokeWidth={2} />
@@ -80,7 +86,7 @@
       <button 
         class="window-control close-btn" 
         on:click={closeWindow}
-        title="Close"
+        title={$_('ui.close')}
       >
         <X size={14} strokeWidth={2} />
       </button>

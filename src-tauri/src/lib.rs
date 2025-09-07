@@ -9,6 +9,7 @@ pub mod error;
 pub mod logging;
 pub mod models;
 pub mod settings;
+pub mod system_health;
 
 #[cfg(test)]
 mod integration_tests;
@@ -16,11 +17,13 @@ mod integration_tests;
 use database::DatabasePool;
 use logging::write_log;
 use settings::SettingsManager;
+use system_health::SystemHealth;
 
-// Application state to hold the database connection and settings
+// Application state to hold the database connection, settings, and system health
 pub struct AppState {
-    pub db: Arc<Mutex<DatabasePool>>, // No Option! Database always ready or app exits!
+    pub db: Arc<Mutex<DatabasePool>>, // Always available! Even if fallback/in-memory
     pub settings: Arc<Mutex<SettingsManager>>,
+    pub system_health: Arc<Mutex<SystemHealth>>,
 }
 
 // All commands are now defined in the commands module
@@ -42,37 +45,73 @@ pub async fn run() {
         }
     };
 
-    let settings_manager = match SettingsManager::new() {
-        Ok(settings) => {
-            tracing::info!(
-                "Settings loaded from: {:?}",
-                settings.get_config_file_path()
-            );
-            settings
-        }
-        Err(e) => {
-            tracing::error!("Failed to initialize settings manager: {e}");
-            tracing::info!("Using default settings");
-            SettingsManager::new().unwrap_or_else(|_| panic!("Cannot create settings manager"))
-        }
-    };
+    let settings_manager = SettingsManager::new();
+    tracing::info!(
+        "Settings loaded from: {:?}",
+        settings_manager.get_config_file_path()
+    );
 
-    // Initialize database properly in async function
+    // Log config health status
+    match settings_manager.get_config_health() {
+        system_health::ConfigHealth::Ok => {
+            tracing::info!("Settings configuration is healthy");
+        }
+        system_health::ConfigHealth::Error {
+            backup_path,
+            message,
+        } => {
+            if let Some(path) = backup_path {
+                tracing::warn!(
+                    "Settings configuration error: {}. Backed up to {:?}. Using default settings.",
+                    message,
+                    path
+                );
+            } else {
+                tracing::warn!(
+                    "Settings configuration error: {}. Using default settings.",
+                    message
+                );
+            }
+        }
+    }
+
+    // Initialize database - this is now infallible
     tracing::info!("Initializing database before app startup");
-    let database_pool = match database::initialize_database().await {
-        Ok(pool) => {
+    let (database_pool, database_health) = database::initialize_database().await;
+
+    // Log database health status
+    match &database_health {
+        system_health::DatabaseHealth::Ok => {
             tracing::info!("Database initialized successfully");
-            pool
         }
-        Err(e) => {
-            tracing::error!("Failed to initialize database: {}", e);
-            std::process::exit(1);
+        system_health::DatabaseHealth::Error {
+            backup_path,
+            message,
+            using_fallback,
+        } => {
+            if *using_fallback {
+                tracing::warn!(
+                    "Database error: {}. Using fallback in-memory database.",
+                    message
+                );
+            } else if let Some(path) = backup_path {
+                tracing::warn!("Database error: {}. Backed up to {:?}.", message, path);
+            } else {
+                tracing::error!("Database error: {}", message);
+            }
         }
-    };
+    }
+
+    // Create system health from both config and database health
+    let system_health = SystemHealth::new(
+        settings_manager.get_config_health().clone(),
+        database_health,
+    );
 
     let app_state = AppState {
         db: Arc::new(Mutex::new(database_pool)),
         settings: Arc::new(Mutex::new(settings_manager)),
+        system_health: Arc::new(Mutex::new(system_health)),
     };
 
     tauri::Builder::default()
@@ -88,6 +127,8 @@ pub async fn run() {
             commands::restore_database,
             commands::list_backups,
             commands::reset_database,
+            commands::system_health_check,
+            commands::get_backup_list,
             // Settings commands
             commands::settings_get_all,
             commands::settings_get_ui,
@@ -99,6 +140,7 @@ pub async fn run() {
             commands::settings_update_database,
             commands::settings_reset_to_defaults,
             commands::settings_get_config_path,
+            commands::settings_get_health_status,
             // Logging
             write_log,
             // Contest management
@@ -140,6 +182,9 @@ pub async fn run() {
             commands::result_get_competitor_results,
             commands::result_export,
             commands::result_get_scoreboard,
+            // Category management
+            commands::weight_class_list,
+            commands::age_category_list,
             // Plate set management
             commands::plate_set_create,
             commands::plate_set_update_quantity,
@@ -148,6 +193,7 @@ pub async fn run() {
             commands::calculate_plates,
             commands::get_contest_bar_weights,
             commands::update_contest_bar_weights,
+            commands::get_plate_colors_for_contest,
             // Window management
             commands::window_open_display,
             commands::window_close_display,

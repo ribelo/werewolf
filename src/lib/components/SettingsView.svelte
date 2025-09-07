@@ -212,12 +212,28 @@
   }
 
   .btn-danger {
-    @apply bg-red-600 text-white border-2 border-red-600
-           px-4 py-2 font-display text-sm tracking-wider uppercase
-           transition-all duration-300 ease-in-out cursor-pointer
-           hover:bg-red-700 hover:border-red-700 disabled:opacity-60 disabled:cursor-not-allowed;
+    background-color: #dc2626;
+    color: white;
+    border: 2px solid #dc2626;
+    padding: 0.5rem 1rem;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 0.875rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    transition: all 0.3s ease-in-out;
+    cursor: pointer;
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
+  }
+  
+  .btn-danger:hover {
+    background-color: #b91c1c;
+    border-color: #b91c1c;
+  }
+  
+  .btn-danger:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 </style>

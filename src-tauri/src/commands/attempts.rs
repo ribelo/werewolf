@@ -4,55 +4,8 @@ use crate::models::attempt::{
     Attempt, AttemptStatus, AttemptUpdateResult, AttemptUpsert, LiftType,
 };
 use crate::AppState;
-use std::fmt;
 use std::str::FromStr;
 use tauri::State;
-
-impl fmt::Display for LiftType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            LiftType::Squat => write!(f, "Squat"),
-            LiftType::Bench => write!(f, "Bench"),
-            LiftType::Deadlift => write!(f, "Deadlift"),
-        }
-    }
-}
-
-impl FromStr for LiftType {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "Squat" => Ok(LiftType::Squat),
-            "Bench" => Ok(LiftType::Bench),
-            "Deadlift" => Ok(LiftType::Deadlift),
-            _ => Err(()),
-        }
-    }
-}
-
-impl fmt::Display for AttemptStatus {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            AttemptStatus::Pending => write!(f, "Pending"),
-            AttemptStatus::Successful => write!(f, "Successful"),
-            AttemptStatus::Failed => write!(f, "Failed"),
-        }
-    }
-}
-
-impl FromStr for AttemptStatus {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "Pending" => Ok(AttemptStatus::Pending),
-            "Successful" => Ok(AttemptStatus::Successful),
-            "Failed" => Ok(AttemptStatus::Failed),
-            _ => Err(()),
-        }
-    }
-}
 
 #[tauri::command]
 pub async fn attempt_upsert_weight(
@@ -100,8 +53,15 @@ pub async fn attempt_list(
                 attempt_number: a.attempt_number,
                 weight: a.weight,
                 status: AttemptStatus::from_str(&a.status).map_err(|_| {
-                    AppError::Internal(format!("Invalid attempt status '{}' in database for attempt {}. Expected 'Pending', 'Successful', or 'Failed'", a.status, attempt_id))
+                    AppError::Internal(format!("Invalid attempt status '{}' in database for attempt {}. Expected 'Pending', 'Successful', 'Failed', or 'Skipped'", a.status, attempt_id))
                 })?,
+                timestamp: a.timestamp,
+                judge1_decision: a.judge1_decision,
+                judge2_decision: a.judge2_decision,
+                judge3_decision: a.judge3_decision,
+                notes: a.notes,
+                created_at: a.created_at.clone(),
+                updated_at: a.created_at, // Default to created_at for now
             })
         })
         .collect::<Result<Vec<Attempt>, AppError>>()?;
@@ -158,8 +118,15 @@ pub async fn attempt_list_for_contest(
                 attempt_number: a.attempt_number,
                 weight: a.weight,
                 status: AttemptStatus::from_str(&a.status).map_err(|_| {
-                    AppError::Internal(format!("Invalid attempt status '{}' in database for attempt {}. Expected 'Pending', 'Successful', or 'Failed'", a.status, attempt_id))
+                    AppError::Internal(format!("Invalid attempt status '{}' in database for attempt {}. Expected 'Pending', 'Successful', 'Failed', or 'Skipped'", a.status, attempt_id))
                 })?,
+                timestamp: a.timestamp,
+                judge1_decision: a.judge1_decision,
+                judge2_decision: a.judge2_decision,
+                judge3_decision: a.judge3_decision,
+                notes: a.notes,
+                created_at: a.created_at.clone(),
+                updated_at: a.created_at, // Default to created_at for now
             })
         })
         .collect::<Result<Vec<Attempt>, AppError>>()?;
@@ -189,6 +156,13 @@ pub async fn attempt_get_current(
             status: AttemptStatus::from_str(&db_attempt.status).map_err(|_| {
                 AppError::Internal(format!("Invalid status: {}", db_attempt.status))
             })?,
+            timestamp: db_attempt.timestamp,
+            judge1_decision: db_attempt.judge1_decision,
+            judge2_decision: db_attempt.judge2_decision,
+            judge3_decision: db_attempt.judge3_decision,
+            notes: db_attempt.notes,
+            created_at: db_attempt.created_at.clone(),
+            updated_at: db_attempt.created_at, // Default to created_at for now
         }))
     } else {
         Ok(None)
@@ -263,6 +237,13 @@ pub async fn attempt_get_next_in_queue(
                     weight: a.weight,
                     status: AttemptStatus::from_str(&a.status)
                         .map_err(|_| AppError::Internal(format!("Invalid status: {}", a.status)))?,
+                    timestamp: a.timestamp,
+                    judge1_decision: a.judge1_decision,
+                    judge2_decision: a.judge2_decision,
+                    judge3_decision: a.judge3_decision,
+                    notes: a.notes,
+                    created_at: a.created_at.clone(),
+                    updated_at: a.created_at, // Default to created_at for now
                 })
             })
             .collect::<Result<Vec<Attempt>, AppError>>()?;

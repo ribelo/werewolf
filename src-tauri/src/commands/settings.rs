@@ -1,4 +1,5 @@
 use crate::settings::{AppSettings, CompetitionSettings, DatabaseSettings, UiSettings};
+use crate::system_health::ConfigHealth;
 use crate::AppState;
 use tauri::State;
 
@@ -109,4 +110,13 @@ pub async fn settings_get_config_path(state: State<'_, AppState>) -> Result<Stri
         .get_config_file_path()
         .to_string_lossy()
         .to_string())
+}
+
+/// Get the config health status
+#[tauri::command]
+pub async fn settings_get_health_status(
+    state: State<'_, AppState>,
+) -> Result<ConfigHealth, String> {
+    let settings_manager = state.settings.lock().await;
+    Ok(settings_manager.get_config_health().clone())
 }

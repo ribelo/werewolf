@@ -1,6 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import PhotoCropper from './PhotoCropper.svelte';
+  import { _ } from 'svelte-i18n';
 
   const dispatch = createEventDispatcher<{
     photoSelected: { base64: string; filename: string };
@@ -103,8 +104,7 @@
     }
   }
 
-  function handleCrop(event: CustomEvent<string>) {
-    const croppedBase64 = event.detail;
+  function handleCrop(croppedBase64: string) {
     showCropper = false;
     tempImageSrc = '';
     
@@ -162,7 +162,7 @@
         <div class="relative inline-block">
           <img
             src="data:image/webp;base64,{currentPhoto}"
-            alt="Competitor photo"
+            alt={$_('ui.current_upload')}
             class="w-32 h-40 object-cover rounded-lg border border-gray-200"
           />
         </div>

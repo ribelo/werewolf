@@ -1,4 +1,5 @@
 pub mod attempts;
+pub mod categories;
 pub mod competitors;
 pub mod contest_state;
 pub mod contests;
@@ -11,6 +12,7 @@ pub mod windows;
 
 // Re-export all commands for easy registration
 pub use attempts::*;
+pub use categories::*;
 pub use competitors::*;
 pub use contest_state::*;
 pub use contests::*;

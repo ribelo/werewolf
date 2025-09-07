@@ -10,6 +10,7 @@
   };
   
   export let size: 'small' | 'medium' | 'large' = 'medium';
+  export let onClick: (() => void) | undefined = undefined;
   
   let photoSrc: string | null = null;
   
@@ -35,29 +36,56 @@
   };
 </script>
 
-<div 
-  class="competitor-thumbnail {sizeClasses[size]} relative overflow-hidden rounded border-2 border-border-color bg-element-bg flex items-center justify-center"
-  title="{competitor.firstName} {competitor.lastName}"
->
-  {#if photoSrc}
-    <img 
-      src={photoSrc} 
-      alt="{competitor.firstName} {competitor.lastName}"
-      class="w-full h-full object-cover"
-      loading="lazy"
-    />
-  {:else}
-    <!-- Fallback placeholder -->
-    <div class="flex flex-col items-center justify-center text-text-secondary">
-      <User size={iconSizes[size]} strokeWidth={1.5} />
-      {#if size !== 'small'}
-        <div class="text-xs mt-1 text-center leading-tight">
-          {competitor.gender === 'Male' ? 'M' : 'F'}
-        </div>
-      {/if}
-    </div>
-  {/if}
-</div>
+{#if onClick}
+  <button 
+    class="competitor-thumbnail {sizeClasses[size]} cursor-pointer hover:border-accent-red relative overflow-hidden rounded border-2 border-border-color bg-element-bg flex items-center justify-center"
+    title="{competitor.firstName} {competitor.lastName}"
+    on:click={onClick}
+  >
+    {#if photoSrc}
+      <img 
+        src={photoSrc} 
+        alt="{competitor.firstName} {competitor.lastName}"
+        class="w-full h-full object-cover"
+        loading="lazy"
+      />
+    {:else}
+      <!-- Fallback placeholder -->
+      <div class="flex flex-col items-center justify-center text-text-secondary">
+        <User size={iconSizes[size]} strokeWidth={1.5} />
+        {#if size !== 'small'}
+          <div class="text-xs mt-1 text-center leading-tight">
+            {competitor.gender === 'Male' ? 'M' : 'F'}
+          </div>
+        {/if}
+      </div>
+    {/if}
+  </button>
+{:else}
+  <div 
+    class="competitor-thumbnail {sizeClasses[size]} relative overflow-hidden rounded border-2 border-border-color bg-element-bg flex items-center justify-center"
+    title="{competitor.firstName} {competitor.lastName}"
+  >
+    {#if photoSrc}
+      <img 
+        src={photoSrc} 
+        alt="{competitor.firstName} {competitor.lastName}"
+        class="w-full h-full object-cover"
+        loading="lazy"
+      />
+    {:else}
+      <!-- Fallback placeholder -->
+      <div class="flex flex-col items-center justify-center text-text-secondary">
+        <User size={iconSizes[size]} strokeWidth={1.5} />
+        {#if size !== 'small'}
+          <div class="text-xs mt-1 text-center leading-tight">
+            {competitor.gender === 'Male' ? 'M' : 'F'}
+          </div>
+        {/if}
+      </div>
+    {/if}
+  </div>
+{/if}
 
 <style>
   .competitor-thumbnail {

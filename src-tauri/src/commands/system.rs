@@ -1,4 +1,5 @@
 use crate::error::AppError;
+use crate::system_health::SystemHealth;
 use crate::{database, AppState};
 use tauri::State;
 
@@ -60,20 +61,13 @@ pub async fn restore_database(
 
     // Reinitialize database connection
     let mut db_guard = state.db.lock().await;
-    match database::initialize_database().await {
-        Ok(pool) => {
-            *db_guard = pool;
-            tracing::info!("Database restored from backup: {}", backup_path);
-            Ok(format!(
-                "Database successfully restored from {}",
-                backup_path
-            ))
-        }
-        Err(e) => {
-            tracing::error!("Failed to reinitialize database after restore: {}", e);
-            Err(AppError::Database(e))
-        }
-    }
+    let (pool, _health) = database::initialize_database().await;
+    *db_guard = pool;
+    tracing::info!("Database restored from backup: {}", backup_path);
+    Ok(format!(
+        "Database successfully restored from {}",
+        backup_path
+    ))
 }
 
 /// List available backups
@@ -81,6 +75,13 @@ pub async fn restore_database(
 pub async fn list_backups() -> Result<Vec<String>, AppError> {
     let backups = database::list_backups().await?;
     Ok(backups)
+}
+
+/// Get the current system health status for frontend
+#[tauri::command]
+pub async fn system_health_check(state: State<'_, AppState>) -> Result<SystemHealth, String> {
+    let system_health = state.system_health.lock().await;
+    Ok(system_health.clone())
 }
 
 /// Reset database - drops all tables and recreates schema
@@ -94,4 +95,60 @@ pub async fn reset_database(state: State<'_, AppState>) -> Result<String, AppErr
         .map_err(AppError::Database)?;
     tracing::info!("Database reset completed successfully");
     Ok("Database reset completed successfully".to_string())
+}
+
+/// Get list of available backup files (both database and config)
+#[tauri::command]
+pub async fn get_backup_list() -> Result<Vec<String>, String> {
+    let db_path = database::get_database_path();
+    let db_dir = std::path::Path::new(&db_path)
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."));
+
+    let mut backups = Vec::new();
+
+    // Check for database backups
+    match std::fs::read_dir(db_dir) {
+        Ok(entries) => {
+            for entry in entries.flatten() {
+                let file_name = entry.file_name();
+                let file_name_str = file_name.to_string_lossy();
+
+                if file_name_str.contains("werewolf.db.")
+                    && (file_name_str.contains("corrupted")
+                        || file_name_str.contains("migration_failed"))
+                {
+                    backups.push(format!("database/{}", file_name_str));
+                }
+            }
+        }
+        Err(e) => {
+            tracing::error!("Failed to read backup directory: {}", e);
+            return Err(format!("Failed to read backup directory: {}", e));
+        }
+    }
+
+    // Check for config backups
+    if let Some(project_dirs) = directories::ProjectDirs::from("com", "ribelo", "werewolf") {
+        let config_dir = project_dirs.config_dir();
+
+        match std::fs::read_dir(config_dir) {
+            Ok(entries) => {
+                for entry in entries.flatten() {
+                    let file_name = entry.file_name();
+                    let file_name_str = file_name.to_string_lossy();
+
+                    if file_name_str.contains("settings.toml.corrupted") {
+                        backups.push(format!("config/{}", file_name_str));
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!("Failed to read config backup directory: {}", e);
+            }
+        }
+    }
+
+    backups.sort();
+    Ok(backups)
 }

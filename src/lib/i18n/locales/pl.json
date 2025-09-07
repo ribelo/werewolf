@@ -79,10 +79,79 @@
     "create_first_backup": "Stwórz Pierwszą Kopię Zapasową",
     "reset_database": "Resetuj Bazę Danych",
     "resetting": "Resetowanie...",
-    "crop_save": "Przytnij i Zapisz"
+    "crop_save": "Przytnij i Zapisz",
+    "delete": "Usuń",
+    "saving": "Zapisywanie...",
+    "deleting": "Usuwanie...",
+    "close": "Zamknij"
   },
   "common": {
     "loading": "Ładowanie..."
+  },
+  "general": {
+    "action_irreversible": "Ta operacja nie może być cofnięta",
+    "male": "Mężczyzna",
+    "female": "Kobieta", 
+    "first_name": "Imię",
+    "last_name": "Nazwisko",
+    "birth_date": "Data urodzenia",
+    "gender": "Płeć",
+    "club": "Klub",
+    "city": "Miasto",
+    "notes": "Notatki",
+    "unknown": "Nieznany",
+    "first_name_placeholder": "Jan",
+    "last_name_placeholder": "Kowalski",
+    "bodyweight_placeholder": "75.0"
+  },
+  "ui": {
+    "minimize": "Minimalizuj",
+    "maximize": "Maksymalizuj", 
+    "restore": "Przywróć",
+    "close": "Zamknij",
+    "crop_area": "Obszar przycinania",
+    "current_upload": "Obecne zdjęcie"
+  },
+  "competitor": {
+    "edit": "Edytuj Zawodnika",
+    "delete": "Usuń Zawodnika",
+    "delete_title": "Usuń Zawodnika",
+    "delete_message": "Czy na pewno chcesz usunąć zawodnika {name}? Spowoduje to usunięcie wszystkich jego prób i wyników z zawodów.",
+    "update_success": "Zawodnik został pomyślnie zaktualizowany",
+    "update_error": "Nie udało się zaktualizować zawodnika",
+    "validation_error": "Proszę wypełnić wszystkie wymagane pola",
+    "photo": "Zdjęcie",
+    "photo_error": "Nie udało się wczytać zdjęcia",
+    "photo_error_desc": "Wystąpił błąd podczas wczytywania zdjęcia tego zawodnika",
+    "no_photo": "Brak Zdjęcia",
+    "no_photo_desc": "Ten zawodnik nie ma dodanego zdjęcia",
+    "photo_modal_instructions": "Naciśnij ESC lub kliknij poza oknem aby zamknąć"
+  },
+  "photo": {
+    "crop_title": "Przytnij Zdjęcie",
+    "crop_instructions": "Przytnij do formatu 4:5 (400×500px)",
+    "crop_loading": "Ładowanie..."
+  },
+  "results": {
+    "competition_summary": "Podsumowanie Wyników Zawodów",
+    "competition_stats": "Statystyki Zawodów",
+    "total_competitors": "Łącznie Zawodników",
+    "successful_finishers": "Pomyślnie Ukończyli",
+    "bombed_out": "Bez Wyniku",
+    "winning_total": "Najlepszy Wynik",
+    "best_lifts": "Najlepsze Wyniki",
+    "best_squat": "Najlepszy Przysiad",
+    "best_bench": "Najlepsze Wyciskanie",
+    "best_deadlift": "Najlepszy Martwy Ciąg",
+    "top_3_finishers": "Top 3 Zawodnicy",
+    "contest_results": "Wyniki Zawodów",
+    "place": "Miejsce",
+    "registration": "Rejestracja",
+    "points": "Punkty",
+    "status": "Status",
+    "disqualified": "DYS",
+    "record": "REKORD",
+    "export_json": "Eksportuj JSON"
   },
   "errors": {
     "load_contests": "Nie udało się wczytać zawodów",
@@ -162,11 +231,54 @@
     "delete_success": "Obciążenie usunięte pomyślnie",
     "delete_error": "Nie udało się usunąć obciążenia",
     "load_error": "Nie udało się załadować obciążeń",
-    "bar_weight_save_error": "Nie udało się zapisać wag sztangi"
+    "bar_weight_save_error": "Nie udało się zapisać wag sztangi",
+    "bar_weight": "Waga sztangi",
+    "per_side": "Na stronę",
+    "plate": "tarcza",
+    "plates": "tarcze",
+    "bar_only": "Tylko sztanga"
   },
   "attempt_extra": {
     "failed_mark_good": "Nie udało się oznaczyć jako udana:",
     "failed_mark_bad": "Nie udało się oznaczyć jako nieudana:"
+  },
+  "system": {
+    "title": "Stan Systemu",
+    "subtitle": "Monitoring zdrowia aplikacji i odzyskiwanie",
+    "checking": "Sprawdzanie stanu systemu...",
+    "check_failed": "Nie udało się sprawdzić stanu systemu",
+    "retry": "Ponów",
+    "config": {
+      "title": "Konfiguracja"
+    },
+    "database": {
+      "title": "Baza Danych",
+      "temporary": "Używanie tymczasowej bazy danych w pamięci"
+    },
+    "status": {
+      "healthy": "Zdrowy",
+      "missing": "Brak",
+      "corrupted": "Uszkodzony",
+      "migration_failed": "Migracja Nieudana",
+      "permission_denied": "Brak Uprawnień",
+      "using_fallback": "Używanie Zastępczego",
+      "unknown": "Nieznany"
+    },
+    "error": "Błąd",
+    "backup_location": "Lokalizacja kopii zapasowej",
+    "recommendations": {
+      "title": "Zalecenia"
+    },
+    "actions": {
+      "title": "Działania Naprawcze",
+      "refresh": "Odśwież Status",
+      "reset_config": "Resetuj Konfigurację",
+      "reset_database": "Resetuj Bazę Danych"
+    },
+    "not_operational": "System nie jest w pełni sprawny",
+    "not_operational_desc": "Niektóre funkcje mogą nie działać poprawnie. Spróbuj wykonać poniższe działania naprawcze.",
+    "continue": "Kontynuuj do Aplikacji",
+    "continue_desc": "System jest sprawny. Możesz normalnie używać aplikacji."
   },
   "disciplines": {
     "Bench": "Wyciskanie",
@@ -186,7 +298,13 @@
     "organizer": "Organizator:", 
     "federation_rules": "Federacja/Regulamin:",
     "notes": "Notatki:",
-    "not_available": "Niedostępne"
+    "not_available": "Niedostępne",
+    "saving": "Zapisywanie..."
+  },
+  "attempt": {
+    "status_pending": "Oczekuje",
+    "status_successful": "Udana",
+    "status_failed": "Nieudana"
   },
   "help": {
     "best_practices": "💡 Najlepsze Praktyki",

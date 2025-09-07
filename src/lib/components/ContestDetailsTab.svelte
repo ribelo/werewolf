@@ -30,21 +30,21 @@
 
     // Name validation
     if (!formData.name.trim()) {
-      validationErrors.name = $_('validation.name_required');
+      validationErrors['name'] = $_('validation.name_required');
     } else if (formData.name.trim().length < VALIDATION.MIN_NAME_LENGTH) {
-      validationErrors.name = $_('validation.name_too_short');
+      validationErrors['name'] = $_('validation.name_too_short');
     }
 
     // Date validation
     if (!formData.date) {
-      validationErrors.date = $_('validation.date_required');
+      validationErrors['date'] = $_('validation.date_required');
     }
 
     // Location validation
     if (!formData.location.trim()) {
-      validationErrors.location = $_('validation.location_required');
+      validationErrors['location'] = $_('validation.location_required');
     } else if (formData.location.trim().length < VALIDATION.MIN_LOCATION_LENGTH) {
-      validationErrors.location = $_('validation.location_min_length');
+      validationErrors['location'] = $_('validation.location_min_length');
     }
 
     return Object.keys(validationErrors).length === 0;
@@ -101,12 +101,12 @@
       id="contest-name"
       type="text"
       bind:value={formData.name}
-      class="input-field w-full {validationErrors.name ? 'border-red-500' : ''}"
+      class="input-field w-full {validationErrors['name'] ? 'border-red-500' : ''}"
       placeholder={$_('contest.name_placeholder')}
       required
     />
-    {#if validationErrors.name}
-      <div class="text-red-500 text-sm mt-1">{validationErrors.name}</div>
+    {#if validationErrors['name']}
+      <div class="text-red-500 text-sm mt-1">{validationErrors['name']}</div>
     {/if}
   </div>
 
@@ -118,11 +118,11 @@
         id="contest-date"
         type="date"
         bind:value={formData.date}
-        class="input-field w-full {validationErrors.date ? 'border-red-500' : ''}"
+        class="input-field w-full {validationErrors['date'] ? 'border-red-500' : ''}"
         required
       />
-      {#if validationErrors.date}
-        <div class="text-red-500 text-sm mt-1">{validationErrors.date}</div>
+      {#if validationErrors['date']}
+        <div class="text-red-500 text-sm mt-1">{validationErrors['date']}</div>
       {/if}
     </div>
     <div>
@@ -131,12 +131,12 @@
         id="contest-location"
         type="text"
         bind:value={formData.location}
-        class="input-field w-full {validationErrors.location ? 'border-red-500' : ''}"
+        class="input-field w-full {validationErrors['location'] ? 'border-red-500' : ''}"
         placeholder={$_('contest.location_placeholder')}
         required
       />
-      {#if validationErrors.location}
-        <div class="text-red-500 text-sm mt-1">{validationErrors.location}</div>
+      {#if validationErrors['location']}
+        <div class="text-red-500 text-sm mt-1">{validationErrors['location']}</div>
       {/if}
     </div>
   </div>

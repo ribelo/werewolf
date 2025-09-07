@@ -18,8 +18,9 @@
   let womensBarWeight = 15.0; // Default women's bar weight
   let barWeightError = ''; // Single error message for bar weight issues
 
-  // Debounce timer for quantity updates
+  // Debounce timers
   let quantityUpdateTimer: number | null = null;
+  let barWeightSaveTimer: number | null = null;
 
   onMount(() => {
     loadPlateSets();
@@ -91,7 +92,7 @@
     }
 
     try {
-      const plateSet = await invoke('plate_set_create', {
+      const plateSet = await invoke<PlateSet>('plate_set_create', {
         plateSet: {
           contestId: contest.id,
           plateWeight: weight,
@@ -104,7 +105,7 @@
       plateError = '';
     } catch (err) {
       // Display backend error message directly
-      plateError = err.message || $_('plates.add_error');
+      plateError = (err as Error)?.message || $_('plates.add_error');
       console.error('Error adding plate:', err);
     }
   }
@@ -123,7 +124,7 @@
     }
 
     // Debounce the actual database update
-    quantityUpdateTimer = setTimeout(async () => {
+    quantityUpdateTimer = Number(setTimeout(async () => {
       try {
         await invoke('plate_set_update_quantity', {
           id: plateId,
@@ -135,7 +136,7 @@
         // Revert on error
         loadPlateSets();
       }
-    }, VALIDATION.QUANTITY_UPDATE_DELAY);
+    }, VALIDATION.QUANTITY_UPDATE_DELAY));
   }
 
   async function deletePlate(plateId: string) {
@@ -164,7 +165,7 @@
       if (plateSets.some(p => p.plateWeight === plate.weight)) continue;
 
       try {
-        const plateSet = await invoke('plate_set_create', {
+        const plateSet = await invoke<PlateSet>('plate_set_create', {
           plateSet: {
             contestId: contest.id,
             plateWeight: plate.weight,
@@ -206,7 +207,6 @@
   }
 
   // Debounced bar weight save function - let backend handle validation
-  let barWeightSaveTimer: number | null = null;
 
   async function saveBarWeights() {
     barWeightError = '';
@@ -217,7 +217,7 @@
     }
 
     // Debounce the save to avoid spamming the backend
-    barWeightSaveTimer = setTimeout(async () => {
+    barWeightSaveTimer = Number(setTimeout(async () => {
       try {
         await invoke('update_contest_bar_weights', {
           contestId: contest.id,
@@ -226,10 +226,10 @@
         });
         barWeightError = ''; // Clear any previous errors on success
       } catch (err) {
-        barWeightError = err.message || $_('plates.bar_weight_save_error');
+        barWeightError = (err as Error)?.message || $_('plates.bar_weight_save_error');
         console.error('Error saving bar weights:', err);
       }
-    }, 500);
+    }, 500));
   }
 
   export { plateError };
