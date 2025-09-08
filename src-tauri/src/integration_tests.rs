@@ -57,6 +57,8 @@ mod integration_tests {
             last_name: "Doe".to_string(),
             birth_date: "1990-05-15".to_string(),
             gender: "Male".to_string(),
+            photo_base64: None,
+            photo_filename: None,
         };
 
         let competitor2 = CompetitorCreate {
@@ -64,6 +66,8 @@ mod integration_tests {
             last_name: "Smith".to_string(),
             birth_date: "1985-08-22".to_string(),
             gender: "Female".to_string(),
+            photo_base64: None,
+            photo_filename: None,
         };
 
         let comp1 = database::queries::competitors::create_competitor(
@@ -76,6 +80,8 @@ mod integration_tests {
                 club: None,
                 city: None,
                 notes: None,
+                photo_base64: None,
+                photo_filename: None,
             },
         )
         .await
@@ -91,6 +97,8 @@ mod integration_tests {
                 club: None,
                 city: None,
                 notes: None,
+                photo_base64: None,
+                photo_filename: None,
             },
         )
         .await
@@ -278,6 +286,8 @@ mod integration_tests {
                 club: None,
                 city: None,
                 notes: None,
+                photo_base64: None,
+                photo_filename: None,
             },
         )
         .await

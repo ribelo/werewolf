@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use strum::{Display, EnumString};
 
-#[derive(Debug, Clone, Serialize, Deserialize, EnumString, Display, sqlx::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, EnumString, Display, sqlx::Type, PartialEq)]
 #[serde(rename_all = "PascalCase")]
 #[strum(serialize_all = "PascalCase")]
 #[sqlx(rename_all = "PascalCase")]
@@ -14,7 +14,7 @@ pub enum Discipline {
     Powerlifting,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, EnumString, Display, sqlx::Type)]
+#[derive(Debug, Clone, Serialize, Deserialize, EnumString, Display, sqlx::Type, PartialEq)]
 #[serde(rename_all = "PascalCase")]
 #[strum(serialize_all = "PascalCase")]
 #[sqlx(rename_all = "PascalCase")]

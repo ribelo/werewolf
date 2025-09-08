@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::database::queries::*;
     use crate::database::DatabasePool;
-    use crate::models::contest::{Contest, ContestStatus, Discipline, NewContest};
+    use crate::models::contest::{ContestStatus, Discipline, NewContest};
     use chrono::NaiveDate;
     use tempfile::tempdir;
 
