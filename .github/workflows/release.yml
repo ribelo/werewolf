@@ -137,15 +137,6 @@ jobs:
     - name: Install Tauri CLI
       run: bun add -g @tauri-apps/cli@latest
 
-    - name: SQLx offline mode (prepare queries)
-      working-directory: ./src-tauri
-      run: |
-        # Skip if no migrations exist
-        if [ -d "migrations" ] && [ "$(ls -A migrations)" ]; then
-          cargo sqlx prepare --database-url sqlite:werewolf.db -- --all-targets --all-features
-        fi
-      shell: bash
-
     - name: Build Tauri app
       uses: tauri-apps/tauri-action@v0
       env:
