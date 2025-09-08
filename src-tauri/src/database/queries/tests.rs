@@ -4,12 +4,10 @@ mod tests {
     use crate::database::DatabasePool;
     use crate::models::contest::{ContestStatus, Discipline, NewContest};
     use chrono::NaiveDate;
-    use tempfile::tempdir;
 
     async fn setup_test_db() -> DatabasePool {
-        let temp_dir = tempdir().expect("Failed to create temp directory");
-        let db_path = temp_dir.path().join("test.db");
-        let db_url = format!("sqlite:{}", db_path.to_str().unwrap());
+        // Use in-memory database for tests to avoid file system issues in CI
+        let db_url = "sqlite::memory:".to_string();
 
         // Create database and run migrations
         let pool = sqlx::SqlitePool::connect(&db_url)

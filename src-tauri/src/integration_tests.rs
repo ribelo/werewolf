@@ -5,7 +5,6 @@ use crate::models::contest::{Discipline, NewContest};
 use crate::models::contest_state::{ContestState, ContestStatus};
 use chrono::NaiveDate;
 use sqlx::SqlitePool;
-use tempfile::tempdir;
 
 /// Integration tests for the complete contest workflow
 /// These tests exercise the full stack: Database -> Queries -> Commands
@@ -14,15 +13,12 @@ mod integration_tests {
     use super::*;
 
     async fn setup_test_db() -> Result<SqlitePool, sqlx::Error> {
-        let temp_dir = tempdir().unwrap();
-        let db_path = temp_dir.path().join("test.db");
-        let db_url = format!("sqlite://{}?mode=rwc", db_path.display());
+        // Use in-memory database for tests to avoid file system issues in CI
+        let db_url = "sqlite::memory:";
 
-        let pool = SqlitePool::connect(&db_url).await?;
+        let pool = SqlitePool::connect(db_url).await?;
         database::run_migrations(&pool).await?;
 
-        // Keep temp_dir alive for the test duration
-        std::mem::forget(temp_dir);
         Ok(pool)
     }
 
