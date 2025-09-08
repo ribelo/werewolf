@@ -42,9 +42,12 @@ jobs:
             git log --pretty=format:"- %s" >> CHANGELOG.md
           fi
           
-          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
-          cat CHANGELOG.md >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          # Use different delimiter approach to avoid EOF issues
+          {
+            echo 'CHANGELOG<<DELIMITER'
+            cat CHANGELOG.md
+            echo 'DELIMITER'
+          } >> $GITHUB_OUTPUT
 
       - name: Create Release
         id: create_release

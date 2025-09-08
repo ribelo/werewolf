@@ -57,6 +57,8 @@ jobs:
 
     - name: Build Rust backend (check compilation)
       working-directory: ./src-tauri
+      env:
+        SQLX_OFFLINE: false
       run: cargo build --release
 
   test:
@@ -91,10 +93,14 @@ jobs:
 
     - name: Run Rust tests
       working-directory: ./src-tauri
+      env:
+        SQLX_OFFLINE: false
       run: cargo test --all-targets --all-features
 
     - name: Run Rust clippy
       working-directory: ./src-tauri
+      env:
+        SQLX_OFFLINE: false
       run: cargo clippy -- -D warnings
 
     - name: Check Rust formatting
