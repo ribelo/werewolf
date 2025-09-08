@@ -1,6 +1,8 @@
-# CLAUDE.md
+# CLAUDE.md - Project Instructions for AI Assistant
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+**Instructions for Claude Code (claude.ai/code) when working with this Tauri-based powerlifting contest management application.**
+
+**Key Context**: This is a production-ready application built for Polish powerlifting meet directors who need reliable, offline contest management without complexity overhead.
 
 ## Project Overview
 
@@ -11,16 +13,23 @@ Werewolf is a Tauri-based desktop application for managing powerlifting contests
 
 ### Application Purpose
 - **Contest Management**: Simple CRUD operations for competitors, attempts, and results
-- **Dual-Window Architecture**: Separate organizer and display interfaces
-- **Real-time Updates**: Synchronization between administrator and presentation views
+- **Dual-Window Architecture**: Separate organizer and display interfaces  
+- **Real-time Updates**: Manual synchronization between administrator and presentation views
+- **Offline-First**: No internet dependency, SQLite local database
+- **Polish/English i18n**: Built for Polish Powerlifting Federation standards
 
 ### Database Location
 - **SQLite Database**: `~/.local/share/werewolf/werewolf.db` (Linux XDG data directory)
 - **Backup Directory**: `~/.local/share/werewolf/backups/`
 - **Debug Database**: `sqlite3 ~/.local/share/werewolf/werewolf.db "SELECT * FROM competitors;"`
 
-### Requirements & Roadmap
-See [REQUIREMENTS_AND_ROADMAP.md](./REQUIREMENTS_AND_ROADMAP.md) for detailed scope definition, strategic analysis, and development roadmap based on user requirements.
+### Project Scope & Requirements
+**See [REQUIREMENTS_AND_ROADMAP.md](./REQUIREMENTS_AND_ROADMAP.md)** for detailed scope definition.
+
+**IN SCOPE**: Simple attempt tracking, offline operation, dual windows, flexible editing, basic export
+**OUT OF SCOPE**: Federation uploads, timer management, judge scoring, complex validation rules, hardware integration
+
+**Core Philosophy**: Simplicity and reliability over feature completeness. Built for real-world powerlifting meets in gyms with unreliable internet.
 
 ## Build Commands
 
@@ -131,11 +140,12 @@ The application features two distinct windows:
 
 ## Development Workflow
 
-### IMPORTANT: Application Execution Policy
+### CRITICAL: Application Execution Policy
 - **NEVER** start the application (`bun run tauri dev`) automatically
-- **USER IS RESPONSIBLE FOR RUNNING IT** - Claude should only provide guidance and fixes
-- Only run compilation checks (`cargo check`, `cargo clippy`) or other development commands
-- If testing is needed, ask the user to run the application themselves
+- **USER IS RESPONSIBLE FOR RUNNING IT** - Claude provides guidance and fixes only
+- **Only run compilation checks** (`cargo check`, `cargo clippy`, `./check.sh`)
+- **If testing needed**: Ask user to run the application themselves
+- **Rationale**: Desktop app with window management - user must control execution
 
 ### Core Development Patterns
 
@@ -157,11 +167,26 @@ The application features two distinct windows:
    - Frontend manages only temporary form state
    - Query database directly for all data
 
-### Adding New Tauri Commands
-1. Define command in `src-tauri/src/commands/` by domain
-2. Use Database struct methods for all operations  
-3. Register command in `src-tauri/src/lib.rs` invoke_handler
-4. Frontend calls via `invoke("domain_action", { args })`
+### Adding New Tauri Commands - Step by Step
+
+1. **Define Command Function** in `src-tauri/src/commands/[domain].rs`:
+   ```rust
+   #[tauri::command]
+   pub async fn competitor_create(
+       state: tauri::State<'_, AppState>,
+       competitor: CompetitorCreate,
+   ) -> Result<Competitor, AppError> {
+       let db = state.database.lock().await;
+       db.competitor_create(competitor).await
+   }
+   ```
+
+2. **Use Database Methods**: Always use existing `Database` struct methods
+3. **Register in Handler**: Add to `src-tauri/src/lib.rs` `invoke_handler![]`
+4. **Frontend Call**: `const result = await invoke('competitor_create', { competitor })`
+5. **Error Handling**: Use `thiserror` errors, propagate to frontend
+
+**Pattern**: Domain-based commands (`contest_*`, `competitor_*`, `attempt_*`, `result_*`)
 
 ### Frontend Development
 - Hot module replacement enabled on port 1420
@@ -175,12 +200,21 @@ The application features two distinct windows:
 - Simple data models for competitors, attempts, and contest state
 - Event system for window synchronization
 
-### Database Development with SQLx
-- **ALWAYS use compile-time safe SQLx macros**: `query!()`, `query_as!()`, `query_scalar!()`
-- **NEVER use runtime-only functions**: `query()`, `query_as()`, `query_scalar()`
-- Compile-time macros provide SQL validation, type checking, and automatic result mapping
-- Runtime functions are error-prone and lack compile-time safety guarantees
-- Example: Use `sqlx::query!("SELECT id, name FROM competitors WHERE id = ?", id)` instead of `sqlx::query("SELECT id, name FROM competitors WHERE id = ?").bind(id)`
+### Database Development with SQLx - CRITICAL RULES
+
+**ALWAYS use compile-time safe SQLx macros:**
+- `sqlx::query!("SELECT id, name FROM competitors WHERE id = ?", id)` ✅
+- `sqlx::query_as!(Model, "SELECT * FROM table WHERE id = ?", id)` ✅ 
+- `sqlx::query_scalar!("SELECT COUNT(*) FROM competitors")` ✅
+
+**NEVER use runtime-only functions:**
+- `sqlx::query("SELECT...").bind(id)` ❌ (no compile-time validation)
+- `sqlx::query_as("SELECT...")` ❌ (no type safety)
+- `sqlx::query_scalar("SELECT...")` ❌ (no SQL validation)
+
+**Why**: Compile-time macros provide SQL validation, type checking, and automatic result mapping. Runtime functions are error-prone and will cause production failures.
+
+**Database URL**: Set `DATABASE_URL="sqlite:~/.local/share/werewolf/werewolf.db"` in `.env` for SQLx compile-time checking.
 
 ### Database Migrations - CRITICAL RULES
 - **NEVER modify existing migration files** once they've been applied to any database (local, staging, production)
@@ -225,19 +259,29 @@ ls -la src-tauri/migrations/
 sha256sum src-tauri/migrations/MIGRATION_FILE.sql
 ```
 
-### Internationalization (i18n) Requirements
-- **NEVER use hardcoded strings in HTML/Svelte templates**
-- **ALL user-visible text must use i18n translation keys**
-- Use `$t('key.name')` syntax for all displayed text
-- Store translation keys in appropriate JSON files
-- Support Polish (primary) and English languages
-- Examples:
-  - ❌ Bad: `<button>Save</button>`
-  - ✅ Good: `<button>{$t('common.save')}</button>`
-  - ❌ Bad: `error = "Failed to save competitor"`
-  - ✅ Good: `error = $t('errors.competitor.save_failed')`
-- **Console/debug messages can remain in English**
-- **Database content and API responses are separate from UI i18n**
+### Internationalization (i18n) - MANDATORY REQUIREMENTS
+
+**ZERO hardcoded user-visible strings allowed:**
+- ❌ `<button>Save</button>`
+- ✅ `<button>{$t('common.save')}</button>`
+- ❌ `error = "Failed to save competitor"`
+- ✅ `error = $t('errors.competitor.save_failed')`
+- ❌ `<h1>Contest Results</h1>`
+- ✅ `<h1>{$t('contest.results.title')}</h1>`
+
+**Translation Files:**
+- `src/lib/i18n/locales/pl.json` - Polish (primary language)
+- `src/lib/i18n/locales/en.json` - English (secondary)
+
+**Usage Pattern**: `$t('domain.section.key')` for all UI text
+
+**Exceptions (English allowed):**
+- Console/debug messages
+- Code comments
+- Database schema and internal data
+- API error messages (internal)
+
+**Validation**: All Svelte templates must use `$t()` for user-facing text.
 
 ## Configuration Files
 
@@ -258,3 +302,36 @@ The project includes a `flake.nix` that provides:
 - **Environment variables** properly configured for Tauri development
 
 Use `nix develop` to enter the development shell with all dependencies available.
+
+---
+
+## Working with this Codebase - AI Assistant Guidelines
+
+### Code Style and Patterns
+1. **Follow existing patterns** - this codebase has established conventions
+2. **Backend-heavy architecture** - business logic stays in Rust, frontend is "dumb views"
+3. **Database as state** - SQLite holds all application state, no in-memory complexity
+4. **Command-based** - frontend calls Tauri commands, no direct database access
+5. **Error propagation** - use `thiserror` errors throughout the stack
+
+### What to Focus On
+- **Reliability over features** - this is production software for real competitions
+- **Simple, testable code** - complex abstractions are discouraged
+- **Polish/English i18n** - all user-facing text must be translatable
+- **SQLite best practices** - compile-time checked queries only
+- **Clear error messages** - users need actionable feedback
+
+### Common Tasks and Patterns
+- **Adding new competitor fields**: Update database schema, models, commands, and UI components
+- **New attempt tracking**: Follow existing squat/bench/deadlift patterns
+- **Display window updates**: Use Tauri window API, no automatic sync
+- **Export functionality**: Generate files in user-specified formats
+- **Backup/restore**: SQLite file operations with proper error handling
+
+### Testing Strategy
+- **Unit tests** for business logic in Rust
+- **Integration tests** for database operations
+- **Manual testing** for UI workflows (user runs application)
+- **No mocking** - test with real SQLite database
+
+**Remember**: This app exists because existing powerlifting software is expensive, overcomplicated, or requires internet. Keep it simple, reliable, and offline-first.

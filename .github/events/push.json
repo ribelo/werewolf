@@ -1,0 +1,31 @@
+{
+  "ref": "refs/heads/master",
+  "repository": {
+    "name": "werewolf",
+    "full_name": "ribelo/werewolf",
+    "owner": {
+      "login": "ribelo"
+    }
+  },
+  "pusher": {
+    "name": "ribelo"
+  },
+  "head_commit": {
+    "id": "example-commit-sha",
+    "message": "Test commit",
+    "author": {
+      "name": "ribelo",
+      "email": "user@example.com"
+    }
+  },
+  "commits": [
+    {
+      "id": "example-commit-sha",
+      "message": "Test commit",
+      "author": {
+        "name": "ribelo",
+        "email": "user@example.com"
+      }
+    }
+  ]
+}

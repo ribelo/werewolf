@@ -1,0 +1,27 @@
+# Act configuration for local GitHub Actions testing
+# Usage: act push (to test build workflow)
+# Usage: act push -e events/release.json (to test release workflow)
+
+# Use larger runner images for better compatibility
+-P ubuntu-latest=catthehacker/ubuntu:act-latest
+-P ubuntu-22.04=catthehacker/ubuntu:act-22.04
+-P windows-latest=catthehacker/ubuntu:act-latest
+-P macos-latest=catthehacker/ubuntu:act-latest
+
+# Set default platform
+--platform ubuntu-latest=catthehacker/ubuntu:act-latest
+
+# Enable verbose output
+--verbose
+
+# Bind local secrets (create .secrets file if needed)
+--secret-file .secrets
+
+# Use local environment variables
+--env-file .env.local
+
+# Reuse containers for faster subsequent runs  
+--reuse
+
+# Bind Docker socket for Docker-in-Docker scenarios
+--bind

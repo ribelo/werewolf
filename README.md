@@ -1,164 +1,233 @@
 # Werewolf - Powerlifting Contest Management
 
-A Tauri-based desktop application for managing powerlifting contests with dual-window functionality.
+**A rock-solid, offline desktop application for powerlifting meet directors who need simple, reliable contest management without the complexity overhead.**
 
-## Overview
+**What it does**: Manages competitors, tracks attempts, calculates results, and displays rankings with dual-window architecture for both organizers and spectators.
 
-Werewolf is a simple CRUD application designed for powerlifting competitions, featuring:
+**What it doesn't do**: Timer management, federation uploads, judge scoring, complex validation rules, or anything that gets in the way of running your meet.
 
-- **Organizer Window**: Administrative interface for managing competitors, attempts, and contest flow
-- **Display Window**: Full-screen presentation view for projecting results and current lifts to audiences
-- **Real-time Updates**: Changes in the organizer window are immediately reflected on the display
+---
 
-## Architecture
+## For Meet Directors (Users)
 
-- **Frontend**: Svelte with custom state management (no Redux/router) and full i18n (Polish/English)
-- **Backend**: Rust with Tauri framework, SQLx for database operations, CLI support
-- **Data**: SQLite database with compile-time verified queries and real-time sync
-- **Federation**: Polish Powerlifting Federation compliant scoring system
-- **Configuration**: XDG-compliant paths with TOML configuration files
+### What You Get
 
-## Quick Start
+**Core Features:**
+- **Competitor Registration**: Add competitors with photos, weight classes, and categories
+- **Attempt Tracking**: Record squat, bench, deadlift attempts (good/bad, no complexity)
+- **Real-time Results**: Automatic calculation with Reshel coefficients and age adjustments
+- **Dual Display System**: Organizer interface + full-screen display for spectators
+- **Data Export**: Results to Excel/CSV for record-keeping and federation submissions
+- **Bulletproof Offline**: No internet required, no cloud dependencies, no subscription fees
 
-### Prerequisites
-- **Rust** (latest stable)
-- **Bun** (for frontend dependencies)
-- **SQLite** (for database)
+**What Makes This Different:**
+- **No bullshit complexity** - Built specifically for meet directors, not software engineers
+- **Handles the mess** - Edit anything, fix mistakes, works with real-world chaos
+- **Actually works offline** - Your meet won't fail because WiFi is down
+- **Polish/English support** - Built for Polish Powerlifting Federation standards
 
-### NixOS Development
+### Installation
+
+**Download the latest release from GitHub:**
+- **Windows**: Download `.msi` installer, run it, ignore SmartScreen warning (click "More info" → "Run anyway")
+- **macOS**: Download `.dmg`, open it, ignore "unidentified developer" (right-click app → "Open" → "Open")
+- **Linux**: Download `.deb` (Ubuntu/Debian) or `.AppImage` (universal), install/run directly
+
+**First time setup warnings are normal** - after the first run, your OS will remember the app is safe.
+
+### Quick Start Guide
+
+1. **Create Contest**: Enter basic details (name, date, location)
+2. **Register Competitors**: Add one-by-one or import from CSV
+3. **Open Display Window**: Click "Display" to show results to spectators
+4. **Track Attempts**: Mark lifts as successful/failed, results update automatically
+5. **Export Results**: Generate Excel/CSV reports when done
+
+**Database Location**: `~/.local/share/werewolf/werewolf.db` (Linux), similar paths on Windows/macOS
+
+---
+
+## For Developers
+
+### Technology Architecture
+
+**Why These Choices:**
+- **Tauri + Rust**: Native performance, small binaries, no Electron bloat
+- **SQLite**: Bulletproof local database, no server complexity
+- **Svelte**: Fast, lightweight frontend without React overhead
+- **No cloud dependencies**: Meets happen in gyms with shit WiFi
+
+**Stack:**
+- **Backend**: Rust with Tauri 2.8, SQLx for compile-time verified queries
+- **Frontend**: Svelte 5.38 with TypeScript, Tailwind CSS
+- **Database**: SQLite with automatic migrations
+- **Build**: GitHub Actions for Windows/macOS/Linux releases
+- **Package Manager**: Bun (faster than npm/yarn)
+
+### Development Setup
+
+**Prerequisites:**
+- Rust (latest stable)
+- Bun (package manager)
+- SQLite
+- Git
+
+**Clone and run:**
 ```bash
-# Enter development environment with all dependencies
-nix develop
+# Clone repository
+git clone <repository-url>
+cd werewolf
 
-# Install frontend dependencies
-bun install
-
-# Initialize database (first time setup)
-cd src-tauri && cargo run -- db migrate
-
-# Start development server
-bun run tauri dev
-```
-
-### Other Platforms
-```bash
 # Install dependencies
 bun install
 
-# Initialize database (first time setup)
-cd src-tauri
-cargo run -- db migrate
-cd ..
-
-# Start development server  
+# Start development (frontend + backend hot reload)
 bun run tauri dev
 ```
 
-## Database Management
-
-The application uses SQLite with SQLx migrations for schema management.
-
-### Setup Database
+**NixOS users:**
 ```bash
-# Navigate to Rust backend
-cd src-tauri
+# Enter development shell with all dependencies
+nix develop
+bun install
+bun run tauri dev
+```
 
-# Run migrations to create/update database schema
+### Project Structure
+
+```
+werewolf/
+├── src/                    # Svelte frontend
+│   ├── lib/components/     # UI components
+│   ├── lib/i18n/          # Polish/English translations
+│   └── lib/stores.ts       # State management
+├── src-tauri/              # Rust backend
+│   ├── src/commands/       # Tauri command handlers
+│   ├── src/database/       # Database layer
+│   ├── src/models/         # Data structures
+│   └── migrations/         # SQLite schema migrations
+├── .github/workflows/      # CI/CD for releases
+└── docs/                   # Architecture documentation
+```
+
+### Key Development Principles
+
+1. **Backend-Heavy Architecture**: All business logic in Rust, frontend as "dumb views"
+2. **Database as State**: SQLite holds all application state, no in-memory complexity
+3. **Command-Based**: Frontend calls domain commands (`contest_create`, `competitor_register`)
+4. **Optimistic Updates**: No real-time sync, no WebSockets, no event streams
+5. **Simplicity First**: Built for reliability, not feature completeness
+
+### Building and Testing
+
+```bash
+# Run all Rust checks (formatting, linting, tests)
+./check.sh
+
+# Frontend type checking
+bun run check
+
+# Build production release
+bun run tauri build
+
+# Database operations
+cd src-tauri
+cargo run -- db migrate    # Run migrations
+cargo run -- db backup     # Create backup
+cargo run -- db status     # Check migration status
+```
+
+### Database Development
+
+**Critical Rules:**
+- **Use SQLx compile-time macros** (`query!()`, `query_as!()`) - never runtime queries
+- **Never modify existing migrations** - always create new migration files
+- **Test migrations locally** before committing
+
+**Working with migrations:**
+```bash
+# Create new migration
+sqlx migrate add descriptive_name
+
+# Apply migrations
 cargo run -- db migrate
 
-# Check migration status
-cargo run -- db status
-
-# Create database backup
-cargo run -- db backup /path/to/backup.sqlite
-
-# Reset database (WARNING: destroys all data)
-cargo run -- db reset --confirm
+# Reset database (development only - destroys data)
+rm ~/.local/share/werewolf/werewolf.db
 ```
 
-### Development Database
-- **Location**: `~/.local/share/werewolf/werewolf.db` (Linux) or platform equivalent
-- **Schema**: Polish Powerlifting Federation compliant structure
-- **Migrations**: Automatic on app startup, manual via CLI commands
+### Internationalization
 
-## CLI Commands
+**All user-facing text must be translatable:**
+- ❌ `<button>Save</button>`
+- ✅ `<button>{$t('common.save')}</button>`
 
-After building the application, you can use these command-line features:
+**Translation files:**
+- `src/lib/i18n/locales/pl.json` - Polish (primary)
+- `src/lib/i18n/locales/en.json` - English
 
-```bash
-# Database operations
-./werewolf db migrate          # Run pending migrations
-./werewolf db status           # Show migration status
-./werewolf db backup <path>    # Create database backup
-./werewolf db reset --confirm  # Reset database (destroys data)
+### Contributing Guidelines
 
-# Export functionality (coming soon)
-./werewolf export contest-id csv   # Export results to CSV
-./werewolf export contest-id excel # Export to Excel format
+1. **Read existing code** - follow established patterns
+2. **Test your changes** - run `./check.sh` before committing
+3. **Keep it simple** - this is intentionally not a complex system
+4. **No feature creep** - check `REQUIREMENTS_AND_ROADMAP.md` for scope
+5. **Document breaking changes** - especially database schema changes
 
-# GUI mode (default)
-./werewolf                     # Start the GUI application
-./werewolf gui                 # Explicitly start GUI mode
-```
+See `CONTRIBUTING.md` for detailed contribution guidelines.
+
+---
 
 ## Powerlifting Scoring System
 
-The application uses authentic powerlifting federation scoring formulas:
+Built for **Polish Powerlifting Federation** standards with authentic scoring:
 
-### Reshel Coefficient
-- **Purpose**: Normalizes lifts across different bodyweight classes for fair comparison
-- **Usage**: Created by Greg Reshel for APF/WPC competitions
-- **Formula**: `points = best_lift × reshel_coefficient × mccullough_coefficient`
-- **Application**: Multiplies total weight lifted to create comparable scores across weight classes
+**Reshel Coefficient**: Normalizes lifts across bodyweight classes (APF/WPC standard)
+**McCullough Coefficient**: Age adjustments for Master lifters (40+ years)
+**Scoring Formula**: `points = total_weight × reshel_coefficient × mccullough_coefficient`
 
-### McCullough Coefficient  
-- **Purpose**: Age adjustment factor for Master lifters (40+ years old)
-- **Usage**: Applied in conjunction with bodyweight normalization (Reshel/Wilks/DOTS)
-- **Application**: Accounts for natural strength decline with age in competition scoring
-- **Note**: For Senior lifters, McCullough coefficient = 1.0 (no age adjustment)
-
-### Scoring Logic
-```
-If all attempts failed (all negative weights):
-  - Max Weight = 0
-  - Points = 0
-Else:
-  - Max Weight = highest successful attempt
-  - Points = max_weight × reshel_coeff × mccullough_coeff
-```
-
-### Competition Categories
+**Competition Categories:**
 - **Age Groups**: Junior (13/16/19/23), Senior, Veteran (40/50/60/70+)
-- **Weight Classes**: Gender-specific ranges (e.g., "DO 75 KG", "+ 140 KG")
+- **Weight Classes**: Gender-specific ("DO 75 KG", "+ 140 KG")
 - **Equipment**: Raw, Equipped (T), Single-ply (SM), Multi-ply (M)
 
-## Technology Stack
+**Results Logic:**
+- Failed attempts = 0 points (all negative weights)
+- Successful attempts = highest successful lift counts toward total
+- Ties broken by earliest successful attempt (or body weight)
 
-### Backend (Rust)
-- **tauri**: Desktop application framework
-- **sqlx**: Compile-time checked SQL queries with SQLite
-- **chrono**: Date/time handling with timezone support
-- **strum**: Enum string conversions and derive macros
-- **serde + serde_json**: JSON serialization for API and configuration
-- **thiserror**: Structured error handling with custom error types
-- **tracing ecosystem**: Structured logging with file rotation
-- **figment + toml**: Hierarchical configuration management
-- **directories**: XDG Base Directory specification compliance
-- **clap**: Command-line interface with subcommands
+---
 
-### Frontend (Svelte)
-- **Svelte**: Reactive UI framework without virtual DOM
-- **Custom stores**: Lightweight state management (no Redux complexity)
-- **No routing**: Simple view switching based on window context
-- **Frontend-only i18n**: Polish/English translation system
-- **Tailwind CSS**: Utility-first CSS with powerlifting-specific design system
-- **Bun**: All-in-one runtime (package manager + bundler + dev server)
+## Release Information
 
-### Development
-- **SQLite**: Local database with federation-compliant schema
-- **XDG directories**: Proper config/data/cache directory structure
-- **CLI integration**: Database operations and export functionality
+**Current Version**: 0.1.0 (active development)
+**Supported Platforms**: Windows 10/11, macOS (Intel/ARM), Linux (Ubuntu 20.04+)
+**Release Schedule**: Tagged releases trigger automatic builds via GitHub Actions
+**Code Signing**: None (expect OS warnings on first run - this is normal)
 
-## Recommended IDE Setup
+**Getting Updates:**
+- Watch this repository for release notifications
+- Download latest `.msi`/`.dmg`/`.deb` from Releases page
+- Automatic updates coming in future versions
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer) + [Svelte](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode)
+---
+
+## Support and Documentation
+
+**User Documentation**:
+- **Quick Start Guide**: This README
+- **Detailed Manual**: `docs/USER_GUIDE.md` (coming soon)
+- **FAQ**: `docs/FAQ.md` (coming soon)
+
+**Developer Documentation**:
+- **Architecture**: `docs/ARCHITECTURE.md`
+- **API Reference**: Generated from Rust docs
+- **Project Instructions**: `CLAUDE.md`
+- **Contributing Guide**: `CONTRIBUTING.md`
+
+**Getting Help**:
+- **Issues**: Report bugs via GitHub Issues
+- **Questions**: Start a GitHub Discussion
+- **Polish Language Support**: Native support, documentation in progress
+
+**This app exists because existing powerlifting software is either expensive, overcomplicated, or requires internet connection. We built something that just works.**
