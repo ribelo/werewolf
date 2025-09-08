@@ -1,5 +1,6 @@
 name: Release
 
+# Only runs when you push a version tag like v1.0.0, v0.2.1, etc.
 on:
   push:
     tags:

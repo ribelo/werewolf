@@ -284,7 +284,7 @@
     if (weightEditModal.lifter && weightEditModal.liftType) {
       await onUpdateAttempt(
         weightEditModal.lifter.registrationId,
-        weightEditModal.liftType,
+        weightEditModal.liftType as LiftType,
         weightEditModal.attemptNumber,
         weightEditModal.newWeight
       );

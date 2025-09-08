@@ -198,14 +198,18 @@ pub async fn registration_get_by_competitor_and_contest(
 ) -> Result<Option<Registration>, AppError> {
     tracing::info!(
         "registration_get_by_competitor_and_contest called for competitor: {}, contest: {}",
-        competitor_id, contest_id
+        competitor_id,
+        contest_id
     );
 
     let db_pool = state.db.lock().await;
     let db_pool = &*db_pool;
     let registration = queries::registrations::get_registration_by_competitor_and_contest(
-        db_pool, &competitor_id, &contest_id
-    ).await?;
+        db_pool,
+        &competitor_id,
+        &contest_id,
+    )
+    .await?;
 
     if let Some(reg) = &registration {
         Ok(Some(Registration {

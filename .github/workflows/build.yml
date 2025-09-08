@@ -15,29 +15,9 @@ env:
   RUST_BACKTRACE: 1
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: 'macos-latest' # for Arm based macs (M1 and above).
-            args: '--target aarch64-apple-darwin'
-            target: aarch64-apple-darwin
-            name: macos-arm64
-          - platform: 'macos-latest' # for Intel based macs.
-            args: '--target x86_64-apple-darwin'
-            target: x86_64-apple-darwin  
-            name: macos-x64
-          - platform: 'ubuntu-22.04'
-            args: ''
-            target: x86_64-unknown-linux-gnu
-            name: linux-x64
-          - platform: 'windows-latest'
-            args: '--target x86_64-pc-windows-msvc'
-            target: x86_64-pc-windows-msvc
-            name: windows-x64
-
-    runs-on: ${{ matrix.platform }}
+  # Quick build test on Linux only for faster feedback
+  quick-build:
+    runs-on: ubuntu-22.04
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -49,16 +29,13 @@ jobs:
 
     - name: Rust setup
       uses: dtolnay/rust-toolchain@stable
-      with:
-        targets: ${{ matrix.target }}
 
     - name: Rust cache
       uses: swatinem/rust-cache@v2
       with:
         workspaces: './src-tauri -> target'
 
-    - name: Install dependencies (ubuntu only)
-      if: matrix.platform == 'ubuntu-22.04'
+    - name: Install dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
@@ -69,9 +46,6 @@ jobs:
     - name: Build frontend
       run: bun run build
 
-    - name: Install Tauri CLI
-      run: bun add -g @tauri-apps/cli@latest
-
     - name: SQLx offline mode (prepare queries)
       working-directory: ./src-tauri
       run: |
@@ -81,25 +55,9 @@ jobs:
         fi
       shell: bash
 
-    - name: Build Tauri app
-      uses: tauri-apps/tauri-action@v0
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        RUSTC_WRAPPER: ''
-        RUSTFLAGS: '-C target-cpu=native'
-      with:
-        args: ${{ matrix.args }}
-        includeDebug: false
-
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v4
-      with:
-        name: werewolf-${{ matrix.name }}
-        path: |
-          src-tauri/target/release/bundle/*/*
-          src-tauri/target/${{ matrix.target }}/release/bundle/*/*
-        if-no-files-found: error
-        retention-days: 7
+    - name: Build Rust backend (check compilation)
+      working-directory: ./src-tauri
+      run: cargo build --release
 
   test:
     runs-on: ubuntu-22.04

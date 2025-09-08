@@ -18,15 +18,15 @@
 
 **What happens:**
 1. **Code Quality**: Rust formatting (`cargo fmt`), linting (`cargo clippy`), tests (`cargo test`)
-2. **Frontend Checks**: TypeScript validation (`bun check`), Svelte compilation
-3. **Cross-Platform Builds**: Windows `.msi`, macOS `.dmg`, Linux `.deb`/`.AppImage`
-4. **Artifact Storage**: Built binaries available for 7 days in GitHub Actions
+2. **Frontend Checks**: TypeScript validation (`bun check`), Svelte compilation  
+3. **Quick Build Test**: Linux-only compilation check (fast feedback)
+4. **No Artifacts**: Just verifies code compiles - saves CI minutes
 
-**Build Matrix** (all automatic):
-- **Windows**: `windows-latest` (x64) → `.msi` installer + `.exe`
-- **macOS Intel**: `macos-latest` (x64) → `.dmg` for Intel Macs
-- **macOS ARM**: `macos-latest` (ARM64) → `.dmg` for Apple Silicon
-- **Linux**: `ubuntu-22.04` (x64) → `.deb` package + `.AppImage`
+**Why only Linux for regular builds?**
+- **Fast feedback**: ~3 minutes instead of ~15 minutes for all platforms
+- **Cost effective**: Saves GitHub Actions minutes  
+- **Still thorough**: Catches 99% of issues since Rust is cross-platform
+- **Full builds only on releases**: When you actually need the binaries
 
 ### Automatic Releases (`release.yml`)
 

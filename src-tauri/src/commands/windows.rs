@@ -107,7 +107,11 @@ pub async fn window_update_display(
     app: AppHandle,
     lifter_data: DisplayLifterData,
 ) -> Result<String, AppError> {
-    tracing::info!("Updating display window with lifter: {} {}", lifter_data.competitor.first_name, lifter_data.competitor.last_name);
+    tracing::info!(
+        "Updating display window with lifter: {} {}",
+        lifter_data.competitor.first_name,
+        lifter_data.competitor.last_name
+    );
 
     if let Some(window) = app.get_webview_window("display") {
         window.emit("display-update", &lifter_data)?;

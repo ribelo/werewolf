@@ -129,10 +129,10 @@
         updatedAt: string;
       }>;
     };
-    squatBest: number | null;
-    benchBest: number | null;
-    deadliftBest: number | null;
-    total: number | null;
+    squatBest?: number;
+    benchBest?: number;
+    deadliftBest?: number;
+    total?: number;
   }
 
   enum ContestStatus {
