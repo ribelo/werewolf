@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        INSERT INTO competitors (id, first_name, last_name, birth_date, gender, club, city, notes, competition_order, photo_data, photo_format, photo_metadata)\n        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 12
+    },
+    "nullable": []
+  },
+  "hash": "7c3bd782eab19d2dd0e03c481a33fdd31bca512b0113520116e9817338d59f00"
+}

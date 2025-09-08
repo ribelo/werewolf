@@ -1,0 +1,92 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT \n            id as \"id!\", \n            name as \"name!\", \n            date as \"date!\", \n            location as \"location!\", \n            discipline as \"discipline!\", \n            status as \"status!\", \n            federation_rules, \n            competition_type, \n            organizer, \n            notes, \n            is_archived as \"is_archived!\", \n            created_at as \"created_at!\", \n            updated_at as \"updated_at!\"\n        FROM contests\n        WHERE id = ?\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "name!",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "date!",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "location!",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "discipline!",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "status!",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "federation_rules",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "competition_type",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "organizer",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "notes",
+        "ordinal": 9,
+        "type_info": "Text"
+      },
+      {
+        "name": "is_archived!",
+        "ordinal": 10,
+        "type_info": "Bool"
+      },
+      {
+        "name": "created_at!",
+        "ordinal": 11,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at!",
+        "ordinal": 12,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "e3a861615645cb957cd006fcc2341acd30de257186b93d47ab8e7c069ed6e9f7"
+}

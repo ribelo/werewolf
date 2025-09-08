@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        UPDATE contests\n        SET mens_bar_weight = ?, womens_bar_weight = ?, updated_at = ?\n        WHERE id = ?\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "bc5ad7e32bfa1bd832d65e5201e4b4707aedb1e9a13667ba43d3a47790313b79"
+}

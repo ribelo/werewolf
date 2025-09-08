@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM competitors WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "afecf8d1c17b5bd30121a53b0d16453c57afca9bb353c343fa9dd8d28e1068f3"
+}

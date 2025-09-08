@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT plate_weight, COALESCE(color, '#374151') as \"color!: String\"\n        FROM plate_sets\n        WHERE contest_id = ?\n        ORDER BY plate_weight DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "plate_weight",
+        "ordinal": 0,
+        "type_info": "Float"
+      },
+      {
+        "name": "color!: String",
+        "ordinal": 1,
+        "type_info": "Null"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "1d9dcc2abec2a26d29a6934a4a087eb513bad13ec6f168cd085807613a797ea1"
+}

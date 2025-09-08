@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        UPDATE contests\n        SET name = ?, date = ?, location = ?, discipline = ?, status = ?, federation_rules = ?, competition_type = ?, organizer = ?, notes = ?, is_archived = ?\n        WHERE id = ?\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 11
+    },
+    "nullable": []
+  },
+  "hash": "25db0bd0c15e0011cd319acaa0430f49886dd3fa2a97b15ad28f7cd3097ed442"
+}

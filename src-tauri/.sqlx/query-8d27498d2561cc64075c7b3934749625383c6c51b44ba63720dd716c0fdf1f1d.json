@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE competitors SET photo_data = NULL, photo_format = NULL, photo_metadata = NULL WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "8d27498d2561cc64075c7b3934749625383c6c51b44ba63720dd716c0fdf1f1d"
+}

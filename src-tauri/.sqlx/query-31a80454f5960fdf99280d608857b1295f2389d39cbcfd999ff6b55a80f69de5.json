@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT competition_order FROM competitors WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "competition_order",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "31a80454f5960fdf99280d608857b1295f2389d39cbcfd999ff6b55a80f69de5"
+}

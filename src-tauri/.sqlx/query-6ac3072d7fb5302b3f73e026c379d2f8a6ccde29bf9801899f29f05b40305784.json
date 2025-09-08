@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT contest_id, reshel_coefficient, mccullough_coefficient FROM registrations WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "contest_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "reshel_coefficient",
+        "ordinal": 1,
+        "type_info": "Float"
+      },
+      {
+        "name": "mccullough_coefficient",
+        "ordinal": 2,
+        "type_info": "Float"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "6ac3072d7fb5302b3f73e026c379d2f8a6ccde29bf9801899f29f05b40305784"
+}

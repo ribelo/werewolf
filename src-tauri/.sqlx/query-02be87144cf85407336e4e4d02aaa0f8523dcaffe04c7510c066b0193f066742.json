@@ -1,0 +1,110 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT \n            id as \"id!\", \n            registration_id as \"registration_id!\", \n            contest_id as \"contest_id!\", \n            best_bench, \n            best_squat, \n            best_deadlift,\n            total_weight as \"total_weight!\", \n            coefficient_points as \"coefficient_points!\", \n            place_open, \n            place_in_age_class, \n            place_in_weight_class,\n            is_disqualified as \"is_disqualified!\", \n            disqualification_reason, \n            broke_record as \"broke_record!\", \n            record_type, \n            calculated_at as \"calculated_at!\"\n        FROM results WHERE registration_id = ?\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "registration_id!",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "contest_id!",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "best_bench",
+        "ordinal": 3,
+        "type_info": "Float"
+      },
+      {
+        "name": "best_squat",
+        "ordinal": 4,
+        "type_info": "Float"
+      },
+      {
+        "name": "best_deadlift",
+        "ordinal": 5,
+        "type_info": "Float"
+      },
+      {
+        "name": "total_weight!",
+        "ordinal": 6,
+        "type_info": "Float"
+      },
+      {
+        "name": "coefficient_points!",
+        "ordinal": 7,
+        "type_info": "Float"
+      },
+      {
+        "name": "place_open",
+        "ordinal": 8,
+        "type_info": "Integer"
+      },
+      {
+        "name": "place_in_age_class",
+        "ordinal": 9,
+        "type_info": "Integer"
+      },
+      {
+        "name": "place_in_weight_class",
+        "ordinal": 10,
+        "type_info": "Integer"
+      },
+      {
+        "name": "is_disqualified!",
+        "ordinal": 11,
+        "type_info": "Bool"
+      },
+      {
+        "name": "disqualification_reason",
+        "ordinal": 12,
+        "type_info": "Text"
+      },
+      {
+        "name": "broke_record!",
+        "ordinal": 13,
+        "type_info": "Bool"
+      },
+      {
+        "name": "record_type",
+        "ordinal": 14,
+        "type_info": "Text"
+      },
+      {
+        "name": "calculated_at!",
+        "ordinal": 15,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "02be87144cf85407336e4e4d02aaa0f8523dcaffe04c7510c066b0193f066742"
+}

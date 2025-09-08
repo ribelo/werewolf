@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT photo_data FROM competitors WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "photo_data",
+        "ordinal": 0,
+        "type_info": "Blob"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "40c6595906bf72a0a71ae15150492e7312b2c443c1469bb36cc40c80e582d668"
+}

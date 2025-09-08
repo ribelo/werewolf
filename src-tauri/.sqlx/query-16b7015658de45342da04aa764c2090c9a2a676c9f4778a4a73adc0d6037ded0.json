@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        UPDATE results \n        SET place_in_weight_class = (\n            SELECT COUNT(*) + 1 \n            FROM results r2\n            JOIN registrations reg2 ON reg2.id = r2.registration_id\n            JOIN registrations reg1 ON reg1.id = results.registration_id\n            WHERE r2.contest_id = results.contest_id \n            AND reg2.weight_class_id = reg1.weight_class_id\n            AND r2.coefficient_points > results.coefficient_points\n            AND NOT r2.is_disqualified\n        )\n        WHERE contest_id = ? AND NOT is_disqualified\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "16b7015658de45342da04aa764c2090c9a2a676c9f4778a4a73adc0d6037ded0"
+}

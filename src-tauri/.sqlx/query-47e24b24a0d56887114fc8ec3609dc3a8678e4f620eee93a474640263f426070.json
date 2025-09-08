@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE competitors SET competition_order = -1 WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "47e24b24a0d56887114fc8ec3609dc3a8678e4f620eee93a474640263f426070"
+}

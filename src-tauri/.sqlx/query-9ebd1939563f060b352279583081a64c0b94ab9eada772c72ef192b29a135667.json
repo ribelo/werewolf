@@ -1,0 +1,98 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT \n            id as \"id!\", \n            first_name as \"first_name!\", \n            last_name as \"last_name!\", \n            birth_date as \"birth_date!\", \n            gender as \"gender!\",\n            club, \n            city, \n            notes, \n            competition_order as \"competition_order!\",\n            photo_data, \n            photo_format, \n            photo_metadata, \n            created_at as \"created_at!\", \n            updated_at as \"updated_at!\"\n        FROM competitors WHERE id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "first_name!",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "last_name!",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "birth_date!",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "gender!",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "club",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "city",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "notes",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "competition_order!",
+        "ordinal": 8,
+        "type_info": "Integer"
+      },
+      {
+        "name": "photo_data",
+        "ordinal": 9,
+        "type_info": "Blob"
+      },
+      {
+        "name": "photo_format",
+        "ordinal": 10,
+        "type_info": "Text"
+      },
+      {
+        "name": "photo_metadata",
+        "ordinal": 11,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at!",
+        "ordinal": 12,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at!",
+        "ordinal": 13,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "9ebd1939563f060b352279583081a64c0b94ab9eada772c72ef192b29a135667"
+}

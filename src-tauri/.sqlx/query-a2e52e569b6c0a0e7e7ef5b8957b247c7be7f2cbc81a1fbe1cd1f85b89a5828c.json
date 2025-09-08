@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        INSERT OR REPLACE INTO results \n        (id, registration_id, contest_id, best_bench, best_squat, best_deadlift, total_weight, coefficient_points)\n        VALUES (?, ?, ?, ?, ?, ?, ?, ?)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 8
+    },
+    "nullable": []
+  },
+  "hash": "a2e52e569b6c0a0e7e7ef5b8957b247c7be7f2cbc81a1fbe1cd1f85b89a5828c"
+}

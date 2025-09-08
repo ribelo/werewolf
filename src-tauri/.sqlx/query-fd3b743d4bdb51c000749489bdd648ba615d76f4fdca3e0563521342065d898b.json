@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        INSERT INTO contests (id, name, date, location, discipline, federation_rules, competition_type, organizer, notes)\n        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 9
+    },
+    "nullable": []
+  },
+  "hash": "fd3b743d4bdb51c000749489bdd648ba615d76f4fdca3e0563521342065d898b"
+}

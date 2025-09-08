@@ -1,0 +1,56 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT id, contest_id, plate_weight, quantity, color, created_at, updated_at\n        FROM plate_sets\n        WHERE contest_id = ?\n        ORDER BY plate_weight DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "contest_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "plate_weight",
+        "ordinal": 2,
+        "type_info": "Float"
+      },
+      {
+        "name": "quantity",
+        "ordinal": 3,
+        "type_info": "Integer"
+      },
+      {
+        "name": "color",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "updated_at",
+        "ordinal": 6,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "61274661cad731cd9e4d6bd04610da227a4c7b0bc6a090e83a1b163ba84f3967"
+}

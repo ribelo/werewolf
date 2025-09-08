@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        UPDATE competitors \n        SET first_name = ?, last_name = ?, birth_date = ?, gender = ?, club = ?, city = ?, notes = ?, photo_data = ?, photo_format = ?, photo_metadata = ?\n        WHERE id = ?\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 11
+    },
+    "nullable": []
+  },
+  "hash": "fbd1a0584b6cd9f8b3d8370ccd1fef1b3ab5b850afc9d2a931ce1d64381b5fea"
+}

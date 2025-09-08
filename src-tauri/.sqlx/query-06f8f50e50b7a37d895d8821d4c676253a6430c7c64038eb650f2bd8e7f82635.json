@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE competitors SET competition_order = competition_order - 1 \n             WHERE competition_order > ? AND competition_order <= ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "06f8f50e50b7a37d895d8821d4c676253a6430c7c64038eb650f2bd8e7f82635"
+}
