@@ -166,6 +166,7 @@ pub async fn run() {
             commands::registration_create,
             commands::registration_list,
             commands::registration_get,
+            commands::registration_get_by_competitor_and_contest,
             commands::registration_update,
             commands::registration_delete,
             // Attempt management

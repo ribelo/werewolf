@@ -2,18 +2,36 @@
   import { onMount } from 'svelte';
   import { _ } from 'svelte-i18n';
   import { invoke } from '@tauri-apps/api/core';
+  import { getCurrentWindow } from '@tauri-apps/api/window';
   import { appView, showHealthWarning, systemHealth } from './lib/stores';
   import ContestWizard from './lib/components/ContestWizard.svelte';
   import ContestView from './lib/components/ContestView.svelte';
   import CustomTitlebar from './lib/components/CustomTitlebar.svelte';
   import SettingsView from './lib/components/SettingsView.svelte';
   import SystemStatusView from './lib/components/SystemStatusView.svelte';
+  import DisplayScreen from './lib/components/DisplayScreen.svelte';
   import { Settings, Trophy, BarChart3, AlertTriangle } from 'lucide-svelte';
 
   console.log('🔧 App.svelte script executing');
 
   onMount(async () => {
     console.log('🏋️ App.svelte mounted');
+    
+    // Check if we're in the display window and route accordingly
+    try {
+      const currentWindow = getCurrentWindow();
+      const windowLabel = currentWindow.label;
+      console.log('Current window label:', windowLabel);
+      
+      if (windowLabel === 'display') {
+        console.log('Display window detected, routing to displayScreen');
+        appView.set('displayScreen');
+        return; // Skip health check for display window
+      }
+    } catch (err) {
+      console.error('Failed to get window label:', err);
+    }
+    
     await checkSystemHealth();
   });
 
@@ -59,25 +77,12 @@
   }
 </script>
 
-<!-- Custom Titlebar -->
-<CustomTitlebar />
+{#if $appView !== 'displayScreen'}
+  <!-- Custom Titlebar -->
+  <CustomTitlebar />
+{/if}
 
-<div class="min-h-screen bg-main-bg flex flex-col" style="padding-top: 40px;">
-  <!-- Header -->
-  <header class="container-full py-3 border-b-2 border-border-color">
-    <div class="flex justify-between items-center">
-      <div class="flex-1"></div>
-      <div class="text-center">
-        <h1 class="text-h1 text-text-primary">
-          {$_('app.title')}
-        </h1>
-        <p class="text-caption text-text-secondary mt-2">
-          {$_('app.subtitle')}
-        </p>
-      </div>
-      <div class="flex-1"></div>
-    </div>
-  </header>
+<div class="min-h-screen bg-main-bg flex flex-col {$appView !== 'displayScreen' ? 'pt-10' : ''}">
 
   <!-- Health Warning Banner -->
   {#if $showHealthWarning && $appView !== 'systemStatus'}
@@ -170,13 +175,17 @@
       <ContestView />
     {:else if $appView === 'settings'}
       <SettingsView />
+    {:else if $appView === 'displayScreen'}
+      <DisplayScreen />
     {/if}
   </main>
 
-  <!-- Footer -->
-  <footer class="container-full py-3 border-t-2 border-border-color">
-    <p class="text-caption text-center text-text-secondary">
-      {$_('messages.built_for_club')}
-    </p>
-  </footer>
+  {#if $appView !== 'displayScreen'}
+    <!-- Footer -->
+    <footer class="container-full py-3 border-t-2 border-border-color">
+      <p class="text-caption text-center text-text-secondary">
+        {$_('messages.built_for_club')}
+      </p>
+    </footer>
+  {/if}
 </div>

@@ -1,6 +1,6 @@
 import { writable } from 'svelte/store';
 
-export type AppView = 'mainMenu' | 'contestWizard' | 'contestView' | 'settings' | 'systemStatus';
+export type AppView = 'mainMenu' | 'contestWizard' | 'contestView' | 'settings' | 'systemStatus' | 'displayScreen';
 
 export const appView = writable<AppView>('mainMenu');
 

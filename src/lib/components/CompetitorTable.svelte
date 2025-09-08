@@ -1,5 +1,6 @@
 <script lang="ts">
   import { _ } from 'svelte-i18n';
+  import { Hash, X, Cast } from 'lucide-svelte';
   import CompetitorThumbnail from './CompetitorThumbnail.svelte';
 
   // Props
@@ -52,6 +53,7 @@
     benchBest: number | null;
     deadliftBest: number | null;
     total: number | null;
+    points: number | null;
   }> = [];
 
   export let weightClasses: Array<{ id: string; name: string; minWeight: number | null; maxWeight: number | null; }> = [];
@@ -78,6 +80,8 @@
   export let onWeightInputHover: (event: MouseEvent, registrationId: string, weight: number) => Promise<void> = async () => {};
   export let onWeightInputLeave: () => void = () => {};
   export let onWeightInputMouseMove: (event: MouseEvent) => void = () => {};
+  export let onShowLiftOnDisplay: (lifter: any, liftType: LiftType, attemptNumber: number) => void = () => {};
+  export let currentDisplayedLift: { lifterId: string; liftType: LiftType; attemptNumber: number } | null = null;
   export let weightIncrement: number = 2.5;
 
   // Sorting state
@@ -88,6 +92,16 @@
   // Drag state
   let draggedIndex: number = -1;
   let dragOverIndex: number = -1;
+
+  // Weight edit modal state
+  let weightEditModal = {
+    show: false,
+    lifter: null as any,
+    liftType: null as string | null,
+    attemptNumber: 0,
+    currentWeight: 0,
+    newWeight: 0
+  };
 
   // Helper functions
   function getAge(lifter: any): number {
@@ -129,7 +143,7 @@
 
   function getAttemptDisplayText(attempt: any): string {
     if (!attempt || attempt.weight === null) return '-';
-    return `${attempt.weight}`;
+    return attempt.weight.toFixed(1);
   }
 
   function getAttemptStatusClass(attempt: any): string {
@@ -249,6 +263,46 @@
       dragOverIndex = -1;
     }
   }
+
+  // Weight edit modal functions
+  function openWeightEditModal(lifter: any, liftType: string, attemptNumber: number, currentWeight: number) {
+    weightEditModal = {
+      show: true,
+      lifter,
+      liftType,
+      attemptNumber,
+      currentWeight,
+      newWeight: currentWeight
+    };
+  }
+
+  function closeWeightEditModal() {
+    weightEditModal.show = false;
+  }
+
+  async function saveWeightFromModal() {
+    if (weightEditModal.lifter && weightEditModal.liftType) {
+      await onUpdateAttempt(
+        weightEditModal.lifter.registrationId,
+        weightEditModal.liftType,
+        weightEditModal.attemptNumber,
+        weightEditModal.newWeight
+      );
+    }
+    closeWeightEditModal();
+  }
+
+  function adjustWeight(delta: number) {
+    weightEditModal.newWeight = Math.max(0, weightEditModal.newWeight + delta);
+  }
+
+  function handleModalKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') {
+      closeWeightEditModal();
+    } else if (event.key === 'Enter') {
+      saveWeightFromModal();
+    }
+  }
 </script>
 
 <div class="overflow-x-auto">
@@ -258,11 +312,11 @@
         <!-- Order Column - Sortable -->
         <th 
           rowspan="2" 
-          class="py-1 px-2 border border-border-color text-center w-16 cursor-pointer hover:bg-slate-600 {sortBy === 'order' ? 'bg-slate-700' : ''}"
+          class="py-1 px-1 border border-border-color text-center w-12 cursor-pointer hover:bg-slate-600 {sortBy === 'order' ? 'bg-slate-700' : ''}"
           on:click={() => handleSort('order')}
         >
           <div class="flex items-center justify-center gap-1">
-            Order
+            <Hash size={14} />
             {#if sortBy === 'order'}
               <span class="text-xs">{sortDirection === 'asc' ? '▲' : '▼'}</span>
             {/if}
@@ -271,7 +325,7 @@
         <!-- Lifter Column - Sortable -->
         <th 
           rowspan="2" 
-          class="py-1 px-2 border border-border-color text-left min-w-[200px] cursor-pointer hover:bg-slate-600 {sortBy === 'name' ? 'bg-slate-700' : ''}"
+          class="py-1 px-1 border border-border-color text-left cursor-pointer hover:bg-slate-600 {sortBy === 'name' ? 'bg-slate-700' : ''}"
           on:click={() => handleSort('name')}
         >
           <div class="flex items-center gap-1">
@@ -284,7 +338,7 @@
         <!-- Age Column - Sortable -->
         <th 
           rowspan="2" 
-          class="py-1 px-2 border border-border-color text-center w-16 cursor-pointer hover:bg-slate-600 {sortBy === 'age' ? 'bg-slate-700' : ''}"
+          class="py-1 px-1 border border-border-color text-center w-12 cursor-pointer hover:bg-slate-600 {sortBy === 'age' ? 'bg-slate-700' : ''}"
           on:click={() => handleSort('age')}
         >
           <div class="flex items-center justify-center gap-1">
@@ -297,7 +351,7 @@
         <!-- Weight Column - Sortable -->
         <th 
           rowspan="2" 
-          class="py-1 px-2 border border-border-color text-center w-20 cursor-pointer hover:bg-slate-600 {sortBy === 'weight' ? 'bg-slate-700' : ''}"
+          class="py-1 px-1 border border-border-color text-center w-16 cursor-pointer hover:bg-slate-600 {sortBy === 'weight' ? 'bg-slate-700' : ''}"
           on:click={() => handleSort('weight')}
         >
           <div class="flex items-center justify-center gap-1">
@@ -310,7 +364,7 @@
         <!-- Category Column - Sortable -->
         <th 
           rowspan="2" 
-          class="py-1 px-2 border border-border-color text-center w-24 cursor-pointer hover:bg-slate-600 {sortBy === 'class' ? 'bg-slate-700' : ''}"
+          class="py-1 px-1 border border-border-color text-center w-20 cursor-pointer hover:bg-slate-600 {sortBy === 'class' ? 'bg-slate-700' : ''}"
           on:click={() => handleSort('class')}
         >
           <div class="flex items-center justify-center gap-1">
@@ -320,12 +374,10 @@
             {/if}
           </div>
         </th>
-        <!-- Points -->
-        <th rowspan="2" class="py-1 px-2 border border-border-color text-center w-16">{$_('results.points')}</th>
         <!-- Squat Column - Sortable -->
         <th 
           colspan="3" 
-          class="py-1 px-2 border border-border-color text-center cursor-pointer hover:bg-slate-600 {sortBy === 'squat_best' ? 'bg-slate-700' : ''}"
+          class="py-1 px-1 border border-border-color text-center cursor-pointer hover:bg-slate-600 {sortBy === 'squat_best' ? 'bg-slate-700' : ''}"
           on:click={() => handleSort('squat_best')}
         >
           <div class="flex items-center justify-center gap-1">
@@ -338,7 +390,7 @@
         <!-- Bench Column - Sortable -->
         <th 
           colspan="3" 
-          class="py-1 px-2 border border-border-color text-center cursor-pointer hover:bg-slate-600 {sortBy === 'bench_best' ? 'bg-slate-700' : ''}"
+          class="py-1 px-1 border border-border-color text-center cursor-pointer hover:bg-slate-600 {sortBy === 'bench_best' ? 'bg-slate-700' : ''}"
           on:click={() => handleSort('bench_best')}
         >
           <div class="flex items-center justify-center gap-1">
@@ -351,7 +403,7 @@
         <!-- Deadlift Column - Sortable -->
         <th 
           colspan="3" 
-          class="py-1 px-2 border border-border-color text-center cursor-pointer hover:bg-slate-600 {sortBy === 'deadlift_best' ? 'bg-slate-700' : ''}"
+          class="py-1 px-1 border border-border-color text-center cursor-pointer hover:bg-slate-600 {sortBy === 'deadlift_best' ? 'bg-slate-700' : ''}"
           on:click={() => handleSort('deadlift_best')}
         >
           <div class="flex items-center justify-center gap-1">
@@ -364,7 +416,7 @@
         <!-- Total Column - Sortable -->
         <th 
           rowspan="2" 
-          class="py-1 px-2 border border-border-color text-center cursor-pointer hover:bg-slate-600 {sortBy === 'total' ? 'bg-slate-700' : ''}"
+          class="py-1 px-1 border border-border-color text-center cursor-pointer hover:bg-slate-600 {sortBy === 'total' ? 'bg-slate-700' : ''}"
           on:click={() => handleSort('total')}
         >
           <div class="flex items-center justify-center gap-1">
@@ -374,17 +426,19 @@
             {/if}
           </div>
         </th>
+        <!-- Points -->
+        <th rowspan="2" class="py-1 px-1 border border-border-color text-center w-12">Pkt</th>
       </tr>
       <tr>
         <!-- Attempt headers -->
         {#each [1, 2, 3] as i}
-          <th class="py-1 px-2 border border-border-color text-center text-sm">{$_('contest_view.attempt_ordinal_' + i)}</th>
+          <th class="py-1 px-1 border border-border-color text-center text-sm min-w-[60px]">{$_('contest_view.attempt_ordinal_' + i)}</th>
         {/each}
         {#each [1, 2, 3] as i}
-          <th class="py-1 px-2 border border-border-color text-center text-sm">{$_('contest_view.attempt_ordinal_' + i)}</th>
+          <th class="py-1 px-1 border border-border-color text-center text-sm min-w-[60px]">{$_('contest_view.attempt_ordinal_' + i)}</th>
         {/each}
          {#each [1, 2, 3] as i}
-          <th class="py-1 px-2 border border-border-color text-center text-sm">{$_('contest_view.attempt_ordinal_' + i)}</th>
+          <th class="py-1 px-1 border border-border-color text-center text-sm min-w-[60px]">{$_('contest_view.attempt_ordinal_' + i)}</th>
         {/each}
       </tr>
     </thead>
@@ -402,7 +456,7 @@
           on:drop={(e) => handleDrop(e, index)}
         >
           <!-- Order Column -->
-          <td class="py-1 px-2 border border-border-color text-center font-bold">
+          <td class="py-1 px-1 border border-border-color text-center font-bold">
             <div 
               class="flex items-center justify-center gap-2 {sortBy === 'order' ? 'cursor-move' : ''}"
               draggable={sortBy === 'order'}
@@ -415,7 +469,7 @@
           </td>
           
           <!-- Lifter Info -->
-          <td class="py-1 px-2 border border-border-color text-text-primary font-semibold">
+          <td class="py-1 px-1 border border-border-color text-text-primary font-semibold">
             <div class="flex items-center space-x-3">
               <CompetitorThumbnail 
                 competitor={lifter.competitor} 
@@ -434,34 +488,35 @@
           </td>
 
           <!-- Age -->
-          <td class="py-1 px-2 border border-border-color text-center text-text-primary">
+          <td class="py-1 px-1 border border-border-color text-center text-text-primary">
             {getAge(lifter)}
           </td>
 
           <!-- Body Weight -->
-          <td class="py-1 px-2 border border-border-color text-center text-text-primary">
+          <td class="py-1 px-1 border border-border-color text-center text-text-primary">
             {lifter.registration.bodyweight} kg
           </td>
 
           <!-- Category -->
-          <td class="py-1 px-2 border border-border-color text-center text-text-primary">
+          <td class="py-1 px-1 border border-border-color text-center text-text-primary">
             <div class="flex flex-col text-xs">
               <span>{getWeightClassName(lifter.registration.weightClassId)}</span>
               <span class="text-text-secondary">{getAgeCategoryName(lifter.registration.ageCategoryId)}</span>
             </div>
           </td>
 
-          <!-- Points -->
-          <td class="py-1 px-2 border border-border-color text-center text-text-primary">
-            -
-          </td>
 
           <!-- Interactive Attempts - Restored full functionality! -->
           {#each [LiftType.Squat, LiftType.Bench, LiftType.Deadlift] as liftType}
             {#each [1, 2, 3] as attemptNumber}
               {@const attempt = getAttempt(lifter, liftType, attemptNumber)}
               <td 
-                class="py-1 px-2 border border-border-color text-center"
+                class="py-1 px-1 border border-border-color text-center min-w-[60px] relative {
+                  currentDisplayedLift?.lifterId === lifter.registrationId && 
+                  currentDisplayedLift?.liftType === liftType && 
+                  currentDisplayedLift?.attemptNumber === attemptNumber 
+                    ? 'ring-2 ring-blue-500 ring-inset' : ''
+                }"
                 on:contextmenu={(e) => {
                   if (attempt) {
                     e.stopPropagation();
@@ -470,41 +525,41 @@
                 }}
               >
                 <div class="flex items-center justify-center">
-                  <button
-                    on:click={() => onDecrementWeight(lifter.registrationId, liftType, attemptNumber, attempt?.weight || 0)}
-                    class="w-4 h-4 flex items-center justify-center text-xs text-gray-400 hover:text-text-primary transition-colors"
-                    title="Decrease weight by {weightIncrement}kg"
-                  >
-                    −
-                  </button>
+                  {#if attempt}
+                    <button
+                      on:click={() => onStatusClick(attempt)}
+                      class="mr-1 text-lg hover:scale-110 transition-transform cursor-pointer {attempt.status === 'Successful' ? 'text-green-400' : attempt.status === 'Failed' ? 'text-red-400' : 'text-gray-400'}"
+                      title="Click to cycle status (Pending → Success → Failed → Pending)"
+                    >
+                      {attempt.status === 'Successful' ? '✓' : attempt.status === 'Failed' ? '✗' : '●'}
+                    </button>
+                  {/if}
                   <input
                     type="number"
-                    value={attempt?.weight || ''}
+                    value={attempt?.weight ? attempt.weight.toFixed(1) : ''}
                     on:change={(e) => onUpdateAttempt(lifter.registrationId, liftType, attemptNumber, parseFloat(e.currentTarget.value) || 0)}
+                    on:dblclick={() => openWeightEditModal(lifter, liftType, attemptNumber, attempt?.weight || 0)}
                     on:wheel={(e) => onWeightWheel(e, lifter.registrationId, liftType, attemptNumber, attempt?.weight || 0)}
                     on:mousedown={(e) => onWeightDragStart(e, lifter.registrationId, liftType, attemptNumber, attempt?.weight || 0)}
                     on:mouseenter={(e) => onWeightInputHover(e, lifter.registrationId, attempt?.weight || 0)}
                     on:mousemove={onWeightInputMouseMove}
                     on:mouseleave={onWeightInputLeave}
-                    class="w-8 table-input-field text-center font-mono cursor-ns-resize select-none"
+                    class="w-16 table-input-field text-center font-mono cursor-ns-resize select-none"
                     min="0"
                     step={weightIncrement}
                     placeholder="-"
+                    title="Double-click to open weight editor"
                   />
-                  <button
-                    on:click={() => onIncrementWeight(lifter.registrationId, liftType, attemptNumber, attempt?.weight || 0)}
-                    class="w-4 h-4 flex items-center justify-center text-xs text-gray-400 hover:text-text-primary transition-colors"
-                    title="Increase weight by {weightIncrement}kg"
-                  >
-                    +
-                  </button>
-                  {#if attempt}
+                  {#if attempt?.weight > 0}
                     <button
-                      on:click={() => onStatusClick(attempt)}
-                      class="ml-2 text-lg hover:scale-110 transition-transform cursor-pointer {attempt.status === 'Successful' ? 'text-green-400' : attempt.status === 'Failed' ? 'text-red-400' : 'text-gray-400'}"
-                      title="Click to cycle status (Pending → Success → Failed → Pending)"
+                      on:click={(e) => {
+                        e.stopPropagation();
+                        onShowLiftOnDisplay(lifter, liftType, attemptNumber);
+                      }}
+                      class="ml-1 text-gray-400 hover:text-blue-400 transition-colors opacity-40 hover:opacity-100"
+                      title={$_('contest_view.show_on_display')}
                     >
-                      {attempt.status === 'Successful' ? '✓' : attempt.status === 'Failed' ? '✗' : '●'}
+                      <Cast size={14} />
                     </button>
                   {/if}
                 </div>
@@ -513,11 +568,80 @@
           {/each}
 
           <!-- Total -->
-          <td class="py-1 px-2 border border-border-color text-center font-bold text-text-primary">
-            {lifter.total || '-'}
+          <td class="py-1 px-1 border border-border-color text-center font-bold text-text-primary">
+            {lifter.total ? lifter.total.toFixed(1) : '-'}
           </td>
+
+          <!-- Points -->
+          <td class="py-1 px-1 border border-border-color text-center text-text-primary">
+            {lifter.points ? lifter.points.toFixed(2) : '-'}
+          </td>
+
         </tr>
       {/each}
     </tbody>
   </table>
 </div>
+
+<!-- Weight Edit Modal -->
+{#if weightEditModal.show}
+  <div class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50" on:click={closeWeightEditModal} role="presentation">
+    <div 
+      class="bg-card-bg border-2 border-border-color rounded-lg p-6 w-96" 
+      on:click|stopPropagation 
+      role="dialog" 
+      aria-modal="true"
+      on:keydown={handleModalKeydown}
+    >
+      <!-- Header -->
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold text-text-primary">{$_('contest_view.edit_weight')}</h3>
+        <button 
+          on:click={closeWeightEditModal}
+          class="text-text-secondary hover:text-text-primary transition-colors"
+          aria-label="Close"
+        >
+          <X size={20} />
+        </button>
+      </div>
+
+      <!-- Lifter Info -->
+      <div class="mb-4 text-sm text-text-secondary">
+        {weightEditModal.lifter?.competitor?.firstName} {weightEditModal.lifter?.competitor?.lastName} - 
+        {$_(`contest_view.${weightEditModal.liftType?.toLowerCase()}`)} {$_('contest_view.attempt')} {weightEditModal.attemptNumber}
+      </div>
+
+      <!-- Weight Input -->
+      <div class="mb-6">
+        <input 
+          bind:value={weightEditModal.newWeight}
+          type="number" 
+          step="2.5" 
+          min="0"
+          class="w-full text-3xl text-center font-mono bg-element-bg border-2 border-border-color rounded-lg py-4 px-6 text-text-primary focus:border-primary-red focus:outline-none"
+          placeholder="0.0"
+        />
+      </div>
+
+      <!-- Quick Adjustments -->
+      <div class="grid grid-cols-6 gap-2 mb-6">
+        <button on:click={() => adjustWeight(-10)} class="btn-secondary text-sm py-2">-10</button>
+        <button on:click={() => adjustWeight(-5)} class="btn-secondary text-sm py-2">-5</button>
+        <button on:click={() => adjustWeight(-2.5)} class="btn-secondary text-sm py-2">-2.5</button>
+        <button on:click={() => adjustWeight(2.5)} class="btn-secondary text-sm py-2">+2.5</button>
+        <button on:click={() => adjustWeight(5)} class="btn-secondary text-sm py-2">+5</button>
+        <button on:click={() => adjustWeight(10)} class="btn-secondary text-sm py-2">+10</button>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex justify-end gap-3">
+        <button on:click={closeWeightEditModal} class="btn-secondary">
+          {$_('general.cancel')}
+        </button>
+        <button on:click={saveWeightFromModal} class="btn-primary">
+          {$_('general.save')}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}

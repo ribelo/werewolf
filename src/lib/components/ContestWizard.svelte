@@ -30,6 +30,8 @@
     birthDate: string;
     gender: string;
     bodyweight: number;
+    rackHeightSquat: number;
+    rackHeightBench: number;
     photoBase64?: string;
     photoFilename?: string;
   }
@@ -58,6 +60,8 @@
     birthDate: '',
     gender: 'Male',
     bodyweight: 0,
+    rackHeightSquat: 12, // Default for male
+    rackHeightBench: 5,  // Default for male
   };
 
   // --- Functions ---
@@ -128,6 +132,8 @@
       birthDate: '',
       gender: 'Male',
       bodyweight: 0,
+      rackHeightSquat: 12, // Default for male
+      rackHeightBench: 5,  // Default for male
     };
   }
 
@@ -160,6 +166,17 @@
     const delta = event.deltaY > 0 ? -0.1 : 0.1; // Reverse direction for intuitive scrolling
     const newValue = Math.max(0, currentValue + delta);
     newCompetitor.bodyweight = parseFloat(newValue.toFixed(1));
+  }
+
+  // Update rack height defaults when gender changes
+  function handleGenderChange() {
+    if (newCompetitor.gender === 'Male') {
+      newCompetitor.rackHeightSquat = 12;
+      newCompetitor.rackHeightBench = 5;
+    } else {
+      newCompetitor.rackHeightSquat = 10;
+      newCompetitor.rackHeightBench = 4;
+    }
   }
 
   async function createContest() {
@@ -276,6 +293,8 @@
       birthDate: '',
       gender: 'Male',
       bodyweight: 0,
+      rackHeightSquat: 12, // Default for male
+      rackHeightBench: 5,  // Default for male
     };
     validationErrors = {};
     errorMessage = '';
@@ -418,7 +437,7 @@
         </div>
         <div>
           <label for="competitor-gender" class="input-label">{$_('contest_view.gender')}</label>
-          <select id="competitor-gender" class="input-field" bind:value={newCompetitor.gender}>
+          <select id="competitor-gender" class="input-field" bind:value={newCompetitor.gender} on:change={handleGenderChange}>
             <option value="Male">{$_('contest_view.male')}</option>
             <option value="Female">{$_('contest_view.female')}</option>
           </select>
@@ -434,6 +453,34 @@
             on:wheel={handleBodyweightWheel}
             placeholder={$_('general.bodyweight_placeholder')}
           />
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label for="competitor-rack-squat" class="input-label">{$_('contest_view.rack_height_squat')}</label>
+            <input 
+              type="number" 
+              step="1" 
+              min="1" 
+              max="20" 
+              id="competitor-rack-squat" 
+              class="input-field" 
+              bind:value={newCompetitor.rackHeightSquat}
+              title={$_('contest_view.rack_height_help')}
+            />
+          </div>
+          <div>
+            <label for="competitor-rack-bench" class="input-label">{$_('contest_view.rack_height_bench')}</label>
+            <input 
+              type="number" 
+              step="1" 
+              min="1" 
+              max="20" 
+              id="competitor-rack-bench" 
+              class="input-field" 
+              bind:value={newCompetitor.rackHeightBench}
+              title={$_('contest_view.rack_height_help')}
+            />
+          </div>
         </div>
         <div>
           <label for="competitor-photo" class="input-label">{$_('contest_view.photo')} (Optional)</label>

@@ -191,6 +191,47 @@ pub async fn registration_update(
 }
 
 #[tauri::command]
+pub async fn registration_get_by_competitor_and_contest(
+    state: State<'_, AppState>,
+    competitor_id: String,
+    contest_id: String,
+) -> Result<Option<Registration>, AppError> {
+    tracing::info!(
+        "registration_get_by_competitor_and_contest called for competitor: {}, contest: {}",
+        competitor_id, contest_id
+    );
+
+    let db_pool = state.db.lock().await;
+    let db_pool = &*db_pool;
+    let registration = queries::registrations::get_registration_by_competitor_and_contest(
+        db_pool, &competitor_id, &contest_id
+    ).await?;
+
+    if let Some(reg) = &registration {
+        Ok(Some(Registration {
+            id: reg.id.clone(),
+            contest_id: reg.contest_id.clone(),
+            competitor_id: reg.competitor_id.clone(),
+            age_category_id: reg.age_category_id.clone(),
+            weight_class_id: reg.weight_class_id.clone(),
+            equipment_m: reg.equipment_m,
+            equipment_sm: reg.equipment_sm,
+            equipment_t: reg.equipment_t,
+            bodyweight: reg.bodyweight,
+            lot_number: reg.lot_number.clone(),
+            personal_record_at_entry: reg.personal_record_at_entry,
+            reshel_coefficient: reg.reshel_coefficient,
+            mccullough_coefficient: reg.mccullough_coefficient,
+            rack_height_squat: reg.rack_height_squat,
+            rack_height_bench: reg.rack_height_bench,
+            created_at: reg.created_at.clone(),
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
+#[tauri::command]
 pub async fn registration_delete(
     state: State<'_, AppState>,
     registration_id: String,

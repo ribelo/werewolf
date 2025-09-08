@@ -17,6 +17,7 @@
   }
 
   export let competitor: Competitor;
+  export let contestId: string;
   export let onClose: () => void = () => {};
   export let onSave: () => void = () => {};
 
@@ -29,12 +30,16 @@
     city: competitor.city || '',
     notes: competitor.notes || '',
     photoBase64: competitor.photoBase64 || undefined,
-    photoFilename: undefined as string | undefined
+    photoFilename: undefined as string | undefined,
+    rackHeightSquat: 0,
+    rackHeightBench: 0
   };
 
   let isLoading = false;
+  let loadingRegistration = true;
   let error = '';
   let successMessage = '';
+  let registration: any = null;
 
   function handlePhotoSelected(event: CustomEvent<{ base64: string; filename: string }>) {
     editForm.photoBase64 = event.detail.base64;
@@ -46,6 +51,41 @@
     editForm.photoFilename = undefined;
   }
 
+  // Load registration data on mount
+  async function loadRegistrationData() {
+    try {
+      loadingRegistration = true;
+      registration = await invoke('registration_get_by_competitor_and_contest', {
+        competitorId: competitor.id,
+        contestId: contestId
+      });
+      
+      if (registration) {
+        // Set default rack heights based on gender if not set
+        const defaultSquat = competitor.gender === 'Male' ? 12 : 10;
+        const defaultBench = competitor.gender === 'Male' ? 5 : 4;
+        
+        editForm.rackHeightSquat = registration.rackHeightSquat || defaultSquat;
+        editForm.rackHeightBench = registration.rackHeightBench || defaultBench;
+      } else {
+        // No registration found, use defaults
+        const defaultSquat = competitor.gender === 'Male' ? 12 : 10;
+        const defaultBench = competitor.gender === 'Male' ? 5 : 4;
+        editForm.rackHeightSquat = defaultSquat;
+        editForm.rackHeightBench = defaultBench;
+      }
+    } catch (err) {
+      console.error('Failed to load registration data:', err);
+      // Use defaults on error
+      const defaultSquat = competitor.gender === 'Male' ? 12 : 10;
+      const defaultBench = competitor.gender === 'Male' ? 5 : 4;
+      editForm.rackHeightSquat = defaultSquat;
+      editForm.rackHeightBench = defaultBench;
+    } finally {
+      loadingRegistration = false;
+    }
+  }
+
   async function handleSave() {
     // Basic validation
     if (!editForm.firstName.trim() || !editForm.lastName.trim() || !editForm.birthDate) {
@@ -53,11 +93,21 @@
       return;
     }
 
+    // Validate rack heights
+    if (editForm.rackHeightSquat < 1 || editForm.rackHeightSquat > 20) {
+      error = $_('validation.rack_height_validation');
+      return;
+    }
+    if (editForm.rackHeightBench < 1 || editForm.rackHeightBench > 20) {
+      error = $_('validation.rack_height_validation');
+      return;
+    }
+
     isLoading = true;
     error = '';
 
     try {
-      // Update competitor
+      // Update competitor profile
       await invoke('competitor_update', {
         competitorId: competitor.id,
         competitor: {
@@ -69,6 +119,27 @@
           photoFilename: editForm.photoFilename || null,
         }
       });
+
+      // Update rack heights if registration exists
+      if (registration) {
+        await invoke('registration_update', {
+          registration_id: registration.id,
+          registration: {
+            contest_id: registration.contest_id,
+            competitor_id: registration.competitor_id,
+            age_category_id: registration.age_category_id,
+            weight_class_id: registration.weight_class_id,
+            equipment_m: registration.equipment_m,
+            equipment_sm: registration.equipment_sm,
+            equipment_t: registration.equipment_t,
+            bodyweight: registration.bodyweight,
+            lot_number: registration.lot_number,
+            personal_record_at_entry: registration.personal_record_at_entry,
+            rack_height_squat: editForm.rackHeightSquat,
+            rack_height_bench: editForm.rackHeightBench
+          }
+        });
+      }
 
       successMessage = $_('competitor.update_success');
       setTimeout(() => {
@@ -89,8 +160,9 @@
     }
   }
 
-  onMount(() => {
+  onMount(async () => {
     document.body.style.overflow = 'hidden';
+    await loadRegistrationData();
   });
 
   onDestroy(() => {
@@ -208,6 +280,45 @@
             disabled={isLoading}
           ></textarea>
         </div>
+
+        <!-- Rack Heights -->
+        {#if !loadingRegistration}
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="input-label" for="rackHeightSquat">{$_('general.rack_height_squat')}</label>
+              <input
+                id="rackHeightSquat"
+                type="number"
+                min="1"
+                max="20"
+                class="input-field"
+                bind:value={editForm.rackHeightSquat}
+                placeholder={$_('general.rack_height_help')}
+                disabled={isLoading}
+              />
+              <p class="text-sm text-text-secondary mt-1">{$_('general.rack_height_help')}</p>
+            </div>
+            <div>
+              <label class="input-label" for="rackHeightBench">{$_('general.rack_height_bench')}</label>
+              <input
+                id="rackHeightBench"
+                type="number"
+                min="1"
+                max="20"
+                class="input-field"
+                bind:value={editForm.rackHeightBench}
+                placeholder={$_('general.rack_height_help')}
+                disabled={isLoading}
+              />
+              <p class="text-sm text-text-secondary mt-1">{$_('general.rack_height_help')}</p>
+            </div>
+          </div>
+        {:else}
+          <div class="text-center py-4">
+            <span class="loading-spinner"></span>
+            {$_('general.loading')}...
+          </div>
+        {/if}
 
         <!-- Photo -->
         <div>

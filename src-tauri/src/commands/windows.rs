@@ -1,5 +1,65 @@
 use crate::error::AppError;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplayLifterData {
+    pub competitor: DisplayCompetitor,
+    pub registration: DisplayRegistration,
+    pub attempts: DisplayAttempts,
+    pub contest: DisplayContest,
+    pub current_lift: String,
+    pub rack_height_squat: Option<i32>,
+    pub rack_height_bench: Option<i32>,
+    pub specific_lift: Option<SpecificLift>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SpecificLift {
+    pub lift_type: String,
+    pub attempt_number: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplayCompetitor {
+    pub id: String,
+    pub first_name: String,
+    pub last_name: String,
+    pub club: Option<String>,
+    pub photo_base64: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplayRegistration {
+    pub bodyweight: f32,
+    pub weight_class_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplayAttempts {
+    pub squat: Vec<DisplayAttempt>,
+    pub bench: Vec<DisplayAttempt>,
+    pub deadlift: Vec<DisplayAttempt>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplayAttempt {
+    pub number: i32,
+    pub weight: Option<f32>,
+    pub status: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplayContest {
+    pub name: String,
+    pub weight_classes: Vec<DisplayWeightClass>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisplayWeightClass {
+    pub id: String,
+    pub name: String,
+}
 
 /// Open the display window for external viewing
 #[tauri::command]
@@ -19,6 +79,7 @@ pub async fn window_open_display(app: AppHandle) -> Result<String, AppError> {
     )
     .title("Contest Display")
     .fullscreen(true)
+    .decorations(false)
     .center()
     .build()?;
 
@@ -44,13 +105,12 @@ pub async fn window_close_display(app: AppHandle) -> Result<String, AppError> {
 #[tauri::command]
 pub async fn window_update_display(
     app: AppHandle,
-    _lifter_data: String, // TODO: Define proper display data structure
+    lifter_data: DisplayLifterData,
 ) -> Result<String, AppError> {
-    tracing::info!("Updating display window data");
+    tracing::info!("Updating display window with lifter: {} {}", lifter_data.competitor.first_name, lifter_data.competitor.last_name);
 
     if let Some(window) = app.get_webview_window("display") {
-        // TODO: Emit event to display window with lifter data
-        window.emit("display-update", &_lifter_data)?;
+        window.emit("display-update", &lifter_data)?;
         Ok("Display window updated".to_string())
     } else {
         Err(AppError::Internal("Display window is not open".to_string()))

@@ -180,6 +180,7 @@
   let nextUpQueue: Attempt[] = [];
   let selectedContestId: string = '';
   let lifters: Lifter[] = [];
+  let enrichedLifters: any[] = [];
   let results: LifterResult[] = [];
   let loading = false;
   let error = '';
@@ -232,6 +233,10 @@
   let plateSets: PlateSet[] = [];
   let weightIncrement: number = 5.0; // Default 5kg (2.5kg smallest plate × 2)
 
+  // Display synchronization state
+  let currentDisplayedLifterId: string | null = null;
+  let currentDisplayedLift: { liftType: LiftType; attemptNumber: number } | null = null;
+
   // Table state moved to CompetitorTable component
 
 
@@ -280,9 +285,7 @@
   }
 
   async function loadContestData(): Promise<void> {
-    console.log('🚀 loadContestData called with selectedContestId:', selectedContestId);
     if (!selectedContestId) {
-      console.log('❌ No selectedContestId, returning early');
       return;
     }
 
@@ -327,10 +330,6 @@
             competitor,
             registration: reg,
             attempts: attemptsByType,
-            squatBest: null,
-            benchBest: null,
-            deadliftBest: null,
-            total: null,
           };
           
           console.log('🏋️‍♂️ Created lifter:', lifter);
@@ -396,6 +395,9 @@
       // For now, just reload all lifters to see the change.
       // A more optimized approach would be to update the local state directly.
       await loadContestData();
+      
+      // Synchronize display if this lifter is currently shown
+      await updateDisplayIfNeeded(registrationId);
 
     } catch (err) {
       error = `Failed to update attempt: ${err}`;
@@ -433,6 +435,19 @@
 
   async function updateAttemptStatus(attemptId: string, status: AttemptStatus): Promise<void> {
     try {
+      // Find which lifter this attempt belongs to before updating
+      let lifterId: string | null = null;
+      for (const lifter of lifters) {
+        for (const liftType of ['Squat', 'Bench', 'Deadlift'] as LiftType[]) {
+          const attempt = lifter.attempts[liftType].find(a => a.id === attemptId);
+          if (attempt) {
+            lifterId = lifter.registrationId;
+            break;
+          }
+        }
+        if (lifterId) break;
+      }
+      
       await invoke('attempt_update_result', {
         update: {
           attemptId,
@@ -440,6 +455,11 @@
         }
       });
       await loadContestData();
+      
+      // Synchronize display if this lifter is currently shown
+      if (lifterId) {
+        await updateDisplayIfNeeded(lifterId);
+      }
     } catch (error) {
       console.error('Failed to update attempt status:', error);
     }
@@ -452,9 +472,9 @@
       case AttemptStatus.Successful:
         return AttemptStatus.Failed;
       case AttemptStatus.Failed:
-        return AttemptStatus.Skipped;
-      case AttemptStatus.Skipped:
         return AttemptStatus.Pending;
+      case AttemptStatus.Skipped:
+        return AttemptStatus.Pending; // If somehow we encounter skipped, go to pending
       default:
         return AttemptStatus.Pending;
     }
@@ -500,7 +520,7 @@
 
   function openCompetitorEdit() {
     modalState.competitorEdit = true;
-    closeCompetitorContext();
+    modalState.competitorContext = false; // Only close the menu, keep selectedCompetitor
   }
 
   function closeCompetitorEdit() {
@@ -509,7 +529,7 @@
 
   function openCompetitorDelete() {
     modalState.competitorDelete = true;
-    closeCompetitorContext();
+    modalState.competitorContext = false; // Only close the menu, keep selectedCompetitor
   }
 
   function closeCompetitorDelete() {
@@ -636,7 +656,7 @@
     if (!interactionState.isDragging && !interactionState.isScrolling) {
       smartTooltip = {
         show: true,
-        text: 'Drag ↕ | Scroll wheel | +/- buttons',
+        text: $_('contest_view.weight_input_help'),
         position: { x: event.clientX, y: event.clientY }
       };
     }
@@ -805,7 +825,12 @@
 
   function getTotal(lifter: Lifter): number {
     if (!lifter || !lifter.attempts) return 0;
-    return getBestLift(lifter.attempts.Squat) + getBestLift(lifter.attempts.Bench) + getBestLift(lifter.attempts.Deadlift);
+    
+    const squatBest = getBestLift(lifter.attempts.Squat);
+    const benchBest = getBestLift(lifter.attempts.Bench);  
+    const deadliftBest = getBestLift(lifter.attempts.Deadlift);
+    
+    return squatBest + benchBest + deadliftBest;
   }
 
   // Results calculation and ranking functions
@@ -890,6 +915,29 @@
     results = calculateResults();
     console.log('🎯 Results updated:', results.length);
   }
+
+  // Reactive statement to create enriched lifters with calculated properties
+  $: enrichedLifters = lifters.map(lifter => {
+    // Calculate all best lifts once
+    const squatBest = getBestLift(lifter.attempts.Squat);
+    const benchBest = getBestLift(lifter.attempts.Bench); 
+    const deadliftBest = getBestLift(lifter.attempts.Deadlift);
+    const total = squatBest + benchBest + deadliftBest;
+    
+    // Calculate points using the already computed total
+    const reshel = lifter.registration.reshelCoefficient || 1.0;
+    const mccullough = lifter.registration.mcculloughCoefficient || 1.0;
+    const points = total > 0 ? Math.round(total * reshel * mccullough * 100) / 100 : 0;
+    
+    return {
+      ...lifter,
+      squatBest,
+      benchBest,
+      deadliftBest,
+      total,
+      points
+    };
+  });
 
   // Sorting functions moved to CompetitorTable component
 
@@ -976,6 +1024,130 @@
     }
   }
 
+  // Display window management functions
+  
+  // Prepare display data for a lifter
+  function prepareDisplayData(lifter: Lifter, specificLift?: { liftType: LiftType; attemptNumber: number }): any {
+    return {
+      competitor: {
+        id: lifter.competitor.id,
+        first_name: lifter.competitor.firstName,
+        last_name: lifter.competitor.lastName,
+        gender: lifter.competitor.gender,
+        club: lifter.competitor.club,
+        photo_base64: lifter.competitor.photoBase64,
+      },
+      registration: {
+        bodyweight: lifter.registration.bodyweight,
+        weight_class_id: lifter.registration.weightClassId,
+      },
+      attempts: {
+        squat: lifter.attempts.Squat.map(a => ({
+          number: a.attemptNumber,
+          weight: a.weight || null,
+          status: a.status,
+        })),
+        bench: lifter.attempts.Bench.map(a => ({
+          number: a.attemptNumber,
+          weight: a.weight || null,
+          status: a.status,
+        })),
+        deadlift: lifter.attempts.Deadlift.map(a => ({
+          number: a.attemptNumber,
+          weight: a.weight || null,
+          status: a.status,
+        })),
+      },
+      contest: {
+        id: selectedContestId,
+        name: contests.find(c => c.id === selectedContestId)?.name || 'Contest',
+        weight_classes: weightClasses.map(wc => ({
+          id: wc.id,
+          name: wc.name,
+        })),
+      },
+      current_lift: contestState?.currentLift || 'Squat',
+      rack_height_squat: (lifter as any).registration.rackHeightSquat || null,
+      rack_height_bench: (lifter as any).registration.rackHeightBench || null,
+      specific_lift: specificLift ? {
+        lift_type: specificLift.liftType,
+        attempt_number: specificLift.attemptNumber
+      } : null,
+    };
+  }
+
+  // Send lifter data to display window
+  async function sendLifterToDisplay(lifter: Lifter, specificLift?: { liftType: LiftType; attemptNumber: number }): Promise<void> {
+    const displayData = prepareDisplayData(lifter, specificLift);
+    await invoke('window_update_display', { lifterData: displayData });
+  }
+
+  // Update display if the modified lifter is currently shown
+  async function updateDisplayIfNeeded(lifterId: string): Promise<void> {
+    if (currentDisplayedLifterId !== lifterId) return;
+    
+    const lifter = lifters.find(l => l.registrationId === lifterId);
+    if (!lifter) return;
+    
+    try {
+      await sendLifterToDisplay(lifter, currentDisplayedLift || undefined);
+      console.log('Display synchronized for lifter:', lifterId);
+    } catch (err) {
+      console.error('Error synchronizing display:', err);
+    }
+  }
+
+
+  // Show specific lift on display
+  async function handleShowLiftOnDisplay(lifter: Lifter, liftType: LiftType, attemptNumber: number): Promise<void> {
+    try {
+      // Track which lifter and lift is displayed
+      currentDisplayedLifterId = lifter.registrationId;
+      currentDisplayedLift = { liftType, attemptNumber };
+      
+      // First try to update existing window
+      try {
+        await sendLifterToDisplay(lifter, currentDisplayedLift);
+        console.log(`Display window updated with ${liftType} attempt ${attemptNumber}`);
+      } catch (err) {
+        // If window doesn't exist, open it first then send data
+        console.log('Display window not open, opening and sending data...');
+        await invoke('window_open_display');
+        
+        // Give the window a moment to initialize and set up event listeners
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Now send the data
+        await sendLifterToDisplay(lifter, currentDisplayedLift);
+        console.log('Display window opened and data sent');
+      }
+      
+    } catch (err) {
+      error = `Failed to update display: ${err}`;
+      console.error('Error updating display:', err);
+      currentDisplayedLifterId = null;
+      currentDisplayedLift = null;
+    }
+  }
+
+  async function openDisplayWindow(): Promise<void> {
+    try {
+      await invoke('window_open_display');
+    } catch (err) {
+      error = `Failed to open display window: ${err}`;
+      console.error('Error opening display window:', err);
+    }
+  }
+
+  async function closeDisplayWindow(): Promise<void> {
+    try {
+      await invoke('window_close_display');
+    } catch (err) {
+      error = `Failed to close display window: ${err}`;
+      console.error('Error closing display window:', err);
+    }
+  }
+
   function goBack(): void {
     appView.set('mainMenu');
   }
@@ -992,18 +1164,21 @@
   <!-- Header -->
   <header class="container-full py-6 border-b border-border-color">
     <div class="flex items-center justify-between">
-      <div>
+      <div class="flex-1"></div>
+      <div class="text-center">
         <h1 class="text-h2 text-text-primary">{$_('contest_view.title')}</h1>
         <p class="text-caption text-text-secondary mt-1">
           {$_('contest_view.subtitle')}
         </p>
       </div>
-      <button 
-        class="btn-secondary"
-        on:click={goBack}
-      >
-        ← Back to Menu
-      </button>
+      <div class="flex-1 flex justify-end">
+        <button 
+          class="btn-secondary"
+          on:click={goBack}
+        >
+          ← Back to Menu
+        </button>
+      </div>
     </div>
   </header>
 
@@ -1062,6 +1237,10 @@
           {/if}
           {#if contestState.status === ContestStatus.Paused}
             <button class="btn-primary" on:click={() => updateContestStatus(ContestStatus.InProgress)}>{$_('contest_view.resume_contest')}</button>
+          {/if}
+          {#if contestState.status === ContestStatus.InProgress || contestState.status === ContestStatus.Paused}
+            <button class="btn-secondary" on:click={openDisplayWindow}>{$_('contest_view.open_display_window')}</button>
+            <button class="btn-ghost" on:click={closeDisplayWindow}>{$_('contest_view.close_display_window')}</button>
           {/if}
         </div>
         {#if contestState.status === ContestStatus.InProgress}
@@ -1123,7 +1302,7 @@
     {:else if lifters.length > 0}
       <!-- Competitor Table - Grug approved extraction! -->
       <CompetitorTable
-        {lifters}
+        lifters={enrichedLifters}
         {weightClasses}
         {ageCategories}
         {weightIncrement}
@@ -1140,6 +1319,12 @@
         onWeightInputHover={handleWeightInputHover}
         onWeightInputMouseMove={handleWeightInputMouseMove}
         onWeightInputLeave={handleWeightInputLeave}
+        onShowLiftOnDisplay={handleShowLiftOnDisplay}
+        currentDisplayedLift={currentDisplayedLift ? {
+          lifterId: currentDisplayedLifterId!,
+          liftType: currentDisplayedLift.liftType,
+          attemptNumber: currentDisplayedLift.attemptNumber
+        } : null}
       />
     {/if}
     
@@ -1391,6 +1576,7 @@
 {#if modalState.competitorEdit && modalState.selectedCompetitor}
   <EditCompetitorModal
     competitor={modalState.selectedCompetitor}
+    contestId={selectedContestId}
     onClose={closeCompetitorEdit}
     onSave={() => {
       loadContestData();

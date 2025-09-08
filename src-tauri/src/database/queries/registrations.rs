@@ -225,6 +225,49 @@ pub async fn update_registration(
     Ok(())
 }
 
+/// Get registration by competitor and contest
+pub async fn get_registration_by_competitor_and_contest(
+    pool: &Pool<Sqlite>,
+    competitor_id: &str,
+    contest_id: &str,
+) -> Result<Option<Registration>, sqlx::Error> {
+    let row = sqlx::query(
+        r#"
+        SELECT id, contest_id, competitor_id, age_category_id, weight_class_id,
+               equipment_m, equipment_sm, equipment_t, bodyweight, lot_number,
+               personal_record_at_entry, reshel_coefficient, mccullough_coefficient,
+               rack_height_squat, rack_height_bench, created_at
+        FROM registrations WHERE competitor_id = ?1 AND contest_id = ?2
+        "#,
+    )
+    .bind(competitor_id)
+    .bind(contest_id)
+    .fetch_optional(pool)
+    .await?;
+
+    match row {
+        Some(row) => Ok(Some(Registration {
+            id: row.try_get("id")?,
+            contest_id: row.try_get("contest_id")?,
+            competitor_id: row.try_get("competitor_id")?,
+            age_category_id: row.try_get("age_category_id")?,
+            weight_class_id: row.try_get("weight_class_id")?,
+            equipment_m: row.try_get("equipment_m")?,
+            equipment_sm: row.try_get("equipment_sm")?,
+            equipment_t: row.try_get("equipment_t")?,
+            bodyweight: row.try_get("bodyweight")?,
+            lot_number: row.try_get("lot_number")?,
+            personal_record_at_entry: row.try_get("personal_record_at_entry")?,
+            reshel_coefficient: row.try_get("reshel_coefficient")?,
+            mccullough_coefficient: row.try_get("mccullough_coefficient")?,
+            rack_height_squat: row.try_get("rack_height_squat")?,
+            rack_height_bench: row.try_get("rack_height_bench")?,
+            created_at: row.try_get("created_at")?,
+        })),
+        None => Ok(None),
+    }
+}
+
 /// Delete registration
 pub async fn delete_registration(
     pool: &Pool<Sqlite>,

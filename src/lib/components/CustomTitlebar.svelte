@@ -10,6 +10,11 @@
   onMount(() => {
     appWindow = getCurrentWindow();
     
+    // Skip event listeners for display window (no titlebar needed)
+    if (appWindow.label === 'display') {
+      return;
+    }
+    
     let unlistenMaximize: (() => void) | null = null;
     
     // Setup async listeners
