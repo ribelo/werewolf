@@ -6,6 +6,9 @@ on:
     tags:
       - 'v*.*.*'
 
+permissions:
+  contents: write
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
@@ -58,6 +61,14 @@ jobs:
             --notes-file CHANGELOG.md \
             --draft=false \
             --prerelease=false
+          
+          # Get the release ID for the Tauri action
+          RELEASE_INFO=$(gh api repos/${{ github.repository }}/releases/tags/${{ steps.get_version.outputs.VERSION }})
+          RELEASE_ID=$(echo "$RELEASE_INFO" | jq -r '.id')
+          UPLOAD_URL=$(echo "$RELEASE_INFO" | jq -r '.upload_url')
+          
+          echo "id=$RELEASE_ID" >> $GITHUB_OUTPUT
+          echo "upload_url=$UPLOAD_URL" >> $GITHUB_OUTPUT
 
   build-and-upload:
     needs: create-release
