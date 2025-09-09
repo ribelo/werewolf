@@ -142,7 +142,8 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         RUSTC_WRAPPER: ''
-        RUSTFLAGS: '-C target-cpu=native'
+        # Don't use target-cpu=native for cross-compilation builds
+        RUSTFLAGS: ${{ contains(matrix.args, '--target') && '' || '-C target-cpu=native' }}
       with:
         releaseId: ${{ needs.create-release.outputs.release_id }}
         args: ${{ matrix.args }}
