@@ -1,0 +1,21 @@
+name = "werewolf-dev"
+main = "apps/api/src/index.ts"
+compatibility_date = "2025-09-17"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENV = "development"
+
+[[durable_objects.bindings]]
+name = "werewolf-contest-room"
+class_name = "ContestRoom"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "werewolf-d1-dev"
+database_id = "952d9b14-6236-4e59-8fc8-66b2df9128b7"
+migrations_dir = "./migrations"
+
+[[kv_namespaces]]
+binding = "KV"
+id = "8cf514e5365c468eb782d0a96f6ad309"

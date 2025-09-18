@@ -1,0 +1,319 @@
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue:wght@400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom base styles for powerlifting app */
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  
+  body {
+    @apply bg-main-bg text-text-primary antialiased;
+  }
+  
+  /* Disable text selection on UI elements (except inputs) */
+  .no-select {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+}
+
+/* Blood Theme Design System Components - COMPACT DATA-FRIENDLY VERSION */
+@layer components {
+  /* Typography Classes - Compact but Stylish */
+  .text-hero { @apply font-display font-normal tracking-[0.25rem] text-[64px] leading-none; }
+  .text-display { @apply font-display font-normal tracking-[0.125rem] text-[48px] leading-none; }
+  .text-h1 { @apply text-3xl font-display font-normal tracking-wider; }
+  .text-h2 { @apply text-2xl font-display font-normal tracking-wide; }
+  .text-h3 { @apply text-xl font-display font-normal tracking-wide; }
+  
+  .weight-hero { @apply font-mono font-bold leading-none text-[64px]; }
+  .weight-large { @apply font-mono font-bold leading-none text-[48px]; }
+  .weight-medium { @apply font-mono font-semibold leading-none text-[24px]; }
+  .weight-small { @apply font-mono font-semibold leading-none text-[16px]; }
+  
+  .text-body { @apply text-sm font-body font-normal leading-relaxed; }
+  .text-label { @apply text-xs font-body font-semibold uppercase tracking-widest; }
+  .text-caption { @apply text-xs font-body font-medium leading-tight; }
+
+  /* Layout Containers - Full Width for Data Density */
+  .container-narrow { @apply max-w-2xl mx-auto px-3; }
+  .container-medium { @apply max-w-4xl mx-auto px-3; }
+  .container-wide { @apply max-w-6xl mx-auto px-3; }
+  .container-full { @apply w-full px-4 md:px-6 lg:px-8; }
+
+  /* Card Components - Compact with Blood Theme */
+  .card {
+    @apply bg-card-bg border-2 border-border-color p-4 shadow-card relative 
+           transition-all duration-300 ease-in-out;
+  }
+  
+  .card:hover {
+    @apply border-primary-red;
+    box-shadow: 0 8px 32px rgba(220, 20, 60, 0.3);
+  }
+  
+  .card::before {
+    content: '';
+    @apply absolute top-0 left-0 right-0 h-1 
+           bg-gradient-to-r from-transparent via-primary-red to-transparent;
+  }
+  
+  .card-header { @apply border-b-2 border-border-color pb-3 mb-3; }
+
+  /* Button Components - Compact Blood Theme */
+  .btn-primary {
+    @apply bg-primary-red text-black border-2 border-primary-red 
+           px-4 py-2 font-display text-sm tracking-wider uppercase
+           transition-all duration-300 ease-in-out cursor-pointer
+           hover:bg-accent-red hover:border-accent-red hover:-translate-y-0.5;
+    box-shadow: 0 0 20px rgba(255, 0, 64, 0.5);
+  }
+  
+  .btn-secondary {
+    @apply bg-transparent text-text-secondary border-2 border-border-color
+           px-4 py-2 font-display text-sm tracking-wider uppercase
+           transition-all duration-300 ease-in-out cursor-pointer
+           hover:text-text-primary hover:border-primary-red hover:bg-red-500/10;
+  }
+  
+  .btn-ghost {
+    @apply bg-transparent text-text-secondary border-2 border-transparent
+           px-4 py-2 font-display text-sm tracking-wider uppercase
+           transition-all duration-300 ease-in-out cursor-pointer
+           hover:text-text-primary hover:border-border-color;
+  }
+
+  /* Form Elements - Blood Theme with Proper Colors */
+  .input-field {
+    @apply bg-element-bg border-2 border-border-color text-text-primary px-3 py-2
+           font-body text-sm transition-all duration-300 ease-in-out
+           focus:border-primary-red focus:outline-none focus:ring-0;
+    box-shadow: 0 0 0 0 transparent;
+  }
+  
+  .input-field:focus {
+    box-shadow: 0 0 0 3px rgba(220, 20, 60, 0.2);
+  }
+
+  /* Table input fields that blend with background */
+  .table-input-field {
+    @apply bg-transparent border-0 text-text-primary px-1 py-0
+           font-body text-inherit transition-colors duration-200 ease-in-out
+           focus:bg-element-bg focus:outline-none focus:ring-0;
+    box-shadow: none;
+  }
+  
+  .table-input-field:focus {
+    box-shadow: 0 0 0 2px rgba(220, 20, 60, 0.3);
+    border-radius: 2px;
+  }
+
+  /* Remove number input arrows */
+  .table-input-field::-webkit-outer-spin-button,
+  .table-input-field::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  .table-input-field[type=number] {
+    -moz-appearance: textfield;
+  }
+
+  /* Fixed width for weight cells to prevent layout shifting */
+  .weight-cell-fixed {
+    width: 110px; /* Accommodates "9999.99 kg" in text-lg with padding */
+    min-width: 110px;
+    max-width: 110px;
+  }
+
+  /* Extra small text size for very compact tables */
+  .text-xxs {
+    font-size: 0.6875rem; /* 11px */
+    line-height: 1rem;
+  }
+
+  .error-message {
+    @apply text-xs text-status-error mt-1;
+  }
+
+  /* Specific styling for select elements - Blood Theme */
+  select.input-field {
+    @apply bg-element-bg border-2 border-border-color text-text-primary px-3 py-2
+           font-body text-sm transition-all duration-300 ease-in-out
+           focus:border-primary-red focus:outline-none focus:ring-0;
+    box-shadow: 0 0 0 0 transparent;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23FFFFFF' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.75rem center;
+    background-repeat: no-repeat;
+    background-size: 1.25em 1.25em;
+    padding-right: 2.5rem;
+    /* Force dark theme in dropdown */
+    color-scheme: dark;
+  }
+
+  select.input-field option {
+    @apply bg-element-bg text-text-primary;
+    background-color: #2C2C2C !important;
+    color: #FFFFFF !important;
+  }
+  
+  .input-label {
+    @apply block text-label text-text-secondary mb-1;
+  }
+
+  /* Status Components - Blood Theme */
+  .status-badge {
+    @apply inline-flex items-center px-3 py-1 font-display text-xs 
+           tracking-wider uppercase;
+  }
+  
+  .status-active { @apply bg-status-success text-green-100; }
+  .status-warning { @apply bg-status-warning text-orange-100; }
+  .status-error { @apply bg-status-error text-red-100; }
+  .status-neutral { @apply bg-element-bg text-text-secondary; }
+
+  /* Attempt Status - Blood Theme */
+  .attempt-pending { @apply text-gray-400 bg-element-bg px-2 py-1 font-mono text-xs; }
+  .attempt-good { @apply text-green-100 bg-status-success px-2 py-1 font-mono text-xs font-bold; }
+  .attempt-failed { @apply text-red-100 bg-status-error px-2 py-1 font-mono text-xs line-through; }
+
+  /* Weight Display Components - Blood Theme */
+  .weight-display { @apply text-center; }
+  .weight-value { @apply font-mono font-bold text-text-primary; }
+  .weight-unit { @apply font-mono font-normal text-text-secondary ml-2; }
+  
+  .weight-hero .weight-unit { @apply text-2xl; }
+  .weight-large .weight-unit { @apply text-xl; }
+  .weight-medium .weight-unit { @apply text-base; }
+  .weight-small .weight-unit { @apply text-sm; }
+
+  /* Timer Components - Blood Theme */
+  .timer-display {
+    @apply weight-large text-center p-4 bg-main-bg text-text-primary;
+  }
+  
+  .timer-bar {
+    @apply h-2 bg-primary-red transition-all duration-1000 ease-linear;
+  }
+  
+  .timer-warning { @apply animate-pulse-slow bg-status-warning; }
+  .timer-critical { @apply animate-ping bg-status-error; }
+
+  /* Display Window (Big Screen) - Blood Theme */
+  .display-view { @apply bg-main-bg text-text-primary min-h-screen; }
+  .display-title { @apply text-hero text-center text-text-primary mb-8; }
+  .display-competitor { @apply text-h1 text-center text-text-primary mb-6; }
+  .display-weight { @apply weight-hero text-center text-accent-red; }
+
+  /* Leaderboard - Blood Theme */
+  .leaderboard-row {
+    @apply border-b-2 border-border-color hover:bg-card-bg transition-colors duration-200;
+  }
+  
+  .leaderboard-place {
+    @apply text-h3 font-bold text-text-primary w-12 text-center;
+  }
+  
+  .leaderboard-place.first { @apply text-yellow-400; }
+  .leaderboard-place.second { @apply text-gray-300; }
+  .leaderboard-place.third { @apply text-amber-600; }
+
+  /* Grid Layouts - Compact */
+  .stats-grid { @apply grid gap-3 grid-cols-1 md:grid-cols-3; }
+  .leaderboard-grid { @apply grid gap-4 grid-cols-1 lg:grid-cols-2; }
+  .attempt-grid { @apply grid gap-2 grid-cols-3; }
+
+  /* Visual Effects - Blood Theme */
+  .glow-effect { @apply shadow-glow; }
+  .glow-active { @apply animate-pulse-glow; }
+  
+  /* Heartbeat Icon Animation - Blood Theme */
+  .icon-shine {
+    animation: heartbeat-pulse 2.5s ease-in-out infinite;
+  }
+  
+  .icon-shine:hover {
+    animation: heartbeat-pulse 1.2s ease-in-out;
+  }
+  
+  .divider { @apply h-0.5 bg-border-color my-4; }
+  .divider-accent { @apply h-1 bg-gradient-to-r from-transparent via-primary-red to-transparent my-4; }
+
+  /* Mobile Responsive Helpers */
+  .mobile-stack { @apply flex flex-col md:flex-row gap-2 md:gap-4; }
+  .mobile-center { @apply text-center md:text-left; }
+  .mobile-full { @apply w-full md:w-auto; }
+}
+
+/* Blood Theme Utilities and Mobile Responsive Rules */
+@layer utilities {
+  /* Legacy timer animation */
+  .animate-timer {
+    animation: timer-countdown 60s linear forwards;
+  }
+  
+  .transition-smooth {
+    @apply transition-all duration-300 ease-in-out;
+  }
+  
+  /* Heartbeat pulse animation keyframes */
+  @keyframes heartbeat-pulse {
+    0%, 70% { 
+      transform: scale(1);
+      filter: brightness(1) hue-rotate(0deg) drop-shadow(0 0 0 transparent);
+    }
+    10% { 
+      transform: scale(1.02);
+      filter: brightness(1.15) hue-rotate(5deg) drop-shadow(0 0 3px rgba(255, 0, 64, 0.4)); 
+    }
+    20% { 
+      transform: scale(1);
+      filter: brightness(1) hue-rotate(0deg) drop-shadow(0 0 0 transparent); 
+    }
+    30% { 
+      transform: scale(1.01);
+      filter: brightness(1.1) hue-rotate(3deg) drop-shadow(0 0 2px rgba(255, 0, 64, 0.3)); 
+    }
+    40% { 
+      transform: scale(1);
+      filter: brightness(1) hue-rotate(0deg) drop-shadow(0 0 0 transparent); 
+    }
+  }
+
+  /* Mobile font size adjustments - compact but readable */
+  @media (max-width: 768px) {
+    .text-hero { @apply text-5xl; }        /* 64px → 48px */
+    .text-display { @apply text-4xl; }     /* 48px → 36px */
+    .text-h1 { @apply text-2xl; }          /* 24px → 20px */
+    .text-h2 { @apply text-xl; }           /* 20px → 18px */
+    
+    .weight-hero { @apply text-5xl; }      /* 64px → 48px */
+    .weight-large { @apply text-4xl; }     /* 48px → 36px */
+    
+    /* Reduce card padding on mobile */
+    .card { @apply p-3; }                  /* 16px → 12px */
+    
+    /* Stack button groups vertically on mobile */
+    .mobile-stack { @apply flex-col gap-2; }
+    
+    /* Adjust containers on mobile */
+    .container-narrow,
+    .container-medium,
+    .container-wide {
+      @apply px-2;
+    }
+    
+    .container-full {
+      @apply px-2;
+    }
+  }
+}

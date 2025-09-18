@@ -1,0 +1,40 @@
+{
+  "name": "werewolf-web",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "bunx vite dev",
+    "build": "SVELTE_ADAPTER=cloudflare bunx vite build",
+    "preview": "SVELTE_ADAPTER=cloudflare bunx vite preview",
+    "check": "bunx svelte-kit sync && bunx svelte-check --tsconfig ./tsconfig.json",
+    "check:watch": "bunx svelte-kit sync && bunx svelte-check --tsconfig ./tsconfig.json --watch",
+    "test": "vitest",
+    "test:run": "vitest run"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-auto": "^3.0.0",
+    "@sveltejs/kit": "^2.0.0",
+    "@sveltejs/vite-plugin-svelte": "^3.0.0",
+    "@testing-library/jest-dom": "^6.8.0",
+    "@testing-library/svelte": "^5.2.8",
+    "@types/cookie": "^0.6.0",
+    "@types/qrcode": "^1.5.5",
+    "autoprefixer": "^10.4.16",
+    "@tailwindcss/typography": "^0.5.15",
+    "jsdom": "^27.0.0",
+    "postcss": "^8.4.32",
+    "svelte": "^4.2.7",
+    "svelte-check": "^3.6.0",
+    "tailwindcss": "^3.4.0",
+    "tslib": "^2.4.1",
+    "typescript": "^5.0.0",
+    "vite": "^5.0.0",
+    "vitest": "^3.2.4"
+  },
+  "type": "module",
+  "dependencies": {
+    "@sveltejs/adapter-cloudflare": "^4.4.4",
+    "qrcode": "^1.5.3",
+    "svelte-i18n": "3.7.3"
+  }
+}

@@ -1,0 +1,30 @@
+import type { Hono } from 'hono';
+import type { WerewolfEnvironment } from '../env';
+import attempts, { contestAttempts, registrationAttempts } from './attempts';
+import contests from './contests';
+import competitors from './competitors';
+import plateSets from './plate-sets';
+import reference from './reference';
+import registrations, { contestRegistrations } from './registrations';
+import results, { contestResults } from './results';
+import settings from './settings';
+import system from './system';
+import live from './live';
+
+export const registerRoutes = (app: Hono<WerewolfEnvironment>) => {
+  app.route('/contests', contests);
+  app.route('/registrations', registrations);
+  app.route('/contests/:contestId/registrations', contestRegistrations);
+  app.route('/competitors', competitors);
+  app.route('/attempts', attempts);
+  app.route('/contests/:contestId/attempts', contestAttempts);
+  app.route('/contests/:contestId/registrations/:registrationId/attempts', registrationAttempts);
+  app.route('/results', results);
+  app.route('/registrations/:registrationId/results', results);
+  app.route('/contests/:contestId/results', contestResults);
+  app.route('/settings', settings);
+  app.route('/system', system);
+  app.route('/reference', reference);
+  app.route('/contests/:contestId/platesets', plateSets);
+  app.route('/', live);
+};

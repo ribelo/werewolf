@@ -1,0 +1,129 @@
+<script lang="ts">
+  import Layout from '$lib/components/Layout.svelte';
+  import { PAGE_LINKS } from '$lib/nav';
+  import { _ } from 'svelte-i18n';
+  import type { PageData } from './$types';
+
+  export let data: PageData;
+
+  const { contests, error, database, databaseError, apiBase } = data;
+
+  const stats = database?.stats;
+  const totalContests = contests.length;
+  const totalCompetitors = stats?.competitors ?? 0;
+  const totalRegistrations = stats?.registrations ?? 0;
+</script>
+
+<svelte:head>
+  <title>{$_('dashboard.title')}</title>
+</svelte:head>
+
+<Layout
+  title={$_('dashboard.title')}
+  subtitle={$_('dashboard.subtitle')}
+  currentPage="contests"
+  apiBase={apiBase}
+>
+  <section class="grid gap-6 md:grid-cols-2 xl:grid-cols-3 mb-12">
+    <a href="/contests/new" class="card group no-select">
+      <header class="card-header flex items-center justify-between">
+        <h2 class="text-h2 text-text-primary">{$_('dashboard.tiles.create.title')}</h2>
+        <span class="btn-primary">{$_('dashboard.tiles.create.cta')}</span>
+      </header>
+      <p class="text-body text-text-secondary">{$_('dashboard.tiles.create.description')}</p>
+    </a>
+
+    <a href={PAGE_LINKS.competitors.href} class="card group no-select">
+      <header class="card-header flex items-center justify-between">
+        <h2 class="text-h2 text-text-primary">{$_('dashboard.tiles.competitors.title')}</h2>
+        <span class="text-h3 text-text-secondary">{totalCompetitors}</span>
+      </header>
+      <p class="text-body text-text-secondary">{$_('dashboard.tiles.competitors.description')}</p>
+    </a>
+
+    <a href={PAGE_LINKS.settings.href} class="card group no-select">
+      <header class="card-header flex items-center justify-between">
+        <h2 class="text-h2 text-text-primary">{$_('dashboard.tiles.settings.title')}</h2>
+        <span class="text-h3 text-text-secondary">{$_('dashboard.tiles.settings.cta')}</span>
+      </header>
+      <p class="text-body text-text-secondary">{$_('dashboard.tiles.settings.description')}</p>
+    </a>
+  </section>
+
+  <section class="grid gap-4 md:grid-cols-3 mb-12">
+    <div class="card">
+      <h3 class="text-label text-text-secondary mb-2">{$_('dashboard.stats.contests.label')}</h3>
+      <p class="text-h1 text-text-primary">{totalContests}</p>
+      <p class="text-caption text-text-secondary mt-2">{$_('dashboard.stats.contests.description')}</p>
+    </div>
+    <div class="card">
+      <h3 class="text-label text-text-secondary mb-2">{$_('dashboard.stats.registrations.label')}</h3>
+      <p class="text-h1 text-text-primary">{totalRegistrations}</p>
+      <p class="text-caption text-text-secondary mt-2">{$_('dashboard.stats.registrations.description')}</p>
+    </div>
+    <div class="card">
+      <h3 class="text-label text-text-secondary mb-2">{$_('dashboard.stats.database.label')}</h3>
+      <p class={`text-h1 ${database?.status?.toLowerCase() === 'ok' ? 'text-text-primary' : 'text-status-warning'}`}>
+        {database?.status ?? $_('dashboard.stats.database.unknown')}
+      </p>
+      {#if databaseError}
+        <p class="text-caption text-status-error mt-2">{databaseError}</p>
+      {:else}
+        <p class="text-caption text-text-secondary mt-2">{$_('dashboard.stats.database.description')}</p>
+      {/if}
+    </div>
+  </section>
+
+  <section>
+    <header class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+      <div>
+        <h2 class="text-h2 text-text-primary uppercase tracking-[0.3em]">{$_('dashboard.active.heading')}</h2>
+        <p class="text-body text-text-secondary">{$_('dashboard.active.description')}</p>
+      </div>
+      <span class="text-caption text-text-secondary uppercase tracking-[0.4em]">{$_('dashboard.active.total', { values: { count: totalContests } })}</span>
+    </header>
+
+    {#if error}
+      <div class="card border-status-error">
+        <h3 class="text-h3 text-status-error mb-2">{$_('dashboard.active.error_title')}</h3>
+        <p class="text-body text-text-secondary">{error}</p>
+      </div>
+    {:else if contests.length === 0}
+      <div class="card">
+        <p class="text-body text-text-secondary">{$_('dashboard.active.empty')}</p>
+      </div>
+    {:else}
+      <div class="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+        {#each contests as contest}
+          <a href={`/contests/${contest.id}`} class="card hover:border-primary-red transition-colors">
+            <header class="card-header flex items-center justify-between">
+              <div>
+                <h3 class="text-h2 text-text-primary">{contest.name}</h3>
+                <p class="text-caption text-text-secondary">
+                  {contest.location} • {new Date(contest.date).toLocaleDateString()}
+                </p>
+              </div>
+              <span class={`status-badge ${contest.status === 'Active' ? 'status-active' : contest.status === 'Paused' ? 'status-warning' : 'status-neutral'}`}>
+                {contest.status}
+              </span>
+            </header>
+            <dl class="space-y-2 text-body text-text-secondary">
+              <div class="flex justify-between">
+                <dt class="text-label">{$_('dashboard.contest.discipline')}</dt>
+                <dd>{contest.discipline}</dd>
+              </div>
+              <div class="flex justify-between">
+                <dt class="text-label">{$_('dashboard.contest.bar_weights')}</dt>
+                <dd>{contest.mensBarWeight}kg / {contest.womensBarWeight}kg</dd>
+              </div>
+              <div class="flex justify-between">
+                <dt class="text-label">{$_('dashboard.contest.start')}</dt>
+                <dd>{new Date(contest.date).toLocaleString()}</dd>
+              </div>
+            </dl>
+          </a>
+        {/each}
+      </div>
+    {/if}
+  </section>
+</Layout>
