@@ -1,35 +1,140 @@
-export type ToastTone = 'success' | 'error' | 'info';
+import { writable } from 'svelte/store';
 
-export interface Toast {
-  message: string;
-  tone: ToastTone;
-  id: string;
+export type ToastLevel = 'success' | 'error' | 'warning' | 'info';
+export type ToastPosition = 'top-right' | 'top-center' | 'top-left' | 'bottom-right' | 'bottom-center' | 'bottom-left';
+
+export interface ToastAction {
+  label: string;
+  callback: () => void;
+  variant?: 'primary' | 'secondary';
 }
 
-export function createToastStore(timeoutMs = 5000) {
-  let toasts: Toast[] = [];
+export interface ToastConfig {
+  message: string;
+  level: ToastLevel;
+  duration?: number; // milliseconds, 0 for no auto-dismiss
+  actions?: ToastAction[];
+  position?: ToastPosition;
+  id?: string;
+}
 
-  function push(message: string, tone: ToastTone = 'info') {
-    const id = crypto.randomUUID();
-    const toast: Toast = { message, tone, id };
-    toasts = [...toasts, toast];
-    setTimeout(() => remove(id), timeoutMs);
-    return toast;
+export interface Toast extends ToastConfig {
+  id: string;
+  createdAt: number;
+  timeoutId?: number;
+}
+
+interface ToastStore {
+  subscribe: (callback: (value: Toast[]) => void) => () => void;
+  success: (message: string, options?: Partial<Omit<ToastConfig, 'message' | 'level'>>) => string;
+  error: (message: string, options?: Partial<Omit<ToastConfig, 'message' | 'level'>>) => string;
+  warning: (message: string, options?: Partial<Omit<ToastConfig, 'message' | 'level'>>) => string;
+  info: (message: string, options?: Partial<Omit<ToastConfig, 'message' | 'level'>>) => string;
+  push: (config: ToastConfig) => string;
+  remove: (id: string) => void;
+  clear: () => void;
+}
+
+const MAX_TOASTS = 5;
+const DEFAULT_DURATION = 5000;
+
+function createToastStore(): ToastStore {
+  const { subscribe, set, update } = writable<Toast[]>([]);
+
+  function addToast(config: ToastConfig): string {
+    const id = config.id || crypto.randomUUID();
+    const toast: Toast = {
+      ...config,
+      id,
+      createdAt: Date.now(),
+      duration: config.duration ?? DEFAULT_DURATION,
+      position: config.position ?? 'top-right',
+    };
+
+    update(toasts => {
+      // Remove oldest toast if at limit
+      const newToasts = toasts.length >= MAX_TOASTS ? toasts.slice(1) : toasts;
+
+      // Set up auto-dismiss if duration > 0
+      if (toast.duration && toast.duration > 0) {
+        toast.timeoutId = window.setTimeout(() => {
+          remove(id);
+        }, toast.duration);
+      }
+
+      return [...newToasts, toast];
+    });
+
+    return id;
   }
 
   function remove(id: string) {
-    toasts = toasts.filter((entry) => entry.id !== id);
+    update(toasts => {
+      const toast = toasts.find(t => t.id === id);
+      if (toast?.timeoutId) {
+        clearTimeout(toast.timeoutId);
+      }
+      return toasts.filter(t => t.id !== id);
+    });
   }
 
-  function list() {
-    return toasts;
+  function clear() {
+    update(toasts => {
+      toasts.forEach(toast => {
+        if (toast.timeoutId) {
+          clearTimeout(toast.timeoutId);
+        }
+      });
+      return [];
+    });
   }
 
-  function toneClass(tone: ToastTone): string {
-    if (tone === 'success') return 'border-status-success text-green-200 bg-status-success/30';
-    if (tone === 'error') return 'border-status-error text-red-200 bg-status-error/30';
-    return 'border-border-color text-text-secondary bg-element-bg';
-  }
+  return {
+    subscribe,
 
-  return { push, remove, list, toneClass };
+    success: (message: string, options?: Partial<Omit<ToastConfig, 'message' | 'level'>>) =>
+      addToast({ message, level: 'success', ...options }),
+
+    error: (message: string, options?: Partial<Omit<ToastConfig, 'message' | 'level'>>) =>
+      addToast({ message, level: 'error', ...options }),
+
+    warning: (message: string, options?: Partial<Omit<ToastConfig, 'message' | 'level'>>) =>
+      addToast({ message, level: 'warning', ...options }),
+
+    info: (message: string, options?: Partial<Omit<ToastConfig, 'message' | 'level'>>) =>
+      addToast({ message, level: 'info', ...options }),
+
+    push: (config: ToastConfig) => addToast(config),
+
+    remove,
+    clear,
+  };
+}
+
+// Export singleton instance
+export const toast = createToastStore();
+
+// Utility functions for backward compatibility
+export function toneClass(level: ToastLevel): string {
+  switch (level) {
+    case 'success':
+      return 'border-status-success text-green-100 bg-status-success shadow-glow';
+    case 'error':
+      return 'border-status-error text-red-100 bg-status-error shadow-glow';
+    case 'warning':
+      return 'border-status-warning text-black bg-status-warning shadow-glow';
+    case 'info':
+    default:
+      return 'border-border-color text-text-primary bg-element-bg shadow-card';
+  }
+}
+
+export function getIcon(level: ToastLevel): string {
+  switch (level) {
+    case 'success': return '✓';
+    case 'error': return '✕';
+    case 'warning': return '⚠';
+    case 'info': return 'ℹ';
+    default: return 'ℹ';
+  }
 }

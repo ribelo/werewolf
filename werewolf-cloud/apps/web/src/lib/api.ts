@@ -20,19 +20,21 @@ class ApiClient {
     this.baseUrl = getApiBase();
   }
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<ApiResponse<T>> {
+  private async request<T>(endpoint: string, options: RequestInit & { fetch?: typeof fetch } = {}): Promise<ApiResponse<T>> {
     const url = `${this.baseUrl}${endpoint}`;
 
+    const headers = new Headers(options.headers ?? {});
+    if (options.body !== undefined && options.body !== null && !headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
+
+    const fetchFn = options.fetch ?? fetch;
+    const { fetch: _, ...fetchOptions } = options;
+
     try {
-      const response = await fetch(url, {
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers,
-        },
-        ...options,
+      const response = await fetchFn(url, {
+        ...fetchOptions,
+        headers,
       });
 
       if (!response.ok) {
@@ -55,37 +57,49 @@ class ApiClient {
   }
 
   // GET request
-  async get<T>(endpoint: string): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, { method: 'GET' });
+  async get<T>(endpoint: string, fetch?: typeof globalThis.fetch): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, fetch ? { method: 'GET', fetch } : { method: 'GET' });
   }
 
   // POST request
-  async post<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, {
-      method: 'POST',
-      body: data ? JSON.stringify(data) : null,
-    });
+  async post<T>(endpoint: string, data?: unknown, fetch?: typeof globalThis.fetch): Promise<ApiResponse<T>> {
+    const init: RequestInit & { fetch?: typeof globalThis.fetch } = { method: 'POST' };
+    if (data !== undefined) {
+      init.body = JSON.stringify(data);
+    }
+    if (fetch) {
+      init.fetch = fetch;
+    }
+    return this.request<T>(endpoint, init);
   }
 
   // PUT request
-  async put<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, {
-      method: 'PUT',
-      body: data ? JSON.stringify(data) : null,
-    });
+  async put<T>(endpoint: string, data?: unknown, fetch?: typeof globalThis.fetch): Promise<ApiResponse<T>> {
+    const init: RequestInit & { fetch?: typeof globalThis.fetch } = { method: 'PUT' };
+    if (data !== undefined) {
+      init.body = JSON.stringify(data);
+    }
+    if (fetch) {
+      init.fetch = fetch;
+    }
+    return this.request<T>(endpoint, init);
   }
 
   // PATCH request
-  async patch<T>(endpoint: string, data?: any): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, {
-      method: 'PATCH',
-      body: data ? JSON.stringify(data) : null,
-    });
+  async patch<T>(endpoint: string, data?: unknown, fetch?: typeof globalThis.fetch): Promise<ApiResponse<T>> {
+    const init: RequestInit & { fetch?: typeof globalThis.fetch } = { method: 'PATCH' };
+    if (data !== undefined) {
+      init.body = JSON.stringify(data);
+    }
+    if (fetch) {
+      init.fetch = fetch;
+    }
+    return this.request<T>(endpoint, init);
   }
 
   // DELETE request
-  async delete<T>(endpoint: string): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, { method: 'DELETE' });
+  async delete<T>(endpoint: string, fetch?: typeof globalThis.fetch): Promise<ApiResponse<T>> {
+    return this.request<T>(endpoint, fetch ? { method: 'DELETE', fetch } : { method: 'DELETE' });
   }
 }
 

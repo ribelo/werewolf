@@ -37,15 +37,120 @@
     "federation_rules_label": "Federation/Rules (Optional)",
     "federation_rules_placeholder": "e.g., IPF Rules",
     "notes_label": "Notes (Optional)",
-    "notes_placeholder": "Any additional details about the competition...",
-    "bar_weight_label": "Bar Weight (kg)",
-    "edit_button": "Edit Competition",
+  "notes_placeholder": "Any additional details about the competition...",
+  "bar_weight_label": "Bar Weight (kg)",
+  "wizard_validation_warning": "Please complete the required fields before continuing.",
+  "edit_button": "Edit Competition",
     "details_tab": "Competition Details",
     "plates_tab": "Plate Inventory",
     "save_changes": "Save Changes",
     "cancel_changes": "Cancel",
     "saved_successfully": "Competition saved successfully",
-    "save_error": "Failed to save competition changes"
+  "save_error": "Failed to save competition changes",
+  "wizard": {
+    "page_title": "Create Contest • Werewolf Powerlifting",
+    "layout_title": "Contest Wizard",
+    "layout_subtitle": "Create competition and optional roster",
+    "title": "Contest Setup",
+    "step_label": "Step",
+    "step_connector": "of",
+    "steps": {
+      "basic": "Basic information",
+      "basic_hint": "Tell us when and where the contest will take place.",
+      "details": "Competition details",
+      "details_hint": "Provide organizer info and optional notes.",
+      "competitors": "Initial competitor drafts",
+      "competitors_hint": "Optionally pre-register lifters to speed up meet day."
+    },
+    "actions": {
+      "previous": "Previous",
+      "next": "Next",
+      "submit": "Create Contest",
+      "submitting": "Creating…"
+    },
+    "fields": {
+      "name": {
+        "label": "Contest name",
+        "placeholder": "Werewolf Open"
+      },
+      "date": {
+        "label": "Contest date"
+      },
+      "location": {
+        "label": "Location",
+        "placeholder": "Warsaw Power Arena"
+      },
+      "events": {
+        "label": "Events included"
+      },
+      "organizer": {
+        "label": "Organizer",
+        "placeholder": "Werewolf Club"
+      },
+      "federation_rules": {
+        "label": "Federation rules (optional)",
+        "placeholder": "IPF Classic"
+      },
+      "notes": {
+        "label": "Notes (optional)",
+        "placeholder": "Special equipment rules, schedule notes"
+      }
+    },
+    "events": {
+      "squat": "Squat",
+      "bench": "Bench",
+      "deadlift": "Deadlift"
+    },
+    "genders": {
+      "male": "Male",
+      "female": "Female"
+    },
+    "messages": {
+      "events_hint": "Discipline is derived automatically from the selected events.",
+      "success": "Contest created successfully.",
+      "error": "Failed to create contest."
+    },
+    "validation": {
+      "warning": "Please complete the required fields before continuing.",
+      "name_required": "Contest name is required",
+      "location_required": "Location is required",
+      "date_required": "Date is required",
+      "organizer_required": "Organizer is required",
+      "first_name_required": "First name is required",
+      "last_name_required": "Last name is required",
+      "birth_date_required": "Birth date is required",
+      "bodyweight_positive": "Bodyweight must be greater than 0"
+    },
+    "competitor": {
+      "first_name": "First name",
+      "last_name": "Last name",
+      "birth_date": "Birth date",
+      "gender": "Gender",
+      "club": "Club",
+      "club_placeholder": "Werewolf Club",
+      "city": "City",
+      "city_placeholder": "Warsaw",
+      "bodyweight": "Bodyweight (kg)",
+      "rack_squat": "Rack height (Squat)",
+      "rack_bench": "Rack height (Bench)",
+      "equipment": {
+        "legend": "Equipment category",
+        "multi": "Multi-ply",
+        "single": "Single-ply",
+        "wraps": "Knee wraps"
+      },
+      "add_button": "Add competitor",
+      "reset_button": "Reset form"
+    },
+    "drafts": {
+      "title": "Pre-registered competitors",
+      "meta": "{birthDate} • {gender} • {bodyweight} kg",
+      "club_city": "{club} • {city}",
+      "no_club": "No club",
+      "no_city": "No city",
+      "remove": "Remove"
+    }
+  }
   },
   "validation": {
     "name_required": "Contest name is required",
@@ -411,9 +516,11 @@
     "title": "Settings",
     "subtitle": "Configure application and manage data",
     "language_title": "Application Language",
-    "language_description": "Choose your preferred user interface language.",
-    "current_language": "Current language",
-    "database_title": "Database Management",
+  "language_description": "Choose your preferred user interface language.",
+  "current_language": "Current language",
+  "competition_title": "Competition Defaults",
+  "competition_description": "Defaults applied when creating a new contest.",
+  "database_title": "Database Management",
     "database_description": "Manage application data, create backups, and reset database.",
     "backup_description": "Create and restore backups of your contest data.",
     "reset_database_title": "Reset Database",
@@ -497,7 +604,7 @@
     "active": {
       "heading": "Active Contests",
       "description": "Fetched directly from the Werewolf Cloud API.",
-      "total": "{count} total",
+      "total_suffix": "total",
       "empty": "No contests yet. Launch your first meet from the Create Contest wizard.",
       "error_title": "Failed to load contests"
     },
@@ -532,11 +639,40 @@
     "default_bar": "Default bar weight (kg)",
     "language_label": "Interface language",
     "language_desc": "Choose your preferred language.",
+    "language_updated": "Language updated.",
+    "plates_title": "Default plate inventory",
+    "plates_description": "Configure the plate set applied when creating contests.",
+    "plates_weight": "Weight (kg)",
+    "plates_quantity": "Pairs per side",
+    "plates_color": "Color",
+    "plates_add": "Add plate",
+    "plates_remove": "Remove",
+    "plates_restore": "Restore defaults",
+    "plates_save": "Save plate set",
+    "plates_saved": "Default plate set saved.",
+    "plates_error": "Failed to save plate set",
+    "plates_validation_error": "Add at least one plate with weight and quantity.",
+    "plates_empty": "No plates defined.",
+    "plates_unsaved": "Unsaved changes present.",
     "toast_saved": "Settings saved.",
     "toast_error": "Failed to save setting",
     "reset_success": "Reset initiated.",
     "reset_error": "Failed to reset database",
-    "no_data": "No data"
+    "no_data": "No data",
+    "kv_title": "Cloudflare KV Backups",
+    "kv_description": "Durable KV namespace storing scheduled backups.",
+    "kv_total": "PLACEHOLDER_COUNT stored",
+    "kv_empty": "No backups stored yet.",
+    "kv_last_run": "Last update: {timestamp}",
+    "refresh": "Refresh",
+    "create_backup": "Create backup",
+    "creating_backup": "Creating…",
+    "loading": "Loading…",
+    "backup_created": "Backup {id} created.",
+    "backup_counts": "Contests: {contests} • Competitors: {competitors} • Registrations: {registrations}",
+    "contests_count": "Contests: PLACEHOLDER_COUNT",
+    "competitors_count": "Competitors: PLACEHOLDER_COUNT",
+    "registrations_count": "Registrations: PLACEHOLDER_COUNT"
   },
   "display_page": {
     "connection_retry": "Retry Connection",

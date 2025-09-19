@@ -1,11 +1,12 @@
 import { apiClient } from '$lib/api';
-import type { Settings, SystemHealth, DatabaseInfo } from '$lib/types';
+import type { Settings, SystemHealth, DatabaseInfo, BackupSummary } from '$lib/types';
 
-export const load = async () => {
-  const [settingsResp, healthResp, dbResp] = await Promise.allSettled([
-    apiClient.get<Settings>('/settings'),
-    apiClient.get<SystemHealth>('/system/health'),
-    apiClient.get<DatabaseInfo>('/system/database')
+export const load = async ({ fetch }) => {
+  const [settingsResp, healthResp, dbResp, backupsResp] = await Promise.allSettled([
+    apiClient.get<Settings>('/settings', fetch),
+    apiClient.get<SystemHealth>('/system/health', fetch),
+    apiClient.get<DatabaseInfo>('/system/database', fetch),
+    apiClient.get<BackupSummary>('/system/backups', fetch)
   ]);
 
   const unwrap = <T>(result: PromiseSettledResult<{ data: T; error: string | null }>) => {
@@ -24,6 +25,7 @@ export const load = async () => {
   const settings = unwrap(settingsResp);
   const health = unwrap(healthResp);
   const database = unwrap(dbResp);
+  const backups = unwrap(backupsResp);
 
   return {
     settings: settings.data,
@@ -32,6 +34,8 @@ export const load = async () => {
     healthError: health.error,
     database: database.data,
     databaseError: database.error,
+    backups: backups.data,
+    backupsError: backups.error,
     apiBase: apiClient.baseUrl,
   };
 };

@@ -51,9 +51,9 @@
     try {
       const [detailResp, photoResp] = await Promise.all([
         apiClient.get<CompetitorDetail>(`/competitors/${id}`),
-        apiClient.get<CompetitorPhoto>(`/competitors/${id}/photo`).catch((err) => {
+        apiClient.get<CompetitorPhoto>(`/competitors/${id}/photo`).catch(() => {
           // photo endpoint returns 404 when not present; ignore
-          return { data: null, error: null } as any;
+          return { data: null, error: null };
         }),
       ]);
 

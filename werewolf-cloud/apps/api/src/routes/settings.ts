@@ -2,71 +2,42 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import type { WerewolfEnvironment } from '../env';
-import { executeQuery, executeQueryOne, executeMutation, getCurrentTimestamp, convertKeysToCamelCase } from '../utils/database';
+import { executeQuery, executeQueryOne, executeMutation, getCurrentTimestamp } from '../utils/database';
+import {
+  getDefaultSettings,
+  sanitizeSettings,
+  serializeSettings,
+  mergeSettings,
+  coercePartialSettings,
+  sanitizePlateSet,
+} from '../utils/settings-helpers';
+import type { SettingsData } from '../utils/settings-helpers';
 
 const settings = new Hono<WerewolfEnvironment>();
+
+const plateDefinitionSchema = z.object({
+  weight: z.number().positive(),
+  quantity: z.number().int().min(0),
+  color: z.string(),
+});
 
 // GET /settings - Get all settings
 settings.get('/', async (c) => {
   const db = c.env.DB;
 
-  const settings = await executeQueryOne(
-    db,
-    'SELECT data FROM settings LIMIT 1'
-  );
+  const row = await executeQueryOne(db, 'SELECT data FROM settings LIMIT 1');
 
-  if (!settings) {
-    // Return default settings if none exist
-    return c.json({
-      data: {
-        language: 'pl',
-        ui: {
-          theme: 'light',
-          showWeights: true,
-          showAttempts: true,
-        },
-        competition: {
-          federationRules: 'IPF',
-          defaultBarWeight: 20,
-        },
-        database: {
-          backupEnabled: true,
-          autoBackupInterval: 24,
-        },
-      },
-      error: null,
-      requestId: c.get('requestId'),
-    });
-  }
-
-  // Parse the JSON data and return structured object
   try {
-    const parsedSettings = JSON.parse(settings.data);
+    const parsed = row ? sanitizeSettings(JSON.parse(row.data)) : getDefaultSettings();
     return c.json({
-      data: parsedSettings,
+      data: parsed,
       error: null,
       requestId: c.get('requestId'),
     });
   } catch (error) {
     console.error('Failed to parse settings data:', error);
-    // Return defaults if parsing fails
     return c.json({
-      data: {
-        language: 'pl',
-        ui: {
-          theme: 'light',
-          showWeights: true,
-          showAttempts: true,
-        },
-        competition: {
-          federationRules: 'IPF',
-          defaultBarWeight: 20,
-        },
-        database: {
-          backupEnabled: true,
-          autoBackupInterval: 24,
-        },
-      },
+      data: getDefaultSettings(),
       error: null,
       requestId: c.get('requestId'),
     });
@@ -84,6 +55,7 @@ settings.put('/', zValidator('json', z.object({
   competition: z.object({
     federationRules: z.string().optional(),
     defaultBarWeight: z.number().optional(),
+    defaultPlateSet: z.array(plateDefinitionSchema).optional(),
   }).optional(),
   database: z.object({
     backupEnabled: z.boolean().optional(),
@@ -92,8 +64,10 @@ settings.put('/', zValidator('json', z.object({
 })), async (c) => {
   const db = c.env.DB;
   const input = c.req.valid('json');
-
-  const settingsJson = JSON.stringify(input);
+  const row = await executeQueryOne(db, 'SELECT data FROM settings WHERE id = 1');
+  const currentSettings = row ? sanitizeSettings(JSON.parse(row.data)) : getDefaultSettings();
+  const updates = coercePartialSettings(input);
+  const merged = mergeSettings(currentSettings, updates);
 
   await executeMutation(
     db,
@@ -101,7 +75,7 @@ settings.put('/', zValidator('json', z.object({
     INSERT OR REPLACE INTO settings (id, data, updated_at)
     VALUES (1, ?, ?)
     `,
-    [settingsJson, getCurrentTimestamp()]
+    [serializeSettings(merged), getCurrentTimestamp()]
   );
 
   return c.json({
@@ -120,20 +94,10 @@ settings.patch('/ui', zValidator('json', z.object({
   const db = c.env.DB;
   const input = c.req.valid('json');
 
-  // Get current settings
-  const current = await executeQueryOne(
-    db,
-    'SELECT data FROM settings WHERE id = 1'
-  );
-
-  const currentSettings = current ? JSON.parse(current.data) : {};
-  const updatedSettings = {
-    ...currentSettings,
-    ui: {
-      ...currentSettings.ui,
-      ...input,
-    },
-  };
+  const row = await executeQueryOne(db, 'SELECT data FROM settings WHERE id = 1');
+  const currentSettings = row ? sanitizeSettings(JSON.parse(row.data)) : getDefaultSettings();
+  const updates = coercePartialSettings({ ui: input });
+  const merged = mergeSettings(currentSettings, updates);
 
   await executeMutation(
     db,
@@ -141,7 +105,7 @@ settings.patch('/ui', zValidator('json', z.object({
     INSERT OR REPLACE INTO settings (id, data, updated_at)
     VALUES (1, ?, ?)
     `,
-    [JSON.stringify(updatedSettings), getCurrentTimestamp()]
+    [serializeSettings(merged), getCurrentTimestamp()]
   );
 
   return c.json({
@@ -155,17 +119,9 @@ settings.patch('/ui', zValidator('json', z.object({
 settings.get('/ui', async (c) => {
   const db = c.env.DB;
 
-  const current = await executeQueryOne(
-    db,
-    'SELECT data FROM settings WHERE id = 1'
-  );
-
-  const currentSettings = current ? JSON.parse(current.data) : {};
-  const ui = currentSettings.ui ?? {
-    theme: 'light',
-    showWeights: true,
-    showAttempts: true,
-  };
+  const row = await executeQueryOne(db, 'SELECT data FROM settings WHERE id = 1');
+  const settingsData = row ? sanitizeSettings(JSON.parse(row.data)) : getDefaultSettings();
+  const ui = settingsData.ui;
 
   return c.json({
     data: ui,
@@ -178,24 +134,30 @@ settings.get('/ui', async (c) => {
 settings.patch('/competition', zValidator('json', z.object({
   federationRules: z.string().optional(),
   defaultBarWeight: z.number().optional(),
+  defaultPlateSet: z.array(plateDefinitionSchema).optional(),
 })), async (c) => {
   const db = c.env.DB;
   const input = c.req.valid('json');
 
-  // Get current settings
-  const current = await executeQueryOne(
-    db,
-    'SELECT data FROM settings WHERE id = 1'
-  );
+  const row = await executeQueryOne(db, 'SELECT data FROM settings WHERE id = 1');
+  const currentSettings = row ? sanitizeSettings(JSON.parse(row.data)) : getDefaultSettings();
 
-  const currentSettings = current ? JSON.parse(current.data) : {};
-  const updatedSettings = {
-    ...currentSettings,
-    competition: {
-      ...currentSettings.competition,
-      ...input,
-    },
-  };
+  const competitionUpdate: Partial<SettingsData['competition']> = {};
+  if (input.federationRules !== undefined) {
+    competitionUpdate.federationRules = input.federationRules;
+  }
+  if (input.defaultBarWeight !== undefined) {
+    competitionUpdate.defaultBarWeight = input.defaultBarWeight;
+  }
+  if (input.defaultPlateSet !== undefined) {
+    competitionUpdate.defaultPlateSet = sanitizePlateSet(input.defaultPlateSet);
+  }
+
+  const updates: Partial<SettingsData> = Object.keys(competitionUpdate).length
+    ? { competition: competitionUpdate }
+    : {};
+
+  const merged = mergeSettings(currentSettings, updates);
 
   await executeMutation(
     db,
@@ -203,7 +165,7 @@ settings.patch('/competition', zValidator('json', z.object({
     INSERT OR REPLACE INTO settings (id, data, updated_at)
     VALUES (1, ?, ?)
     `,
-    [JSON.stringify(updatedSettings), getCurrentTimestamp()]
+    [serializeSettings(merged), getCurrentTimestamp()]
   );
 
   return c.json({
@@ -221,20 +183,10 @@ settings.patch('/database', zValidator('json', z.object({
   const db = c.env.DB;
   const input = c.req.valid('json');
 
-  // Get current settings
-  const current = await executeQueryOne(
-    db,
-    'SELECT data FROM settings WHERE id = 1'
-  );
-
-  const currentSettings = current ? JSON.parse(current.data) : {};
-  const updatedSettings = {
-    ...currentSettings,
-    database: {
-      ...currentSettings.database,
-      ...input,
-    },
-  };
+  const row = await executeQueryOne(db, 'SELECT data FROM settings WHERE id = 1');
+  const currentSettings = row ? sanitizeSettings(JSON.parse(row.data)) : getDefaultSettings();
+  const updates = coercePartialSettings({ database: input });
+  const merged = mergeSettings(currentSettings, updates);
 
   await executeMutation(
     db,
@@ -242,7 +194,7 @@ settings.patch('/database', zValidator('json', z.object({
     INSERT OR REPLACE INTO settings (id, data, updated_at)
     VALUES (1, ?, ?)
     `,
-    [JSON.stringify(updatedSettings), getCurrentTimestamp()]
+    [serializeSettings(merged), getCurrentTimestamp()]
   );
 
   return c.json({
@@ -259,17 +211,9 @@ settings.put('/language', zValidator('json', z.object({
   const db = c.env.DB;
   const { language } = c.req.valid('json');
 
-  // Get current settings
-  const current = await executeQueryOne(
-    db,
-    'SELECT data FROM settings WHERE id = 1'
-  );
-
-  const currentSettings = current ? JSON.parse(current.data) : {};
-  const updatedSettings = {
-    ...currentSettings,
-    language,
-  };
+  const row = await executeQueryOne(db, 'SELECT data FROM settings WHERE id = 1');
+  const currentSettings = row ? sanitizeSettings(JSON.parse(row.data)) : getDefaultSettings();
+  const merged = mergeSettings(currentSettings, { language });
 
   await executeMutation(
     db,
@@ -277,7 +221,7 @@ settings.put('/language', zValidator('json', z.object({
     INSERT OR REPLACE INTO settings (id, data, updated_at)
     VALUES (1, ?, ?)
     `,
-    [JSON.stringify(updatedSettings), getCurrentTimestamp()]
+    [serializeSettings(merged), getCurrentTimestamp()]
   );
 
   return c.json({
@@ -291,12 +235,8 @@ settings.put('/language', zValidator('json', z.object({
 settings.get('/language', async (c) => {
   const db = c.env.DB;
 
-  const current = await executeQueryOne(
-    db,
-    'SELECT data FROM settings WHERE id = 1'
-  );
-
-  const settings = current ? JSON.parse(current.data) : {};
+  const current = await executeQueryOne(db, 'SELECT data FROM settings WHERE id = 1');
+  const settings = current ? sanitizeSettings(JSON.parse(current.data)) : getDefaultSettings();
   return c.json({
     data: { language: settings.language || 'pl' },
     error: null,
@@ -308,22 +248,7 @@ settings.get('/language', async (c) => {
 settings.post('/reset', async (c) => {
   const db = c.env.DB;
 
-  const defaultSettings = {
-    language: 'pl',
-    ui: {
-      theme: 'light',
-      showWeights: true,
-      showAttempts: true,
-    },
-    competition: {
-      federationRules: 'IPF',
-      defaultBarWeight: 20,
-    },
-    database: {
-      backupEnabled: true,
-      autoBackupInterval: 24,
-    },
-  };
+  const defaultSettings = getDefaultSettings();
 
   await executeMutation(
     db,
@@ -331,7 +256,7 @@ settings.post('/reset', async (c) => {
     INSERT OR REPLACE INTO settings (id, data, updated_at)
     VALUES (1, ?, ?)
     `,
-    [JSON.stringify(defaultSettings), getCurrentTimestamp()]
+    [serializeSettings(defaultSettings), getCurrentTimestamp()]
   );
 
   return c.json({

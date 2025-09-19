@@ -9,7 +9,11 @@
     LiveEvent,
     Registration,
     CurrentAttempt,
+    CurrentAttemptBundle,
+    AttemptStatus,
+    AttemptNumber,
   } from '$lib/types';
+  import { bundleToCurrentAttempt } from '$lib/current-attempt';
 
   export let data: PageData;
 
@@ -28,7 +32,8 @@
   // Real-time state
   let connectionStatus: ConnectionStatus = 'offline';
 let liveAttempts: Attempt[] = [...attempts];
-let liveCurrentAttempt: CurrentAttempt | null = currentAttempt;
+let liveCurrentBundle: CurrentAttemptBundle | null = currentAttempt;
+let liveCurrentAttempt: CurrentAttempt | null = currentAttempt ? bundleToCurrentAttempt(currentAttempt) : null;
 let lastUpdateTime: Date | null = null;
 let recentResultsContainer: HTMLElement | null = null;
 
@@ -70,36 +75,49 @@ let recentResultsContainer: HTMLElement | null = null;
     lastUpdateTime = new Date();
   }
 
-  function handleLiveEvent(event: LiveEvent) {
-    switch (event.type) {
+function handleLiveEvent(event: LiveEvent) {
+  switch (event.type) {
       case 'attempt.upserted': {
-        const index = liveAttempts.findIndex((item) => item.id === event.data.id);
+        const payload = event.data as Attempt | undefined;
+        if (!payload) break;
+        const index = liveAttempts.findIndex((item) => item.id === payload.id);
         if (index >= 0) {
-          liveAttempts[index] = event.data;
+          liveAttempts[index] = payload;
         } else {
-          liveAttempts = [...liveAttempts, event.data];
+          liveAttempts = [...liveAttempts, payload];
         }
         liveAttempts = [...liveAttempts];
         break;
       }
       case 'attempt.resultUpdated': {
-        const index = liveAttempts.findIndex((item) => item.id === event.data.id);
+        const payload = event.data as Attempt | undefined;
+        if (!payload) break;
+        const index = liveAttempts.findIndex((item) => item.id === payload.id);
         if (index >= 0) {
-          liveAttempts[index] = { ...liveAttempts[index], ...event.data };
+          liveAttempts[index] = { ...liveAttempts[index], ...payload };
           liveAttempts = [...liveAttempts];
         }
         break;
       }
       case 'attempt.currentSet': {
-        liveCurrentAttempt = event.data;
+        const payload = event.data as CurrentAttemptBundle | Attempt | CurrentAttempt | undefined;
+        if (payload) {
+          liveCurrentBundle = 'attempt' in (payload as any) ? (payload as CurrentAttemptBundle) : liveCurrentBundle;
+          liveCurrentAttempt = toCurrentAttemptSummary(payload);
+        }
+        break;
+      }
+      case 'attempt.currentCleared': {
+        liveCurrentAttempt = null;
+        liveCurrentBundle = null;
         break;
       }
       default:
         break;
     }
-  }
+}
 
-  function computePendingAttempts(): Attempt[] {
+function computePendingAttempts(): Attempt[] {
     return liveAttempts
       .filter((attempt) => attempt.status === 'Pending')
       .sort((a, b) => {
@@ -112,7 +130,38 @@ let recentResultsContainer: HTMLElement | null = null;
         return (priority[a.liftType] ?? 4) - (priority[b.liftType] ?? 4);
       })
       .slice(0, 12);
+}
+
+  function toCurrentAttemptSummary(input: CurrentAttemptBundle | Attempt | CurrentAttempt): CurrentAttempt {
+    if ('attempt' in (input as any)) {
+      return bundleToCurrentAttempt(input as CurrentAttemptBundle);
+    }
+
+    if ('competitorName' in (input as any) && (input as CurrentAttempt).competitorName) {
+      return input as CurrentAttempt;
+    }
+
+    const attempt = input as Attempt;
+    const registration = registrations.find((entry) => entry.id === attempt.registrationId);
+    const competitorName = registration
+      ? `${registration.firstName} ${registration.lastName}`
+      : attempt.competitorName ?? 'Unknown Competitor';
+
+    return {
+      id: attempt.id,
+      registrationId: attempt.registrationId,
+      competitorName,
+      liftType: attempt.liftType,
+      attemptNumber: attempt.attemptNumber as AttemptNumber,
+      weight: attempt.weight,
+      status: attempt.status as AttemptStatus,
+      competitionOrder: registration?.competitionOrder ?? null,
+      lotNumber: attempt.lotNumber ?? null,
+      updatedAt: attempt.updatedAt ?? null,
+    };
   }
+
+  $: livePlatePlan = liveCurrentBundle?.platePlan ?? null;
 
   function computeRecentAttempts(): Attempt[] {
     return liveAttempts
@@ -299,6 +348,22 @@ let recentResultsContainer: HTMLElement | null = null;
               <p class="text-label text-text-secondary mb-1">Declared Weight</p>
               <p class="text-display text-primary-red">{liveCurrentAttempt.weight}kg</p>
             </div>
+            {#if livePlatePlan}
+              <div class="md:col-span-4 space-y-2">
+                <p class="text-label text-text-secondary mb-1">Plate Plan</p>
+                <p class="text-body text-text-secondary">
+                  Bar {livePlatePlan.barWeight}kg • Total {livePlatePlan.total}kg
+                </p>
+                <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {#each livePlatePlan.plates as plate}
+                    <div class="flex items-center justify-between bg-element-bg border border-border-color rounded px-3 py-2">
+                      <span>{plate.plateWeight}kg</span>
+                      <span>× {plate.count}</span>
+                    </div>
+                  {/each}
+                </div>
+              </div>
+            {/if}
           </div>
         </section>
       {/if}

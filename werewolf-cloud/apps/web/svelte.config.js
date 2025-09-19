@@ -21,6 +21,16 @@ const config = {
 	preprocess: vitePreprocess(),
 	kit: {
 		adapter
+	},
+	// Suppress unused export property warnings for SvelteKit standard props
+	onwarn: (warning, handler) => {
+		// Suppress unused export property warnings (Svelte 5)
+		if (warning.code === 'unused-export-property') return;
+		// Suppress unused export let warnings (Svelte 4 fallback)
+		if (warning.code === 'unused-export-let') return;
+		
+		// Handle all other warnings normally
+		handler(warning);
 	}
 };
 

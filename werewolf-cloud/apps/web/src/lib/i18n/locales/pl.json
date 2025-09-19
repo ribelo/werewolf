@@ -37,15 +37,120 @@
     "federation_rules_label": "Federacja/Regulamin (Opcjonalne)",
     "federation_rules_placeholder": "np. Regulamin PZP",
     "notes_label": "Notatki (Opcjonalne)",
-    "notes_placeholder": "Dodatkowe szczegóły o zawodach...",
-    "bar_weight_label": "Waga sztangi (kg)",
-    "edit_button": "Edytuj Zawody",
+  "notes_placeholder": "Dodatkowe szczegóły o zawodach...",
+  "bar_weight_label": "Waga sztangi (kg)",
+  "wizard_validation_warning": "Uzupełnij wymagane pola przed przejściem dalej.",
+  "edit_button": "Edytuj Zawody",
     "details_tab": "Szczegóły Zawodów",
     "plates_tab": "Obciążenie",
     "save_changes": "Zapisz Zmiany",
     "cancel_changes": "Anuluj",
     "saved_successfully": "Zawody zapisane pomyślnie",
-    "save_error": "Nie udało się zapisać zmian"
+  "save_error": "Nie udało się zapisać zmian",
+  "wizard": {
+    "page_title": "Utwórz zawody • Werewolf Powerlifting",
+    "layout_title": "Kreator zawodów",
+    "layout_subtitle": "Utwórz zawody i opcjonalną listę startową",
+    "title": "Konfiguracja zawodów",
+    "step_label": "Krok",
+    "step_connector": "z",
+    "steps": {
+      "basic": "Informacje podstawowe",
+      "basic_hint": "Podaj datę i miejsce rozgrywania zawodów.",
+      "details": "Szczegóły zawodów",
+      "details_hint": "Uzupełnij dane organizatora oraz ewentualne dodatkowe informacje.",
+      "competitors": "Wstępna lista zawodników",
+      "competitors_hint": "Możesz dodać zawodników z wyprzedzeniem, aby przyspieszyć pracę w dniu zawodów."
+    },
+    "actions": {
+      "previous": "Wstecz",
+      "next": "Dalej",
+      "submit": "Utwórz zawody",
+      "submitting": "Tworzenie…"
+    },
+    "fields": {
+      "name": {
+        "label": "Nazwa zawodów",
+        "placeholder": "Werewolf Open"
+      },
+      "date": {
+        "label": "Data zawodów"
+      },
+      "location": {
+        "label": "Lokalizacja",
+        "placeholder": "Warszawa Power Arena"
+      },
+      "events": {
+        "label": "Dyscypliny"
+      },
+      "organizer": {
+        "label": "Organizator",
+        "placeholder": "Klub Werewolf"
+      },
+      "federation_rules": {
+        "label": "Regulamin (opcjonalnie)",
+        "placeholder": "Regulamin IPF"
+      },
+      "notes": {
+        "label": "Notatki (opcjonalnie)",
+        "placeholder": "Np. zasady sprzętowe, uwagi do harmonogramu"
+      }
+    },
+    "events": {
+      "squat": "Przysiad",
+      "bench": "Wyciskanie leżąc",
+      "deadlift": "Martwy ciąg"
+    },
+    "genders": {
+      "male": "Mężczyzna",
+      "female": "Kobieta"
+    },
+    "messages": {
+      "events_hint": "Dyscyplina jest ustalana automatycznie na podstawie wybranych prób.",
+      "success": "Zawody zostały utworzone.",
+      "error": "Nie udało się utworzyć zawodów."
+    },
+    "validation": {
+      "warning": "Uzupełnij wymagane pola przed kontynuacją.",
+      "name_required": "Nazwa zawodów jest wymagana",
+      "location_required": "Lokalizacja jest wymagana",
+      "date_required": "Data jest wymagana",
+      "organizer_required": "Organizator jest wymagany",
+      "first_name_required": "Imię jest wymagane",
+      "last_name_required": "Nazwisko jest wymagane",
+      "birth_date_required": "Data urodzenia jest wymagana",
+      "bodyweight_positive": "Waga ciała musi być większa od 0"
+    },
+    "competitor": {
+      "first_name": "Imię",
+      "last_name": "Nazwisko",
+      "birth_date": "Data urodzenia",
+      "gender": "Płeć",
+      "club": "Klub",
+      "club_placeholder": "Klub Werewolf",
+      "city": "Miasto",
+      "city_placeholder": "Warszawa",
+      "bodyweight": "Waga ciała (kg)",
+      "rack_squat": "Wysokość stojaków (przysiad)",
+      "rack_bench": "Wysokość stojaków (wyciskanie)",
+      "equipment": {
+        "legend": "Sprzęt",
+        "multi": "Wielo-warstwowy",
+        "single": "Jedno-warstwowy",
+        "wraps": "Owinięcia kolan"
+      },
+      "add_button": "Dodaj zawodnika",
+      "reset_button": "Wyczyść formularz"
+    },
+    "drafts": {
+      "title": "Zarejestrowani zawodnicy",
+      "meta": "{birthDate} • {gender} • {bodyweight} kg",
+      "club_city": "{club} • {city}",
+      "no_club": "Brak klubu",
+      "no_city": "Brak miasta",
+      "remove": "Usuń"
+    }
+  }
   },
   "validation": {
     "name_required": "Nazwa zawodów jest wymagana",
@@ -411,10 +516,12 @@
   "settings": {
     "title": "Ustawienia",
     "subtitle": "Konfiguruj aplikację i zarządzaj danymi",
-    "language_title": "Język Aplikacji",
-    "language_description": "Wybierz preferowany język interfejsu użytkownika.",
-    "current_language": "Aktualny język",
-    "database_title": "Zarządzanie Bazą Danych",
+  "language_title": "Język Aplikacji",
+  "language_description": "Wybierz preferowany język interfejsu użytkownika.",
+  "current_language": "Aktualny język",
+  "competition_title": "Domyślne ustawienia zawodów",
+  "competition_description": "Wartości używane przy zakładaniu nowych zawodów.",
+  "database_title": "Zarządzanie Bazą Danych",
     "database_description": "Zarządzaj danymi aplikacji, twórz kopie zapasowe i resetuj bazę danych.",
     "backup_description": "Twórz i przywracaj kopie zapasowe danych zawodów.",
     "reset_database_title": "Zresetuj Bazę Danych",
@@ -498,7 +605,7 @@
     "active": {
       "heading": "Aktywne zawody",
       "description": "Dane pobierane bezpośrednio z Werewolf Cloud API.",
-      "total": "{count} łącznie",
+      "total_suffix": "łącznie",
       "empty": "Brak zawodów. Uruchom pierwsze zawody w kreatorze.",
       "error_title": "Nie udało się wczytać zawodów"
     },
@@ -533,11 +640,40 @@
     "default_bar": "Domyślny ciężar sztangi (kg)",
     "language_label": "Język interfejsu",
     "language_desc": "Wybierz preferowany język.",
+    "language_updated": "Zmieniono język interfejsu.",
+    "plates_title": "Domyślny zestaw talerzy",
+    "plates_description": "Skonfiguruj talerze dodawane podczas tworzenia zawodów.",
+    "plates_weight": "Waga (kg)",
+    "plates_quantity": "Par na stronę",
+    "plates_color": "Kolor",
+    "plates_add": "Dodaj talerz",
+    "plates_remove": "Usuń",
+    "plates_restore": "Przywróć domyślne",
+    "plates_save": "Zapisz zestaw",
+    "plates_saved": "Domyślny zestaw talerzy zapisany.",
+    "plates_error": "Nie udało się zapisać zestawu talerzy",
+    "plates_validation_error": "Dodaj przynajmniej jeden talerz z wagą i ilością.",
+    "plates_empty": "Brak zdefiniowanych talerzy.",
+    "plates_unsaved": "Masz niezapisane zmiany.",
     "toast_saved": "Ustawienia zapisane.",
     "toast_error": "Nie udało się zapisać ustawień",
     "reset_success": "Reset został uruchomiony.",
     "reset_error": "Nie udało się zresetować bazy",
-    "no_data": "Brak danych"
+    "no_data": "Brak danych",
+    "kv_title": "Kopie zapasowe w Cloudflare KV",
+    "kv_description": "Przestrzeń KV przechowująca harmonogram kopii zapasowych.",
+    "kv_total": "PLACEHOLDER_COUNT przechowywanych",
+    "kv_empty": "Brak zapisanych kopii.",
+    "kv_last_run": "Ostatnia aktualizacja: {timestamp}",
+    "refresh": "Odśwież",
+    "create_backup": "Utwórz kopię",
+    "creating_backup": "Tworzenie…",
+    "loading": "Ładowanie…",
+    "backup_created": "Utworzono kopię {id}.",
+    "backup_counts": "Zawody: {contests} • Zawodnicy: {competitors} • Rejestracje: {registrations}",
+    "contests_count": "Zawody: PLACEHOLDER_COUNT",
+    "competitors_count": "Zawodnicy: PLACEHOLDER_COUNT",
+    "registrations_count": "Rejestracje: PLACEHOLDER_COUNT"
   },
   "display_page": {
     "connection_retry": "Spróbuj ponownie",

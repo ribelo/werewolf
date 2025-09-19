@@ -1,6 +1,6 @@
 import { writable, type Readable } from 'svelte/store';
 import { getApiBase } from './config';
-import type { LiveEvent, ConnectionStatus, Attempt, CurrentAttempt } from './types';
+import type { LiveEvent, ConnectionStatus, Attempt, CurrentAttemptBundle } from './types';
 import { apiClient } from './api';
 
 class RealtimeClientImpl {
@@ -174,13 +174,14 @@ class RealtimeClientImpl {
 
       try {
         // Poll current attempt
-        const currentResponse = await apiClient.get<CurrentAttempt | null>(`/contests/${this.contestId}/attempts/current`);
+        const currentResponse = await apiClient.get<CurrentAttemptBundle | null>(`/contests/${this.contestId}/attempts/current`);
         if (currentResponse.data) {
           const liveEvent: LiveEvent = {
             type: 'attempt.currentSet',
             contestId: this.contestId,
             timestamp: new Date().toISOString(),
-            data: currentResponse.data
+            data: currentResponse.data,
+            payload: currentResponse.data
           };
           this._events.set(liveEvent);
         }
@@ -199,7 +200,8 @@ class RealtimeClientImpl {
               type: 'attempt.upserted',
               contestId: this.contestId!,
               timestamp: attempt.updatedAt,
-              data: attempt
+              data: attempt,
+              payload: attempt
             };
             this._events.set(liveEvent);
           });

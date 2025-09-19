@@ -23,32 +23,61 @@
     offline: 'layout.status.offline',
   };
 
-  onMount(() => {
+  type WindowWithStatus = Window & {
+    __werewolfStatus?: {
+      status: ApiStatus;
+      statusDetail: string;
+      statusDetailKey: string | null;
+    };
+  };
+
+  function setStatus(newStatus: ApiStatus, detail = '', detailKey: string | null = null) {
+    status = newStatus;
+    statusDetail = detail;
+    statusDetailKey = detailKey;
+
+    if (typeof window !== 'undefined') {
+      (window as WindowWithStatus).__werewolfStatus = {
+        status,
+        statusDetail,
+        statusDetailKey,
+      };
+    }
+  }
+
+ onMount(() => {
+    console.log('[layout] onMount');
     checkApiStatus();
   });
 
   async function checkApiStatus(): Promise<void> {
-    status = 'checking';
-    statusDetail = '';
-    statusDetailKey = null;
+    setStatus('checking');
 
     try {
       const response = await apiClient.get<SystemHealth>('/system/health');
 
       if (response.error) {
-        status = 'degraded';
-        statusDetail = response.error;
-        statusDetailKey = null;
+        console.log('[layout] checkApiStatus degraded due to error', response.error);
+        setStatus('degraded', response.error, null);
         return;
       }
 
-      const { status: healthStatus } = response.data ?? { status: 'unknown' };
-      status = healthStatus?.toLowerCase() === 'ok' ? 'online' : 'degraded';
-      statusDetailKey = null;
+      const normalized = (response.data?.status ?? '').toLowerCase();
+
+      if (['ok', 'healthy', 'online'].includes(normalized)) {
+        console.log('[layout] checkApiStatus online');
+        setStatus('online');
+      } else if (normalized === 'unknown' || normalized === '') {
+        console.log('[layout] checkApiStatus unknown -> degraded');
+        setStatus('degraded', '', 'layout.status.fallback_detail');
+      } else {
+        console.log('[layout] checkApiStatus degraded', response.data?.status);
+        setStatus('degraded', response.data?.status ?? normalized, null);
+      }
     } catch (error) {
-      status = 'offline';
-      statusDetail = error instanceof Error ? error.message : '';
-      statusDetailKey = statusDetail ? null : 'layout.status.fallback_detail';
+      console.error('[layout] checkApiStatus offline', error);
+      const message = error instanceof Error ? error.message : '';
+      setStatus('offline', message, message ? null : 'layout.status.fallback_detail');
     }
   }
 

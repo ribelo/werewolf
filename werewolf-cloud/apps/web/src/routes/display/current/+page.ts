@@ -1,6 +1,6 @@
 import { apiClient } from '$lib/api';
 import { OfflineCache } from '$lib/cache';
-import type { ContestDetail, Registration, Attempt, CurrentAttempt, ReferenceData, WeightClass, AgeCategory } from '$lib/types';
+import type { ContestDetail, Registration, Attempt, CurrentAttemptBundle, ReferenceData, WeightClass, AgeCategory } from '$lib/types';
 
 export const load = async ({ url }) => {
   const contestId = url.searchParams.get('contestId');
@@ -28,7 +28,7 @@ export const load = async ({ url }) => {
     const contestResponse = await apiClient.get<ContestDetail>(`/contests/${contestId}`);
     const regResponse = await apiClient.get<Registration[]>(`/contests/${contestId}/registrations`);
     const attemptsResponse = await apiClient.get<Attempt[]>(`/contests/${contestId}/attempts`);
-    const currentAttemptResponse = await apiClient.get<CurrentAttempt | null>(`/contests/${contestId}/attempts/current`);
+    const currentAttemptResponse = await apiClient.get<CurrentAttemptBundle | null>(`/contests/${contestId}/attempts/current`);
     const weightClassesResponse = await apiClient.get<WeightClass[]>(`/reference/weight-classes`);
     const ageCategoriesResponse = await apiClient.get<AgeCategory[]>(`/reference/age-categories`);
 

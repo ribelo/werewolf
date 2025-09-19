@@ -33,8 +33,10 @@
   },
   "type": "module",
   "dependencies": {
+    "@formatjs/icu-messageformat-parser": "^2",
     "@sveltejs/adapter-cloudflare": "^4.4.4",
+    "intl-messageformat": "^10",
     "qrcode": "^1.5.3",
-    "svelte-i18n": "3.7.3"
+    "svelte-i18n": "3.6.0"
   }
 }

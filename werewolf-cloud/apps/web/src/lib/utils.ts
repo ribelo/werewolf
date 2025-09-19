@@ -25,14 +25,88 @@ export function getStatusClasses(status: string): string {
 }
 
 /**
- * Format equipment flags into human-readable text
+ * Format attempt status for display
  */
-export function formatEquipment(reg: Registration): string {
-  const equipment = [];
-  if (reg.equipmentM) equipment.push('Multi-ply');
-  if (reg.equipmentSm) equipment.push('Single-ply');
-  if (reg.equipmentT) equipment.push('Wraps');
-  return equipment.length > 0 ? equipment.join(', ') : 'Raw';
+export function formatStatus(status: string): string {
+  const statusKey = status.toLowerCase();
+  const statusMap: Record<string, string> = {
+    successful: '✓',
+    failed: '✗',
+    pending: '○',
+    skipped: '-',
+    good: '✓',
+    bad: '✗',
+    current: '●',
+    none: ''
+  };
+
+  return statusMap[statusKey] ?? status;
+}
+
+/**
+ * Format attempt weight and status
+ */
+export function formatAttempt(weight: number, status: string): string {
+  const formattedWeight = formatWeight(weight);
+  const statusSymbol = formatStatus(status);
+  return statusSymbol ? `${formattedWeight}${statusSymbol}` : formattedWeight;
+}
+
+/**
+ * Format equipment type for display
+ */
+export function formatEquipment(equipment: string): string;
+export function formatEquipment(reg: Registration): string;
+export function formatEquipment(equipmentOrReg: string | Registration): string {
+  if (typeof equipmentOrReg === 'string') {
+    // Handle string equipment type
+    const equipmentKey = equipmentOrReg.toLowerCase();
+    const equipmentMap: Record<string, string> = {
+      raw: 'Raw',
+      'single-ply': 'Single-ply',
+      'multi-ply': 'Multi-ply',
+      wraps: 'Wraps',
+      'raw-with-wraps': 'Raw with Wraps'
+    };
+    return equipmentMap[equipmentKey] ?? equipmentOrReg;
+  } else {
+    // Handle Registration object (existing logic)
+    const equipment: string[] = [];
+    if (equipmentOrReg.equipmentM) equipment.push('Multi-ply');
+    if (equipmentOrReg.equipmentSm) equipment.push('Single-ply');
+    if (equipmentOrReg.equipmentT) equipment.push('Wraps');
+    return equipment.length > 0 ? equipment.join(', ') : 'Raw';
+  }
+}
+
+/**
+ * Format competitor full name
+ */
+export function formatCompetitorName(firstName: string, lastName: string): string {
+  return `${firstName} ${lastName}`.trim();
+}
+
+/**
+ * Format weight with proper units (kg)
+ */
+export function formatWeight(weight: number): string {
+  return `${weight}kg`;
+}
+
+/**
+ * Calculate age from birth date
+ */
+export function formatAge(birthDate: string): number {
+  const birth = new Date(birthDate);
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+    age--;
+  }
+
+  return age;
 }
 
 /**

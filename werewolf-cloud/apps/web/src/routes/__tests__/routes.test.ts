@@ -115,6 +115,12 @@ vi.mock('../contests/[id]/+page.ts', () => ({
         judge2Decision: true,
         judge3Decision: true,
         notes: 'Good lift',
+        firstName: 'John',
+        lastName: 'Doe',
+        competitorName: 'John Doe',
+        competitionOrder: 1,
+        lotNumber: 1,
+        timestamp: '2024-01-01T10:00:00Z',
         createdAt: '2024-01-01T10:00:00Z',
         updatedAt: '2024-01-01T10:00:00Z'
       },
@@ -125,18 +131,89 @@ vi.mock('../contests/[id]/+page.ts', () => ({
         attemptNumber: 1,
         weight: 150.0,
         status: 'Pending',
+        judge1Decision: null,
+        judge2Decision: null,
+        judge3Decision: null,
+        firstName: 'John',
+        lastName: 'Doe',
+        competitorName: 'John Doe',
+        competitionOrder: 1,
+        lotNumber: 1,
+        timestamp: '2024-01-01T10:05:00Z',
         createdAt: '2024-01-01T10:05:00Z',
         updatedAt: '2024-01-01T10:05:00Z'
       }
     ],
     currentAttempt: {
-      id: 'attempt2',
-      registrationId: 'reg1',
-      competitorName: 'John Doe',
-      liftType: 'Bench',
-      attemptNumber: 1,
-      weight: 150.0,
-      status: 'Pending'
+      contest: {
+        id: '1',
+        name: 'Test Contest',
+        date: '2024-01-01',
+        location: 'Test Location',
+        discipline: 'Powerlifting',
+        status: 'InProgress',
+        barWeight: 20,
+        mensBarWeight: 20,
+        womensBarWeight: 15
+      },
+      attempt: {
+        id: 'attempt2',
+        registrationId: 'reg1',
+        liftType: 'Bench',
+        attemptNumber: 1,
+        weight: 150.0,
+        status: 'Pending',
+        competitionOrder: 1,
+        lotNumber: 1,
+        updatedAt: '2024-01-01T10:05:00Z'
+      },
+      registration: {
+        id: 'reg1',
+        contestId: '1',
+        bodyweight: 85.5,
+        weightClassId: 'wc1',
+        weightClassName: '85kg',
+        ageCategoryId: 'ac1',
+        ageCategoryName: 'Open',
+        equipmentM: true,
+        equipmentSm: false,
+        equipmentT: false,
+        rackHeightSquat: 45,
+        rackHeightBench: 40,
+        competitionOrder: 1
+      },
+      competitor: {
+        id: 'comp1',
+        firstName: 'John',
+        lastName: 'Doe',
+        gender: 'M',
+        club: 'Test Club',
+        city: 'Test City',
+        competitionOrder: 1,
+        birthDate: '1990-01-01'
+      },
+      attemptsByLift: {
+        Squat: [
+          { id: 'attempt1', liftType: 'Squat', attemptNumber: 1, weight: 200, status: 'Successful', updatedAt: '2024-01-01T10:00:00Z' }
+        ],
+        Bench: [
+          { id: 'attempt2', liftType: 'Bench', attemptNumber: 1, weight: 150, status: 'Pending', updatedAt: '2024-01-01T10:05:00Z' }
+        ],
+        Deadlift: []
+      },
+      platePlan: {
+        plates: [],
+        exact: true,
+        total: 150,
+        increment: 2.5,
+        targetWeight: 150,
+        barWeight: 20,
+        weightToLoad: 130
+      },
+      highlight: {
+        liftType: 'Bench',
+        attemptNumber: 1
+      }
     },
     referenceData: {
       weightClasses: [{ id: 'wc1', name: '85kg', gender: 'M', minWeight: 82.5, maxWeight: 87.5 }],
@@ -185,6 +262,11 @@ describe('Routes smoke test', () => {
 
     // Verify attempts data
     expect(Array.isArray(data.attempts)).toBe(true);
+    expect(data.attempts.length).toBeGreaterThan(0);
+    const firstAttempt = data.attempts[0]!;
+    expect(firstAttempt.firstName).toBe('John');
+    expect(firstAttempt.competitorName).toBe('John Doe');
+    expect(firstAttempt.competitionOrder).toBe(1);
 
     // Verify reference data
     expect(data.referenceData).toBeDefined();
@@ -194,7 +276,7 @@ describe('Routes smoke test', () => {
 
   it('should load settings data correctly', async () => {
     const { load } = await import('../settings/+page.ts');
-    const data = await load();
+    const data = await load({ fetch: vi.fn() } as any);
 
     // Verify settings structure
     expect(data.settings).toBeDefined();
@@ -252,12 +334,12 @@ describe('Routes smoke test', () => {
     // Verify current attempt structure
     expect(data.currentAttempt).toBeDefined();
     if (data.currentAttempt) {
-      expect(data.currentAttempt.id).toBeDefined();
-      expect(data.currentAttempt.competitorName).toBeDefined();
-      expect(data.currentAttempt.liftType).toBeDefined();
-      expect(data.currentAttempt.attemptNumber).toBeDefined();
-      expect(typeof data.currentAttempt.weight).toBe('number');
-      expect(data.currentAttempt.status).toBeDefined();
+      expect(data.currentAttempt.attempt.id).toBeDefined();
+      expect(data.currentAttempt.competitor.firstName).toBeDefined();
+      expect(data.currentAttempt.highlight.liftType).toBeDefined();
+      expect(data.currentAttempt.highlight.attemptNumber).toBeDefined();
+      expect(typeof data.currentAttempt.attempt.weight).toBe('number');
+      expect(data.currentAttempt.attempt.status).toBeDefined();
     }
   });
 

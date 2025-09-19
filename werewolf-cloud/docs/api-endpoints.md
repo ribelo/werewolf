@@ -491,6 +491,17 @@ Get all attempts for a registration.
 curl -X GET https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/registrations/789e0123-e89b-12d3-a456-426614174002/attempts
 ```
 
+### List Attempts for Contest
+
+#### GET /contests/{contestId}/attempts
+
+List every attempt in a contest (joined with competitor information). Results are ordered by competitor order, then lift, then attempt number.
+
+**Example:**
+```bash
+curl -X GET https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/attempts
+```
+
 ### Update Attempt Result
 
 #### PATCH /attempts/{attemptId}/result
@@ -500,6 +511,7 @@ Update attempt result (success/failure).
 **Request Body:**
 ```json
 {
+  "attemptId": "012e3456-e89b-12d3-a456-426614174003",
   "status": "Successful",
   "judge1Decision": true,
   "judge2Decision": true,
@@ -513,6 +525,7 @@ Update attempt result (success/failure).
 curl -X PATCH https://werewolf.r-krzywaznia-2c4.workers.dev/attempts/012e3456-e89b-12d3-a456-426614174003/result \
   -H "Content-Type: application/json" \
   -d '{
+    "attemptId": "012e3456-e89b-12d3-a456-426614174003",
     "status": "Successful",
     "judge1Decision": true,
     "judge2Decision": true,
@@ -521,11 +534,21 @@ curl -X PATCH https://werewolf.r-krzywaznia-2c4.workers.dev/attempts/012e3456-e8
   }'
 ```
 
+> **Live updates:** publishing a result triggers `attempt.resultUpdated` over WebSocket and notifies all connected displays.
+
 ### Get Current Attempt
 
 #### GET /contests/{contestId}/attempts/current
 
-Get the currently active attempt.
+Get the currently active attempt. The response now includes a display-ready bundle used by realtime clients:
+
+- `contest`: id, name, location, date, discipline, status, default/mens/womens bar weights
+- `attempt`: full attempt row (lift type, weight, status, judges, timestamps)
+- `registration`: bodyweight, weight/age class labels, equipment flags, rack heights, competition order
+- `competitor`: identity info (name, gender, club/city)
+- `attemptsByLift`: the competitor's attempts grouped by lift (including status + updatedAt)
+- `platePlan`: computed loading plan for the declared weight (plates per side, bar weight, total, accuracy flag)
+- `highlight`: the lift/attempt number that should be emphasised on displays
 
 **Example:**
 ```bash
@@ -553,6 +576,21 @@ curl -X PUT https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b
     "attemptId": "012e3456-e89b-12d3-a456-426614174003"
   }'
 ```
+
+> **Live updates:** setting the current attempt broadcasts `attempt.currentSet` so announcer and big-screen refresh immediately.
+
+### Clear Current Attempt
+
+#### DELETE /contests/{contestId}/attempts/current
+
+Clear the active attempt (announcer/big-screen will fall back to queue). Returns `{ "success": true, "cleared": true }` when an active attempt was cleared.
+
+**Example:**
+```bash
+curl -X DELETE https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/attempts/current
+```
+
+> **Live updates:** clearing the active lift emits `attempt.currentCleared` so connected clients fall back to the next lift.
 
 ## Results & Scoring
 

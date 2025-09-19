@@ -1,18 +1,36 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
-  import Layout from '$lib/components/Layout.svelte';
-  import { apiClient } from '$lib/api';
-  import type { PageData } from './$types';
-  import type { ContestSummary } from '$lib/types';
+import { goto } from '$app/navigation';
+import Layout from '$lib/components/Layout.svelte';
+import { apiClient } from '$lib/api';
+import type { PageData } from './$types';
+import type { ContestSummary } from '$lib/types';
+import { toast } from '$lib/ui/toast';
+import { _ } from 'svelte-i18n';
+import { get } from 'svelte/store';
 
   const AVAILABLE_EVENTS = ['Squat', 'Bench', 'Deadlift'] as const;
+  const EVENT_LABEL_KEYS: Record<typeof AVAILABLE_EVENTS[number], string> = {
+    Squat: 'contest.wizard.events.squat',
+    Bench: 'contest.wizard.events.bench',
+    Deadlift: 'contest.wizard.events.deadlift',
+  };
+
   const GENDERS = ['Male', 'Female'] as const;
+  const GENDER_LABEL_KEYS: Record<typeof GENDERS[number], string> = {
+    Male: 'contest.wizard.genders.male',
+    Female: 'contest.wizard.genders.female',
+  };
 
   export let data: PageData;
+  export let params: Record<string, string> = {};
+
+  $: void params;
   const { apiBase } = data;
 
   type ContestEvent = typeof AVAILABLE_EVENTS[number];
   type Gender = typeof GENDERS[number];
+
+  const translate = (key: string, values?: Record<string, unknown>) => get(_)(key, values) as string;
 
   interface ContestForm {
     name: string;
@@ -21,7 +39,6 @@
     discipline: 'Powerlifting' | 'Bench' | 'Squat' | 'Deadlift';
     events: ContestEvent[];
     federationRules: string;
-    competitionType: string;
     organizer: string;
     notes: string;
   }
@@ -34,7 +51,6 @@
     club: string;
     city: string;
     bodyweight: number;
-    lotNumber: string;
     rackHeightSquat: number | null;
     rackHeightBench: number | null;
     equipmentM: boolean;
@@ -42,7 +58,14 @@
     equipmentT: boolean;
   }
 
-  let step = 1;
+  const MIN_STEP = 1;
+  const MAX_STEP = 3;
+  const TOTAL_STEPS = MAX_STEP;
+  const BODYWEIGHT_STEP = 0.5;
+  const DEFAULT_RACK_SQUAT = 10;
+  const DEFAULT_RACK_BENCH = 5;
+
+  let step = MIN_STEP;
   let isSubmitting = false;
   let error: string | null = null;
   let success: string | null = null;
@@ -57,7 +80,6 @@
     discipline: 'Powerlifting',
     events: ['Squat', 'Bench', 'Deadlift'],
     federationRules: '',
-    competitionType: 'Classic Powerlifting',
     organizer: '',
     notes: '',
   };
@@ -69,10 +91,9 @@
     gender: 'Male',
     club: '',
     city: '',
-    bodyweight: 0,
-    lotNumber: '',
-    rackHeightSquat: null,
-    rackHeightBench: null,
+    bodyweight: 70,
+    rackHeightSquat: DEFAULT_RACK_SQUAT,
+    rackHeightBench: DEFAULT_RACK_BENCH,
     equipmentM: false,
     equipmentSm: false,
     equipmentT: false,
@@ -90,21 +111,18 @@
     if (form.events.length === 0) {
       form.events = [event];
     }
-    updateCompetitionType();
+    updateDiscipline();
   }
 
-  function updateCompetitionType() {
-    if (form.events.length === 3) {
-      form.competitionType = 'Powerlifting (SQ + BP + DL)';
-    } else if (form.events.length === 2) {
-      form.competitionType = `${form.events[0]} + ${form.events[1]}`;
+  function updateDiscipline() {
+    if (form.events.length >= 2) {
       form.discipline = 'Powerlifting';
-    } else if (form.events.length === 1) {
-      const [singleEvent] = form.events;
-      if (singleEvent) {
-        form.discipline = singleEvent;
-        form.competitionType = `${singleEvent} Only`;
-      }
+      return;
+    }
+
+    const [singleEvent] = form.events;
+    if (singleEvent) {
+      form.discipline = singleEvent;
     }
   }
 
@@ -116,10 +134,9 @@
       gender: 'Male',
       club: '',
       city: '',
-      bodyweight: 0,
-      lotNumber: '',
-      rackHeightSquat: null,
-      rackHeightBench: null,
+      bodyweight: 70,
+      rackHeightSquat: DEFAULT_RACK_SQUAT,
+      rackHeightBench: DEFAULT_RACK_BENCH,
       equipmentM: false,
       equipmentSm: false,
       equipmentT: false,
@@ -130,16 +147,16 @@
     validationErrors = {};
 
     if (!competitorDraft.firstName.trim()) {
-      validationErrors['firstName'] = 'First name is required';
+      validationErrors['firstName'] = translate('contest.wizard.validation.first_name_required');
     }
     if (!competitorDraft.lastName.trim()) {
-      validationErrors['lastName'] = 'Last name is required';
+      validationErrors['lastName'] = translate('contest.wizard.validation.last_name_required');
     }
     if (!competitorDraft.birthDate) {
-      validationErrors['birthDate'] = 'Birth date is required';
+      validationErrors['birthDate'] = translate('contest.wizard.validation.birth_date_required');
     }
     if (competitorDraft.bodyweight <= 0) {
-      validationErrors['bodyweight'] = 'Bodyweight must be greater than 0';
+      validationErrors['bodyweight'] = translate('contest.wizard.validation.bodyweight_positive');
     }
 
     if (Object.keys(validationErrors).length > 0) {
@@ -154,18 +171,31 @@
     competitorDrafts = competitorDrafts.filter((_, i) => i !== index);
   }
 
+  function handleBodyweightWheel(event: WheelEvent) {
+    event.preventDefault();
+    const direction = event.deltaY > 0 ? -1 : 1;
+    const nextValue = Math.max(0, (competitorDraft.bodyweight || 0) + direction * BODYWEIGHT_STEP);
+    competitorDraft.bodyweight = Number(nextValue.toFixed(2));
+  }
+
   function validateStep(stepNumber: number): boolean {
     validationErrors = {};
 
     if (stepNumber === 1) {
       if (!form.name.trim()) {
-        validationErrors['name'] = 'Contest name is required';
+        validationErrors['name'] = translate('contest.wizard.validation.name_required');
       }
       if (!form.location.trim()) {
-        validationErrors['location'] = 'Location is required';
+        validationErrors['location'] = translate('contest.wizard.validation.location_required');
       }
       if (!form.date) {
-        validationErrors['date'] = 'Date is required';
+        validationErrors['date'] = translate('contest.wizard.validation.date_required');
+      }
+    }
+
+    if (stepNumber === 2) {
+      if (!form.organizer.trim()) {
+        validationErrors['organizer'] = translate('contest.wizard.validation.organizer_required');
       }
     }
 
@@ -178,10 +208,12 @@
   }
 
   function goToStep(next: number) {
-    if (next > step && !validateStep(step)) {
+    const target = Math.min(Math.max(next, MIN_STEP), MAX_STEP);
+    if (target > step && !validateStep(step)) {
+      toast.error(translate('contest.wizard.validation.warning'));
       return;
     }
-    step = next;
+    step = target;
   }
 
   async function submitContest() {
@@ -199,15 +231,14 @@
       location: form.location.trim(),
       discipline: form.discipline,
       federationRules: form.federationRules.trim() || null,
-      competitionType: form.competitionType.trim() || null,
-      organizer: form.organizer.trim() || null,
+      organizer: form.organizer.trim(),
       notes: form.notes.trim() || null,
     };
 
     try {
       const response = await apiClient.post<ContestSummary>('/contests', payload);
       if (response.error || !response.data) {
-        throw new Error(response.error || 'Failed to create contest');
+        throw new Error(response.error || translate('contest.wizard.messages.error'));
       }
 
       const contest = response.data;
@@ -225,7 +256,7 @@
           });
 
           if (competitorResponse.error || !competitorResponse.data) {
-            throw new Error(competitorResponse.error || 'Failed to create competitor');
+            throw new Error(competitorResponse.error || translate('contest.wizard.messages.error'));
           }
 
           const competitorId = competitorResponse.data.id;
@@ -233,7 +264,6 @@
           const registrationResponse = await apiClient.post(`/contests/${contest.id}/registrations`, {
             competitorId,
             bodyweight: draft.bodyweight,
-            lotNumber: draft.lotNumber || null,
             rackHeightSquat: draft.rackHeightSquat,
             rackHeightBench: draft.rackHeightBench,
             equipmentM: draft.equipmentM,
@@ -248,14 +278,14 @@
         }
       }
 
-      success = 'Contest created successfully.';
+      success = translate('contest.wizard.messages.success');
       resetForm();
       competitorDrafts = [];
 
       await goto(`/contests/${contest.id}`);
     } catch (err) {
       console.error(err);
-      error = err instanceof Error ? err.message : 'Failed to create contest';
+      error = err instanceof Error ? err.message : translate('contest.wizard.messages.error');
     } finally {
       isSubmitting = false;
     }
@@ -269,7 +299,6 @@
       discipline: 'Powerlifting',
       events: ['Squat', 'Bench', 'Deadlift'],
       federationRules: '',
-      competitionType: 'Classic Powerlifting',
       organizer: '',
       notes: '',
     };
@@ -278,12 +307,12 @@
 </script>
 
 <svelte:head>
-  <title>Create Contest • Werewolf Powerlifting</title>
+  <title>{$_('contest.wizard.page_title')}</title>
 </svelte:head>
 
 <Layout
-  title="Contest Wizard"
-  subtitle="Create competition and optional roster"
+  title={$_('contest.wizard.layout_title')}
+  subtitle={$_('contest.wizard.layout_subtitle')}
   currentPage="contests"
   apiBase={apiBase}
 >
@@ -291,25 +320,33 @@
     <div class="card">
       <header class="card-header flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h2 class="text-h2 text-text-primary">Contest Setup</h2>
-          <p class="text-body text-text-secondary">Step {step} of 3</p>
+          <h2 class="text-h2 text-text-primary">{$_('contest.wizard.title')}</h2>
+          <p class="text-body text-text-secondary">
+            {$_('contest.wizard.step_label')} {step} {$_('contest.wizard.step_connector')} {TOTAL_STEPS}
+          </p>
         </div>
         <div class="flex gap-2">
           <button
             class="btn-secondary"
-            on:click={() => goToStep(Math.max(step - 1, 1))}
-            disabled={step === 1}
+            on:click={() => goToStep(Math.max(step - 1, MIN_STEP))}
+            disabled={step === MIN_STEP}
             type="button"
           >
-            Previous
+            {$_('contest.wizard.actions.previous')}
           </button>
           <button
             class="btn-primary"
-            on:click={() => (step < 3 ? goToStep(step + 1) : submitContest())}
+            on:click={() => (step < TOTAL_STEPS ? goToStep(step + 1) : submitContest())}
             type="button"
             disabled={isSubmitting}
           >
-            {step < 3 ? 'Next' : (isSubmitting ? 'Creating…' : 'Create Contest')}
+            {#if step < TOTAL_STEPS}
+              {$_('contest.wizard.actions.next')}
+            {:else if isSubmitting}
+              {$_('contest.wizard.actions.submitting')}
+            {:else}
+              {$_('contest.wizard.actions.submit')}
+            {/if}
           </button>
         </div>
       </header>
@@ -328,14 +365,19 @@
 
       {#if step === 1}
         <section class="space-y-6">
+          <div class="space-y-2">
+            <h3 class="text-h3 text-text-primary">{$_('contest.wizard.steps.basic')}</h3>
+            <p class="text-caption text-text-secondary">{$_('contest.wizard.steps.basic_hint')}</p>
+          </div>
+
           <div class="grid gap-4 md:grid-cols-2">
             <div>
-              <label class="input-label" for="contest-name">Contest name</label>
+              <label class="input-label" for="contest-name">{$_('contest.wizard.fields.name.label')}</label>
               <input
                 id="contest-name"
                 class="input-field"
                 bind:value={form.name}
-                placeholder="Werewolf Open"
+                placeholder={$_('contest.wizard.fields.name.placeholder')}
                 required
               />
               {#if validationErrors['name']}
@@ -343,7 +385,7 @@
               {/if}
             </div>
             <div>
-              <label class="input-label" for="contest-date">Contest date</label>
+              <label class="input-label" for="contest-date">{$_('contest.wizard.fields.date.label')}</label>
               <input
                 id="contest-date"
                 class="input-field"
@@ -360,12 +402,12 @@
 
           <div class="grid gap-4 md:grid-cols-2">
             <div>
-              <label class="input-label" for="location">Location</label>
+              <label class="input-label" for="location">{$_('contest.wizard.fields.location.label')}</label>
               <input
                 id="location"
                 class="input-field"
                 bind:value={form.location}
-                placeholder="Warsaw Power Arena"
+                placeholder={$_('contest.wizard.fields.location.placeholder')}
                 required
               />
               {#if validationErrors['location']}
@@ -373,7 +415,7 @@
               {/if}
             </div>
             <div class="flex flex-col gap-2">
-              <span class="input-label">Events included</span>
+              <span class="input-label">{$_('contest.wizard.fields.events.label')}</span>
               <div class="flex flex-wrap gap-3">
                 {#each AVAILABLE_EVENTS as eventName}
                   <label class="flex items-center gap-2 text-body">
@@ -383,90 +425,113 @@
                       checked={form.events.includes(eventName)}
                       on:change={() => toggleEvent(eventName)}
                     />
-                    {eventName}
+                    {$_(EVENT_LABEL_KEYS[eventName])}
                   </label>
                 {/each}
               </div>
-              <p class="text-caption text-text-secondary">Discipline is derived automatically from the selected events.</p>
+              <p class="text-caption text-text-secondary">{$_('contest.wizard.messages.events_hint')}</p>
             </div>
           </div>
         </section>
       {:else if step === 2}
-        <section class="grid gap-4 md:grid-cols-2">
-          <div>
-            <label class="input-label" for="competitionType">Competition type</label>
-            <input
-              id="competitionType"
-              class="input-field"
-              bind:value={form.competitionType}
-              placeholder="Bench + Deadlift"
-            />
+        <section class="space-y-6">
+          <div class="space-y-2">
+            <h3 class="text-h3 text-text-primary">{$_('contest.wizard.steps.details')}</h3>
+            <p class="text-caption text-text-secondary">{$_('contest.wizard.steps.details_hint')}</p>
           </div>
-          <div>
-            <label class="input-label" for="organizer">Organizer</label>
-            <input
-              id="organizer"
-              class="input-field"
-              bind:value={form.organizer}
-              placeholder="Werewolf Club"
-            />
-          </div>
-          <div>
-            <label class="input-label" for="federationRules">Federation rules</label>
-            <input
-              id="federationRules"
-              class="input-field"
-              bind:value={form.federationRules}
-              placeholder="IPF Classic"
-            />
-          </div>
-          <div class="md:col-span-2">
-            <label class="input-label" for="notes">Notes</label>
-            <textarea id="notes" class="input-field" rows="3" bind:value={form.notes} placeholder="Special equipment rules, schedule notes" />
+
+          <div class="grid gap-4 md:grid-cols-2">
+            <div>
+              <label class="input-label" for="organizer">{$_('contest.wizard.fields.organizer.label')}</label>
+              <input
+                id="organizer"
+                class="input-field"
+                bind:value={form.organizer}
+                placeholder={$_('contest.wizard.fields.organizer.placeholder')}
+                required
+              />
+              {#if validationErrors['organizer']}
+                <p class="error-message">{validationErrors['organizer']}</p>
+              {/if}
+            </div>
+            <div>
+              <label class="input-label" for="federationRules">{$_('contest.wizard.fields.federation_rules.label')}</label>
+              <input
+                id="federationRules"
+                class="input-field"
+                bind:value={form.federationRules}
+                placeholder={$_('contest.wizard.fields.federation_rules.placeholder')}
+              />
+            </div>
+            <div class="md:col-span-2">
+              <label class="input-label" for="notes">{$_('contest.wizard.fields.notes.label')}</label>
+              <textarea
+                id="notes"
+                class="input-field"
+                rows="3"
+                bind:value={form.notes}
+                placeholder={$_('contest.wizard.fields.notes.placeholder')}
+              />
+            </div>
           </div>
         </section>
       {:else}
         <section class="space-y-6">
+          <div class="space-y-2">
+            <h3 class="text-h3 text-text-primary">{$_('contest.wizard.steps.competitors')}</h3>
+            <p class="text-caption text-text-secondary">{$_('contest.wizard.steps.competitors_hint')}</p>
+          </div>
+
           <div class="grid gap-4 md:grid-cols-2">
             <div>
-              <label class="input-label" for="firstName">First name</label>
+              <label class="input-label" for="firstName">{$_('contest.wizard.competitor.first_name')}</label>
               <input id="firstName" class="input-field" bind:value={competitorDraft.firstName} />
               {#if validationErrors['firstName']}
                 <p class="error-message">{validationErrors['firstName']}</p>
               {/if}
             </div>
             <div>
-              <label class="input-label" for="lastName">Last name</label>
+              <label class="input-label" for="lastName">{$_('contest.wizard.competitor.last_name')}</label>
               <input id="lastName" class="input-field" bind:value={competitorDraft.lastName} />
               {#if validationErrors['lastName']}
                 <p class="error-message">{validationErrors['lastName']}</p>
               {/if}
             </div>
             <div>
-              <label class="input-label" for="birthDate">Birth date</label>
+              <label class="input-label" for="birthDate">{$_('contest.wizard.competitor.birth_date')}</label>
               <input id="birthDate" type="date" class="input-field" bind:value={competitorDraft.birthDate} />
               {#if validationErrors['birthDate']}
                 <p class="error-message">{validationErrors['birthDate']}</p>
               {/if}
             </div>
             <div>
-              <label class="input-label" for="gender">Gender</label>
+              <label class="input-label" for="gender">{$_('contest.wizard.competitor.gender')}</label>
               <select id="gender" class="input-field" bind:value={competitorDraft.gender}>
                 {#each GENDERS as gender}
-                  <option value={gender}>{gender}</option>
+                  <option value={gender}>{$_(GENDER_LABEL_KEYS[gender])}</option>
                 {/each}
               </select>
             </div>
             <div>
-              <label class="input-label" for="club">Club</label>
-              <input id="club" class="input-field" bind:value={competitorDraft.club} placeholder="Werewolf Club" />
+              <label class="input-label" for="club">{$_('contest.wizard.competitor.club')}</label>
+              <input
+                id="club"
+                class="input-field"
+                bind:value={competitorDraft.club}
+                placeholder={$_('contest.wizard.competitor.club_placeholder')}
+              />
             </div>
             <div>
-              <label class="input-label" for="city">City</label>
-              <input id="city" class="input-field" bind:value={competitorDraft.city} placeholder="Warsaw" />
+              <label class="input-label" for="city">{$_('contest.wizard.competitor.city')}</label>
+              <input
+                id="city"
+                class="input-field"
+                bind:value={competitorDraft.city}
+                placeholder={$_('contest.wizard.competitor.city_placeholder')}
+              />
             </div>
             <div>
-              <label class="input-label" for="bodyweight">Bodyweight (kg)</label>
+              <label class="input-label" for="bodyweight">{$_('contest.wizard.competitor.bodyweight')}</label>
               <input
                 id="bodyweight"
                 type="number"
@@ -474,17 +539,14 @@
                 min="0"
                 class="input-field"
                 bind:value={competitorDraft.bodyweight}
+                on:wheel={handleBodyweightWheel}
               />
               {#if validationErrors['bodyweight']}
                 <p class="error-message">{validationErrors['bodyweight']}</p>
               {/if}
             </div>
             <div>
-              <label class="input-label" for="lotNumber">Lot number</label>
-              <input id="lotNumber" class="input-field" bind:value={competitorDraft.lotNumber} placeholder="Optional" />
-            </div>
-            <div>
-              <label class="input-label" for="rackHeightSquat">Rack height (Squat)</label>
+              <label class="input-label" for="rackHeightSquat">{$_('contest.wizard.competitor.rack_squat')}</label>
               <input
                 id="rackHeightSquat"
                 type="number"
@@ -493,7 +555,7 @@
               />
             </div>
             <div>
-              <label class="input-label" for="rackHeightBench">Rack height (Bench)</label>
+              <label class="input-label" for="rackHeightBench">{$_('contest.wizard.competitor.rack_bench')}</label>
               <input
                 id="rackHeightBench"
                 type="number"
@@ -503,26 +565,36 @@
             </div>
           </div>
 
-          <div class="flex flex-wrap gap-3 text-body">
-            <label class="flex items-center gap-2">
-              <input type="checkbox" bind:checked={competitorDraft.equipmentM} /> Multi-ply
-            </label>
-            <label class="flex items-center gap-2">
-              <input type="checkbox" bind:checked={competitorDraft.equipmentSm} /> Single-ply
-            </label>
-            <label class="flex items-center gap-2">
-              <input type="checkbox" bind:checked={competitorDraft.equipmentT} /> Knee wraps
-            </label>
-          </div>
+          <fieldset class="space-y-2">
+            <legend class="input-label">{$_('contest.wizard.competitor.equipment.legend')}</legend>
+            <div class="flex flex-wrap gap-3 text-body">
+              <label class="flex items-center gap-2">
+                <input type="checkbox" bind:checked={competitorDraft.equipmentM} />
+                {$_('contest.wizard.competitor.equipment.multi')}
+              </label>
+              <label class="flex items-center gap-2">
+                <input type="checkbox" bind:checked={competitorDraft.equipmentSm} />
+                {$_('contest.wizard.competitor.equipment.single')}
+              </label>
+              <label class="flex items-center gap-2">
+                <input type="checkbox" bind:checked={competitorDraft.equipmentT} />
+                {$_('contest.wizard.competitor.equipment.wraps')}
+              </label>
+            </div>
+          </fieldset>
 
           <div class="flex gap-3">
-            <button class="btn-primary" type="button" on:click={addCompetitorDraft}>Add competitor</button>
-            <button class="btn-secondary" type="button" on:click={resetCompetitorDraft}>Reset form</button>
+            <button class="btn-primary" type="button" on:click={addCompetitorDraft}>
+              {$_('contest.wizard.competitor.add_button')}
+            </button>
+            <button class="btn-secondary" type="button" on:click={resetCompetitorDraft}>
+              {$_('contest.wizard.competitor.reset_button')}
+            </button>
           </div>
 
           {#if competitorDrafts.length > 0}
             <div class="space-y-3">
-              <h3 class="text-h3 text-text-primary">Pre-registered competitors</h3>
+              <h3 class="text-h3 text-text-primary">{$_('contest.wizard.drafts.title')}</h3>
               {#each competitorDrafts as competitor, index}
                 <div class="bg-element-bg border border-border-color p-4 flex justify-between items-center">
                   <div>
@@ -530,14 +602,25 @@
                       {competitor.firstName} {competitor.lastName}
                     </p>
                     <p class="text-caption text-text-secondary">
-                      {competitor.birthDate} • {competitor.gender} • {competitor.bodyweight} kg
+                      {$_('contest.wizard.drafts.meta', {
+                        values: {
+                          birthDate: competitor.birthDate,
+                          gender: $_(GENDER_LABEL_KEYS[competitor.gender]),
+                          bodyweight: competitor.bodyweight,
+                        }
+                      })}
                     </p>
                     <p class="text-caption text-text-secondary">
-                      {competitor.club || 'No club'} • {competitor.city || 'No city'}
+                      {$_('contest.wizard.drafts.club_city', {
+                        values: {
+                          club: competitor.club.trim() ? competitor.club : $_('contest.wizard.drafts.no_club'),
+                          city: competitor.city.trim() ? competitor.city : $_('contest.wizard.drafts.no_city'),
+                        }
+                      })}
                     </p>
                   </div>
                   <button class="btn-secondary" type="button" on:click={() => removeCompetitorDraft(index)}>
-                    Remove
+                    {$_('contest.wizard.drafts.remove')}
                   </button>
                 </div>
               {/each}

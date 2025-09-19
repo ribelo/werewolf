@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import { Miniflare } from 'miniflare';
 import type { D1Database, KVNamespace } from '@cloudflare/workers-types';
 import { createApp } from '../src/app';
@@ -49,6 +50,15 @@ describe('Werewolf API – integration (Miniflare + D1)', () => {
       KV: kv,
       ENV: 'test',
     } as WerewolfEnvironment;
+
+    (env as any)['werewolf-contest-room'] = {
+      idFromName: () => ({
+        name: 'test-room',
+      }),
+      get: () => ({
+        fetch: async () => new Response(null, { status: 204 }),
+      }),
+    };
   });
 
   afterAll(async () => {
@@ -193,6 +203,142 @@ describe('Werewolf API – integration (Miniflare + D1)', () => {
     const body = await res.json();
     expect(body.data).toBeNull();
     expect(body.error).toContain('Validation failed');
+  });
+
+  it('PATCH /attempts/:id/result updates status and judges', async () => {
+    const contestRes = await createContest(app, env, {
+      name: 'Result Patch Test',
+      date: '2025-05-01',
+      location: 'Patch City',
+      discipline: 'Powerlifting',
+    });
+    const contestId = (await contestRes.json()).data.id as string;
+
+    const competitorRes = await app.request('http://localhost/competitors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        firstName: 'Marta',
+        lastName: 'Nowak',
+        birthDate: '1994-02-18',
+        gender: 'Female',
+      }),
+    }, env);
+    const competitorId = (await competitorRes.json()).data.id as string;
+
+    const registrationRes = await app.request(`http://localhost/contests/${contestId}/registrations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contestId,
+        competitorId,
+        bodyweight: 63.0,
+      }),
+    }, env);
+    const registrationId = (await registrationRes.json()).data.id as string;
+
+    const attemptId = randomUUID();
+    await db.prepare(
+      `INSERT INTO attempts (id, registration_id, lift_type, attempt_number, weight, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'Pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+    ).bind(attemptId, registrationId, 'Bench', 1, 95).run();
+
+    const patchRes = await app.request(`http://localhost/attempts/${attemptId}/result`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        attemptId,
+        status: 'Successful',
+        judge1Decision: true,
+        judge2Decision: true,
+        judge3Decision: false,
+        notes: 'Two white lights',
+      }),
+    }, env);
+
+    expect(patchRes.status).toBe(200);
+    const patchBody = await patchRes.json();
+    expect(patchBody).toMatchObject({ data: { success: true }, error: null });
+
+    const updatedAttempt = await db.prepare(
+      'SELECT status, judge1_decision, judge2_decision, judge3_decision, notes, timestamp, updated_at FROM attempts WHERE id = ?'
+    ).bind(attemptId).first();
+
+    expect(updatedAttempt?.status).toBe('Successful');
+    expect(Boolean(updatedAttempt?.judge1_decision)).toBe(true);
+    expect(Boolean(updatedAttempt?.judge2_decision)).toBe(true);
+    expect(Boolean(updatedAttempt?.judge3_decision)).toBe(false);
+    expect(updatedAttempt?.notes).toBe('Two white lights');
+    expect(typeof updatedAttempt?.timestamp).toBe('string');
+    expect(typeof updatedAttempt?.updated_at).toBe('string');
+  });
+
+  it('DELETE /contests/:id/attempts/current clears the active lift', async () => {
+    const contestRes = await createContest(app, env, {
+      name: 'Clear Current Test',
+      date: '2025-05-10',
+      location: 'Clear City',
+      discipline: 'Powerlifting',
+    });
+    const contestId = (await contestRes.json()).data.id as string;
+
+    await db.prepare(
+      'INSERT INTO contest_states (contest_id, status, current_lift, current_round) VALUES (?, ?, ?, ?)'
+    ).bind(contestId, 'InProgress', 'Bench', 1).run();
+
+    const competitorRes = await app.request('http://localhost/competitors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        firstName: 'Piotr',
+        lastName: 'Lis',
+        birthDate: '1991-11-11',
+        gender: 'Male',
+      }),
+    }, env);
+    const competitorId = (await competitorRes.json()).data.id as string;
+
+    const registrationRes = await app.request(`http://localhost/contests/${contestId}/registrations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contestId,
+        competitorId,
+        bodyweight: 93.0,
+      }),
+    }, env);
+    const registrationId = (await registrationRes.json()).data.id as string;
+
+    const attemptId = randomUUID();
+    await db.prepare(
+      `INSERT INTO attempts (id, registration_id, lift_type, attempt_number, weight, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'Pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+    ).bind(attemptId, registrationId, 'Bench', 1, 140).run();
+
+    const setRes = await app.request(`http://localhost/contests/${contestId}/attempts/current`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ attemptId }),
+    }, env);
+    expect(setRes.status).toBe(200);
+
+    const activeEntry = await db.prepare(
+      'SELECT is_active FROM current_lifts WHERE contest_id = ?'
+    ).bind(contestId).first();
+    expect(Boolean(activeEntry?.is_active)).toBe(true);
+
+    const clearRes = await app.request(`http://localhost/contests/${contestId}/attempts/current`, {
+      method: 'DELETE',
+    }, env);
+
+    expect(clearRes.status).toBe(200);
+    const clearBody = await clearRes.json();
+    expect(clearBody).toMatchObject({ data: { success: true, cleared: true }, error: null });
+
+    const clearedEntry = await db.prepare(
+      'SELECT is_active FROM current_lifts WHERE contest_id = ?'
+    ).bind(contestId).first();
+    expect(Boolean(clearedEntry?.is_active)).toBe(false);
   });
 });
 

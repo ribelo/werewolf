@@ -1,5 +1,5 @@
 import { apiClient } from '$lib/api';
-import type { ContestDetail, Registration, ReferenceData, WeightClass, AgeCategory, Attempt, CurrentAttempt } from '$lib/types';
+import type { ContestDetail, Registration, ReferenceData, WeightClass, AgeCategory, Attempt, CurrentAttemptBundle } from '$lib/types';
 
 export const load = async ({ params }) => {
   const contestId = params.id;
@@ -15,7 +15,7 @@ export const load = async ({ params }) => {
     const attemptsResponse = await apiClient.get<Attempt[]>(`/contests/${contestId}/attempts`);
 
     // Load current attempt
-    const currentAttemptResponse = await apiClient.get<CurrentAttempt | null>(`/contests/${contestId}/attempts/current`);
+    const currentAttemptResponse = await apiClient.get<CurrentAttemptBundle | null>(`/contests/${contestId}/attempts/current`);
 
     // Load reference data
     const weightClassesResponse = await apiClient.get<WeightClass[]>(`/reference/weight-classes`);

@@ -3,6 +3,7 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import type { WerewolfEnvironment } from '../env';
 import { executeQuery, executeQueryOne, executeMutation, getCurrentTimestamp, convertKeysToCamelCase } from '../utils/database';
+import { buildPlatePlan } from '../services/plate-plan';
 
 const plateSets = new Hono<WerewolfEnvironment>();
 
@@ -113,48 +114,17 @@ plateSets.post('/calculate', zValidator('json', z.object({
   const contestId = c.req.param('contestId');
   const { targetWeight, barWeight } = c.req.valid('json');
 
-  // Get bar weight from contest or use provided/default
-  let actualBarWeight = barWeight;
-  if (!actualBarWeight) {
-    const contest = await executeQueryOne(
-      db,
-      'SELECT bar_weight FROM contests WHERE id = ?',
-      [contestId]
-    );
-    actualBarWeight = contest?.bar_weight || 20;
-  }
-
-  // Ensure we have a valid bar weight
-  const barWeightValue = actualBarWeight || 20;
-
-  // Calculate weight to load (target - bar)
-  const weightToLoad = targetWeight - barWeightValue;
-  if (weightToLoad <= 0) {
-    return c.json({
-      data: { plates: [], totalLoaded: actualBarWeight },
-      error: null,
-      requestId: c.get('requestId'),
-    });
-  }
-
-  // Get available plates
-  const availablePlates = await executeQuery(
-    db,
-    `
-    SELECT plate_weight, quantity, color
-    FROM plate_sets
-    WHERE contest_id = ? AND quantity > 0
-    ORDER BY plate_weight DESC
-    `,
-    [contestId]
-  );
-
-  const plates = calculatePlates(weightToLoad, availablePlates);
+  const plan = await buildPlatePlan(db, contestId, targetWeight, { barWeightOverride: barWeight });
 
   return c.json({
     data: {
-      plates: convertKeysToCamelCase(plates),
-      totalLoaded: barWeightValue + (plates.reduce((sum, p) => sum + (p.plateWeight * 2 * p.count), 0)),
+      plates: convertKeysToCamelCase(plan.plates),
+      totalLoaded: plan.total,
+      exact: plan.exact,
+      increment: plan.increment,
+      barWeight: plan.barWeight,
+      weightToLoad: plan.weightToLoad,
+      targetWeight: plan.targetWeight,
     },
     error: null,
     requestId: c.get('requestId'),
@@ -282,31 +252,4 @@ function getDefaultPlateColor(weight: number): string {
     default:
       return '#374151'; // default gray
   }
-}
-
-function calculatePlates(weightToLoad: number, availablePlates: any[]) {
-  const plates: { plateWeight: number; count: number; color: string }[] = [];
-  let remainingWeight = weightToLoad / 2; // Since plates come in pairs
-
-  for (const plate of availablePlates) {
-    if (remainingWeight <= 0) break;
-
-    const plateWeight = plate.plate_weight;
-    const availableCount = plate.quantity;
-    const color = plate.color;
-
-    if (plateWeight <= remainingWeight) {
-      const count = Math.min(
-        Math.floor(remainingWeight / plateWeight),
-        availableCount
-      );
-
-      if (count > 0) {
-        plates.push({ plateWeight, count, color });
-        remainingWeight -= count * plateWeight;
-      }
-    }
-  }
-
-  return plates;
 }

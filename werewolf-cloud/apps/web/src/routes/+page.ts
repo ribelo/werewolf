@@ -4,8 +4,8 @@ import type { ContestSummary, DatabaseInfo } from '$lib/types';
 export const load = async ({ fetch }) => {
   try {
     const [contestsResponse, databaseResponse] = await Promise.all([
-      apiClient.get<ContestSummary[]>('/contests'),
-      apiClient.get<DatabaseInfo>('/system/database')
+      apiClient.get<ContestSummary[]>('/contests', fetch),
+      apiClient.get<DatabaseInfo>('/system/database', fetch)
     ]);
 
     return {

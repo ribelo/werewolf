@@ -2,9 +2,11 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import type { WerewolfEnvironment } from '../env';
+import type { Database } from '../utils/database';
 import { executeQuery, executeQueryOne, executeMutation, generateId, getCurrentTimestamp, convertKeysToCamelCase } from '../utils/database';
 import { publishEvent } from '../live/publish';
 import { attemptUpsertSchema, attemptResultUpdateSchema, attemptStatusSchema, liftTypeSchema } from '@werewolf/domain/models/attempt';
+import { getAttemptWithRelations, buildCurrentAttemptPayload } from '../services/attempts';
 
 export const registrationAttempts = new Hono<WerewolfEnvironment>();
 
@@ -54,16 +56,18 @@ registrationAttempts.post('/', zValidator('json', attemptUpsertSchema), async (c
     );
   }
 
-  // Broadcast attempt upserted
+  // Broadcast attempt upserted with full attempt payload
   if (contestId) {
+    const attemptRecord = await getAttemptWithRelations(db, attemptId, contestId);
     await publishEvent(c.env, contestId, {
       type: 'attempt.upserted',
-      payload: {
-        attemptId,
-        registrationId,
-        liftType: input.liftType,
-        attemptNumber: input.attemptNumber,
+      payload: attemptRecord ?? {
+        attempt_id: attemptId,
+        registration_id: registrationId,
+        lift_type: input.liftType,
+        attempt_number: input.attemptNumber,
         weight: input.weight,
+        status: 'Pending',
       },
     });
   }
@@ -115,12 +119,14 @@ contestAttempts.get('/', async (c) => {
       a.id, a.registration_id, a.lift_type, a.attempt_number, a.weight,
       a.status, a.timestamp, a.judge1_decision, a.judge2_decision, a.judge3_decision,
       a.notes, a.created_at, a.updated_at,
-      c.first_name, c.last_name, r.lot_number
+      comp.first_name, comp.last_name, comp.competition_order, r.lot_number,
+      comp.first_name || ' ' || comp.last_name AS competitor_name
     FROM attempts a
     JOIN registrations r ON a.registration_id = r.id
-    JOIN competitors c ON r.competitor_id = c.id
+    JOIN competitors comp ON r.competitor_id = comp.id
     WHERE r.contest_id = ?
-    ORDER BY r.lot_number ASC, a.lift_type ASC, a.attempt_number ASC
+    ORDER BY comp.competition_order ASC, comp.last_name ASC, comp.first_name ASC,
+      a.lift_type ASC, a.attempt_number ASC
     `,
     [contestId]
   );
@@ -144,13 +150,14 @@ contestAttempts.get('/current', async (c) => {
       a.id, a.registration_id, a.lift_type, a.attempt_number, a.weight,
       a.status, a.timestamp, a.judge1_decision, a.judge2_decision, a.judge3_decision,
       a.notes, a.created_at, a.updated_at,
-      c.first_name, c.last_name, r.lot_number, cl.rack_height
+      comp.first_name, comp.last_name, comp.competition_order, r.lot_number, cl.rack_height,
+      comp.first_name || ' ' || comp.last_name AS competitor_name
     FROM current_lifts cl
     JOIN attempts a ON cl.registration_id = a.registration_id
       AND cl.lift_type = a.lift_type
       AND cl.attempt_number = a.attempt_number
     JOIN registrations r ON a.registration_id = r.id
-    JOIN competitors c ON r.competitor_id = c.id
+    JOIN competitors comp ON r.competitor_id = comp.id
     WHERE cl.contest_id = ? AND cl.is_active = true
     `,
     [contestId]
@@ -164,8 +171,10 @@ contestAttempts.get('/current', async (c) => {
     });
   }
 
+  const payload = currentLift.id ? await buildCurrentAttemptPayload(db, contestId, String(currentLift.id)) : null;
+
   return c.json({
-    data: convertKeysToCamelCase(currentLift),
+    data: payload,
     error: null,
     requestId: c.get('requestId'),
   });
@@ -183,9 +192,11 @@ contestAttempts.put('/current', zValidator('json', z.object({
   const attempt = await executeQueryOne(
     db,
     `
-    SELECT a.registration_id, a.lift_type, a.attempt_number, a.weight
+    SELECT a.registration_id, a.lift_type, a.attempt_number, a.weight,
+      comp.first_name, comp.last_name, comp.competition_order
     FROM attempts a
     JOIN registrations r ON a.registration_id = r.id
+    JOIN competitors comp ON r.competitor_id = comp.id
     WHERE a.id = ? AND r.contest_id = ?
     `,
     [attemptId, contestId]
@@ -202,8 +213,29 @@ contestAttempts.put('/current', zValidator('json', z.object({
     [contestId]
   );
 
-  if (!contestState || contestState.status !== 'InProgress') {
-    return c.json({ data: null, error: 'Contest is not in progress', requestId: c.get('requestId') }, 400);
+  if (!contestState) {
+    await executeMutation(
+      db,
+      `INSERT INTO contest_states (contest_id, status, current_lift, current_round, updated_at)
+       VALUES (?, 'InProgress', ?, ?, ?)` ,
+      [contestId, attempt.lift_type, attempt.attempt_number, getCurrentTimestamp()]
+    );
+  } else if (contestState.status !== 'InProgress') {
+    await executeMutation(
+      db,
+      `UPDATE contest_states
+       SET status = 'InProgress', current_lift = ?, current_round = ?, updated_at = ?
+       WHERE contest_id = ?`,
+      [attempt.lift_type, attempt.attempt_number, getCurrentTimestamp(), contestId]
+    );
+  } else {
+    await executeMutation(
+      db,
+      `UPDATE contest_states
+       SET current_lift = ?, current_round = ?, updated_at = ?
+       WHERE contest_id = ?`,
+      [attempt.lift_type, attempt.attempt_number, getCurrentTimestamp(), contestId]
+    );
   }
 
   // Update current lift
@@ -220,20 +252,107 @@ contestAttempts.put('/current', zValidator('json', z.object({
 
   // Broadcast current attempt set
   if (contestId) {
+    const payload = await buildCurrentAttemptPayload(db, contestId, attemptId);
+    if (payload) {
+      await publishEvent(c.env, contestId, {
+        type: 'attempt.currentSet',
+        payload,
+      });
+    } else {
+      const fallback = await getAttemptWithRelations(db, attemptId, contestId);
+      await publishEvent(c.env, contestId, {
+        type: 'attempt.currentSet',
+        payload: fallback ?? {
+          attempt_id: attemptId,
+          registration_id: attempt.registration_id,
+          lift_type: attempt.lift_type,
+          attempt_number: attempt.attempt_number,
+          weight: attempt.weight,
+        },
+      });
+    }
+  }
+
+  return c.json({
+    data: { success: true },
+    error: null,
+    requestId: c.get('requestId'),
+  });
+});
+
+// DELETE /contests/:contestId/attempts/current - Clear current attempt
+contestAttempts.delete('/current', async (c) => {
+  const db = c.env.DB;
+  const contestId = c.req.param('contestId');
+
+  const current = await executeQueryOne(
+    db,
+    `
+    SELECT registration_id, lift_type, attempt_number
+    FROM current_lifts
+    WHERE contest_id = ? AND is_active = true
+    `,
+    [contestId]
+  );
+
+  if (!current) {
+    return c.json({
+      data: { success: true, cleared: false },
+      error: null,
+      requestId: c.get('requestId'),
+    });
+  }
+
+  await executeMutation(
+    db,
+    `
+    UPDATE current_lifts
+    SET is_active = false,
+        updated_at = ?,
+        timer_start = NULL
+    WHERE contest_id = ?
+    `,
+    [getCurrentTimestamp(), contestId]
+  );
+
+  await executeMutation(
+    db,
+    `
+    UPDATE contest_states
+    SET current_lift = NULL,
+        current_round = 1,
+        updated_at = ?
+    WHERE contest_id = ?
+    `,
+    [getCurrentTimestamp(), contestId]
+  );
+
+  const attemptRow = await executeQueryOne<{ id: string }>(
+    db,
+    `
+    SELECT id
+    FROM attempts
+    WHERE registration_id = ? AND lift_type = ? AND attempt_number = ?
+    `,
+    [current.registration_id, current.lift_type, current.attempt_number]
+  );
+
+  const attemptRecord = attemptRow?.id ? await getAttemptWithRelations(db, attemptRow.id, contestId) : null;
+
+  if (contestId) {
     await publishEvent(c.env, contestId, {
-      type: 'attempt.currentSet',
-      payload: {
-        attemptId,
-        registrationId: attempt.registration_id,
-        liftType: attempt.lift_type,
-        attemptNumber: attempt.attempt_number,
-        weight: attempt.weight,
+      type: 'attempt.currentCleared',
+      payload: attemptRecord ?? {
+        attempt_id: attemptRow?.id ?? null,
+        registration_id: current.registration_id,
+        lift_type: current.lift_type,
+        attempt_number: current.attempt_number,
       },
     });
   }
 
   return c.json({
-    data: { success: true },
+    data: { success: true, cleared: true },
     error: null,
     requestId: c.get('requestId'),
   });
@@ -266,12 +385,13 @@ contestAttempts.get('/queue', async (c) => {
       a.id, a.registration_id, a.lift_type, a.attempt_number, a.weight,
       a.status, a.timestamp, a.judge1_decision, a.judge2_decision, a.judge3_decision,
       a.notes, a.created_at, a.updated_at,
-      c.first_name, c.last_name, r.lot_number
+      comp.first_name, comp.last_name, comp.competition_order, r.lot_number,
+      comp.first_name || ' ' || comp.last_name AS competitor_name
     FROM attempts a
     JOIN registrations r ON a.registration_id = r.id
-    JOIN competitors c ON r.competitor_id = c.id
+    JOIN competitors comp ON r.competitor_id = comp.id
     WHERE r.contest_id = ? AND a.lift_type = ? AND a.attempt_number = ? AND a.status = 'Pending'
-    ORDER BY r.lot_number ASC
+    ORDER BY comp.competition_order ASC, comp.last_name ASC, comp.first_name ASC
     `,
     [contestId, contestState.current_lift, contestState.current_round]
   );
@@ -292,7 +412,7 @@ attempts.patch('/:attemptId/result', zValidator('json', attemptResultUpdateSchem
   const input = c.req.valid('json');
 
   const updates: string[] = [];
-  const params: any[] = [];
+  const params: (string | number | null | boolean)[] = [];
 
   updates.push('status = ?');
   params.push(input.status);
@@ -334,15 +454,17 @@ attempts.patch('/:attemptId/result', zValidator('json', attemptResultUpdateSchem
     `SELECT r.contest_id as contestId FROM attempts a JOIN registrations r ON a.registration_id = r.id WHERE a.id = ?`,
     [attemptId]
   );
-  if (contestRow?.contestId) {
-    await publishEvent(c.env, String(contestRow.contestId), {
+  const contestId = contestRow?.contestId ? String(contestRow.contestId) : undefined;
+  const updatedAttempt = await getAttemptWithRelations(db, attemptId, contestId);
+  if (contestId) {
+    await publishEvent(c.env, contestId, {
       type: 'attempt.resultUpdated',
-      payload: {
-        attemptId,
+      payload: updatedAttempt ?? {
+        attempt_id: attemptId,
         status: input.status,
-        judge1Decision: input.judge1Decision,
-        judge2Decision: input.judge2Decision,
-        judge3Decision: input.judge3Decision,
+        judge1_decision: input.judge1Decision,
+        judge2_decision: input.judge2Decision,
+        judge3_decision: input.judge3Decision,
         notes: input.notes,
       },
     });

@@ -1,13 +1,24 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import Layout from "$lib/components/Layout.svelte";
-  import { formatEquipment, getStatusClasses, formatWeightClass, formatAgeClass } from "$lib/utils";
-  import { apiClient } from "$lib/api";
+  import Layout from '$lib/components/Layout.svelte';
+  import CompetitorModal from '$lib/components/CompetitorModal.svelte';
+  import AttemptEditorModal from '$lib/components/AttemptEditorModal.svelte';
+  import { formatEquipment, getStatusClasses, formatWeightClass, formatAgeClass, formatCompetitorName, formatWeight } from '$lib/utils';
+  import { apiClient, ApiError } from '$lib/api';
   import { realtimeClient } from "$lib/realtime";
-  import type { PageData } from "./$types";
-  import type { Registration, Attempt, CurrentAttempt, LiveEvent, ConnectionStatus } from "$lib/types";
+  import { modalStore } from '$lib/ui/modal';
+  import { toast } from '$lib/ui/toast';
+  import { contestStore } from '$lib/ui/contest-store';
+  import { setContestContext } from '$lib/ui/context-helpers';
+  import { getAttemptStatusClass, getAttemptStatusLabel } from '$lib/ui/status';
+  import type { PageData } from './$types';
+  import type { Registration, Attempt, CurrentAttempt, CurrentAttemptBundle, LiveEvent, ConnectionStatus, AttemptStatus, AttemptNumber, LiftType } from '$lib/types';
+  import { bundleToCurrentAttempt } from '$lib/current-attempt';
 
   export let data: PageData;
+  export let params: Record<string, string> = {};
+
+  $: void params;
   let { contest, registrations, attempts, currentAttempt, referenceData, error, apiBase, contestId } = data;
 
   let weightClasses = referenceData?.weightClasses ?? [];
@@ -19,7 +30,15 @@
 
   // Reactive data that updates with live events
   let liveAttempts = [...attempts];
-  let liveCurrentAttempt = currentAttempt;
+  let liveCurrentAttempt: CurrentAttempt | null = currentAttempt
+    ? normaliseCurrentAttempt(currentAttempt as Attempt | CurrentAttempt | CurrentAttemptBundle)
+    : null;
+
+  const attemptStatusOptions: AttemptStatus[] = ['Pending', 'Successful', 'Failed', 'Skipped'];
+
+  let statusLoading: Record<string, boolean> = {};
+  let setCurrentLoading: Record<string, boolean> = {};
+  let isClearingCurrent = false;
 
   const TABS = [
     { id: 'registrations', label: 'Registrations' },
@@ -31,8 +50,14 @@
 
   type TabId = typeof TABS[number]['id'];
   let activeTab: TabId = 'registrations';
-  let showModal = false;
-  let selectedRegistration: Registration | null = null;
+
+  function setStatusLoadingFlag(id: string, value: boolean) {
+    statusLoading = { ...statusLoading, [id]: value };
+  }
+
+  function setCurrentLoadingFlag(id: string, value: boolean) {
+    setCurrentLoading = { ...setCurrentLoading, [id]: value };
+  }
 
   // Inline editing state
   let editingRackHeights: { [key: string]: boolean } = {};
@@ -61,19 +86,170 @@
     return 'Offline';
   }
 
-  function handleModalKeydown(event: KeyboardEvent): void {
-    if (showModal && event.key === 'Escape') {
-      closeModal();
+
+
+  // Helper functions to resolve competitor names
+  function getRegistrationCompetitorName(registrationId: string): string {
+    const registration = registrations.find((r) => r.id === registrationId);
+    if (registration) {
+      return formatCompetitorName(registration.firstName, registration.lastName);
+    }
+    return 'Unknown Competitor';
+  }
+
+  function getAttemptCompetitor(attempt: Attempt): string {
+    if (attempt.competitorName) return attempt.competitorName;
+    if (attempt.firstName || attempt.lastName) {
+      return formatCompetitorName(attempt.firstName ?? '', attempt.lastName ?? '');
+    }
+    return getRegistrationCompetitorName(attempt.registrationId);
+  }
+
+  function upsertAttemptRecord(attempt: Attempt) {
+    if (!attempt?.id) return;
+    const index = liveAttempts.findIndex((existing) => existing.id === attempt.id);
+    if (index >= 0) {
+      const updated = { ...liveAttempts[index], ...attempt };
+      liveAttempts = [
+        ...liveAttempts.slice(0, index),
+        updated,
+        ...liveAttempts.slice(index + 1),
+      ];
+    } else {
+      liveAttempts = [...liveAttempts, attempt];
+    }
+    contestStore.updateAttempt(attempt);
+  }
+
+  function normaliseCurrentAttempt(input: Attempt | CurrentAttempt | CurrentAttemptBundle): CurrentAttempt {
+    if ('attempt' in (input as any)) {
+      return bundleToCurrentAttempt(input as CurrentAttemptBundle);
+    }
+
+    if ('competitorName' in (input as any) && (input as CurrentAttempt).competitorName) {
+      const current = input as CurrentAttempt;
+      return {
+        id: current.id,
+        registrationId: current.registrationId,
+        competitorName: current.competitorName,
+        liftType: current.liftType,
+        attemptNumber: current.attemptNumber,
+        weight: current.weight,
+        status: current.status,
+        competitionOrder: current.competitionOrder ?? null,
+        lotNumber: current.lotNumber ?? null,
+        updatedAt: current.updatedAt ?? null,
+      };
+    }
+
+    const attempt = input as Attempt;
+    return {
+      id: attempt.id,
+      registrationId: attempt.registrationId,
+      competitorName: getAttemptCompetitor(attempt),
+      liftType: attempt.liftType as LiftType,
+      attemptNumber: (attempt.attemptNumber as AttemptNumber) ?? 1,
+      weight: attempt.weight,
+      status: attempt.status as AttemptStatus,
+      competitionOrder: attempt.competitionOrder ?? null,
+      lotNumber: attempt.lotNumber ?? null,
+      updatedAt: attempt.updatedAt ?? null,
+    };
+  }
+
+  async function refreshAttemptsData() {
+    if (!contestId) return;
+    try {
+      const response = await apiClient.get<Attempt[]>(`/contests/${contestId}/attempts`);
+      const refreshed = response.data ?? [];
+      statusLoading = {};
+      setCurrentLoading = {};
+      liveAttempts = [...refreshed];
+      refreshed.forEach(upsertAttemptRecord);
+    } catch (error) {
+      console.error('Failed to refresh attempts', error);
     }
   }
 
-  // Helper function to get competitor name from registration ID
-  function getCompetitorName(registrationId: string): string {
-    const registration = registrations.find(r => r.id === registrationId);
-    if (registration) {
-      return `${registration.firstName} ${registration.lastName}`;
+  async function openAttemptModal(registrationRecord: Registration) {
+    try {
+      const result = (await modalStore.open({
+        title: `Edit attempts – ${formatCompetitorName(registrationRecord.firstName, registrationRecord.lastName)}`,
+        component: AttemptEditorModal,
+        size: 'xl',
+        showFooter: false,
+        data: {
+          contestId,
+          registration: registrationRecord,
+          attempts: liveAttempts.filter((attempt) => attempt.registrationId === registrationRecord.id),
+        },
+      })) as unknown as boolean | undefined;
+
+      if (result) {
+        await refreshAttemptsData();
+      }
+    } catch (error) {
+      console.error('Failed to open attempt editor modal', error);
     }
-    return 'Unknown Competitor';
+  }
+
+  async function handleStatusChange(attempt: Attempt, event: Event) {
+    const select = event.target as HTMLSelectElement | null;
+    if (!select) return;
+    updateAttemptStatusHandler(attempt, select.value as AttemptStatus);
+  }
+
+  async function updateAttemptStatusHandler(attempt: Attempt, status: AttemptStatus) {
+    if (!contestId || !attempt?.id) return;
+    if (attempt.status === status) return;
+
+    setStatusLoadingFlag(attempt.id, true);
+
+    try {
+      await apiClient.patch(`/attempts/${attempt.id}/result`, {
+        attemptId: attempt.id,
+        status,
+      });
+
+      upsertAttemptRecord({ ...attempt, status, updatedAt: new Date().toISOString() });
+      toast.success(`Attempt updated to ${getAttemptStatusLabel(status)}`);
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : error instanceof Error ? error.message : 'Unable to update attempt status';
+      toast.error(message);
+    } finally {
+      setStatusLoadingFlag(attempt.id, false);
+    }
+  }
+
+  async function setCurrentAttemptHandler(attempt: Attempt) {
+    if (!contestId || !attempt?.id) return;
+    setCurrentLoadingFlag(attempt.id, true);
+
+    try {
+      await apiClient.put(`/contests/${contestId}/attempts/current`, { attemptId: attempt.id });
+      liveCurrentAttempt = normaliseCurrentAttempt({ ...attempt, updatedAt: new Date().toISOString() });
+      toast.success('Current attempt updated');
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : error instanceof Error ? error.message : 'Unable to set current attempt';
+      toast.error(message);
+    } finally {
+      setCurrentLoadingFlag(attempt.id, false);
+    }
+  }
+
+  async function clearCurrentAttemptHandler() {
+    if (!contestId) return;
+    isClearingCurrent = true;
+    try {
+      await apiClient.delete(`/contests/${contestId}/attempts/current`);
+      liveCurrentAttempt = null;
+      toast.info('Current attempt cleared');
+    } catch (error) {
+      const message = error instanceof ApiError ? error.message : error instanceof Error ? error.message : 'Unable to clear current attempt';
+      toast.error(message);
+    } finally {
+      isClearingCurrent = false;
+    }
   }
 
   // Get recent attempts (last 5 completed attempts)
@@ -99,34 +275,35 @@
   function handleLiveEvent(event: LiveEvent) {
     switch (event.type) {
       case 'attempt.upserted':
-        // Update or add attempt
-        const existingIndex = liveAttempts.findIndex(a => a.id === event.data.id);
-        if (existingIndex >= 0) {
-          liveAttempts[existingIndex] = event.data;
-        } else {
-          liveAttempts = [...liveAttempts, event.data];
-        }
-        liveAttempts = [...liveAttempts]; // Trigger reactivity
-        break;
-
-      case 'attempt.resultUpdated':
-        // Update attempt result
-        const resultIndex = liveAttempts.findIndex(a => a.id === event.data.id);
-        if (resultIndex >= 0) {
-          liveAttempts[resultIndex] = { ...liveAttempts[resultIndex], ...event.data };
-          liveAttempts = [...liveAttempts]; // Trigger reactivity
+      case 'attempt.resultUpdated': {
+        const attempt = event.data as Attempt | undefined;
+        if (attempt) {
+          upsertAttemptRecord(attempt);
+          if (liveCurrentAttempt?.id === attempt.id) {
+            liveCurrentAttempt = normaliseCurrentAttempt({ ...liveCurrentAttempt, ...attempt });
+          }
         }
         break;
-
-      case 'attempt.currentSet':
-        // Update current attempt
-        liveCurrentAttempt = event.data;
+      }
+      case 'attempt.currentSet': {
+        const payload = event.data as CurrentAttemptBundle | Attempt | CurrentAttempt | undefined;
+        if (payload) {
+          liveCurrentAttempt = normaliseCurrentAttempt(payload);
+        }
         break;
-
+      }
+      case 'attempt.currentCleared':
+        liveCurrentAttempt = null;
+        break;
       case 'heartbeat':
-        // Connection is alive
         break;
     }
+  }
+
+  // Set contest in store and context when data is available
+  $: if (contest) {
+    contestStore.setContest(contest, registrations);
+    setContestContext(contest);
   }
 
   onMount(() => {
@@ -201,6 +378,12 @@
         throw new Error(response.error);
       }
 
+      // Update contest store with the updated registration
+      const updatedRegistration = registrations.find(r => r.id === registrationId);
+      if (updatedRegistration) {
+        contestStore.updateRegistration(updatedRegistration);
+      }
+
       // Success - clean up editing state
       editingRackHeights[registrationId] = false;
       delete tempRackHeights[registrationId];
@@ -251,6 +434,12 @@
         throw new Error(response.error);
       }
 
+      // Update contest store with the updated registration
+      const updatedRegistration = registrations.find(r => r.id === registrationId);
+      if (updatedRegistration) {
+        contestStore.updateRegistration(updatedRegistration);
+      }
+
       // Success - clean up editing state
       editingEquipment[registrationId] = false;
       delete tempEquipment[registrationId];
@@ -262,22 +451,48 @@
     }
   }
 
-  function openModal(registration: Registration) {
-    selectedRegistration = registration;
-    showModal = true;
+  async function openCompetitorModal(registration: Registration) {
+    try {
+      // Create a competitor summary object from the registration
+      const competitorSummary = {
+        id: registration.id,
+        firstName: registration.firstName,
+        lastName: registration.lastName,
+        birthDate: registration.birthDate,
+        gender: registration.gender,
+        club: registration.club,
+        city: registration.city,
+        competitionOrder: registration.competitionOrder,
+      };
+
+      const result = await modalStore.open({
+        title: `Edit ${registration.firstName} ${registration.lastName}`,
+        size: 'xl',
+        component: CompetitorModal,
+        data: {
+          competitor: competitorSummary,
+          mode: 'edit' as const,
+        },
+      });
+
+      if (result) {
+        // Refresh the registrations data
+        toast.success('Competitor updated successfully');
+      }
+    } catch (error) {
+      console.error('Modal error:', error);
+      toast.error('Failed to update competitor');
+    }
   }
 
-  function closeModal() {
-    showModal = false;
-    selectedRegistration = null;
-  }
+
 </script>
 
 <svelte:head>
   <title>{contest?.name ?? "Contest"} • Werewolf Powerlifting</title>
 </svelte:head>
 
-<svelte:window on:keydown={handleModalKeydown} />
+
 
 <Layout
   title={contest?.name ?? "Contest"}
@@ -371,9 +586,23 @@
               </div>
               <div class="text-right">
                 <p class="text-label text-text-secondary mb-1">Weight</p>
-                <p class="weight-large text-text-primary">{liveCurrentAttempt.weight} kg</p>
-                <p class="text-caption text-text-secondary mt-2">{liveCurrentAttempt.status}</p>
+                <p class="weight-large text-text-primary">{formatWeight(liveCurrentAttempt.weight)}</p>
+                <p class="text-caption text-text-secondary mt-2">{getAttemptStatusLabel(liveCurrentAttempt.status)}</p>
               </div>
+            </div>
+            <div class="mt-4 flex justify-end">
+              <button
+                type="button"
+                class="btn-secondary"
+                disabled={isClearingCurrent}
+                on:click={clearCurrentAttemptHandler}
+              >
+                {#if isClearingCurrent}
+                  Clearing…
+                {:else}
+                  Clear current
+                {/if}
+              </button>
             </div>
           {:else}
             <div class="text-center py-8 text-text-secondary">
@@ -393,11 +622,15 @@
               {#each recentAttempts as attempt (attempt.id)}
                 <li class="flex items-center justify-between border-b border-border-color pb-3 last:border-b-0">
                   <div>
-                    <p class="text-body text-text-primary font-semibold">{getCompetitorName(attempt.registrationId)}</p>
-                    <p class="text-caption text-text-secondary">{attempt.liftType} #{attempt.attemptNumber} • {attempt.weight} kg</p>
+                    <p class="text-body text-text-primary font-semibold">{getAttemptCompetitor(attempt)}</p>
+                    <p class="text-caption text-text-secondary">{attempt.liftType} #{attempt.attemptNumber} • {formatWeight(attempt.weight)}</p>
                   </div>
                   <div class="text-right">
-                    <span class={getStatusClasses(attempt.status)}>{attempt.status}</span>
+                    <span
+                      class={`inline-flex items-center justify-center rounded px-2 py-1 text-xxs font-semibold ${getAttemptStatusClass(attempt.status)}`}
+                    >
+                      {getAttemptStatusLabel(attempt.status)}
+                    </span>
                     <p class="text-xxs text-text-secondary mt-1">{new Date(attempt.updatedAt).toLocaleTimeString()}</p>
                   </div>
                 </li>
@@ -552,9 +785,22 @@
                         </td>
                         <td class="px-4 py-3 text-text-secondary">{reg.competitionOrder ?? '—'}</td>
                         <td class="px-4 py-3 text-right">
-                          <button type="button" class="btn-secondary px-3 py-1 text-xxs" on:click={() => openModal(reg)}>
-                            View details
-                          </button>
+                          <div class="flex flex-wrap justify-end gap-2">
+                            <button
+                              type="button"
+                              class="btn-primary px-3 py-1 text-xxs"
+                              on:click={() => openAttemptModal(reg)}
+                            >
+                              Edit attempts
+                            </button>
+                            <button
+                              type="button"
+                              class="btn-secondary px-3 py-1 text-xxs"
+                              on:click={() => openCompetitorModal(reg)}
+                            >
+                              View details
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     {/each}
@@ -585,19 +831,54 @@
                       <th class="px-4 py-3">Weight</th>
                       <th class="px-4 py-3">Status</th>
                       <th class="px-4 py-3">Updated</th>
+                      <th class="px-4 py-3 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {#each liveAttempts as attempt (attempt.id)}
-                      <tr class="border-b border-border-color hover:bg-element-bg/60">
-                        <td class="px-4 py-3 text-text-primary font-semibold">{getCompetitorName(attempt.registrationId)}</td>
+                      <tr class={`border-b border-border-color hover:bg-element-bg/60 transition ${liveCurrentAttempt?.id === attempt.id ? 'bg-element-bg/70' : ''}`}>
+                        <td class="px-4 py-3 text-text-primary font-semibold">{getAttemptCompetitor(attempt)}</td>
                         <td class="px-4 py-3 text-text-secondary">{attempt.liftType}</td>
                         <td class="px-4 py-3 text-text-secondary">{attempt.attemptNumber}</td>
-                        <td class="px-4 py-3 text-text-secondary">{attempt.weight} kg</td>
+                        <td class="px-4 py-3 text-text-secondary">{formatWeight(attempt.weight)}</td>
                         <td class="px-4 py-3">
-                          <span class={getStatusClasses(attempt.status)}>{attempt.status}</span>
+                          <div class="flex flex-col gap-2">
+                            <span
+                              class={`inline-flex items-center justify-center rounded px-2 py-1 text-xxs font-semibold ${getAttemptStatusClass(attempt.status)}`}
+                            >
+                              {getAttemptStatusLabel(attempt.status)}
+                            </span>
+                            <select
+                              class="input text-xs"
+                              value={attempt.status}
+                              disabled={statusLoading[attempt.id]}
+                              on:change={(event) => handleStatusChange(attempt, event)}
+                            >
+                              {#each attemptStatusOptions as option}
+                                <option value={option}>{getAttemptStatusLabel(option)}</option>
+                              {/each}
+                            </select>
+                          </div>
                         </td>
                         <td class="px-4 py-3 text-text-secondary">{new Date(attempt.updatedAt).toLocaleString()}</td>
+                        <td class="px-4 py-3 text-right">
+                          <div class="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              class="btn-secondary px-3 py-1 text-xxs"
+                              disabled={setCurrentLoading[attempt.id] || liveCurrentAttempt?.id === attempt.id}
+                              on:click={() => setCurrentAttemptHandler(attempt)}
+                            >
+                              {#if setCurrentLoading[attempt.id]}
+                                Setting…
+                              {:else if liveCurrentAttempt?.id === attempt.id}
+                                Current
+                              {:else}
+                                Set current
+                              {/if}
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     {/each}
                   </tbody>
@@ -639,76 +920,5 @@
     </div>
   {/if}
 
-  {#if showModal && selectedRegistration}
-    <div class="fixed inset-0 z-40 flex items-center justify-center">
-      <button
-        type="button"
-        class="absolute inset-0 bg-black/70"
-        aria-label="Close modal"
-        on:click={closeModal}
-      ></button>
-      <div
-        class="relative z-50 w-full max-w-3xl card focus:outline-none"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="registration-modal-title"
-        aria-describedby="registration-modal-description"
-        tabindex="-1"
-      >
-        <header class="flex items-center justify-between mb-6">
-          <h3 id="registration-modal-title" class="text-h2 text-text-primary">
-            Registration • {selectedRegistration.firstName} {selectedRegistration.lastName}
-          </h3>
-          <button type="button" class="btn-secondary px-3 py-1" on:click={closeModal}>Close</button>
-        </header>
-        <p id="registration-modal-description" class="sr-only">
-          Detailed registration information for the selected competitor.
-        </p>
-        <div class="grid gap-6 md:grid-cols-2">
-          <div>
-            <h4 class="text-label text-text-secondary mb-2">Competitor</h4>
-            <dl class="space-y-2 text-body text-text-secondary">
-              <div>
-                <dt>Name</dt>
-                <dd class="text-text-primary">{selectedRegistration.firstName} {selectedRegistration.lastName}</dd>
-              </div>
-              <div>
-                <dt>Birth date</dt>
-                <dd class="text-text-primary">{new Date(selectedRegistration.birthDate).toLocaleDateString()}</dd>
-              </div>
-              <div>
-                <dt>Gender</dt>
-                <dd class="text-text-primary">{selectedRegistration.gender}</dd>
-              </div>
-              <div>
-                <dt>Lot number</dt>
-                <dd class="text-text-primary">{selectedRegistration.lotNumber ?? '—'}</dd>
-              </div>
-            </dl>
-          </div>
-          <div>
-            <h4 class="text-label text-text-secondary mb-2">Performance</h4>
-            <dl class="space-y-2 text-body text-text-secondary">
-              <div>
-                <dt>Bodyweight</dt>
-                <dd class="text-text-primary">{selectedRegistration.bodyweight ? `${selectedRegistration.bodyweight.toFixed(1)} kg` : '—'}</dd>
-              </div>
-              <div>
-                <dt>Weight class</dt>
-                <dd class="text-text-primary">{formatWeightClass(selectedRegistration.weightClassId, weightClasses)}</dd>
-              </div>
-              <div>
-                <dt>Age class</dt>
-                <dd class="text-text-primary">{formatAgeClass(selectedRegistration.ageClassId, ageCategories)}</dd>
-              </div>
-              <div>
-                <dt>Equipment</dt>
-                <dd class="text-text-primary">{formatEquipment(selectedRegistration)}</dd>
-              </div>
-            </dl>
-          </div>
-        </div>
-      </div>
-    </div>
-  {/if}
+
 </Layout>

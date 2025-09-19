@@ -3,12 +3,16 @@
   import { realtimeClient } from '$lib/realtime';
   import QRShare from '$lib/components/QRShare.svelte';
   import type { PageData } from './$types';
+  import { bundleToCurrentAttempt } from '$lib/current-attempt';
   import type {
     Attempt,
     ConnectionStatus,
     CurrentAttempt,
+    CurrentAttemptBundle,
     LiveEvent,
     Registration,
+    LiftAttemptSnapshot,
+    AttemptStatus,
   } from '$lib/types';
 
   export let data: PageData;
@@ -27,23 +31,52 @@
 
   let connectionStatus: ConnectionStatus = 'offline';
   let liveAttempts: Attempt[] = [...attempts];
-  let liveCurrentAttempt: CurrentAttempt | null = currentAttempt;
+  let liveCurrentBundle: CurrentAttemptBundle | null = currentAttempt;
+  let liveCurrentAttempt: CurrentAttempt | null = currentAttempt ? bundleToCurrentAttempt(currentAttempt) : null;
 
   // Derived competitor data
-  $: currentRegistration = liveCurrentAttempt
-    ? registrations.find((item) => item.id === liveCurrentAttempt?.registrationId)
-    : null;
+  $: currentRegistration = liveCurrentBundle?.registration ?? null;
 
-  $: competitorHistory = currentRegistration
-    ? liveAttempts
-        .filter((attempt) => attempt.registrationId === currentRegistration!.id && attempt.status !== 'Pending')
-        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+  $: currentCompetitor = liveCurrentBundle?.competitor ?? null;
+
+  $: sanitizedName = currentCompetitor
+    ? truncate(`${currentCompetitor.firstName} ${currentCompetitor.lastName}`, 28)
+    : '';
+
+  $: attemptsByLift = liveCurrentBundle?.attemptsByLift ?? { Squat: [], Bench: [], Deadlift: [] };
+
+  $: highlightedLift = liveCurrentBundle?.highlight?.liftType ?? null;
+
+  $: currentLiftAttempts = highlightedLift ? attemptsByLift[highlightedLift] ?? [] : [];
+
+  $: attemptTiles = currentLiftAttempts.length > 0
+    ? [1, 2, 3].map((num) => {
+        const match = currentLiftAttempts.find((item) => item.attemptNumber === num);
+        return {
+          number: num,
+          weight: match?.weight ?? 0,
+          status: (match?.status ?? 'Pending') as AttemptStatus,
+          isHighlighted: liveCurrentBundle?.highlight?.attemptNumber === num,
+        };
+      })
+    : [1, 2, 3].map((num) => ({
+        number: num,
+        weight: 0,
+        status: 'Pending' as AttemptStatus,
+        isHighlighted: false,
+      }));
+
+  $: competitorHistory = liveCurrentBundle
+    ? Object.values(liveCurrentBundle.attemptsByLift)
+        .flat()
+        .filter((attempt) => attempt.status !== 'Pending')
+        .sort((a, b) => new Date(b.updatedAt ?? '').getTime() - new Date(a.updatedAt ?? '').getTime())
         .slice(0, 3)
     : [];
 
-  $: sanitizedName = liveCurrentAttempt
-    ? truncate(liveCurrentAttempt.competitorName, 28)
-    : '';
+  $: platePlan = liveCurrentBundle?.platePlan ?? null;
+
+  $: weightClassLabel = currentRegistration?.weightClassName ?? currentRegistration?.weightClassId ?? '—';
 
   $: shareableUrl = typeof window !== 'undefined' && contestId
     ? `${window.location.origin}${window.location.pathname}?contestId=${contestId}`
@@ -73,25 +106,38 @@
   function handleLiveEvent(event: LiveEvent) {
     switch (event.type) {
       case 'attempt.upserted': {
-        const index = liveAttempts.findIndex((item) => item.id === event.data.id);
+        const payload = event.data as Attempt;
+        if (!payload) break;
+        const index = liveAttempts.findIndex((item) => item.id === payload.id);
         if (index >= 0) {
-          liveAttempts[index] = event.data;
+          liveAttempts[index] = payload;
         } else {
-          liveAttempts = [...liveAttempts, event.data];
+          liveAttempts = [...liveAttempts, payload];
         }
         liveAttempts = [...liveAttempts];
         break;
       }
       case 'attempt.resultUpdated': {
-        const index = liveAttempts.findIndex((item) => item.id === event.data.id);
+        const payload = event.data as Attempt;
+        if (!payload) break;
+        const index = liveAttempts.findIndex((item) => item.id === payload.id);
         if (index >= 0) {
-          liveAttempts[index] = { ...liveAttempts[index], ...event.data };
+          liveAttempts[index] = { ...liveAttempts[index], ...payload };
           liveAttempts = [...liveAttempts];
         }
         break;
       }
       case 'attempt.currentSet': {
-        liveCurrentAttempt = event.data;
+        const bundle = event.data as CurrentAttemptBundle | null;
+        if (bundle) {
+          liveCurrentBundle = bundle;
+          liveCurrentAttempt = bundleToCurrentAttempt(bundle);
+        }
+        break;
+      }
+      case 'attempt.currentCleared': {
+        liveCurrentBundle = null;
+        liveCurrentAttempt = null;
         break;
       }
       default:
@@ -107,13 +153,18 @@
   function connectionBadge(): string {
     if (connectionStatus === 'connected') return 'status-badge status-active';
     if (connectionStatus === 'connecting') return 'status-badge status-warning';
-    return isOffline ? 'status-badge status-warning' : 'status-badge status-error';
+    if (isOffline) return 'status-badge status-warning';
+    return 'status-badge status-warning';
   }
 
   function connectionLabel(): string {
     if (connectionStatus === 'connected') return 'Live';
     if (connectionStatus === 'connecting') return 'Connecting';
-    return isOffline ? `Cached ${cacheAge ? `${cacheAge} min ago` : ''}` : 'Offline';
+    if (isOffline) {
+      const suffix = cacheAge ? `${cacheAge} min ago` : '';
+      return suffix ? `Cached ${suffix}` : 'Cached';
+    }
+    return 'Polling';
   }
 
   function reconnect() {
@@ -124,20 +175,22 @@
   }
 
   function rackHeight(): string | null {
-    if (!currentRegistration || !liveCurrentAttempt) return null;
-    if (liveCurrentAttempt.liftType === 'Squat' && currentRegistration.rackHeightSquat) {
+    if (!currentRegistration) return null;
+    const lift = highlightedLift ?? liveCurrentAttempt?.liftType ?? null;
+    if (lift === 'Squat' && currentRegistration.rackHeightSquat) {
       return `${currentRegistration.rackHeightSquat} cm`;
     }
-    if (liveCurrentAttempt.liftType === 'Bench' && currentRegistration.rackHeightBench) {
+    if (lift === 'Bench' && currentRegistration.rackHeightBench) {
       return `${currentRegistration.rackHeightBench} cm`;
     }
     return null;
   }
 
-  import { attemptToneClass, statusBadgeClass } from '$lib/ui/status';
+  import { attemptToneClass, statusBadgeClass, getAttemptStatusClass, getAttemptStatusLabel } from '$lib/ui/status';
 
   function liftLabel(): string {
-    return liveCurrentAttempt ? liveCurrentAttempt.liftType.toUpperCase() : '';
+    const lift = highlightedLift ?? liveCurrentAttempt?.liftType ?? null;
+    return lift ? lift.toUpperCase() : '';
   }
 </script>
 
@@ -197,8 +250,8 @@
           <p class="text-label text-text-secondary mb-3">Lifter</p>
           <h2 class="text-display text-text-primary uppercase tracking-[0.35em]">{sanitizedName}</h2>
           <div class="mt-6 space-y-2 text-body text-text-secondary">
-            {#if currentRegistration?.club}
-              <p>{currentRegistration.club}{currentRegistration.city ? ` • ${currentRegistration.city}` : ''}</p>
+            {#if currentCompetitor?.club}
+              <p>{currentCompetitor.club}{currentCompetitor.city ? ` • ${currentCompetitor.city}` : ''}</p>
             {/if}
             <p>Lot #{currentRegistration?.competitionOrder ?? '—'} • Bodyweight {currentRegistration?.bodyweight ?? '—'} kg</p>
           </div>
@@ -216,6 +269,25 @@
               <span class="text-h2 text-primary-red">{liveCurrentAttempt.weight} kg</span>
             </div>
           </div>
+        </div>
+      </section>
+
+      <section class="card attempt-grid">
+        <header class="flex items-center justify-between mb-4">
+          <div>
+            <h3 class="text-h3 text-text-primary">Attempt Progress</h3>
+            <p class="text-body text-text-secondary">Latest attempts for this lift.</p>
+          </div>
+          <span class="status-badge status-active">{liftLabel()}</span>
+        </header>
+        <div class="grid gap-4 md:grid-cols-3">
+          {#each attemptTiles as tile}
+            <div class={`rounded-lg p-4 transition duration-300 ${getAttemptStatusClass(tile.status)} ${tile.isHighlighted ? 'ring-2 ring-primary-red bg-primary-red/20' : ''}`}>
+              <p class="text-caption uppercase tracking-[0.3em] text-text-secondary">Attempt {tile.number}</p>
+              <p class="text-display font-semibold">{tile.weight ? `${tile.weight} kg` : '—'}</p>
+              <p class="text-body text-text-secondary">{getAttemptStatusLabel(tile.status)}</p>
+            </div>
+          {/each}
         </div>
       </section>
 
@@ -241,9 +313,35 @@
         </div>
         <div class="card">
           <p class="text-label text-text-secondary mb-2">Weight Class</p>
-          <p class="text-h2 text-text-primary">{currentRegistration?.weightClassId ?? '—'}</p>
+          <p class="text-h2 text-text-primary">{weightClassLabel}</p>
         </div>
       </section>
+
+      {#if platePlan && platePlan.plates.length > 0}
+        <section class="card">
+          <header class="card-header flex items-center justify-between">
+            <div>
+              <h3 class="text-h3 text-text-primary">Plate Loading Plan</h3>
+              <p class="text-body text-text-secondary">Bar {platePlan.barWeight} kg • Total {platePlan.total.toFixed(1)} kg</p>
+            </div>
+          </header>
+          <div class="grid gap-3 md:grid-cols-2">
+            <ul class="space-y-2">
+              {#each platePlan.plates as plate}
+                <li class="flex items-center justify-between bg-element-bg border border-border-color rounded px-3 py-2">
+                  <span class="text-body">{plate.plateWeight} kg</span>
+                  <span class="text-body font-semibold">× {plate.count} per side</span>
+                </li>
+              {/each}
+            </ul>
+            <div class="space-y-2 text-body text-text-secondary">
+              <p>Weight to load: {platePlan.weightToLoad.toFixed(1)} kg</p>
+              <p>Increment step: {platePlan.increment.toFixed(1)} kg</p>
+              <p>Status: {platePlan.exact ? 'Exact match' : 'Adjusted to nearest available weight'}</p>
+            </div>
+          </div>
+        </section>
+      {/if}
 
       {#if competitorHistory.length > 0}
         <section class="card">
@@ -256,7 +354,7 @@
         <div class="border border-border-color p-4 bg-element-bg">
           <p class="text-caption text-text-secondary uppercase tracking-[0.3em]">{history.liftType} #{history.attemptNumber}</p>
           <p class={`text-h2 ${attemptToneClass(history.status)}`}>{history.weight} kg</p>
-          <p class="text-caption text-text-secondary mt-2">{history.status}</p>
+          <p class="text-caption text-text-secondary mt-2">{getAttemptStatusLabel(history.status)}</p>
         </div>
       {/each}
           </div>

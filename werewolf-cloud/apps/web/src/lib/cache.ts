@@ -1,10 +1,10 @@
-import type { ContestDetail, Registration, Attempt, CurrentAttempt, ReferenceData } from './types';
+import type { ContestDetail, Registration, Attempt, CurrentAttemptBundle, ReferenceData } from './types';
 
 interface CacheData {
   contest: ContestDetail;
   registrations: Registration[];
   attempts: Attempt[];
-  currentAttempt: CurrentAttempt | null;
+  currentAttempt: CurrentAttemptBundle | null;
   referenceData: ReferenceData;
   timestamp: number;
 }
@@ -28,7 +28,7 @@ export class OfflineCache {
     contest: ContestDetail;
     registrations: Registration[];
     attempts: Attempt[];
-    currentAttempt: CurrentAttempt | null;
+    currentAttempt: CurrentAttemptBundle | null;
     referenceData: ReferenceData;
   }): void {
     try {
@@ -110,7 +110,7 @@ export class OfflineCache {
     }
   }
 
-  updateCurrentAttempt(currentAttempt: CurrentAttempt | null): void {
+  updateCurrentAttempt(currentAttempt: CurrentAttemptBundle | null): void {
     const cached = this.get();
     if (cached) {
       cached.currentAttempt = currentAttempt;

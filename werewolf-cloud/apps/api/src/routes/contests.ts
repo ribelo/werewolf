@@ -3,6 +3,7 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import type { WerewolfEnvironment } from '../env';
 import { executeQuery, executeQueryOne, executeMutation, generateId, getCurrentTimestamp, convertKeysToCamelCase } from '../utils/database';
+import { sanitizePlateSet, DEFAULT_PLATE_SET, getPlateColor, sanitizeSettings } from '../utils/settings-helpers';
 import { contestSchema, contestCreateSchema, contestUpdateSchema, contestStatusSchema } from '@werewolf/domain/models/contest';
 
 const contests = new Hono<WerewolfEnvironment>();
@@ -375,16 +376,7 @@ export default contests;
 
 // Helper function to create default plate sets
 async function createDefaultPlateSets(db: D1Database, contestId: string) {
-  const defaultPlates = [
-    { weight: 25, quantity: 4 },
-    { weight: 20, quantity: 4 },
-    { weight: 15, quantity: 4 },
-    { weight: 10, quantity: 6 },
-    { weight: 5, quantity: 6 },
-    { weight: 2.5, quantity: 6 },
-    { weight: 1.25, quantity: 4 },
-    { weight: 0.5, quantity: 4 },
-  ];
+  const defaultPlates = await loadPlateSetFromSettings(db);
 
   for (const plate of defaultPlates) {
     try {
@@ -394,7 +386,7 @@ async function createDefaultPlateSets(db: D1Database, contestId: string) {
         INSERT INTO plate_sets (contest_id, plate_weight, quantity, color)
         VALUES (?, ?, ?, ?)
         `,
-        [contestId, plate.weight, plate.quantity, getPlateColor(plate.weight)]
+        [contestId, plate.weight, plate.quantity, plate.color ?? getPlateColor(plate.weight)]
       );
     } catch (error) {
       console.warn(`Failed to create plate set for ${plate.weight}kg:`, error);
@@ -402,17 +394,19 @@ async function createDefaultPlateSets(db: D1Database, contestId: string) {
   }
 }
 
-// Helper function to get plate color based on weight
-function getPlateColor(weight: number): string {
-  switch (weight) {
-    case 25: return 'red';
-    case 20: return 'blue';
-    case 15: return 'yellow';
-    case 10: return 'green';
-    case 5: return 'white';
-    case 2.5: return 'red';
-    case 1.25: return 'blue';
-    case 0.5: return 'yellow';
-    default: return 'black';
+async function loadPlateSetFromSettings(db: D1Database) {
+  const row = await executeQueryOne(db, 'SELECT data FROM settings WHERE id = 1');
+
+  if (!row) {
+    return DEFAULT_PLATE_SET.map((plate) => ({ ...plate }));
+  }
+
+  try {
+    const settingsData = sanitizeSettings(JSON.parse(row.data));
+    const plateSet = sanitizePlateSet(settingsData.competition.defaultPlateSet);
+    return plateSet.map((plate) => ({ ...plate }));
+  } catch (error) {
+    console.warn('Failed to parse default plate set from settings:', error);
+    return DEFAULT_PLATE_SET.map((plate) => ({ ...plate }));
   }
 }

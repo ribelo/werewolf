@@ -3,7 +3,7 @@ import type { CompetitorSummary } from '$lib/types';
 
 export const load = async ({ fetch }) => {
   try {
-    const response = await apiClient.get<CompetitorSummary[]>('/competitors');
+    const response = await apiClient.get<CompetitorSummary[]>('/competitors', fetch);
     return {
       competitors: response.data ?? [],
       error: response.error,

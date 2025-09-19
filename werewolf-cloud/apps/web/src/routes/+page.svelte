@@ -5,6 +5,14 @@
   import type { PageData } from './$types';
 
   export let data: PageData;
+  export let params: Record<string, string> = {};
+  export let form: unknown = undefined;
+  export let errors: unknown = undefined;
+
+  $: void params;
+  $: void form;
+  $: void errors;
+
 
   const { contests, error, database, databaseError, apiBase } = data;
 
@@ -80,7 +88,7 @@
         <h2 class="text-h2 text-text-primary uppercase tracking-[0.3em]">{$_('dashboard.active.heading')}</h2>
         <p class="text-body text-text-secondary">{$_('dashboard.active.description')}</p>
       </div>
-      <span class="text-caption text-text-secondary uppercase tracking-[0.4em]">{$_('dashboard.active.total', { values: { count: totalContests } })}</span>
+      <span class="text-caption text-text-secondary uppercase tracking-[0.4em]">{totalContests} {$_('dashboard.active.total_suffix')}</span>
     </header>
 
     {#if error}

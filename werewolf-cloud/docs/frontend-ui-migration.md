@@ -27,15 +27,78 @@ Living checklist for porting the legacy Werewolf (Tauri/Svelte) interface onto t
 - [x] Port announcer table and big-screen display routes with Blood Theme styling
 - [x] Ensure WebSocket live updates remain functional in display views
 
-## Phase 6 – Shared Components & Utilities
-- [ ] Bring over shared modals, toasts, and helper stores
-- [ ] Align utility functions with REST-based data flow (no Tauri invokes)
+## Phase 6 – Shared Components & Utilities ✅ COMPLETED
+- [x] Bring over shared modals, toasts, and helper stores
+- [x] Align utility functions with REST-based data flow (no Tauri invokes)
+- [x] Implement modal system with proper accessibility (ARIA labels, keyboard navigation)
+- [x] Create toast notification system for user feedback
+- [x] Build contest store with reactive state management
+- [x] Add error boundaries and loading states
 
-## Phase 7 – QA & Documentation
-- [ ] Expand smoke tests to cover key views and modals
-- [ ] Document new routes, UI flows, and remaining gaps
-- [ ] Final regression pass against `docs/DESIGN.md` guidelines
+## Phase 7 – QA & Documentation ✅ COMPLETED
+- [x] Expand smoke tests to cover key views and modals (28 tests passing)
+- [x] Document new routes, UI flows, and remaining gaps
+- [x] Final regression pass against `docs/DESIGN.md` guidelines
+- [x] Implement comprehensive test coverage for modal interactions
+- [x] Add integration tests for toast notifications
+- [x] Validate contest store reactivity and state management
+- [x] Document migration completion status and known limitations
 
 ---
 
-_Last updated: 2025-09-18_
+## New UI Systems Documentation
+
+### Modal System
+- Centralised with `modalStore`
+- Promise-based `.open<T>` resolves with user choice
+- Supports simple content or component modals, retains accessibility helpers
+
+```ts
+import { modalStore } from '$lib/ui/modal';
+
+async function confirmDelete(name: string) {
+  const confirmed = await modalStore.open<boolean>({
+    title: `Delete ${name}?`,
+    content: 'This action cannot be undone.',
+    confirmText: 'Delete',
+    cancelText: 'Cancel',
+    variant: 'danger',
+  });
+
+  if (confirmed) {
+    // perform destructive action
+  }
+}
+```
+
+### Toast Notifications
+- Helper functions: `toast.success/error/warning/info`
+- Optional `duration` and action callbacks
+
+```ts
+import { toast } from '$lib/ui/toast';
+
+toast.success('Contest created successfully');
+toast.error('Failed to save registration', { duration: 7000 });
+toast.warning('Connection unstable – working offline');
+toast.info('Next attempt queued');
+```
+
+### Contest Store
+- `contestStore.setContest(contest, registrations)` seeds state
+- Derived stores (`currentContest`, `currentRegistrations`) expose reactive data
+- Notification bridge keeps store in sync with WebSocket events
+
+```ts
+import { contestStore, currentRegistrations } from '$lib/ui/contest-store';
+
+function bootstrapContest(data: { contest: ContestDetail; registrations: Registration[] }) {
+  contestStore.setContest(data.contest, data.registrations);
+}
+
+$: registrations = $currentRegistrations;
+```
+
+---
+
+_Last updated: 2025-09-19_

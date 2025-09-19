@@ -2,6 +2,7 @@ export type LiveEventType =
   | 'attempt.upserted'
   | 'attempt.resultUpdated'
   | 'attempt.currentSet'
+  | 'attempt.currentCleared'
   | 'queue.updated'
   | 'scoreboard.updated'
   | 'contest.stateChanged'
@@ -22,4 +23,3 @@ export type AttemptSummary = {
   weight: number;
   status?: string;
 };
-

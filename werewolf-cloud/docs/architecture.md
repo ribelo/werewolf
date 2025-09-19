@@ -23,7 +23,7 @@ This document captures the agreed constraints, architecture decisions, and concr
 Event envelope (JSON):
 ```
 {
-  "type": "attempt.upserted" | "attempt.resultUpdated" | "attempt.currentSet" | "queue.updated" | "scoreboard.updated" | "contest.stateChanged" | "heartbeat",
+  "type": "attempt.upserted" | "attempt.resultUpdated" | "attempt.currentSet" | "attempt.currentCleared" | "queue.updated" | "scoreboard.updated" | "contest.stateChanged" | "heartbeat",
   "contestId": "<uuid>",
   "timestamp": "2025-09-18T12:34:56.000Z",
   "payload": { /* event-specific fields */ }
@@ -38,7 +38,13 @@ Attempt summary payload (typical):
   "liftType": "Squat" | "Bench" | "Deadlift",
   "attemptNumber": 1 | 2 | 3 | 4,
   "weight": 220.0,
-  "status": "Pending" | "Successful" | "Failed" | "Skipped" // when applicable
+  "status": "Pending" | "Successful" | "Failed" | "Skipped",
+  "firstName": "Jane",
+  "lastName": "Doe",
+  "competitorName": "Jane Doe",
+  "competitionOrder": 7,
+  "lotNumber": null,
+  "updatedAt": "2025-09-18T12:34:56.000Z"
 }
 ```
 
@@ -49,6 +55,10 @@ Client policy:
 ## 3) UI Surfaces (Three Screens)
 
 - Management (admin): existing contest detail becomes control hub; shows connection status; applies live events to current attempt and attempts list. Offline write‑queue support (IndexedDB) for POST/PATCH/PUT requests.
+  - Per registration “Edit attempts” modal exposes 3 attempts × lifts grid; saves via POST `/contests/:contestId/registrations/:registrationId/attempts` and refreshes list.
+  - Attempt rows provide status selector (Pending/Successful/Failed/Skipped) backed by `PATCH /attempts/:id/result` with optimistic label updates.
+  - “Set current” button issues `PUT /contests/:contestId/attempts/current`; current panel offers “Clear current” (DELETE) to release displays.
+  - Toasts summarise outcomes; realtime bridge keeps contest store and displays in sync (events: `attempt.upserted`, `attempt.resultUpdated`, `attempt.currentSet`, `attempt.currentCleared`).
 - Announcer Table (public): `/display/table` – readonly, large rows; columns include lot, name, lift, attempt #, weight, status. Uses WS/polling.
 - Big‑Screen Current (public): `/display/current` – shows current lifter, attempt #, weight, rack heights, lights (judge decisions), basic timer; full‑screen layout.
 
@@ -114,11 +124,63 @@ Frontend wizard:
   - Frontend: `PUBLIC_API_BASE=http://127.0.0.1:8787 bun run dev`
 - Deploy: `wrangler deploy --env production`
 
+## 9) Using Modal/Toast/Contest Store
+
+### Modal System
+`modalStore` centralises dialog presentation. Use `modalStore.open<T>()` to display a dialog and await the user's decision while the global modal host handles accessibility (focus trap, ARIA labels, ESC/backdrop handling).
+
+```ts
+import { modalStore } from '$lib/ui/modal';
+
+async function confirmReset() {
+  const confirmed = await modalStore.open<boolean>({
+    title: 'Reset contest?',
+    content: 'All attempts will be cleared.',
+    confirmText: 'Reset',
+    cancelText: 'Cancel',
+    variant: 'danger',
+  });
+
+  if (confirmed) {
+    // perform reset
+  }
+}
+```
+
+### Toast Notifications
+`toast` exposes helpers to surface transient messages. The global `ToastList` component is already mounted in the root layout, so features simply call the helper functions.
+
+```ts
+import { toast } from '$lib/ui/toast';
+
+toast.success('Contest created successfully');
+toast.error('Failed to save registration', { duration: 7000 });
+toast.warning('Connection unstable – working offline');
+toast.info('Next attempt queued');
+```
+
+### Contest Store
+`contestStore` keeps contest state in sync across components and realtime events. Seed it after fetching contest data, then consume the derived stores for reactivity.
+
+```ts
+import { contestStore, currentContest, currentRegistrations } from '$lib/ui/contest-store';
+
+contestStore.setContest(contest, registrations);
+
+$: contest = $currentContest;
+$: registrations = $currentRegistrations;
+```
+
+The notification bridge updates `contestStore` whenever WebSocket events arrive, so displays and management screens automatically reflect live data.
+
+### Live Display Payloads
+- `attempt.currentSet` events now publish a display-ready bundle (contest metadata, competitor/registration snapshot, attempts grouped by lift, and a server-computed plate plan). See `apps/api/src/services/attempts.ts`.
+- `/contests/{id}/attempts/current` returns the same payload so polling fallbacks and initial page loads share a single contract.
+- Frontend helpers (`$lib/current-attempt.ts`) normalise bundles into lightweight summaries for operator UI while keeping full context for displays.
+
 ## 8) Open Items (tracked)
 
 - Add `contest_disciplines` table and API routes (0008 migration).
-- Implement `/display/table` and `/display/current` pages.
-- Realtime client with backoff and polling fallback.
 - Management offline queue (IndexedDB) – PoC scope.
 - Optional: scoreboard computation endpoint and broadcast on result updates.
 
@@ -128,4 +190,3 @@ References
 - WS & DO foundation: apps/api/src/live/*, wrangler.toml DO binding.
 - Event producers: apps/api/src/routes/attempts.ts (upsert, result update, current set).
 - Domain logic: packages/domain/src/services/score-engine.ts.
-
