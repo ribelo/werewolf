@@ -1,8 +1,13 @@
 export function getApiBase(): string {
-  // Check for environment variable first
   const envBase = import.meta.env['PUBLIC_API_BASE'];
   if (envBase) return envBase;
 
-  // Default to local development
-  return 'http://127.0.0.1:8787';
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return 'http://127.0.0.1:8787';
+    }
+  }
+
+  return 'https://werewolf.r-krzywaznia-2c4.workers.dev';
 }
