@@ -1,6 +1,9 @@
+import { get } from 'svelte/store';
+import { _ } from 'svelte-i18n';
+
 export type StatusTone = 'active' | 'warning' | 'error' | 'neutral';
 
-export type AttemptStatus = 'good' | 'bad' | 'pending' | 'current' | 'none';
+export type NormalizedAttemptStatus = 'pending' | 'successful' | 'failed';
 
 export function statusBadgeClass(status: string): string {
   const key = status.toLowerCase();
@@ -11,34 +14,26 @@ export function statusBadgeClass(status: string): string {
 }
 
 export function attemptToneClass(status: string): string {
-  const normalized = status.toLowerCase();
+  const normalized = status.toLowerCase() as NormalizedAttemptStatus | string;
   if (normalized === 'successful') return 'text-green-200 bg-green-600/30 border border-green-500';
   if (normalized === 'failed') return 'text-red-200 bg-red-600/30 border border-red-500';
-  return 'text-yellow-200 bg-yellow-600/30 border border-yellow-500';
+  return 'text-gray-400 bg-element-bg border border-border-color';
 }
 
 /**
- * Get CSS classes for attempt status
+ * Get CSS classes for attempt status - Blood Theme dark styling
  */
 export function getAttemptStatusClass(status: string): string {
-  const normalized = status.toLowerCase();
+  const normalized = status.toLowerCase() as NormalizedAttemptStatus | string;
 
   switch (normalized) {
     case 'successful':
-    case 'good':
-      return 'text-green-600 bg-green-50 border border-green-200';
+      return 'text-green-200 bg-green-600/30 border border-green-500';
     case 'failed':
-    case 'bad':
-      return 'text-red-600 bg-red-50 border border-red-200';
+      return 'text-red-200 bg-red-600/30 border border-red-500';
     case 'pending':
-      return 'text-yellow-600 bg-yellow-50 border border-yellow-200';
-    case 'current':
-      return 'text-blue-600 bg-blue-50 border border-blue-200 font-semibold';
-    case 'skipped':
-      return 'text-gray-500 bg-gray-50 border border-gray-200';
-    case 'none':
     default:
-      return 'text-gray-400 bg-gray-25 border border-gray-100';
+      return 'text-gray-400 bg-element-bg border border-border-color';
   }
 }
 
@@ -46,38 +41,41 @@ export function getAttemptStatusClass(status: string): string {
  * Get icon for attempt status
  */
 export function getAttemptStatusIcon(status: string): string {
-  const normalized = status.toLowerCase();
-  const iconMap: Record<string, string> = {
+  const normalized = status.toLowerCase() as NormalizedAttemptStatus | string;
+  const iconMap: Record<NormalizedAttemptStatus, string> = {
     successful: '✓',
-    good: '✓',
     failed: '✗',
-    bad: '✗',
-    pending: '○',
-    current: '●',
-    skipped: '-',
-    none: ''
+    pending: '○'
   };
 
-  return iconMap[normalized] ?? '';
+  if (normalized in iconMap) {
+    return iconMap[normalized as NormalizedAttemptStatus];
+  }
+
+  return '';
 }
 
 /**
  * Get human-readable label for attempt status
  */
 export function getAttemptStatusLabel(status: string): string {
-  const normalized = status.toLowerCase();
-  const labelMap: Record<string, string> = {
-    successful: 'Good Lift',
-    good: 'Good Lift',
-    failed: 'No Lift',
-    bad: 'No Lift',
-    pending: 'Pending',
-    current: 'Current',
-    skipped: 'Skipped',
-    none: 'Not Set'
+  const normalized = status.toLowerCase() as NormalizedAttemptStatus | string;
+  const labelFallback: Record<NormalizedAttemptStatus, string> = {
+    successful: 'Successful',
+    failed: 'Failed',
+    pending: 'Pending'
   };
 
-  return labelMap[normalized] ?? status;
+  const translate = get(_);
+  const key = `attempt.status.${normalized}`;
+  const fallback =
+    normalized in labelFallback ? labelFallback[normalized as NormalizedAttemptStatus] : status;
+
+  try {
+    return translate(key, { default: fallback });
+  } catch {
+    return fallback;
+  }
 }
 
 /**
@@ -85,24 +83,15 @@ export function getAttemptStatusLabel(status: string): string {
  */
 export function isAttemptComplete(status: string): boolean {
   const normalized = status.toLowerCase();
-  return ['successful', 'good', 'failed', 'bad', 'skipped'].includes(normalized);
+  return normalized === 'successful' || normalized === 'failed';
 }
 
 /**
  * Get next logical status in attempt progression
  */
-export function getNextAttemptStatus(current: string): string {
+export function getNextAttemptStatus(current: string): NormalizedAttemptStatus {
   const normalized = current.toLowerCase();
-  const progressionMap: Record<string, string> = {
-    none: 'pending',
-    pending: 'current',
-    current: 'successful', // Default to successful, UI can override
-    successful: 'successful',
-    good: 'good',
-    failed: 'failed',
-    bad: 'bad',
-    skipped: 'skipped'
-  };
-
-  return progressionMap[normalized] ?? 'none';
+  if (normalized === 'pending') return 'successful';
+  if (normalized === 'successful') return 'failed';
+  return 'pending';
 }

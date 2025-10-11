@@ -1,6 +1,9 @@
 import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import AttemptEditorModal from '$lib/components/AttemptEditorModal.svelte';
+import { addMessages, init, waitLocale } from 'svelte-i18n';
+import en from '$lib/i18n/locales/en.json';
+import type { Attempt } from '$lib/types';
 
 const postMock = vi.fn();
 
@@ -20,7 +23,9 @@ const registration = {
   club: 'AZS',
   city: 'Warszawa',
   weightClassId: 'wc1',
-  ageClassId: 'ac1',
+  weightClassName: 'Do 67.5 kg',
+  ageCategoryId: 'ac1',
+  ageCategoryName: 'Open',
   bodyweight: 63.5,
   lotNumber: null,
   equipmentM: false,
@@ -34,20 +39,35 @@ const registration = {
   competitionOrder: 1,
 };
 
-const baseAttempt = {
-  registrationId: registration.id,
-  weight: 0,
-  status: 'Pending' as const,
-  judge1Decision: null,
-  judge2Decision: null,
-  judge3Decision: null,
-  notes: null,
-  createdAt: '2024-01-01T10:00:00Z',
-  updatedAt: '2024-01-01T10:00:00Z',
-};
+function buildAttempt(overrides: Partial<Attempt> = {}): Attempt {
+  return {
+    id: 'attempt-default',
+    registrationId: registration.id,
+    liftType: 'Squat',
+    attemptNumber: 1,
+    weight: 170,
+    status: 'Pending',
+    judge1Decision: null,
+    judge2Decision: null,
+    judge3Decision: null,
+    notes: null,
+    timestamp: null,
+    createdAt: '2024-01-01T10:00:00Z',
+    updatedAt: '2024-01-01T10:00:00Z',
+    firstName: registration.firstName,
+    lastName: registration.lastName,
+    competitorName: `${registration.firstName} ${registration.lastName}`,
+    competitionOrder: registration.competitionOrder ?? null,
+    lotNumber: registration.lotNumber,
+    ...overrides,
+  };
+}
 
 describe('AttemptEditorModal', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    addMessages('en', en);
+    init({ fallbackLocale: 'en', initialLocale: 'en' });
+    await waitLocale();
     postMock.mockReset();
     postMock.mockResolvedValue({ data: { success: true }, error: null });
   });
@@ -55,20 +75,16 @@ describe('AttemptEditorModal', () => {
   it('submits updated attempt weights and resolves onSaved', async () => {
     const onSaved = vi.fn();
 
+    const optimisticSpy = vi.fn();
     const { getAllByRole, getByText } = render(AttemptEditorModal, {
       contestId: 'contest-1',
       registration,
-      attempts: [
-        {
-          ...baseAttempt,
-          id: 'attempt-squat-1',
-          liftType: 'Squat',
-          attemptNumber: 1,
-          weight: 170,
-        },
-      ],
+      attempts: [buildAttempt({ id: 'attempt-squat-1' })],
       onClose: vi.fn(),
       onSaved,
+      onOptimisticUpdate: optimisticSpy,
+      getSnapshot: () => [],
+      restoreSnapshot: vi.fn(),
     });
 
     const inputs = getAllByRole('spinbutton');
@@ -96,5 +112,41 @@ describe('AttemptEditorModal', () => {
     );
 
     expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(optimisticSpy).toHaveBeenCalled();
+  });
+
+  it('applies optimistic attempts and restores snapshot on failure', async () => {
+    const optimisticSpy = vi.fn();
+    const restoreSpy = vi.fn();
+    const snapshot: Attempt[] = [buildAttempt({ id: 'attempt-squat-1' })];
+
+    postMock.mockRejectedValueOnce(new Error('network error'));
+
+    const { getByText, getAllByRole } = render(AttemptEditorModal, {
+      contestId: 'contest-1',
+      registration,
+      attempts: snapshot,
+      onClose: vi.fn(),
+      onSaved: vi.fn(),
+      onOptimisticUpdate: optimisticSpy,
+      getSnapshot: () => snapshot,
+      restoreSnapshot: restoreSpy,
+    });
+
+    const inputs = getAllByRole('spinbutton');
+    const emptyInput = inputs.find((input) => (input as HTMLInputElement).value === '') as HTMLInputElement | undefined;
+    const targetInput = emptyInput ?? (inputs[0] as HTMLInputElement);
+    await fireEvent.input(targetInput, { target: { value: '190' } });
+
+    await fireEvent.click(getByText('Save attempts'));
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledTimes(1);
+    });
+
+    expect(optimisticSpy).toHaveBeenCalled();
+    await waitFor(() => {
+      expect(restoreSpy).toHaveBeenCalledWith(snapshot);
+    });
   });
 });

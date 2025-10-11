@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "bunx vite dev",
     "build": "SVELTE_ADAPTER=cloudflare bunx vite build",
+    "build:report": "SVELTE_ADAPTER=cloudflare BUNDLE_ANALYZE=true bunx vite build",
     "preview": "SVELTE_ADAPTER=cloudflare bunx vite preview",
     "check": "bunx svelte-kit sync && bunx svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "bunx svelte-kit sync && bunx svelte-check --tsconfig ./tsconfig.json --watch",
@@ -15,14 +16,16 @@
     "@sveltejs/adapter-auto": "^3.0.0",
     "@sveltejs/kit": "^2.0.0",
     "@sveltejs/vite-plugin-svelte": "^3.0.0",
+    "@tailwindcss/typography": "^0.5.15",
     "@testing-library/jest-dom": "^6.8.0",
     "@testing-library/svelte": "^5.2.8",
     "@types/cookie": "^0.6.0",
     "@types/qrcode": "^1.5.5",
     "autoprefixer": "^10.4.16",
-    "@tailwindcss/typography": "^0.5.15",
+    "fake-indexeddb": "^6.0.2",
     "jsdom": "^27.0.0",
     "postcss": "^8.4.32",
+    "rollup-plugin-visualizer": "^6.0.3",
     "svelte": "^4.2.7",
     "svelte-check": "^3.6.0",
     "tailwindcss": "^3.4.0",
@@ -35,6 +38,7 @@
   "dependencies": {
     "@formatjs/icu-messageformat-parser": "^2",
     "@sveltejs/adapter-cloudflare": "^4.4.4",
+    "idb": "^8.0.3",
     "intl-messageformat": "^10",
     "qrcode": "^1.5.3",
     "svelte-i18n": "3.6.0"

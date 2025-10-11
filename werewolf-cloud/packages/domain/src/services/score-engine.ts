@@ -1,5 +1,5 @@
 export interface ScoreComputationContext {
-  attempts: { status: 'Pending' | 'Successful' | 'Failed' | 'Skipped'; weight: number; liftType: 'Squat' | 'Bench' | 'Deadlift' }[];
+  attempts: { status: 'Pending' | 'Successful' | 'Failed'; weight: number; liftType: 'Squat' | 'Bench' | 'Deadlift' }[];
   coefficients: {
     reshel?: number;
     mccullough?: number;

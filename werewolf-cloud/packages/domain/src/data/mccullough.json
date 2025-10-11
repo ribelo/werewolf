@@ -1,0 +1,210 @@
+{
+  "source": "https://wsf-federation.ru/files/McCulloch_coefficients_WRPF.pdf",
+  "retrievedAt": "2025-09-20T10:45:46.800987+00:00",
+  "entries": [
+    {
+      "age": 40,
+      "coefficient": 1.0
+    },
+    {
+      "age": 41,
+      "coefficient": 1.01
+    },
+    {
+      "age": 42,
+      "coefficient": 1.02
+    },
+    {
+      "age": 43,
+      "coefficient": 1.031
+    },
+    {
+      "age": 44,
+      "coefficient": 1.043
+    },
+    {
+      "age": 45,
+      "coefficient": 1.055
+    },
+    {
+      "age": 46,
+      "coefficient": 1.068
+    },
+    {
+      "age": 47,
+      "coefficient": 1.082
+    },
+    {
+      "age": 48,
+      "coefficient": 1.097
+    },
+    {
+      "age": 49,
+      "coefficient": 1.113
+    },
+    {
+      "age": 50,
+      "coefficient": 1.13
+    },
+    {
+      "age": 51,
+      "coefficient": 1.147
+    },
+    {
+      "age": 52,
+      "coefficient": 1.165
+    },
+    {
+      "age": 53,
+      "coefficient": 1.184
+    },
+    {
+      "age": 54,
+      "coefficient": 1.204
+    },
+    {
+      "age": 55,
+      "coefficient": 1.225
+    },
+    {
+      "age": 56,
+      "coefficient": 1.246
+    },
+    {
+      "age": 57,
+      "coefficient": 1.268
+    },
+    {
+      "age": 58,
+      "coefficient": 1.291
+    },
+    {
+      "age": 59,
+      "coefficient": 1.315
+    },
+    {
+      "age": 60,
+      "coefficient": 1.34
+    },
+    {
+      "age": 61,
+      "coefficient": 1.366
+    },
+    {
+      "age": 62,
+      "coefficient": 1.393
+    },
+    {
+      "age": 63,
+      "coefficient": 1.421
+    },
+    {
+      "age": 64,
+      "coefficient": 1.45
+    },
+    {
+      "age": 65,
+      "coefficient": 1.48
+    },
+    {
+      "age": 66,
+      "coefficient": 1.511
+    },
+    {
+      "age": 67,
+      "coefficient": 1.543
+    },
+    {
+      "age": 68,
+      "coefficient": 1.576
+    },
+    {
+      "age": 69,
+      "coefficient": 1.61
+    },
+    {
+      "age": 70,
+      "coefficient": 1.645
+    },
+    {
+      "age": 71,
+      "coefficient": 1.681
+    },
+    {
+      "age": 72,
+      "coefficient": 1.718
+    },
+    {
+      "age": 73,
+      "coefficient": 1.756
+    },
+    {
+      "age": 74,
+      "coefficient": 1.795
+    },
+    {
+      "age": 75,
+      "coefficient": 1.835
+    },
+    {
+      "age": 76,
+      "coefficient": 1.876
+    },
+    {
+      "age": 77,
+      "coefficient": 1.918
+    },
+    {
+      "age": 78,
+      "coefficient": 1.961
+    },
+    {
+      "age": 79,
+      "coefficient": 2.005
+    },
+    {
+      "age": 80,
+      "coefficient": 2.05
+    },
+    {
+      "age": 81,
+      "coefficient": 2.096
+    },
+    {
+      "age": 82,
+      "coefficient": 2.143
+    },
+    {
+      "age": 83,
+      "coefficient": 2.19
+    },
+    {
+      "age": 84,
+      "coefficient": 2.238
+    },
+    {
+      "age": 85,
+      "coefficient": 2.287
+    },
+    {
+      "age": 86,
+      "coefficient": 2.337
+    },
+    {
+      "age": 87,
+      "coefficient": 2.388
+    },
+    {
+      "age": 88,
+      "coefficient": 2.44
+    },
+    {
+      "age": 89,
+      "coefficient": 2.494
+    },
+    {
+      "age": 90,
+      "coefficient": 2.549
+    }
+  ]
+}

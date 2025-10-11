@@ -114,7 +114,11 @@ plateSets.post('/calculate', zValidator('json', z.object({
   const contestId = c.req.param('contestId');
   const { targetWeight, barWeight } = c.req.valid('json');
 
-  const plan = await buildPlatePlan(db, contestId, targetWeight, { barWeightOverride: barWeight });
+  if (!contestId) {
+    return c.json({ error: 'Contest ID is required', data: null }, 400);
+  }
+  
+  const plan = await buildPlatePlan(db, contestId, targetWeight, { barWeightOverride: barWeight ?? null });
 
   return c.json({
     data: {
@@ -125,6 +129,7 @@ plateSets.post('/calculate', zValidator('json', z.object({
       barWeight: plan.barWeight,
       weightToLoad: plan.weightToLoad,
       targetWeight: plan.targetWeight,
+      clampWeight: plan.clampWeight,
     },
     error: null,
     requestId: c.get('requestId'),
@@ -138,7 +143,7 @@ plateSets.get('/barweights', async (c) => {
 
   const contest = await executeQueryOne(
     db,
-    'SELECT mens_bar_weight, womens_bar_weight, bar_weight FROM contests WHERE id = ?',
+    'SELECT mens_bar_weight, womens_bar_weight, bar_weight, clamp_weight FROM contests WHERE id = ?',
     [contestId]
   );
 
@@ -151,6 +156,7 @@ plateSets.get('/barweights', async (c) => {
       mensBarWeight: contest.mens_bar_weight,
       womensBarWeight: contest.womens_bar_weight,
       barWeight: contest.bar_weight,
+      clampWeight: contest.clamp_weight,
     },
     error: null,
     requestId: c.get('requestId'),

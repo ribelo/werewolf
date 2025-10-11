@@ -4,6 +4,9 @@
   import { PAGE_LINKS } from '$lib/nav';
   import { _ } from 'svelte-i18n';
   import type { SystemHealth } from '$lib/types';
+  import { initializeMutationQueue, queueCounts } from '$lib/offline/mutation-queue';
+  import MutationQueueModal from '$lib/components/MutationQueueModal.svelte';
+  import { modalStore } from '$lib/ui/modal';
 
   type ApiStatus = 'checking' | 'online' | 'degraded' | 'offline';
 
@@ -15,6 +18,11 @@
   let status: ApiStatus = 'checking';
   let statusDetail = '';
   let statusDetailKey: string | null = null;
+  $: counts = $queueCounts;
+  $: queueHasFailures = counts.failed > 0;
+  $: queueButtonClasses = queueHasFailures
+    ? 'btn-secondary px-3 py-1 text-xxs border-status-warning text-status-warning bg-status-warning/20'
+    : 'btn-secondary px-3 py-1 text-xxs';
 
   const STATUS_LABEL_KEYS: Record<ApiStatus, string> = {
     checking: 'layout.status.checking',
@@ -45,8 +53,9 @@
     }
   }
 
- onMount(() => {
+  onMount(() => {
     console.log('[layout] onMount');
+    void initializeMutationQueue();
     checkApiStatus();
   });
 
@@ -93,6 +102,15 @@
         return 'status-badge status-error';
     }
   }
+
+  const openQueueModal = () => {
+    void modalStore.open({
+      title: $_('queue.modal.title'),
+      size: 'lg',
+      component: MutationQueueModal,
+      showFooter: false,
+    });
+  };
 </script>
 
 <div class="min-h-screen bg-main-bg text-text-primary flex flex-col">
@@ -137,6 +155,21 @@
           >
             {$_('layout.check_status')}
           </button>
+          {#if counts.total > 0}
+            <button
+              type="button"
+              class={queueButtonClasses}
+              on:click={openQueueModal}
+            >
+              {$_(queueHasFailures ? 'layout.queue.button_failed' : 'layout.queue.button_pending', {
+                values: {
+                  total: counts.total,
+                  pending: counts.pending,
+                  failed: counts.failed,
+                }
+              })}
+            </button>
+          {/if}
         </div>
       </div>
     </div>

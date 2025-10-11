@@ -13,9 +13,14 @@ This document tracks follow-up items after the Cloud migration. Use it as a livi
 
 ## Follow-up TODOs
 1. **Schema audit** – double-check plate colour/JSON parity against the legacy database before cutting the final migration release.
-2. **Settings PATCH coverage** – add focused tests for invalid payloads and rollback behaviour.
-3. **Bundle analysis** – run Vite bundle visualiser and identify opportunities for code-splitting (display routes + wizard steps are good candidates).
-4. **Offline queue PoC** – implement IndexedDB-backed mutation queue for admin UI (currently tracked as requirement, not yet implemented).
+2. **Bundle analysis** – run Vite bundle visualiser and identify opportunities for code-splitting (display routes + wizard steps are good candidates).
+3. **Offline queue polish** – add write coalescing, surface queue diagnostics (counts, last error) in settings, and explore background sync now that the baseline queue is live.
+4. **Frontend bundle follow-ups** – create tickets for (a) lazy-loading locale dictionaries, (b) deferring contest desk modals, and (c) serving coefficient tables from API instead of bundling JSON so the `_app/immutable/nodes/4…` chunk shrinks.
+5. **Offline queue docs** – extend the operator/user guide with the new drawer workflow and troubleshooting steps (how to retry, discard, or clear stale entries).
+
+## Recently Resolved
+- 2025-09-20 – Added backend and frontend coverage for settings PATCH validation (rollback verified, tests updated).
+- 2025-09-20 – Replaced contest detail placeholders with live results table, plate inventory, and backup summary UI.
 
 ## Nice-to-have Enhancements
 - Multi-contest support (currently PoC assumes one active contest)

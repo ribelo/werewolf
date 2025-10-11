@@ -1,0 +1,93 @@
+# Werewolf Cloud
+
+## Requirements
+- [REQ-WW-OVERVIEW] When meet directors run a competition, the Werewolf Cloud platform shall provide end-to-end contest management through the Cloudflare Worker API, SvelteKit frontend, and D1 persistence layer.
+- [REQ-WW-SPEC-GUIDELINES] The Werewolf specification shall express requirements in EARS form using `- [slug] ...` bullets grouped under descriptive headings so future iterations remain consistent.
+- [REQ-WW-LEGACY-BOUNDARY] When contributors scope new work, they shall treat `src/` and `src-tauri/` as a frozen legacy reference, delivering all net-new code inside `werewolf-cloud/` unless explicitly maintaining critical fixes.
+
+### P0 Additions & Constraints
+- [REQ-WW-AUTH-P0] When an organizer signs in, the platform shall support a single-user username/password login with cookie session, powered only by free Cloudflare features (no paid add-ons).
+- [REQ-WW-PWA-P0] When the web app is installed, it shall function as a PWA with offline shell and background sync for pending changes, assuming only one active editor at a time (no conflict resolution).
+- [REQ-WW-BACKUP-R2-P0] When backups run, the platform shall store full backup blobs in Cloudflare R2 and keep small metadata in KV; encryption is optional for P0.
+- [REQ-WW-RECONNECT-P0] When the app reconnects after being offline, it shall fetch the latest server snapshot and resume from current state (no event replay protocol).
+- [REQ-WW-PHOTOS-OUT-P0] When competitors are managed, the platform shall not include photo capture or storage features.
+- [REQ-WW-THEME-P0] When displays render, the platform shall support theming/branding presets configured in settings.
+- [REQ-WW-SINGLE-USER-P0] When deploying P0, the system shall operate as single-tenant with one organizer account.
+- [REQ-WW-LIVE-SIMPLE-P0] When a meet is in progress, organizers shall follow one canonical workflow with minimal clicks; advanced configuration must be completed pre-competition so the live desk stays simple.
+
+### Cloud API & Services
+- [REQ-WW-API-CONTESTS] When contest data is requested, the Worker API shall expose CRUD endpoints under `/contests` with validation via shared Zod schemas and default plate/category seeding on creation.
+- [REQ-WW-API-ATTEMPTS] When desk operators submit attempt changes, the API shall accept POST/PATCH calls under `/attempts` that enforce attempt order, judge call overrides, and status timestamps.
+- [REQ-WW-API-REGISTRATIONS] When lifters are registered, the API shall record competitor metadata, auto-classify weight/age categories, and hydrate registrations to the UI via `/registrations` endpoints.
+- [REQ-WW-API-RESULTS] When results are exported, the API shall provide CSV and JSON payloads via `/results/export` endpoints using federation-agnostic column definitions.
+- [REQ-WW-API-SETTINGS] When configuration is saved, the API shall persist contest settings, plate sets, and display presets via `/settings` routes with audit fields.
+- [REQ-WW-API-SYSTEM] When health checks run, the API shall respond on `/system` routes with DB connectivity, Durable Object heartbeat, and KV sync freshness.
+ - [REQ-WW-API-REG-LIST-ENRICHED] When listing contest registrations, the API shall include competitor `club`, `city`, `lot_number`, computed coefficients, rack heights, equipment flags, competition order, and any assigned `flight_code`/`flight_order`.
+ - [REQ-WW-API-FLIGHTS] When managing flights, the API shall expose endpoints to set/get the active flight per contest and to (bulk) assign registrations to flights and orders.
+ - [REQ-WW-API-LABELS] When managing operator labels, the API shall allow adding/removing labels per registration and filtering results by a label (e.g., `uniformed`).
+ - [REQ-WW-API-CLAMPS] When calculating plates, the plate-plan service shall factor in `contests.clamp_weight` in addition to bar weight when validating loadable weight and computing per‑side plates.
+
+### Realtime & Synchronisation
+- [REQ-WW-RT-DURABLE-ROOM] When a contest session starts, the Worker shall initialise a Durable Object room per contest to broadcast state mutations to announcer and display clients.
+- [REQ-WW-RT-WEBSOCKET] When clients subscribe, the platform shall upgrade to WebSocket streams for sub-second updates and fall back to long polling when WebSockets are unavailable.
+- [REQ-WW-RT-MUTATION-QUEUE] When the network drops, the frontend shall queue mutations in IndexedDB and replay them with exponential backoff once connectivity is restored.
+- [REQ-WW-RT-OFFLINE-FALLBACK] When a mutation cannot be persisted after configured retries, the UI shall surface a toast with retry/abort controls and prevent stale desk state.
+ - [REQ-WW-RT-QUEUE-REFRESH] When the current attempt, declared weights, or active flight changes, the live queue card and announcer view shall refresh automatically and reflect the updated rising-bar order with flight gating applied.
+
+### Lifting Order & Validation (P0)
+- [REQ-WW-ORDER-RISING-BAR] When the queue is generated for a given lift and round, the system shall sort lifters by the declared attempt weight ascending (rising bar); ties are broken by `lot_number`, then by `competition_order`.
+- [REQ-WW-ORDER-ROUND-ADVANCE] When the operator advances rounds, the system shall re-sort using the updated declared weights; automatic round advance is deferred (later).
+- [REQ-WW-VALIDATION-INCREMENT] When an attempt weight is set, the API shall validate that the loadable portion (weight − bar) is a multiple of the minimum increment derived from the current plate set (smallest plate × 2).
+
+### Flights & Queue Control
+- [REQ-WW-ORDER-FLIGHTS] When there are many competitors, the system shall support grouping registrations into flights (A, B, ...); at most N competitors from the active flight may cycle through all three attempts for the current lift before the next flight is admitted to the queue. N shall be configurable per contest.
+- [REQ-WW-ORDER-FLIGHT-GATING] When a flight is active, the queue generator shall only include pending attempts for the active flight until all members in that flight have recorded a result (Successful/Failed/Skipped) for the current attempt number; then it may admit the next flight.
+- [REQ-WW-ORDER-FLIGHT-ASSIGNMENT] When editing registrations, organizers shall be able to assign or change a lifter’s flight and relative order within that flight via the UI; these values shall be persisted in D1.
+
+### Data & Persistence
+- [REQ-WW-DB-SCHEMA] The D1 schema shall maintain tables for contests, flights, competitors, registrations, attempts, plate_sets, displays, backups, and audit events plus supporting views for leaderboards.
+- [REQ-WW-DB-MIGRATIONS] When migrations exist in `werewolf-cloud/migrations`, the toolkit shall apply them through Wrangler dev bootstrap and record versions in `d1_migrations` history.
+- [REQ-WW-DB-BACKUP] When the backup endpoint runs, the Worker shall write JSON/CSV blobs to R2 with small metadata tracked in KV (encryption optional for P0).
+ - [REQ-WW-DB-FIELDS-FLIGHTS] When flights are enabled, the schema shall store `registrations.flight_code` (TEXT), `registrations.flight_order` (INTEGER), and optional `contests.active_flight` to coordinate queue gating.
+ - [REQ-WW-DB-FIELDS-LABELS] When operator labels are used, the schema shall store `registrations.labels` as JSON (array of strings) for ad‑hoc tags such as uniformed services; labels shall be queryable for filtered leaderboards.
+ - [REQ-WW-DB-FIELDS-CLAMPS] When clamp/lock collars are configured, the schema shall store `contests.clamp_weight` (REAL, default 2.5) to represent total collar mass included in the bar assembly.
+
+### Frontend Experience
+- [REQ-WW-UI-DESK] When the organizer desk loads, the SvelteKit app shall present contest overview, attempt grid, queue controls, and judge override tools backed by realtime data stores.
+ - [REQ-WW-UI-ANNOUNCER] When the announcer view is opened, the frontend shall display rising-bar order, current lifter, next lifter, and plate plan with auto-refresh from the Durable Object stream. (Flights not used in P0.)
+- [REQ-WW-UI-DISPLAY] When the big-screen display runs, it shall show lifter scoreboard, best lifts, and QR link for audience mobile access with automatic refresh cadence.
+- [REQ-WW-UI-I18N] When UI copy renders, the app shall source strings from `i18n` dictionaries supporting Polish and English with runtime language switching per user preference.
+- [REQ-WW-UI-ACCESSIBILITY] When components are built, they shall ensure keyboard navigation, focus outlines, and ARIA labels for desk workflows.
+ - [REQ-WW-UI-BIG-TABLE] When organizers switch to the registrations tab, the UI shall present a unified, sortable table including: place, name, city (with club on a second line), age, age category, bodyweight, weight class, M/SM equipment flags, Reshel and McCullough coefficients, rack heights, declared attempts for all three lifts (I/II/III), points, and max lift; cells may stack lines for readability.
+ - [REQ-WW-UI-SORT-ALL] When a column header is clicked in the unified table, the table shall sort by that column ascending/descending and persist the selection in state.
+ - [REQ-WW-UI-BODYWEIGHT-EDIT] When the bodyweight cell is edited inline, the UI shall PATCH the registration, recompute coefficients, and update dependent columns without page reload.
+ - [REQ-WW-UI-LABELS] When labels exist on a registration, the UI shall render them as chips and allow adding/removing labels through a small editor; labels are saved immediately.
+ - [REQ-WW-UI-FLIGHT-TABS] When flights are configured, the UI shall show quick filters or tabs per flight and visually indicate the active flight used for queue gating.
+  - [REQ-WW-UI-ANNOUNCER-TABLE] When the announcer or display desk renders the contest roster, it shall reuse the unified table in read-only mode so operators and spectators see the same columns and sorting.
+
+### Results & Leaderboards
+- [REQ-WW-RESULTS-WEIGHT-TABS] When viewing results, operators shall be able to switch weight-class tabs; each tab shall show lifters in that class ordered by place with best lifts, totals, and points.
+- [REQ-WW-RESULTS-UNIFORMED] When the uniformed-services label is in use, the system shall expose a dedicated “Uniformed (Open)” leaderboard independent of age/weight classes.
+
+### Offline & Resilience
+- [REQ-WW-RESILIENCE-RETRY] When API calls fail due to transient errors, the frontend shall retry with exponential backoff and circuit-breaker escalation to avoid duplicate attempts.
+- [REQ-WW-RESILIENCE-STATE-SNAPSHOT] When the desk loads, the app shall hydrate from the last contest snapshot cached in IndexedDB/localStorage before confirming server state.
+- [REQ-WW-RESILIENCE-EXPORT] When exports are requested, the system shall stream data in chunks to avoid Worker memory limits and provide progress updates to the UI.
+
+### Legacy Desktop Support
+- [REQ-WW-LEGACY-MAINTENANCE] When blocking bugs arise in the legacy Tauri app, maintainers shall scope fixes under `src-tauri/` without introducing new features beyond data export parity.
+- [REQ-WW-LEGACY-DATA] When legacy data needs importing, the repository shall retain SQLx queries and migrations enabling reference or one-off conversions.
+
+### Operations & Tooling
+- [REQ-WW-OPS-WRANGLER] When developers run `bun run dev`, the toolchain shall start Wrangler with local D1, KV, and Durable Object bindings plus seed migrations.
+- [REQ-WW-OPS-CHECKS] When contributors submit changes, they shall execute `bun run check`, `bun run test`, and `bun run lint` within `werewolf-cloud/` to guard type, lint, and unit coverage.
+- [REQ-WW-OPS-DISPLAYS] When display bundles build, Vite shall produce Cloudflare Pages artefacts compatible with `adapter-cloudflare` deployment.
+- [REQ-WW-OPS-TELEMETRY] When the system runs in production, it shall capture structured logs with request IDs and surface them via Cloudflare dashboard observability tooling.
+
+### Security & Compliance
+- [REQ-WW-SEC-CREDENTIALS] When environment secrets are required, the platform shall load them via Wrangler secrets or `.env` files excluded from version control.
+- [REQ-WW-SEC-ACCESS] When sensitive API routes execute, the Worker shall enforce organizer tokens (or Cloudflare Access headers when enabled) before mutating contest data.
+- [REQ-WW-SEC-AUDIT] (Later) When contest mutations occur, the system shall record audit entries with actor, timestamp, and before/after payloads for compliance review; excluded from P0.
+
+### Multi‑Tenant (Later)
+- [REQ-WW-MT-LATER] When multi-tenant is introduced, each customer shall have an isolated database; for Cloudflare D1 this may require one Worker deployment per tenant or a routing layer, and is out of scope for P0.

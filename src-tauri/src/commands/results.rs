@@ -2,8 +2,9 @@ use crate::error::AppError;
 use crate::AppState;
 use tauri::State;
 
-// TODO: Define proper Result types and requests
-// For now, placeholder implementations
+// Legacy note: this module is frozen. The Cloud Worker implements
+// the authoritative results endpoints; the Tauri commands remain for
+// historical builds but are not actively maintained.
 
 use crate::database::queries;
 

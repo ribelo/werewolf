@@ -7,8 +7,8 @@ const tables = [
   'competitors',
   'registrations',
   'attempts',
-  'age_categories',
-  'weight_classes'
+  'contest_age_categories',
+  'contest_weight_classes'
 ];
 
 for (const table of tables) {

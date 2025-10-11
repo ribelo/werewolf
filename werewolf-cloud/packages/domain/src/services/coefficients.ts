@@ -1,143 +1,301 @@
 // werewolf/werewolf-cloud/packages/domain/src/services/coefficients.ts
 
-/**
- * Calculate Reshel coefficient based on bodyweight and gender
- * This is a simplified formula - in practice you'd use official IPF tables
- */
-export function calculateReshelCoefficient(bodyweight: number, gender: string): number {
-  switch (gender.toLowerCase()) {
-    case 'male':
-    case 'm': {
-      const a = -216.0475144;
-      const b = 16.2606339;
-      const c = -0.002388645;
-      const d = -0.00113732;
-      const e = 7.01863e-06;
-      const f = -1.291e-08;
+import reshelMenDataset from '../data/reshel-men.json';
+import reshelWomenDataset from '../data/reshel-women.json';
+import mcculloughDataset from '../data/mccullough.json';
+import {
+  DEFAULT_CONTEST_AGE_CATEGORY_TEMPLATES,
+  DEFAULT_CONTEST_WEIGHT_CLASS_TEMPLATES,
+} from '../constants/categories';
 
-      const x = bodyweight;
-      return 500.0 / (a + b * x + c * x * x + d * x * x * x + e * x * x * x * x + f * x * x * x * x * x);
-    }
-    case 'female':
-    case 'f': {
-      const a = 594.31747775582;
-      const b = -27.23842536447;
-      const c = 0.82112226871;
-      const d = -0.00930733913;
-      const e = 4.731582e-05;
-      const f = -9.054e-08;
+type Gender = 'male' | 'female';
 
-      const x = bodyweight;
-      return 500.0 / (a + b * x + c * x * x + d * x * x * x + e * x * x * x * x + f * x * x * x * x * x);
-    }
-    default:
-      return 1.0;
-  }
+export interface ReshelEntry {
+  bodyweightKg: number;
+  coefficient: number;
 }
 
-/**
- * Calculate McCullough coefficient based on age
- * Age adjustment factor for masters/veterans and juniors
- */
-export function calculateMcCulloughCoefficient(birthDate: string, contestDate: string): number {
-  try {
-    const birth = new Date(birthDate);
-    const contest = new Date(contestDate);
+export interface ReshelTables {
+  male: ReshelEntry[];
+  female: ReshelEntry[];
+  incrementKg: number;
+}
 
-    // Calculate age on contest date
-    const age = contest.getFullYear() - birth.getFullYear();
-    const monthDiff = contest.getMonth() - birth.getMonth();
-    const actualAge = monthDiff < 0 || (monthDiff === 0 && contest.getDate() < birth.getDate())
-      ? age - 1
-      : age;
+export interface McCulloughEntry {
+  age: number;
+  coefficient: number;
+}
 
-    // McCullough age factors (simplified)
-    if (actualAge >= 13 && actualAge <= 15) return 1.13; // Junior 13
-    if (actualAge >= 16 && actualAge <= 18) return 1.08; // Junior 16
-    if (actualAge === 19) return 1.06; // Junior 19
-    if (actualAge >= 20 && actualAge <= 23) return 1.03; // Junior 23
-    if (actualAge >= 24 && actualAge <= 39) return 1.0; // Senior
-    if (actualAge >= 40 && actualAge <= 44) return 1.01; // Veteran 40
-    if (actualAge >= 45 && actualAge <= 49) return 1.02;
-    if (actualAge >= 50 && actualAge <= 54) return 1.04; // Veteran 50
-    if (actualAge >= 55 && actualAge <= 59) return 1.06;
-    if (actualAge >= 60 && actualAge <= 64) return 1.09; // Veteran 60
-    if (actualAge >= 65 && actualAge <= 69) return 1.12;
-    if (actualAge >= 70 && actualAge <= 74) return 1.16; // Veteran 70
-    if (actualAge >= 75 && actualAge <= 79) return 1.21;
-    if (actualAge >= 80) return 1.27; // Veteran 80+
+const DEFAULT_RESHEL_TABLES: ReshelTables = {
+  male: reshelMenDataset.entries,
+  female: reshelWomenDataset.entries,
+  incrementKg: reshelMenDataset.incrementKg ?? 0.25,
+};
 
-    return 1.0; // Default
-  } catch (error) {
-    console.warn('Failed to calculate McCullough coefficient:', error);
+const DEFAULT_MCCULLOUGH_ENTRIES: McCulloughEntry[] = mcculloughDataset.entries;
+
+const JUNIOR_COEFFICIENTS: Array<{ min: number; max: number; value: number }> = [
+  { min: 13, max: 15, value: 1.13 },
+  { min: 16, max: 18, value: 1.08 },
+  { min: 19, max: 19, value: 1.06 },
+  { min: 20, max: 23, value: 1.03 },
+];
+
+export interface AgeCategoryDescriptor {
+  id: string;
+  code: string;
+  minAge: number | null;
+  maxAge: number | null;
+  sortOrder?: number | null;
+}
+
+export interface WeightClassDescriptor {
+  id: string;
+  code: string;
+  gender: string;
+  minWeight: number | null;
+  maxWeight: number | null;
+  sortOrder?: number | null;
+}
+
+export const DEFAULT_AGE_CATEGORY_DESCRIPTORS: AgeCategoryDescriptor[] =
+  DEFAULT_CONTEST_AGE_CATEGORY_TEMPLATES.map((template) => ({
+    id: template.code,
+    code: template.code,
+    minAge: template.minAge,
+    maxAge: template.maxAge,
+    sortOrder: template.sortOrder,
+  }));
+
+export const DEFAULT_WEIGHT_CLASS_DESCRIPTORS: WeightClassDescriptor[] =
+  DEFAULT_CONTEST_WEIGHT_CLASS_TEMPLATES.map((template) => ({
+    id: template.code,
+    code: template.code,
+    gender: template.gender,
+    minWeight: template.minWeight,
+    maxWeight: template.maxWeight,
+    sortOrder: template.sortOrder,
+  }));
+
+function normalizeGender(input: string): Gender | null {
+  const value = input.toLowerCase();
+  if (value === 'male' || value === 'm') return 'male';
+  if (value === 'female' || value === 'f') return 'female';
+  return null;
+}
+
+function roundToIncrement(value: number, increment: number): number {
+  return Number((Math.round(value / increment) * increment).toFixed(2));
+}
+
+function findClosestWeight(entries: ReshelEntry[], target: number): ReshelEntry | undefined {
+  let best: ReshelEntry | undefined;
+  let bestDiff = Number.POSITIVE_INFINITY;
+
+  for (const entry of entries) {
+    const diff = Math.abs(entry.bodyweightKg - target);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = entry;
+    }
+  }
+
+  return best;
+}
+
+function sortDescriptors<T extends { sortOrder?: number | null }>(items: T[]): T[] {
+  return [...items].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+}
+
+export function getDefaultReshelTables(): ReshelTables {
+  return DEFAULT_RESHEL_TABLES;
+}
+
+export function getDefaultMcCulloughEntries(): McCulloughEntry[] {
+  return DEFAULT_MCCULLOUGH_ENTRIES;
+}
+
+export function resolveReshelCoefficient(
+  bodyweight: number,
+  gender: string,
+  tables: ReshelTables = DEFAULT_RESHEL_TABLES,
+): number {
+  if (!Number.isFinite(bodyweight) || bodyweight <= 0) {
     return 1.0;
   }
+
+  const normalizedGender = normalizeGender(gender);
+  if (!normalizedGender) {
+    return 1.0;
+  }
+
+  const entries = normalizedGender === 'male' ? tables.male : tables.female;
+  if (!entries || entries.length === 0) {
+    return 1.0;
+  }
+
+  const increment = tables.incrementKg ?? 0.25;
+  const minWeight = entries[0]!.bodyweightKg;
+  const maxWeight = entries[entries.length - 1]!.bodyweightKg;
+
+  const rounded = roundToIncrement(bodyweight, increment);
+  const clamped = Math.min(maxWeight, Math.max(minWeight, rounded));
+
+  const match = entries.find((entry) => Math.abs(entry.bodyweightKg - clamped) < 0.0001)
+    ?? findClosestWeight(entries, clamped);
+
+  return match?.coefficient ?? 1.0;
 }
 
-/**
- * Determine age category based on age
- */
-export function determineAgeCategory(birthDate: string, contestDate: string): string {
+function calculateAge(birthDate: string, contestDate: string): number | null {
   try {
     const birth = new Date(birthDate);
     const contest = new Date(contestDate);
 
-    const age = contest.getFullYear() - birth.getFullYear();
+    if (Number.isNaN(birth.getTime()) || Number.isNaN(contest.getTime())) {
+      return null;
+    }
+
+    const yearDiff = contest.getFullYear() - birth.getFullYear();
     const monthDiff = contest.getMonth() - birth.getMonth();
-    const actualAge = monthDiff < 0 || (monthDiff === 0 && contest.getDate() < birth.getDate())
-      ? age - 1
-      : age;
+    const isBeforeBirthday = monthDiff < 0 || (monthDiff === 0 && contest.getDate() < birth.getDate());
 
-    if (actualAge >= 13 && actualAge <= 15) return 'JUNIOR13';
-    if (actualAge >= 16 && actualAge <= 18) return 'JUNIOR16';
-    if (actualAge === 19) return 'JUNIOR19';
-    if (actualAge >= 20 && actualAge <= 23) return 'JUNIOR23';
-    if (actualAge >= 24 && actualAge <= 39) return 'SENIOR';
-    if (actualAge >= 40 && actualAge <= 49) return 'VETERAN40';
-    if (actualAge >= 50 && actualAge <= 59) return 'VETERAN50';
-    if (actualAge >= 60 && actualAge <= 69) return 'VETERAN60';
-    if (actualAge >= 70) return 'VETERAN70';
-
-    return 'SENIOR';
+    return isBeforeBirthday ? yearDiff - 1 : yearDiff;
   } catch (error) {
-    console.warn('Failed to determine age category:', error);
-    return 'SENIOR';
+    console.warn('Failed to calculate age:', error);
+    return null;
   }
 }
 
-/**
- * Determine weight class based on bodyweight and gender
- */
-export function determineWeightClass(bodyweight: number, gender: string): string {
-  switch (gender.toLowerCase()) {
-    case 'male':
-    case 'm':
-      if (bodyweight <= 52.0) return 'M_52';
-      if (bodyweight <= 56.0) return 'M_56';
-      if (bodyweight <= 60.0) return 'M_60';
-      if (bodyweight <= 67.5) return 'M_67_5';
-      if (bodyweight <= 75.0) return 'M_75';
-      if (bodyweight <= 82.5) return 'M_82_5';
-      if (bodyweight <= 90.0) return 'M_90';
-      if (bodyweight <= 100.0) return 'M_100';
-      if (bodyweight <= 110.0) return 'M_110';
-      if (bodyweight <= 125.0) return 'M_125';
-      if (bodyweight <= 140.0) return 'M_140';
-      return 'M_140_PLUS';
-
-    case 'female':
-    case 'f':
-      if (bodyweight <= 47.0) return 'F_47';
-      if (bodyweight <= 52.0) return 'F_52';
-      if (bodyweight <= 57.0) return 'F_57';
-      if (bodyweight <= 63.0) return 'F_63';
-      if (bodyweight <= 72.0) return 'F_72';
-      if (bodyweight <= 84.0) return 'F_84';
-      return 'F_84_PLUS';
-
-    default:
-      return 'M_75';
+function resolveJuniorMcCullough(age: number): number | null {
+  for (const range of JUNIOR_COEFFICIENTS) {
+    if (age >= range.min && age <= range.max) {
+      return range.value;
+    }
   }
+  if (age >= 24 && age <= 39) {
+    return 1.0;
+  }
+  return null;
+}
+
+export function resolveMcCulloughCoefficient(
+  age: number,
+  entries: McCulloughEntry[] = DEFAULT_MCCULLOUGH_ENTRIES,
+): number {
+  if (!Number.isFinite(age) || age < 0) {
+    return 1.0;
+  }
+
+  const junior = resolveJuniorMcCullough(age);
+  if (junior !== null) {
+    return junior;
+  }
+
+  if (entries.length === 0) {
+    return 1.0;
+  }
+
+  const minAge = entries[0]!.age;
+  const maxAge = entries[entries.length - 1]!.age;
+
+  const clampedAge = Math.min(maxAge, Math.max(minAge, Math.floor(age)));
+  const exactMatch = entries.find((entry) => entry.age === clampedAge);
+  if (exactMatch) {
+    return exactMatch.coefficient;
+  }
+
+  let closest = entries[0]!;
+  let closestDiff = Math.abs(closest.age - clampedAge);
+  for (const entry of entries) {
+    const diff = Math.abs(entry.age - clampedAge);
+    if (diff < closestDiff) {
+      closest = entry;
+      closestDiff = diff;
+    }
+  }
+
+  return closest.coefficient;
+}
+
+export function determineAgeCategory(
+  birthDate: string,
+  contestDate: string,
+  categories: AgeCategoryDescriptor[] = DEFAULT_AGE_CATEGORY_DESCRIPTORS,
+): string {
+  const fallback = categories[0]?.code ?? 'OPEN';
+
+  try {
+    const age = calculateAge(birthDate, contestDate);
+    if (age === null) {
+      return fallback;
+    }
+
+    const ordered = sortDescriptors(categories);
+    const rangeMatch = ordered.find((category) => {
+      const definesRange = category.minAge !== null || category.maxAge !== null;
+      if (!definesRange) {
+        return false;
+      }
+      const minOk = category.minAge === null || age >= category.minAge;
+      const maxOk = category.maxAge === null || age <= category.maxAge;
+      return minOk && maxOk;
+    });
+
+    if (rangeMatch) {
+      return rangeMatch.code;
+    }
+
+    const openMatch = ordered.find((category) => category.code.toUpperCase() === 'OPEN');
+    if (openMatch) {
+      return openMatch.code;
+    }
+
+    return fallback;
+  } catch (error) {
+    console.warn('Failed to determine age category:', error);
+    return fallback;
+  }
+}
+
+export function determineWeightClass(
+  bodyweight: number,
+  gender: string,
+  classes: WeightClassDescriptor[] = DEFAULT_WEIGHT_CLASS_DESCRIPTORS,
+): string {
+  const normalisedGender = gender.toLowerCase().startsWith('f') ? 'Female' : 'Male';
+  const safeWeight = Number.isFinite(bodyweight) ? bodyweight : 0;
+
+  const genderClasses = classes.filter((cls) => cls.gender.toLowerCase() === normalisedGender.toLowerCase());
+  const ordered = sortDescriptors(genderClasses.length > 0 ? genderClasses : classes);
+
+  for (const cls of ordered) {
+    const minOk = cls.minWeight === null || safeWeight >= cls.minWeight;
+    const maxOk = cls.maxWeight === null || safeWeight <= cls.maxWeight;
+    if (minOk && maxOk) {
+      return cls.code;
+    }
+  }
+
+  return ordered[ordered.length - 1]?.code ?? classes[0]?.code ?? 'OPEN';
+}
+
+/**
+ * Calculate Reshel coefficient based on bodyweight and gender.
+ */
+export function calculateReshelCoefficient(bodyweight: number, gender: string): number {
+  return resolveReshelCoefficient(bodyweight, gender, DEFAULT_RESHEL_TABLES);
+}
+
+/**
+ * Calculate McCullough coefficient based on age (uses junior defaults + table lookups).
+ */
+export function calculateMcCulloughCoefficient(birthDate: string, contestDate: string): number {
+  const age = calculateAge(birthDate, contestDate);
+  if (age === null) {
+    return 1.0;
+  }
+  return resolveMcCulloughCoefficient(age, DEFAULT_MCCULLOUGH_ENTRIES);
 }
 
 /**

@@ -32,12 +32,7 @@ export function formatStatus(status: string): string {
   const statusMap: Record<string, string> = {
     successful: '✓',
     failed: '✗',
-    pending: '○',
-    skipped: '-',
-    good: '✓',
-    bad: '✗',
-    current: '●',
-    none: ''
+    pending: '○'
   };
 
   return statusMap[statusKey] ?? status;
@@ -94,6 +89,16 @@ export function formatWeight(weight: number): string {
 }
 
 /**
+ * Format coefficient values with fixed precision
+ */
+export function formatCoefficient(value: number | null | undefined, options: { fallback?: string } = {}): string {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return options.fallback ?? '—';
+  }
+  return value.toFixed(3);
+}
+
+/**
  * Calculate age from birth date
  */
 export function formatAge(birthDate: string): number {
@@ -113,14 +118,14 @@ export function formatAge(birthDate: string): number {
  * Format weight class ID into display text
  */
 export function formatWeightClass(weightClassId: string, weightClasses: WeightClass[]): string {
-  const weightClass = weightClasses.find(wc => wc.id === weightClassId);
+  const weightClass = weightClasses.find((wc) => wc.id === weightClassId || wc.code === weightClassId);
   return weightClass ? weightClass.name : weightClassId;
 }
 
 /**
  * Format age class ID into display text
  */
-export function formatAgeClass(ageClassId: string, ageCategories: AgeCategory[]): string {
-  const ageCategory = ageCategories.find(ac => ac.id === ageClassId);
-  return ageCategory ? ageCategory.name : ageClassId;
+export function formatAgeClass(ageCategoryId: string, ageCategories: AgeCategory[]): string {
+  const ageCategory = ageCategories.find((ac) => ac.id === ageCategoryId || ac.code === ageCategoryId);
+  return ageCategory ? ageCategory.name : ageCategoryId;
 }

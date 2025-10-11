@@ -10,7 +10,9 @@
     ".": "./src/index.ts",
     "./models/*": "./src/models/*",
     "./services/*": "./src/services/*",
-    "./utils": "./src/utils/index.ts"
+    "./utils": "./src/utils/index.ts",
+    "./data/*": "./src/data/*",
+    "./constants/*": "./src/constants/*"
   },
   "scripts": {
     "typecheck": "tsc --project tsconfig.json"

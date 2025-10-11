@@ -1,233 +1,122 @@
-# Werewolf - Powerlifting Contest Management
+# Werewolf Cloud
 
-**A rock-solid, offline desktop application for powerlifting meet directors who need simple, reliable contest management without the complexity overhead.**
+Cloud-native powerlifting contest management designed for meet directors who need a reliable, real-time system that still works when the gym WiFi flakes out. The Werewolf rewrite moves the legacy Tauri desktop experience to a modern Cloudflare stack while preserving the workflows that kept our meets running for years.
 
-**What it does**: Manages competitors, tracks attempts, calculates results, and displays rankings with dual-window architecture for both organizers and spectators.
-
-**What it doesn't do**: Timer management, federation uploads, judge scoring, complex validation rules, or anything that gets in the way of running your meet.
+> **Audience:** Powerlifting organizers and volunteers running the scoring desk, announcer table, and public display screens.
 
 ---
 
-## For Meet Directors (Users)
+## Feature Highlights
 
-### What You Get
-
-**Core Features:**
-- **Competitor Registration**: Add competitors with photos, weight classes, and categories
-- **Attempt Tracking**: Record squat, bench, deadlift attempts (good/bad, no complexity)
-- **Real-time Results**: Automatic calculation with Reshel coefficients and age adjustments
-- **Dual Display System**: Organizer interface + full-screen display for spectators
-- **Data Export**: Results to Excel/CSV for record-keeping and federation submissions
-- **Bulletproof Offline**: No internet required, no cloud dependencies, no subscription fees
-
-**What Makes This Different:**
-- **No bullshit complexity** - Built specifically for meet directors, not software engineers
-- **Handles the mess** - Edit anything, fix mistakes, works with real-world chaos
-- **Actually works offline** - Your meet won't fail because WiFi is down
-- **Polish/English support** - Built for Polish Powerlifting Federation standards
-
-### Installation
-
-**Download the latest release from GitHub:**
-- **Windows**: Download `.msi` installer, run it, ignore SmartScreen warning (click "More info" → "Run anyway")
-- **macOS**: Download `.dmg`, open it, ignore "unidentified developer" (right-click app → "Open" → "Open")
-- **Linux**: Download `.deb` (Ubuntu/Debian) or `.AppImage` (universal), install/run directly
-
-**First time setup warnings are normal** - after the first run, your OS will remember the app is safe.
-
-### Quick Start Guide
-
-1. **Create Contest**: Enter basic details (name, date, location)
-2. **Register Competitors**: Add one-by-one or import from CSV
-3. **Open Display Window**: Click "Display" to show results to spectators
-4. **Track Attempts**: Mark lifts as successful/failed, results update automatically
-5. **Export Results**: Generate Excel/CSV reports when done
-
-**Database Location**: `~/.local/share/werewolf/werewolf.db` (Linux), similar paths on Windows/macOS
+- **Contest Control Centre** – Create contests, register lifters, manage flights, and drive the live desk from one responsive UI.
+- **Attempt Desk Tools** – Edit attempts in-place, mark judges' calls, queue the next lift, and broadcast the current lifter to displays within 1–2 seconds.
+- **Dual Display Surfaces** – Dedicated announcer table view and big-screen scoreboard, each with QR sharing for audiences.
+- **Resilient Updates** – WebSocket delivery with automatic polling fallback; mutation queue design ready for offline-first enhancements.
+- **Cloudflare Native** – Worker API (Hono), D1 relational database, KV metadata, Durable Object room per contest, deployed via Wrangler/Pages.
+- **Type-Safe Everything** – Shared TypeScript contracts, Zod validation, Vitest/Playwright coverage, automated CamelCase envelopes.
+- **Polish/English i18n** – All UI strings and status badges localised, with operator language preference stored in settings.
 
 ---
 
-## For Developers
-
-### Technology Architecture
-
-**Why These Choices:**
-- **Tauri + Rust**: Native performance, small binaries, no Electron bloat
-- **SQLite**: Bulletproof local database, no server complexity
-- **Svelte**: Fast, lightweight frontend without React overhead
-- **No cloud dependencies**: Meets happen in gyms with shit WiFi
-
-**Stack:**
-- **Backend**: Rust with Tauri 2.8, SQLx for compile-time verified queries
-- **Frontend**: Svelte 5.38 with TypeScript, Tailwind CSS
-- **Database**: SQLite with automatic migrations
-- **Build**: GitHub Actions for Windows/macOS/Linux releases
-- **Package Manager**: Bun (faster than npm/yarn)
-
-### Development Setup
-
-**Prerequisites:**
-- Rust (latest stable)
-- Bun (package manager)
-- SQLite
-- Git
-
-**Clone and run:**
-```bash
-# Clone repository
-git clone <repository-url>
-cd werewolf
-
-# Install dependencies
-bun install
-
-# Start development (frontend + backend hot reload)
-bun run tauri dev
-```
-
-**NixOS users:**
-```bash
-# Enter development shell with all dependencies
-nix develop
-bun install
-bun run tauri dev
-```
-
-### Project Structure
+## Repository Layout
 
 ```
 werewolf/
-├── src/                    # Svelte frontend
-│   ├── lib/components/     # UI components
-│   ├── lib/i18n/          # Polish/English translations
-│   └── lib/stores.ts       # State management
-├── src-tauri/              # Rust backend
-│   ├── src/commands/       # Tauri command handlers
-│   ├── src/database/       # Database layer
-│   ├── src/models/         # Data structures
-│   └── migrations/         # SQLite schema migrations
-├── .github/workflows/      # CI/CD for releases
-└── docs/                   # Architecture documentation
+├── werewolf-cloud/              # Cloud implementation (primary focus)
+│   ├── apps/
+│   │   ├── api/                 # Cloudflare Worker (Hono)
+│   │   └── web/                 # SvelteKit frontend
+│   ├── docs/                    # Cloud-specific documentation (kept in root docs/)
+│   └── migrations/              # D1 SQL migrations
+├── docs/                        # Shared documentation
+├── src/, src-tauri/             # Legacy Tauri desktop implementation (kept for reference)
+└── ...
 ```
 
-### Key Development Principles
+The legacy desktop app is still present under `src/` and `src-tauri/` for historical comparison; all new development targets `werewolf-cloud/`.
 
-1. **Backend-Heavy Architecture**: All business logic in Rust, frontend as "dumb views"
-2. **Database as State**: SQLite holds all application state, no in-memory complexity
-3. **Command-Based**: Frontend calls domain commands (`contest_create`, `competitor_register`)
-4. **Optimistic Updates**: No real-time sync, no WebSockets, no event streams
-5. **Simplicity First**: Built for reliability, not feature completeness
+---
 
-### Building and Testing
+## Local Development
 
+### 1. Prerequisites
+- Bun ≥ 1.2
+- Node ≥ 20 (for tooling compatibility)
+- Wrangler (provided via Nix flake or `bunx`)
+- SQLite CLI (optional, useful for inspecting local D1 state)
+
+### 2. Environment Variables
+Create `werewolf-cloud/.env` with the credentials you received:
+```
+CLOUDFLARE_ACCOUNT_ID=2c42f4960f9c28a9235cac01483bd626
+CLOUDFLARE_API_TOKEN=MeKJV3fDOswsV_JB-70ZFjE7YobOich5nLgydGoO
+ENV=development
+PUBLIC_API_BASE=http://127.0.0.1:8787
+```
+`PUBLIC_API_BASE` is only required when running the frontend separately.
+
+### 3. Start the Worker (API)
 ```bash
-# Run all Rust checks (formatting, linting, tests)
-./check.sh
+cd werewolf-cloud
+bun install
+bun run dev             # wraps wrangler dev with local D1/KV bindings
+```
+This spins up the Worker at `http://127.0.0.1:8787`, applies migrations to `.wrangler/state`, and exposes Durable Object + KV emulation.
 
-# Frontend type checking
+### 4. Start the Frontend
+```bash
+cd werewolf-cloud/apps/web
+bun install
+PUBLIC_API_BASE=http://127.0.0.1:8787 bun run dev -- --host 0.0.0.0 --port 5173
+```
+Vite may move to the next free port (e.g. 5174) if 5173 is taken. The frontend automatically connects to the running Worker, falls back to polling when Durable Objects are unavailable locally, and writes contest cache snapshots to `localStorage`.
+
+### 5. Run Checks and Tests
+```bash
+# API type check & tests
+cd werewolf-cloud/apps/api
+bun run typecheck
+bun run test
+
+# Frontend type check & tests
+cd werewolf-cloud/apps/web
 bun run check
+bun run test:run
 
-# Build production release
-bun run tauri build
-
-# Database operations
-cd src-tauri
-cargo run -- db migrate    # Run migrations
-cargo run -- db backup     # Create backup
-cargo run -- db status     # Check migration status
+# Integration smoke (root)
+cd werewolf-cloud
+bun run test
 ```
 
-### Database Development
+---
 
-**Critical Rules:**
-- **Use SQLx compile-time macros** (`query!()`, `query_as!()`) - never runtime queries
-- **Never modify existing migrations** - always create new migration files
-- **Test migrations locally** before committing
+## Deployment Workflow
 
-**Working with migrations:**
-```bash
-# Create new migration
-sqlx migrate add descriptive_name
-
-# Apply migrations
-cargo run -- db migrate
-
-# Reset database (development only - destroys data)
-rm ~/.local/share/werewolf/werewolf.db
-```
-
-### Internationalization
-
-**All user-facing text must be translatable:**
-- ❌ `<button>Save</button>`
-- ✅ `<button>{$t('common.save')}</button>`
-
-**Translation files:**
-- `src/lib/i18n/locales/pl.json` - Polish (primary)
-- `src/lib/i18n/locales/en.json` - English
-
-### Contributing Guidelines
-
-1. **Read existing code** - follow established patterns
-2. **Test your changes** - run `./check.sh` before committing
-3. **Keep it simple** - this is intentionally not a complex system
-4. **No feature creep** - check `REQUIREMENTS_AND_ROADMAP.md` for scope
-5. **Document breaking changes** - especially database schema changes
-
-See `CONTRIBUTING.md` for detailed contribution guidelines.
+1. **Configure bindings** in `wrangler.toml` (`werewolf-d1`, `werewolf-d1-dev`, `werewolf-kv`, `werewolf-kv-dev`, `werewolf-contest-room`).
+2. **Login & publish**
+   ```bash
+   bunx wrangler@latest login
+   bunx wrangler@latest deploy --env production --config wrangler.toml
+   ```
+3. **Promote frontend** via Cloudflare Pages (v2 build: `bun install && bun run build`).
+4. **Verify** using `scripts/curl-api-test.sh` and open the announcer/big-screen URLs generated from the Worker host.
 
 ---
 
-## Powerlifting Scoring System
+## Documentation
+- [Architecture](docs/ARCHITECTURE.md) – detailed system diagram, component responsibilities, deployment topology.
+- [User Guide](docs/USER_GUIDE.md) – running a meet from setup to teardown.
+- [FAQ](docs/FAQ.md) – common questions from operators and tech volunteers.
+- [Post-Migration Action Plan](docs/post-migration-action-plan.md) – remaining work before release.
+- [Requirements & Roadmap](REQUIREMENTS_AND_ROADMAP.md) – long-term scope decisions.
 
-Built for **Polish Powerlifting Federation** standards with authentic scoring:
-
-**Reshel Coefficient**: Normalizes lifts across bodyweight classes (APF/WPC standard)
-**McCullough Coefficient**: Age adjustments for Master lifters (40+ years)
-**Scoring Formula**: `points = total_weight × reshel_coefficient × mccullough_coefficient`
-
-**Competition Categories:**
-- **Age Groups**: Junior (13/16/19/23), Senior, Veteran (40/50/60/70+)
-- **Weight Classes**: Gender-specific ("DO 75 KG", "+ 140 KG")
-- **Equipment**: Raw, Equipped (T), Single-ply (SM), Multi-ply (M)
-
-**Results Logic:**
-- Failed attempts = 0 points (all negative weights)
-- Successful attempts = highest successful lift counts toward total
-- Ties broken by earliest successful attempt (or body weight)
+The legacy Tauri instructions remain in `CLAUDE.md` for historical reference; the new Cloud-focused workflow lives here.
 
 ---
 
-## Release Information
+## Support & Feedback
+- **Issues** – GitHub Issues for bugs or feature requests.
+- **Questions** – GitHub Discussions or direct contact with the Werewolf maintainers.
+- **Polish Language** – All docs available in Polish on request; the app ships with Polish as the default locale.
 
-**Current Version**: 0.1.0 (active development)
-**Supported Platforms**: Windows 10/11, macOS (Intel/ARM), Linux (Ubuntu 20.04+)
-**Release Schedule**: Tagged releases trigger automatic builds via GitHub Actions
-**Code Signing**: None (expect OS warnings on first run - this is normal)
-
-**Getting Updates:**
-- Watch this repository for release notifications
-- Download latest `.msi`/`.dmg`/`.deb` from Releases page
-- Automatic updates coming in future versions
-
----
-
-## Support and Documentation
-
-**User Documentation**:
-- **Quick Start Guide**: This README
-- **Detailed Manual**: `docs/USER_GUIDE.md` (coming soon)
-- **FAQ**: `docs/FAQ.md` (coming soon)
-
-**Developer Documentation**:
-- **Architecture**: `docs/ARCHITECTURE.md`
-- **API Reference**: Generated from Rust docs
-- **Project Instructions**: `CLAUDE.md`
-- **Contributing Guide**: `CONTRIBUTING.md`
-
-**Getting Help**:
-- **Issues**: Report bugs via GitHub Issues
-- **Questions**: Start a GitHub Discussion
-- **Polish Language Support**: Native support, documentation in progress
-
-**This app exists because existing powerlifting software is either expensive, overcomplicated, or requires internet connection. We built something that just works.**
+Werewolf Cloud keeps the spirit of the original desktop app—fast, opinionated, and built for real gyms—while embracing the resilience and reach of the cloud. Contributions are welcome; just keep one goal in mind: help directors run a flawless meet.

@@ -63,7 +63,9 @@ vi.mock('../contests/[id]/+page.ts', () => ({
           club: 'Test Club',
           city: 'Test City',
           weightClassId: 'wc1',
-          ageClassId: 'ac1',
+          weightClassName: 'Do 82.5 kg',
+          ageCategoryId: 'ac1',
+          ageCategoryName: 'Open',
           bodyweight: 85.5,
           lotNumber: 1,
           equipmentM: true,
@@ -89,7 +91,9 @@ vi.mock('../contests/[id]/+page.ts', () => ({
         club: 'Test Club',
         city: 'Test City',
         weightClassId: 'wc1',
-        ageClassId: 'ac1',
+        weightClassName: 'Do 82.5 kg',
+        ageCategoryId: 'ac1',
+        ageCategoryName: 'Open',
         bodyweight: 85.5,
         lotNumber: 1,
         equipmentM: true,
@@ -172,7 +176,7 @@ vi.mock('../contests/[id]/+page.ts', () => ({
         contestId: '1',
         bodyweight: 85.5,
         weightClassId: 'wc1',
-        weightClassName: '85kg',
+        weightClassName: 'Do 82.5 kg',
         ageCategoryId: 'ac1',
         ageCategoryName: 'Open',
         equipmentM: true,
@@ -215,6 +219,12 @@ vi.mock('../contests/[id]/+page.ts', () => ({
         attemptNumber: 1
       }
     },
+    resultsOpen: [],
+    resultsAge: [],
+    resultsWeight: [],
+    plateSets: [],
+    barWeights: { mensBarWeight: 20, womensBarWeight: 15, barWeight: 20 },
+    backupsSummary: { backups: [], total: 0, timestamp: '2024-01-01T00:00:00Z' },
     referenceData: {
       weightClasses: [{ id: 'wc1', name: '85kg', gender: 'M', minWeight: 82.5, maxWeight: 87.5 }],
       ageCategories: [{ id: 'ac1', name: 'Open', minAge: 0, maxAge: 99 }]
@@ -326,7 +336,7 @@ describe('Routes smoke test', () => {
       expect(['Squat', 'Bench', 'Deadlift']).toContain(attempt.liftType);
       expect([1, 2, 3]).toContain(attempt.attemptNumber);
       expect(typeof attempt.weight).toBe('number');
-      expect(['Pending', 'Successful', 'Failed', 'Skipped']).toContain(attempt.status);
+      expect(['Pending', 'Successful', 'Failed']).toContain(attempt.status);
       expect(attempt.createdAt).toBeDefined();
       expect(attempt.updatedAt).toBeDefined();
     }
@@ -363,6 +373,12 @@ describe('Routes smoke test', () => {
       registrations: [],
       attempts: [],
       currentAttempt: null,
+      resultsOpen: [],
+      resultsAge: [],
+      resultsWeight: [],
+      plateSets: [],
+      barWeights: { mensBarWeight: 20, womensBarWeight: 15, barWeight: 20 },
+      backupsSummary: { backups: [], total: 0, timestamp: '2024-01-01T00:00:00Z' },
       referenceData: {
         weightClasses: [],
         ageCategories: []

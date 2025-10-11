@@ -6,6 +6,21 @@ import { executeQuery, executeQueryOne, executeMutation, generateId, getCurrentT
 
 export const contestResults = new Hono<WerewolfEnvironment>();
 
+function parseLabelText(input: unknown): string[] {
+  if (Array.isArray(input)) {
+    return input.map(String);
+  }
+  if (typeof input === 'string') {
+    try {
+      const parsed = JSON.parse(input);
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 // POST /contests/:contestId/results/recalculate - Recalculate all results
 contestResults.post('/recalculate', async (c) => {
   const db = c.env.DB;
@@ -40,10 +55,13 @@ contestResults.post('/recalculate', async (c) => {
 // GET /contests/:contestId/results/rankings - Get rankings by type
 contestResults.get('/rankings', zValidator('query', z.object({
   type: z.enum(['open', 'age', 'weight']).default('open'),
+  label: z.string().trim().min(1).optional(),
 })), async (c) => {
   const db = c.env.DB;
   const contestId = c.req.param('contestId');
-  const { type } = c.req.valid('query');
+  const { type, label } = c.req.valid('query');
+
+  const labelMatch = label ? `%"${label}"%` : null;
 
   let rankings;
 
@@ -59,14 +77,16 @@ contestResults.get('/rankings', zValidator('query', z.object({
           r.place_open, r.place_in_age_class, r.place_in_weight_class,
           r.is_disqualified, r.disqualification_reason,
           r.broke_record, r.record_type, r.calculated_at,
-          c.first_name, c.last_name, reg.lot_number
+          c.first_name, c.last_name, reg.lot_number,
+          COALESCE(reg.labels, '[]') AS labels
         FROM results r
         JOIN registrations reg ON r.registration_id = reg.id
         JOIN competitors c ON reg.competitor_id = c.id
         WHERE r.contest_id = ?
+        ${labelMatch ? "AND COALESCE(reg.labels, '[]') LIKE ?" : ''}
         ORDER BY r.place_open ASC
         `,
-        [contestId]
+        labelMatch ? [contestId, labelMatch] : [contestId]
       );
       break;
 
@@ -81,15 +101,17 @@ contestResults.get('/rankings', zValidator('query', z.object({
           r.place_open, r.place_in_age_class, r.place_in_weight_class,
           r.is_disqualified, r.disqualification_reason,
           r.broke_record, r.record_type, r.calculated_at,
-          c.first_name, c.last_name, reg.lot_number, ac.name as age_category
+          c.first_name, c.last_name, reg.lot_number, ac.name as age_category,
+          COALESCE(reg.labels, '[]') AS labels
         FROM results r
         JOIN registrations reg ON r.registration_id = reg.id
         JOIN competitors c ON reg.competitor_id = c.id
-        JOIN age_categories ac ON reg.age_category_id = ac.id
+        JOIN contest_age_categories ac ON reg.age_category_id = ac.id
         WHERE r.contest_id = ?
+        ${labelMatch ? "AND COALESCE(reg.labels, '[]') LIKE ?" : ''}
         ORDER BY ac.name ASC, r.place_in_age_class ASC
         `,
-        [contestId]
+        labelMatch ? [contestId, labelMatch] : [contestId]
       );
       break;
 
@@ -104,21 +126,29 @@ contestResults.get('/rankings', zValidator('query', z.object({
           r.place_open, r.place_in_age_class, r.place_in_weight_class,
           r.is_disqualified, r.disqualification_reason,
           r.broke_record, r.record_type, r.calculated_at,
-          c.first_name, c.last_name, reg.lot_number, wc.name as weight_class
+          c.first_name, c.last_name, reg.lot_number, wc.name as weight_class,
+          COALESCE(reg.labels, '[]') AS labels
         FROM results r
         JOIN registrations reg ON r.registration_id = reg.id
         JOIN competitors c ON reg.competitor_id = c.id
-        JOIN weight_classes wc ON reg.weight_class_id = wc.id
+        JOIN contest_weight_classes wc ON reg.weight_class_id = wc.id
         WHERE r.contest_id = ?
+        ${labelMatch ? "AND COALESCE(reg.labels, '[]') LIKE ?" : ''}
         ORDER BY wc.name ASC, r.place_in_weight_class ASC
         `,
-        [contestId]
+        labelMatch ? [contestId, labelMatch] : [contestId]
       );
       break;
   }
 
+  const camel = convertKeysToCamelCase(rankings) as any[];
+  const enriched = camel.map((row) => ({
+    ...row,
+    labels: parseLabelText(row.labels),
+  }));
+
   return c.json({
-    data: convertKeysToCamelCase(rankings),
+    data: enriched,
     error: null,
     requestId: c.get('requestId'),
   });

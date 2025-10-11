@@ -81,11 +81,11 @@ export function sanitizePlateSet(input: unknown): PlateDefinition[] {
 
   for (const entry of input) {
     if (typeof entry !== 'object' || entry === null) continue;
-    const weight = Number((entry as Record<string, unknown>).weight);
-    const qtyValue = Number((entry as Record<string, unknown>).quantity);
+    const weight = Number((entry as Record<string, unknown>)['weight']);
+    const qtyValue = Number((entry as Record<string, unknown>)['quantity']);
     if (!Number.isFinite(weight) || weight <= 0) continue;
     const quantity = Number.isFinite(qtyValue) ? Math.max(0, Math.trunc(qtyValue)) : 0;
-    const colorValue = (entry as Record<string, unknown>).color;
+    const colorValue = (entry as Record<string, unknown>)['color'];
     const color =
       typeof colorValue === 'string' && colorValue.trim().length > 0
         ? colorValue
@@ -107,42 +107,42 @@ export function sanitizeSettings(raw: unknown): SettingsData {
   }
 
   const source = raw as Record<string, unknown>;
-  const uiSource = (source.ui as Record<string, unknown>) ?? {};
-  const competitionSource = (source.competition as Record<string, unknown>) ?? {};
-  const databaseSource = (source.database as Record<string, unknown>) ?? {};
+  const uiSource = (source['ui'] as Record<string, unknown>) ?? {};
+  const competitionSource = (source['competition'] as Record<string, unknown>) ?? {};
+  const databaseSource = (source['database'] as Record<string, unknown>) ?? {};
 
   const result: SettingsData = {
-    language: typeof source.language === 'string' ? source.language : defaults.language,
+    language: typeof source['language'] === 'string' ? source['language'] : defaults.language,
     ui: {
-      theme: typeof uiSource.theme === 'string' ? uiSource.theme : defaults.ui.theme,
+      theme: typeof uiSource['theme'] === 'string' ? uiSource['theme'] : defaults.ui.theme,
       showWeights:
-        typeof uiSource.showWeights === 'boolean'
-          ? uiSource.showWeights
+        typeof uiSource['showWeights'] === 'boolean'
+          ? uiSource['showWeights']
           : defaults.ui.showWeights,
       showAttempts:
-        typeof uiSource.showAttempts === 'boolean'
-          ? uiSource.showAttempts
+        typeof uiSource['showAttempts'] === 'boolean'
+          ? uiSource['showAttempts']
           : defaults.ui.showAttempts,
     },
     competition: {
       federationRules:
-        typeof competitionSource.federationRules === 'string'
-          ? competitionSource.federationRules
+        typeof competitionSource['federationRules'] === 'string'
+          ? competitionSource['federationRules']
           : defaults.competition.federationRules,
       defaultBarWeight:
-        Number.isFinite(Number(competitionSource.defaultBarWeight))
-          ? Number(competitionSource.defaultBarWeight)
+        Number.isFinite(Number(competitionSource['defaultBarWeight']))
+          ? Number(competitionSource['defaultBarWeight'])
           : defaults.competition.defaultBarWeight,
-      defaultPlateSet: sanitizePlateSet(competitionSource.defaultPlateSet),
+      defaultPlateSet: sanitizePlateSet(competitionSource['defaultPlateSet']),
     },
     database: {
       backupEnabled:
-        typeof databaseSource.backupEnabled === 'boolean'
-          ? databaseSource.backupEnabled
+        typeof databaseSource['backupEnabled'] === 'boolean'
+          ? databaseSource['backupEnabled']
           : defaults.database.backupEnabled,
       autoBackupInterval:
-        Number.isFinite(Number(databaseSource.autoBackupInterval))
-          ? Number(databaseSource.autoBackupInterval)
+        Number.isFinite(Number(databaseSource['autoBackupInterval']))
+          ? Number(databaseSource['autoBackupInterval'])
           : defaults.database.autoBackupInterval,
     },
   };
@@ -190,58 +190,58 @@ export function coercePartialSettings(partial: unknown): Partial<SettingsData> {
   const source = partial as Record<string, unknown>;
   const updates: Partial<SettingsData> = {};
 
-  if (typeof source.language === 'string') {
-    updates.language = source.language;
+  if (typeof source['language'] === 'string') {
+    updates.language = source['language'];
   }
 
-  if (typeof source.ui === 'object' && source.ui !== null) {
-    const uiSource = source.ui as Record<string, unknown>;
+  if (typeof source['ui'] === 'object' && source['ui'] !== null) {
+    const uiSource = source['ui'] as Record<string, unknown>;
     const uiUpdate: Partial<SettingsData['ui']> = {};
-    if ('theme' in uiSource && typeof uiSource.theme === 'string') {
-      uiUpdate.theme = uiSource.theme;
+    if ('theme' in uiSource && typeof uiSource['theme'] === 'string') {
+      uiUpdate.theme = uiSource['theme'];
     }
-    if ('showWeights' in uiSource && typeof uiSource.showWeights === 'boolean') {
-      uiUpdate.showWeights = uiSource.showWeights;
+    if ('showWeights' in uiSource && typeof uiSource['showWeights'] === 'boolean') {
+      uiUpdate.showWeights = uiSource['showWeights'];
     }
-    if ('showAttempts' in uiSource && typeof uiSource.showAttempts === 'boolean') {
-      uiUpdate.showAttempts = uiSource.showAttempts;
+    if ('showAttempts' in uiSource && typeof uiSource['showAttempts'] === 'boolean') {
+      uiUpdate.showAttempts = uiSource['showAttempts'];
     }
     if (Object.keys(uiUpdate).length > 0) {
       updates.ui = uiUpdate as SettingsData['ui'];
     }
   }
 
-  if (typeof source.competition === 'object' && source.competition !== null) {
-    const competitionSource = source.competition as Record<string, unknown>;
+  if (typeof source['competition'] === 'object' && source['competition'] !== null) {
+    const competitionSource = source['competition'] as Record<string, unknown>;
     const competitionUpdate: Partial<SettingsData['competition']> = {};
-    if ('federationRules' in competitionSource && typeof competitionSource.federationRules === 'string') {
-      competitionUpdate.federationRules = competitionSource.federationRules;
+    if ('federationRules' in competitionSource && typeof competitionSource['federationRules'] === 'string') {
+      competitionUpdate.federationRules = competitionSource['federationRules'];
     }
     if (
       'defaultBarWeight' in competitionSource &&
-      Number.isFinite(Number(competitionSource.defaultBarWeight))
+      Number.isFinite(Number(competitionSource['defaultBarWeight']))
     ) {
-      competitionUpdate.defaultBarWeight = Number(competitionSource.defaultBarWeight);
+      competitionUpdate.defaultBarWeight = Number(competitionSource['defaultBarWeight']);
     }
     if ('defaultPlateSet' in competitionSource) {
-      competitionUpdate.defaultPlateSet = sanitizePlateSet(competitionSource.defaultPlateSet);
+      competitionUpdate.defaultPlateSet = sanitizePlateSet(competitionSource['defaultPlateSet']);
     }
     if (Object.keys(competitionUpdate).length > 0) {
       updates.competition = competitionUpdate as SettingsData['competition'];
     }
   }
 
-  if (typeof source.database === 'object' && source.database !== null) {
-    const databaseSource = source.database as Record<string, unknown>;
+  if (typeof source['database'] === 'object' && source['database'] !== null) {
+    const databaseSource = source['database'] as Record<string, unknown>;
     const databaseUpdate: Partial<SettingsData['database']> = {};
-    if ('backupEnabled' in databaseSource && typeof databaseSource.backupEnabled === 'boolean') {
-      databaseUpdate.backupEnabled = databaseSource.backupEnabled;
+    if ('backupEnabled' in databaseSource && typeof databaseSource['backupEnabled'] === 'boolean') {
+      databaseUpdate.backupEnabled = databaseSource['backupEnabled'];
     }
     if (
       'autoBackupInterval' in databaseSource &&
-      Number.isFinite(Number(databaseSource.autoBackupInterval))
+      Number.isFinite(Number(databaseSource['autoBackupInterval']))
     ) {
-      databaseUpdate.autoBackupInterval = Number(databaseSource.autoBackupInterval);
+      databaseUpdate.autoBackupInterval = Number(databaseSource['autoBackupInterval']);
     }
     if (Object.keys(databaseUpdate).length > 0) {
       updates.database = databaseUpdate as SettingsData['database'];

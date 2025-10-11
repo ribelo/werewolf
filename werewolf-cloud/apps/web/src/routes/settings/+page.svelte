@@ -141,22 +141,48 @@ $: if (settings && !platesDirty) {
 
   function handleShowWeightsChange(event: Event) {
     if (!settings) return;
-    const checked = (event.currentTarget as HTMLInputElement).checked;
+    const checkbox = event.currentTarget as HTMLInputElement;
+    const previousValue = settings.ui.showWeights;
+    const checked = checkbox.checked;
+
     settings = {
       ...settings,
       ui: { ...settings.ui, showWeights: checked },
     };
-    updateSetting('ui', 'showWeights', checked).catch(() => {});
+
+    updateSetting('ui', 'showWeights', checked).catch(() => {
+      if (!settings) return;
+      settings = {
+        ...settings,
+        ui: { ...settings.ui, showWeights: previousValue },
+      };
+      checkbox.checked = previousValue;
+    });
   }
 
   function handleDefaultBarWeightChange(event: Event) {
     if (!settings) return;
-    const value = Number((event.currentTarget as HTMLInputElement).value);
+    const input = event.currentTarget as HTMLInputElement;
+    const previousValue = settings.competition.defaultBarWeight;
+    const value = Number(input.value);
+
+    if (!Number.isFinite(value)) {
+      input.value = String(previousValue);
+      return;
+    }
+
     settings = {
       ...settings,
       competition: { ...settings.competition, defaultBarWeight: value },
     };
-    updateSetting('competition', 'defaultBarWeight', value).catch(() => {});
+    updateSetting('competition', 'defaultBarWeight', value).catch(() => {
+      if (!settings) return;
+      settings = {
+        ...settings,
+        competition: { ...settings.competition, defaultBarWeight: previousValue },
+      };
+      input.value = String(previousValue);
+    });
   }
 
   function updatePlateWeight(index: number, value: number) {

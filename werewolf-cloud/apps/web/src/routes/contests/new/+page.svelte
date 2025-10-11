@@ -3,10 +3,21 @@ import { goto } from '$app/navigation';
 import Layout from '$lib/components/Layout.svelte';
 import { apiClient } from '$lib/api';
 import type { PageData } from './$types';
-import type { ContestSummary } from '$lib/types';
+import type { ContestSummary, AgeCategory, WeightClass, ContestCategories, RegistrationSummary } from '$lib/types';
 import { toast } from '$lib/ui/toast';
 import { _ } from 'svelte-i18n';
 import { get } from 'svelte/store';
+import { tick } from 'svelte';
+import {
+  createDefaultAgeCategories,
+  createDefaultWeightClasses,
+  validateCategories,
+  formatCategoryIssues,
+  buildCategoryPayload,
+  categoriesEqual,
+} from '$lib/categories';
+import { evaluateAttemptWeight, normalizeAttemptWeight } from '$lib/plate-plan';
+import { formatWeight } from '$lib/utils';
 
   const AVAILABLE_EVENTS = ['Squat', 'Bench', 'Deadlift'] as const;
   const EVENT_LABEL_KEYS: Record<typeof AVAILABLE_EVENTS[number], string> = {
@@ -30,7 +41,336 @@ import { get } from 'svelte/store';
   type ContestEvent = typeof AVAILABLE_EVENTS[number];
   type Gender = typeof GENDERS[number];
 
+  type AttemptPlan = Record<ContestEvent, number | null>;
+
+  type AttemptIssueType = 'missing' | 'unloadable' | 'below_bar';
+
+  interface AttemptIssue {
+    competitorIndex: number;
+    name: string;
+    event: ContestEvent;
+    type: AttemptIssueType;
+    suggestedWeight?: number;
+  }
+
+  const ATTEMPT_INCREMENT = 2.5;
+
+  function roundToIncrement(value: number, increment = ATTEMPT_INCREMENT): number {
+    const rounded = Math.round(value / increment) * increment;
+    return Number(rounded.toFixed(2));
+  }
+
+  function suggestOpener(event: ContestEvent, bodyweight: number): number {
+    const base = Math.max(bodyweight || 0, 20);
+    const multiplier = {
+      Squat: 1.2,
+      Bench: 0.8,
+      Deadlift: 1.4,
+    }[event];
+
+    const suggested = roundToIncrement(base * multiplier);
+    return Math.max(20, suggested);
+  }
+
+  function createAttemptPlan(events: ContestEvent[], bodyweight: number, fill = false): AttemptPlan {
+    const plan = {} as AttemptPlan;
+    for (const event of events) {
+      plan[event] = fill ? suggestOpener(event, bodyweight) : null;
+    }
+    return plan;
+  }
+
+  function syncAttemptPlan(plan: AttemptPlan | undefined, events: ContestEvent[]): AttemptPlan {
+    const source = plan ?? ({} as AttemptPlan);
+    const next = {} as AttemptPlan;
+    for (const event of events) {
+      next[event] = source[event] ?? null;
+    }
+    return next;
+  }
+
+  function normalizeAttemptValue(value: number | null, gender: Gender): number | null {
+    if (!value || value <= 0) {
+      return null;
+    }
+    return normalizeAttemptWeight(value, gender);
+  }
+
+  function normalizeAttemptPlanForGender(plan: AttemptPlan, gender: Gender): AttemptPlan {
+    const events = Object.keys(plan) as ContestEvent[];
+    const normalized = {} as AttemptPlan;
+    for (const event of events) {
+      normalized[event] = normalizeAttemptValue(plan[event] ?? null, gender);
+    }
+    return normalized;
+  }
+
+  function cloneAttemptPlan(plan: AttemptPlan): AttemptPlan {
+    const events = Object.keys(plan) as ContestEvent[];
+    return syncAttemptPlan(plan, events);
+  }
+
+  function fillAttemptPlan(plan: AttemptPlan, events: ContestEvent[], bodyweight: number, onlyMissing = false): AttemptPlan {
+    const next = { ...plan } as AttemptPlan;
+    for (const event of events) {
+      const current = next[event] ?? null;
+      if (!onlyMissing || !current || current <= 0) {
+        next[event] = suggestOpener(event, bodyweight);
+      }
+    }
+    return next;
+  }
+
   const translate = (key: string, values?: Record<string, unknown>) => get(_)(key, values) as string;
+
+  let ageCategoriesDraft: AgeCategory[] = createDefaultAgeCategories();
+  let weightClassesDraft: WeightClass[] = createDefaultWeightClasses();
+  let categoryIssues: string[] = [];
+
+  const CONTEST_NAMES = [
+    'Werewolf Classic',
+    'Northern Lights Open',
+    'Iron Den Invitational',
+    'Capital City Throwdown',
+    'Vistula Strength Meet',
+    'Silver Moon Showdown'
+  ] as const;
+
+  const VENUES = [
+    'Warsaw',
+    'Kraków',
+    'Gdańsk',
+    'Wrocław',
+    'Poznań',
+    'Łódź',
+    'Katowice'
+  ] as const;
+
+  const ORGANIZERS = [
+    'Werewolf Powerlifting Club',
+    'Northern Strength Association',
+    'Iron Den Athletics',
+    'Polska Liga Siły',
+    'Vistula Barbell'
+  ] as const;
+
+  const RULESETS = ['IPF', 'WRPF', 'USAPL', 'URP'] as const;
+
+  const CLUBS = [
+    'Werewolf PL',
+    'Barbell Syndicate',
+    'Northern Strength',
+    'Vistula Barbell',
+    'Katowice Ironworks',
+    'Łódź Power Crew'
+  ] as const;
+
+  const CITIES = [
+    'Warszawa',
+    'Kraków',
+    'Łódź',
+    'Gdynia',
+    'Szczecin',
+    'Białystok',
+    'Lublin',
+    'Rzeszów'
+  ] as const;
+
+  type NameTuple = readonly [string, string];
+
+  const FEMALE_NAMES: readonly NameTuple[] = [
+    ['Anna', 'Nowak'],
+    ['Magda', 'Kowalska'],
+    ['Kinga', 'Wiśniewska'],
+    ['Natalia', 'Mazur'],
+    ['Julia', 'Baran'],
+    ['Marta', 'Lis'],
+    ['Karolina', 'Jasińska'],
+    ['Ewelina', 'Sobczak'],
+    ['Zuzanna', 'Kaczmarek']
+  ] as const;
+
+  const MALE_NAMES: readonly NameTuple[] = [
+    ['Paweł', 'Zieliński'],
+    ['Tomasz', 'Lewandowski'],
+    ['Michał', 'Piotrowski'],
+    ['Krzysztof', 'Sikora'],
+    ['Piotr', 'Bryk'],
+    ['Damian', 'Olszewski'],
+    ['Łukasz', 'Kubiak'],
+    ['Jakub', 'Konarski']
+  ] as const;
+
+  const NAME_SETS: Record<Gender, readonly NameTuple[]> = {
+    Male: MALE_NAMES,
+    Female: FEMALE_NAMES,
+  } as const;
+
+  function randomItem<T>(items: readonly T[]): T {
+    if (items.length === 0) {
+      throw new Error('Cannot select a random item from an empty array');
+    }
+    const index = Math.floor(Math.random() * items.length);
+    return items[index] as T;
+  }
+
+  function randomDateWithin(days: number): string {
+    const base = new Date();
+    const offset = Math.floor(Math.random() * days);
+    base.setDate(base.getDate() + offset);
+    return base.toISOString().slice(0, 10);
+  }
+
+  function randomBodyweight(gender: Gender): number {
+    const min = gender === 'Male' ? 70 : 55;
+    const max = gender === 'Male' ? 125 : 85;
+    const value = min + Math.random() * (max - min);
+    return Number(value.toFixed(1));
+  }
+
+  function randomBirthDate(): string {
+    const today = new Date();
+    const minAge = 18;
+    const maxAge = 40;
+    const age = minAge + Math.floor(Math.random() * (maxAge - minAge + 1));
+    const birth = new Date(today.getFullYear() - age, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1);
+    return birth.toISOString().slice(0, 10);
+  }
+
+  function randomEvents(): ContestEvent[] {
+    const shuffled = [...AVAILABLE_EVENTS].sort(() => Math.random() - 0.5);
+    const count = Math.random() < 0.4 ? 3 : Math.random() < 0.7 ? 2 : 1;
+    return shuffled.slice(0, count);
+  }
+
+  function buildRandomCompetitor(gender: Gender, usedNames: Set<string>, events: ContestEvent[]): CompetitorDraft {
+    const baseNames = NAME_SETS[gender];
+    const available = baseNames.filter(([firstName, lastName]) => !usedNames.has(`${firstName}|${lastName}`));
+    const [firstName, lastName] = available.length > 0
+      ? randomItem(available)
+      : randomItem(baseNames);
+    usedNames.add(`${firstName}|${lastName}`);
+    const rackHeightSquat = DEFAULT_RACK_SQUAT + Math.floor(Math.random() * 5) - 2;
+    const rackHeightBench = DEFAULT_RACK_BENCH + Math.floor(Math.random() * 3) - 1;
+    const bodyweight = randomBodyweight(gender);
+
+    return {
+      firstName,
+      lastName,
+      birthDate: randomBirthDate(),
+      gender,
+      club: randomItem(CLUBS),
+      city: randomItem(CITIES),
+      bodyweight,
+      rackHeightSquat,
+      rackHeightBench,
+      equipmentM: Math.random() < 0.05,
+      equipmentSm: Math.random() < 0.15,
+      equipmentT: Math.random() < 0.6,
+      attempts: normalizeAttemptPlanForGender(createAttemptPlan(events, bodyweight, true), gender),
+    };
+  }
+
+  function resetCategoryDraftsToDefault() {
+    ageCategoriesDraft = createDefaultAgeCategories();
+    weightClassesDraft = createDefaultWeightClasses();
+    categoryIssues = [];
+  }
+
+  function addAgeCategoryDraft() {
+    ageCategoriesDraft = [
+      ...ageCategoriesDraft,
+      {
+        id: undefined,
+        code: '',
+        name: '',
+        minAge: null,
+        maxAge: null,
+        sortOrder: (ageCategoriesDraft.length + 1) * 10,
+        metadata: null,
+      },
+    ];
+  }
+
+  function removeAgeCategoryDraft(index: number) {
+    ageCategoriesDraft = ageCategoriesDraft.filter((_, idx) => idx !== index);
+  }
+
+  function updateAgeCategoryDraft(index: number, field: keyof AgeCategory, value: string) {
+    const updated = [...ageCategoriesDraft];
+    const target = { ...updated[index] };
+    if (field === 'code') {
+      target.code = value.trim().toUpperCase();
+    } else if (field === 'name') {
+      target.name = value;
+    } else if (field === 'minAge' || field === 'maxAge' || field === 'sortOrder') {
+      const parsed = value.trim() === '' ? null : Number(value);
+      target[field] = Number.isFinite(parsed) ? (parsed as number) : null;
+    }
+    updated[index] = target;
+    ageCategoriesDraft = updated;
+    categoryIssues = [];
+  }
+
+  function handleAgeCategoryInput(index: number, field: keyof AgeCategory) {
+    return (event: Event) => {
+      const input = event.currentTarget as HTMLInputElement | null;
+      updateAgeCategoryDraft(index, field, input?.value ?? '');
+    };
+  }
+
+  function addWeightClassDraft() {
+    weightClassesDraft = [
+      ...weightClassesDraft,
+      {
+        id: undefined,
+        code: '',
+        name: '',
+        gender: weightClassesDraft.length % 2 === 0 ? 'Female' : 'Male',
+        minWeight: null,
+        maxWeight: null,
+        sortOrder: (weightClassesDraft.length + 1) * 10,
+        metadata: null,
+      },
+    ];
+  }
+
+  function removeWeightClassDraft(index: number) {
+    weightClassesDraft = weightClassesDraft.filter((_, idx) => idx !== index);
+  }
+
+  function updateWeightClassDraft(index: number, field: keyof WeightClass, value: string) {
+    const updated = [...weightClassesDraft];
+    const target = { ...updated[index] };
+    if (field === 'code') {
+      target.code = value.trim().toUpperCase();
+    } else if (field === 'name') {
+      target.name = value;
+    } else if (field === 'gender') {
+      const upper = value.trim().toUpperCase();
+      target.gender = upper.startsWith('F') ? 'Female' : 'Male';
+    } else if (field === 'minWeight' || field === 'maxWeight' || field === 'sortOrder') {
+      const parsed = value.trim() === '' ? null : Number(value);
+      target[field] = Number.isFinite(parsed) ? (parsed as number) : null;
+    }
+    updated[index] = target;
+    weightClassesDraft = updated;
+    categoryIssues = [];
+  }
+
+  function handleWeightClassInput(index: number, field: keyof WeightClass) {
+    return (event: Event) => {
+      const input = event.currentTarget as HTMLInputElement | null;
+      updateWeightClassDraft(index, field, input?.value ?? '');
+    };
+  }
+
+  function handleWeightClassSelect(index: number) {
+    return (event: Event) => {
+      const select = event.currentTarget as HTMLSelectElement | null;
+      updateWeightClassDraft(index, 'gender', select?.value ?? '');
+    };
+  }
 
   interface ContestForm {
     name: string;
@@ -56,10 +396,11 @@ import { get } from 'svelte/store';
     equipmentM: boolean;
     equipmentSm: boolean;
     equipmentT: boolean;
+    attempts: AttemptPlan;
   }
 
   const MIN_STEP = 1;
-  const MAX_STEP = 3;
+  const MAX_STEP = 4;
   const TOTAL_STEPS = MAX_STEP;
   const BODYWEIGHT_STEP = 0.5;
   const DEFAULT_RACK_SQUAT = 10;
@@ -67,6 +408,7 @@ import { get } from 'svelte/store';
 
   let step = MIN_STEP;
   let isSubmitting = false;
+  let isGeneratingSample = false;
   let error: string | null = null;
   let success: string | null = null;
 
@@ -97,10 +439,52 @@ import { get } from 'svelte/store';
     equipmentM: false,
     equipmentSm: false,
     equipmentT: false,
+    attempts: createAttemptPlan(form.events, 70, false),
   };
 
   let competitorDrafts: CompetitorDraft[] = [];
   let validationErrors: Record<string, string> = {};
+  let attemptIssues: AttemptIssue[] = [];
+
+  function generateSampleContestData() {
+    if (isGeneratingSample) return;
+    isGeneratingSample = true;
+
+    try {
+      const DEFAULT_EVENTS = ['Squat', 'Bench', 'Deadlift'] as const;
+      const hasCustomEventSelection =
+        form.events.length !== DEFAULT_EVENTS.length ||
+        form.events.some((event, index) => event !== DEFAULT_EVENTS[index]);
+
+      const events = hasCustomEventSelection ? [...form.events] : randomEvents();
+      const discipline = events.length >= 2 ? 'Powerlifting' : events[0] ?? 'Powerlifting';
+
+      form = {
+        name: randomItem(CONTEST_NAMES),
+        date: randomDateWithin(21),
+        location: randomItem(VENUES),
+        discipline: discipline as ContestForm['discipline'],
+        events,
+        federationRules: Math.random() < 0.7 ? randomItem(RULESETS) : '',
+        organizer: randomItem(ORGANIZERS),
+        notes: translate('contest.wizard.sample.notes'),
+      };
+
+      const competitorCount = 6 + Math.floor(Math.random() * 4);
+      const usedNames = new Set<string>();
+      competitorDrafts = Array.from({ length: competitorCount }, (_, index) => {
+        const gender: Gender = index % 2 === 0 ? 'Male' : 'Female';
+        return buildRandomCompetitor(gender, usedNames, events);
+      });
+
+      validationErrors = {};
+      step = 4;
+      syncAttemptPlansWithEvents();
+      toast.info(translate('contest.wizard.toast.sample_generated'));
+    } finally {
+      isGeneratingSample = false;
+    }
+  }
 
   function toggleEvent(event: ContestEvent) {
     if (form.events.includes(event)) {
@@ -112,6 +496,7 @@ import { get } from 'svelte/store';
       form.events = [event];
     }
     updateDiscipline();
+    syncAttemptPlansWithEvents();
   }
 
   function updateDiscipline() {
@@ -140,7 +525,23 @@ import { get } from 'svelte/store';
       equipmentM: false,
       equipmentSm: false,
       equipmentT: false,
+      attempts: createAttemptPlan(form.events, 70, false),
     };
+  }
+
+  function syncAttemptPlansWithEvents() {
+    const events = form.events;
+    competitorDraft = {
+      ...competitorDraft,
+      attempts: normalizeAttemptPlanForGender(
+        syncAttemptPlan(competitorDraft.attempts, events),
+        competitorDraft.gender,
+      ),
+    };
+    competitorDrafts = competitorDrafts.map((draft) => ({
+      ...draft,
+      attempts: normalizeAttemptPlanForGender(syncAttemptPlan(draft.attempts, events), draft.gender),
+    }));
   }
 
   function addCompetitorDraft() {
@@ -163,7 +564,18 @@ import { get } from 'svelte/store';
       return;
     }
 
-    competitorDrafts = [...competitorDrafts, { ...competitorDraft, bodyweight: Number(competitorDraft.bodyweight) }];
+    const attempts = normalizeAttemptPlanForGender(
+      syncAttemptPlan(competitorDraft.attempts, form.events),
+      competitorDraft.gender,
+    );
+    competitorDrafts = [
+      ...competitorDrafts,
+      {
+        ...competitorDraft,
+        bodyweight: Number(competitorDraft.bodyweight),
+        attempts,
+      },
+    ];
     resetCompetitorDraft();
   }
 
@@ -176,6 +588,106 @@ import { get } from 'svelte/store';
     const direction = event.deltaY > 0 ? -1 : 1;
     const nextValue = Math.max(0, (competitorDraft.bodyweight || 0) + direction * BODYWEIGHT_STEP);
     competitorDraft.bodyweight = Number(nextValue.toFixed(2));
+  }
+
+  function updateAttemptDraft(index: number, event: ContestEvent, value: number | null) {
+    competitorDrafts = competitorDrafts.map((draft, idx) => {
+      if (idx !== index) return draft;
+      const attempts = { ...syncAttemptPlan(draft.attempts, form.events) } as AttemptPlan;
+      attempts[event] = value && Number.isFinite(value) && value > 0 ? Number(value.toFixed(2)) : null;
+      return { ...draft, attempts };
+    });
+  }
+
+  function handleAttemptInput(index: number, event: ContestEvent) {
+    return (inputEvent: Event) => {
+      const input = inputEvent.currentTarget as HTMLInputElement | null;
+      const raw = input?.value ?? '';
+      const parsed = raw.trim() === '' ? null : Number(raw);
+      updateAttemptDraft(index, event, parsed);
+    };
+  }
+
+  function collectAttemptIssues(): AttemptIssue[] {
+    const issues: AttemptIssue[] = [];
+    competitorDrafts.forEach((competitor, index) => {
+      const attempts = syncAttemptPlan(competitor.attempts, form.events);
+      const displayName = [competitor.firstName, competitor.lastName].filter(Boolean).join(' ').trim() ||
+        translate('contest.wizard.attempts.unnamed', { values: { index: index + 1 } });
+      for (const event of form.events) {
+        const weight = attempts[event];
+        if (!weight || weight <= 0) {
+          issues.push({
+            competitorIndex: index,
+            name: displayName,
+            event,
+            type: 'missing',
+          });
+          continue;
+        }
+
+        const check = evaluateAttemptWeight(weight, competitor.gender);
+        if (!check.loadable) {
+          issues.push({
+            competitorIndex: index,
+            name: displayName,
+            event,
+            type: check.reason === 'below_bar' ? 'below_bar' : 'unloadable',
+            suggestedWeight: check.normalized,
+          });
+        }
+      }
+    });
+    return issues;
+  }
+
+  $: attemptIssues = collectAttemptIssues();
+
+  function fillMissingAttemptWeights() {
+    if (competitorDrafts.length === 0) {
+      return;
+    }
+
+    competitorDrafts = competitorDrafts.map((draft) => ({
+      ...draft,
+      attempts: normalizeAttemptPlanForGender(
+        fillAttemptPlan(syncAttemptPlan(draft.attempts, form.events), form.events, draft.bodyweight, true),
+        draft.gender,
+      ),
+    }));
+
+    competitorDraft = {
+      ...competitorDraft,
+      attempts: normalizeAttemptPlanForGender(
+        fillAttemptPlan(
+          syncAttemptPlan(competitorDraft.attempts, form.events),
+          form.events,
+          competitorDraft.bodyweight,
+          true,
+        ),
+        competitorDraft.gender,
+      ),
+    };
+
+    toast.success(translate('contest.wizard.attempts.auto_fill_success'));
+  }
+
+  function normalizeAllCompetitorAttempts() {
+    competitorDrafts = competitorDrafts.map((draft) => ({
+      ...draft,
+      attempts: normalizeAttemptPlanForGender(
+        syncAttemptPlan(draft.attempts, form.events),
+        draft.gender,
+      ),
+    }));
+
+    competitorDraft = {
+      ...competitorDraft,
+      attempts: normalizeAttemptPlanForGender(
+        syncAttemptPlan(competitorDraft.attempts, form.events),
+        competitorDraft.gender,
+      ),
+    };
   }
 
   function validateStep(stepNumber: number): boolean {
@@ -197,11 +709,25 @@ import { get } from 'svelte/store';
       if (!form.organizer.trim()) {
         validationErrors['organizer'] = translate('contest.wizard.validation.organizer_required');
       }
+
+      const issues = validateCategories(ageCategoriesDraft, weightClassesDraft);
+      if (issues.length > 0) {
+        categoryIssues = formatCategoryIssues(issues, translate);
+      } else {
+        categoryIssues = [];
+      }
+
+    if (categoryIssues.length > 0) {
+      return false;
     }
+  }
 
     if (stepNumber === 3 && competitorDrafts.length === 0) {
-      // Optional pre-registration, no validation required
       validationErrors = {};
+    }
+
+    if (stepNumber === 4 && attemptIssues.length > 0) {
+      return false;
     }
 
     return Object.keys(validationErrors).length === 0;
@@ -217,13 +743,26 @@ import { get } from 'svelte/store';
   }
 
   async function submitContest() {
+    normalizeAllCompetitorAttempts();
+    await tick();
+
     if (!validateStep(step)) {
+      toast.error(translate('contest.wizard.validation.warning'));
       return;
     }
 
     error = null;
     success = null;
     isSubmitting = true;
+
+    const issues = validateCategories(ageCategoriesDraft, weightClassesDraft);
+    if (issues.length > 0) {
+      categoryIssues = formatCategoryIssues(issues, translate);
+      isSubmitting = false;
+      return;
+    }
+
+    categoryIssues = [];
 
     const payload = {
       name: form.name.trim(),
@@ -242,8 +781,30 @@ import { get } from 'svelte/store';
       }
 
       const contest = response.data;
+      const attemptCreationErrors: string[] = [];
 
-      for (const draft of competitorDrafts) {
+      const draftCategories: ContestCategories = {
+        ageCategories: ageCategoriesDraft,
+        weightClasses: weightClassesDraft,
+      };
+
+      const defaultCategories: ContestCategories = {
+        ageCategories: createDefaultAgeCategories(),
+        weightClasses: createDefaultWeightClasses(),
+      };
+
+      if (!categoriesEqual(defaultCategories, draftCategories)) {
+        const categoriesPayload = buildCategoryPayload(ageCategoriesDraft, weightClassesDraft);
+        const categoryResponse = await apiClient.put<ContestCategories>(
+          `/contests/${contest.id}/categories`,
+          categoriesPayload,
+        );
+        if (categoryResponse.error) {
+          throw new Error(categoryResponse.error);
+        }
+      }
+
+      for (const [draftIndex, draft] of competitorDrafts.entries()) {
         try {
           const competitorResponse = await apiClient.post<{ id: string }>('/competitors', {
             firstName: draft.firstName.trim(),
@@ -261,11 +822,14 @@ import { get } from 'svelte/store';
 
           const competitorId = competitorResponse.data.id;
 
+          const includeSquat = form.events.includes('Squat');
+          const includeBench = form.events.includes('Bench');
+
           const registrationResponse = await apiClient.post(`/contests/${contest.id}/registrations`, {
             competitorId,
             bodyweight: draft.bodyweight,
-            rackHeightSquat: draft.rackHeightSquat,
-            rackHeightBench: draft.rackHeightBench,
+            rackHeightSquat: includeSquat ? draft.rackHeightSquat : null,
+            rackHeightBench: includeBench ? draft.rackHeightBench : null,
             equipmentM: draft.equipmentM,
             equipmentSm: draft.equipmentSm,
             equipmentT: draft.equipmentT,
@@ -273,9 +837,45 @@ import { get } from 'svelte/store';
           if (registrationResponse.error) {
             throw new Error(registrationResponse.error);
           }
+
+          const registrationData = registrationResponse.data as RegistrationSummary | undefined;
+          const registrationId = registrationData?.id;
+
+          if (registrationId) {
+            const displayName = [draft.firstName, draft.lastName].filter(Boolean).join(' ').trim() ||
+              translate('contest.wizard.attempts.unnamed', { values: { index: draftIndex + 1 } });
+            const attemptPlan = normalizeAttemptPlanForGender(
+              syncAttemptPlan(draft.attempts, form.events),
+              draft.gender,
+            );
+            for (const event of form.events) {
+              const weight = attemptPlan[event];
+              if (weight && weight > 0) {
+                try {
+                  const attemptPayload = {
+                    registrationId,
+                    liftType: event,
+                    attemptNumber: 1 as const,
+                    weight,
+                  };
+                  const attemptResponse = await apiClient.post(`/contests/${contest.id}/registrations/${registrationId}/attempts`, attemptPayload);
+                  if (attemptResponse.error) {
+                    throw new Error(attemptResponse.error);
+                  }
+                } catch (attemptError) {
+                  const message = attemptError instanceof Error ? attemptError.message : translate('contest.wizard.attempts.submit_error');
+                  attemptCreationErrors.push(`${displayName} • ${translate(EVENT_LABEL_KEYS[event])}: ${message}`);
+                }
+              }
+            }
+          }
         } catch (competitorError) {
           console.error('Failed to register competitor draft:', competitorError);
         }
+      }
+
+      if (attemptCreationErrors.length > 0) {
+        attemptCreationErrors.forEach((message) => toast.error(message));
       }
 
       success = translate('contest.wizard.messages.success');
@@ -303,6 +903,8 @@ import { get } from 'svelte/store';
       notes: '',
     };
     validationErrors = {};
+    resetCategoryDraftsToDefault();
+    syncAttemptPlansWithEvents();
   }
 </script>
 
@@ -325,7 +927,19 @@ import { get } from 'svelte/store';
             {$_('contest.wizard.step_label')} {step} {$_('contest.wizard.step_connector')} {TOTAL_STEPS}
           </p>
         </div>
-        <div class="flex gap-2">
+        <div class="flex flex-wrap gap-2 justify-end">
+          <button
+            class="btn-secondary"
+            type="button"
+            on:click={generateSampleContestData}
+            disabled={isSubmitting || isGeneratingSample}
+          >
+            {#if isGeneratingSample}
+              {$_('contest.wizard.actions.generating_sample')}
+            {:else}
+              {$_('contest.wizard.actions.generate_sample')}
+            {/if}
+          </button>
           <button
             class="btn-secondary"
             on:click={() => goToStep(Math.max(step - 1, MIN_STEP))}
@@ -474,8 +1088,198 @@ import { get } from 'svelte/store';
               />
             </div>
           </div>
+
+          <div class="space-y-6 border-t border-border-color pt-6">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+              <div>
+                <h4 class="text-h4 text-text-primary">{$_('contest.wizard.categories.age.title')}</h4>
+                <p class="text-caption text-text-secondary">{$_('contest.wizard.categories.age.description')}</p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button type="button" class="btn-secondary px-3 py-1" on:click={resetCategoryDraftsToDefault}>
+                  {$_('contest.wizard.categories.actions.reset_defaults')}
+                </button>
+                <button type="button" class="btn-secondary px-3 py-1" on:click={addAgeCategoryDraft}>
+                  {$_('contest.wizard.categories.age.add')}
+                </button>
+              </div>
+            </div>
+
+            <div class="overflow-x-auto border border-border-color rounded-lg">
+              <table class="min-w-full text-left text-sm">
+                <thead class="bg-element-bg text-label">
+                  <tr>
+                    <th class="px-3 py-2">{$_('contest.wizard.categories.columns.code')}</th>
+                    <th class="px-3 py-2">{$_('contest.wizard.categories.columns.name')}</th>
+                    <th class="px-3 py-2">{$_('contest.wizard.categories.columns.min_age')}</th>
+                    <th class="px-3 py-2">{$_('contest.wizard.categories.columns.max_age')}</th>
+                    <th class="px-3 py-2">{$_('contest.wizard.categories.columns.sort_order')}</th>
+                    <th class="px-3 py-2 text-right">{$_('contest.wizard.categories.columns.actions')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {#each ageCategoriesDraft as category, index}
+                    <tr class="border-t border-border-color">
+                      <td class="px-3 py-2">
+                        <input
+                          class="table-input-field w-full"
+                          placeholder="OPEN"
+                          value={category.code}
+                          on:input={handleAgeCategoryInput(index, 'code')}
+                        />
+                      </td>
+                      <td class="px-3 py-2">
+                        <input
+                          class="table-input-field w-full"
+                          placeholder={$_('contest.wizard.categories.placeholders.age_name')}
+                          value={category.name}
+                          on:input={handleAgeCategoryInput(index, 'name')}
+                        />
+                      </td>
+                      <td class="px-3 py-2">
+                        <input
+                          class="table-input-field w-full"
+                          type="number"
+                          min="0"
+                          value={category.minAge ?? ''}
+                            on:input={handleAgeCategoryInput(index, 'minAge')}
+                        />
+                      </td>
+                      <td class="px-3 py-2">
+                        <input
+                          class="table-input-field w-full"
+                          type="number"
+                          min="0"
+                          value={category.maxAge ?? ''}
+                            on:input={handleAgeCategoryInput(index, 'maxAge')}
+                        />
+                      </td>
+                      <td class="px-3 py-2">
+                        <input
+                          class="table-input-field w-full"
+                          type="number"
+                          min="0"
+                          value={category.sortOrder ?? (index + 1) * 10}
+                            on:input={handleAgeCategoryInput(index, 'sortOrder')}
+                        />
+                      </td>
+                      <td class="px-3 py-2 text-right">
+                        <button type="button" class="btn-secondary px-3 py-1" on:click={() => removeAgeCategoryDraft(index)}>
+                          {$_('buttons.remove')}
+                        </button>
+                      </td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            </div>
+
+            <div class="space-y-2">
+              <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div>
+                  <h4 class="text-h4 text-text-primary">{$_('contest.wizard.categories.weight.title')}</h4>
+                  <p class="text-caption text-text-secondary">{$_('contest.wizard.categories.weight.description')}</p>
+                </div>
+                <button type="button" class="btn-secondary px-3 py-1" on:click={addWeightClassDraft}>
+                  {$_('contest.wizard.categories.weight.add')}
+                </button>
+              </div>
+
+              <div class="overflow-x-auto border border-border-color rounded-lg">
+                <table class="min-w-full text-left text-sm">
+                  <thead class="bg-element-bg text-label">
+                    <tr>
+                      <th class="px-3 py-2">{$_('contest.wizard.categories.columns.gender')}</th>
+                      <th class="px-3 py-2">{$_('contest.wizard.categories.columns.code')}</th>
+                      <th class="px-3 py-2">{$_('contest.wizard.categories.columns.name')}</th>
+                      <th class="px-3 py-2">{$_('contest.wizard.categories.columns.min_weight')}</th>
+                      <th class="px-3 py-2">{$_('contest.wizard.categories.columns.max_weight')}</th>
+                      <th class="px-3 py-2">{$_('contest.wizard.categories.columns.sort_order')}</th>
+                      <th class="px-3 py-2 text-right">{$_('contest.wizard.categories.columns.actions')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {#each weightClassesDraft as weightClass, index}
+                      <tr class="border-t border-border-color">
+                        <td class="px-3 py-2">
+                          <select
+                            class="table-input-field w-full"
+                            value={weightClass.gender}
+                            on:change={handleWeightClassSelect(index)}
+                          >
+                            <option value="Female">{$_('contest.wizard.categories.gender.female')}</option>
+                            <option value="Male">{$_('contest.wizard.categories.gender.male')}</option>
+                          </select>
+                        </td>
+                        <td class="px-3 py-2">
+                          <input
+                            class="table-input-field w-full"
+                            placeholder="M_95"
+                            value={weightClass.code}
+                            on:input={handleWeightClassInput(index, 'code')}
+                          />
+                        </td>
+                        <td class="px-3 py-2">
+                          <input
+                            class="table-input-field w-full"
+                            placeholder={$_('contest.wizard.categories.placeholders.weight_name')}
+                            value={weightClass.name}
+                            on:input={handleWeightClassInput(index, 'name')}
+                          />
+                        </td>
+                        <td class="px-3 py-2">
+                          <input
+                            class="table-input-field w-full"
+                            type="number"
+                            min="0"
+                            step="0.1"
+                            value={weightClass.minWeight ?? ''}
+                            on:input={handleWeightClassInput(index, 'minWeight')}
+                          />
+                        </td>
+                        <td class="px-3 py-2">
+                          <input
+                            class="table-input-field w-full"
+                            type="number"
+                            min="0"
+                            step="0.1"
+                            value={weightClass.maxWeight ?? ''}
+                            on:input={handleWeightClassInput(index, 'maxWeight')}
+                          />
+                        </td>
+                        <td class="px-3 py-2">
+                          <input
+                            class="table-input-field w-full"
+                            type="number"
+                            min="0"
+                            value={weightClass.sortOrder ?? (index + 1) * 10}
+                            on:input={handleWeightClassInput(index, 'sortOrder')}
+                          />
+                        </td>
+                        <td class="px-3 py-2 text-right">
+                          <button type="button" class="btn-secondary px-3 py-1" on:click={() => removeWeightClassDraft(index)}>
+                            {$_('buttons.remove')}
+                          </button>
+                        </td>
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {#if categoryIssues.length > 0}
+              <div class="bg-status-error/20 border border-status-error text-status-error px-4 py-3 rounded-lg">
+                <ul class="list-disc list-inside space-y-1">
+                  {#each categoryIssues as issue}
+                    <li>{issue}</li>
+                  {/each}
+                </ul>
+              </div>
+            {/if}
+          </div>
         </section>
-      {:else}
+      {:else if step === 3}
         <section class="space-y-6">
           <div class="space-y-2">
             <h3 class="text-h3 text-text-primary">{$_('contest.wizard.steps.competitors')}</h3>
@@ -622,6 +1426,108 @@ import { get } from 'svelte/store';
                   <button class="btn-secondary" type="button" on:click={() => removeCompetitorDraft(index)}>
                     {$_('contest.wizard.drafts.remove')}
                   </button>
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </section>
+      {:else}
+        <section class="space-y-6">
+          <div class="space-y-2">
+            <h3 class="text-h3 text-text-primary">{$_('contest.wizard.steps.attempts')}</h3>
+            <p class="text-caption text-text-secondary">{$_('contest.wizard.steps.attempts_hint')}</p>
+          </div>
+
+          <div class="flex flex-wrap gap-3">
+            <button
+              type="button"
+              class="btn-secondary px-3 py-1"
+              on:click={fillMissingAttemptWeights}
+              disabled={competitorDrafts.length === 0}
+            >
+              {$_('contest.wizard.attempts.auto_fill')}
+            </button>
+          </div>
+
+          {#if competitorDrafts.length === 0}
+            <div class="card">
+              <p class="text-body text-text-secondary">{$_('contest.wizard.attempts.empty')}</p>
+            </div>
+          {:else}
+            {#if attemptIssues.length > 0}
+              <div class="bg-status-warning/20 border border-status-warning text-status-warning px-4 py-3 rounded-lg">
+                <h4 class="text-label text-status-warning mb-2">{$_('contest.wizard.attempts.issues_title')}</h4>
+                <ul class="list-disc list-inside space-y-1">
+                  {#each attemptIssues as issue}
+                    <li>
+                      {$_(
+                        issue.type === 'missing'
+                          ? 'contest.wizard.attempts.issue_missing'
+                          : issue.type === 'below_bar'
+                            ? 'contest.wizard.attempts.issue_below_bar'
+                            : 'contest.wizard.attempts.issue_unloadable',
+                        {
+                          values: {
+                            name: issue.name,
+                            event: $_(EVENT_LABEL_KEYS[issue.event]),
+                            suggested: issue.suggestedWeight !== undefined
+                              ? formatWeight(issue.suggestedWeight)
+                              : '',
+                          },
+                        }
+                      )}
+                    </li>
+                  {/each}
+                </ul>
+              </div>
+            {/if}
+
+            <div class="space-y-4">
+              {#each competitorDrafts as competitor, index}
+                {@const attemptPlan = syncAttemptPlan(competitor.attempts, form.events)}
+                {@const competitorIssues = attemptIssues.filter((issue) => issue.competitorIndex === index)}
+                {@const issuesCount = competitorIssues.length}
+                <div class="card space-y-4">
+                  <header class="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <h4 class="text-h4 text-text-primary">{competitor.firstName} {competitor.lastName}</h4>
+                      <p class="text-caption text-text-secondary">
+                        {$_('contest.wizard.attempts.competitor_meta', {
+                          values: {
+                            bodyweight: competitor.bodyweight,
+                            gender: $_(GENDER_LABEL_KEYS[competitor.gender])
+                          }
+                        })}
+                      </p>
+                    </div>
+                    {#if issuesCount > 0}
+                      <span class="text-xxs uppercase tracking-[0.35em] text-status-warning">
+                        {$_('contest.wizard.attempts.issue_badge', { values: { count: issuesCount } })}
+                      </span>
+                    {/if}
+                  </header>
+
+                  <div class={`grid gap-4 ${form.events.length > 2 ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+                    {#each form.events as event}
+                      <div>
+                        <label class="input-label" for={`attempt-${index}-${event}`}>
+                          {$_(EVENT_LABEL_KEYS[event])}
+                        </label>
+                        <div class="flex items-center gap-3">
+                          <input
+                            id={`attempt-${index}-${event}`}
+                            type="number"
+                            class="input-field"
+                            min="0"
+                            step="0.5"
+                            value={attemptPlan[event] ?? ''}
+                            on:input={handleAttemptInput(index, event)}
+                          />
+                          <span class="text-caption text-text-secondary">kg</span>
+                        </div>
+                      </div>
+                    {/each}
+                  </div>
                 </div>
               {/each}
             </div>

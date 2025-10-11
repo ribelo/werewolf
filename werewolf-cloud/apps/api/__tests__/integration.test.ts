@@ -4,6 +4,10 @@ import { Miniflare } from 'miniflare';
 import type { D1Database, KVNamespace } from '@cloudflare/workers-types';
 import { createApp } from '../src/app';
 import type { WerewolfEnvironment } from '../src/env';
+import reshelMenData from '../../../packages/domain/src/data/reshel-men.json';
+import reshelWomenData from '../../../packages/domain/src/data/reshel-women.json';
+import mccData from '../../../packages/domain/src/data/mccullough.json';
+import { resetCoefficientCaches } from '../src/services/coefficients';
 
 
 const DEFAULT_SETTINGS = {
@@ -68,6 +72,7 @@ describe('Werewolf API – integration (Miniflare + D1)', () => {
   beforeEach(async () => {
     await resetDatabase(db);
     await clearKv(kv);
+    resetCoefficientCaches();
   });
 
   it('GET /health returns service status', async () => {
@@ -134,26 +139,538 @@ describe('Werewolf API – integration (Miniflare + D1)', () => {
     expect(competitorRes.status).toBe(201);
     const competitorId = (await competitorRes.json()).data.id as string;
 
+  const registrationRes = await app.request(`http://localhost/contests/${contestId}/registrations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contestId,
+      competitorId,
+      bodyweight: 93.4,
+    }),
+  }, env);
+
+  expect(registrationRes.status).toBe(201);
+  const registrationBody = await registrationRes.json();
+  expect(registrationBody.data).toMatchObject({
+    competitorId,
+    contestId,
+    ageCategoryId: expect.any(String),
+    weightClassId: expect.any(String),
+    ageCategoryName: expect.any(String),
+    weightClassName: expect.any(String),
+    reshelCoefficient: expect.any(Number),
+    mcculloughCoefficient: expect.any(Number),
+  });
+
+  expect(registrationBody.data.ageCategoryName).toBe('Open');
+  expect(registrationBody.data.weightClassName).toBe('Do 95 kg');
+  expect(registrationBody.data.reshelCoefficient).toBeCloseTo(0.945, 3);
+  expect(registrationBody.data.mcculloughCoefficient).toBeCloseTo(1.0, 3);
+  });
+
+  it('recalculates coefficients via maintenance endpoint', async () => {
+    const contestRes = await createContest(app, env, {
+      name: 'Recalc Meet',
+      date: '2025-05-10',
+      location: 'City Hall',
+      discipline: 'Powerlifting',
+    });
+    const contestId = (await contestRes.json()).data.id as string;
+
+    const competitorRes = await app.request('http://localhost/competitors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        firstName: 'Taylor',
+        lastName: 'Strong',
+        birthDate: '1988-02-02',
+        gender: 'Male',
+      }),
+    }, env);
+    expect(competitorRes.status).toBe(201);
+    const competitorId = (await competitorRes.json()).data.id as string;
+
     const registrationRes = await app.request(`http://localhost/contests/${contestId}/registrations`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contestId,
         competitorId,
-        bodyweight: 93.4,
+        bodyweight: 93.5,
+      }),
+    }, env);
+    expect(registrationRes.status).toBe(201);
+    const registrationId = (await registrationRes.json()).data.id as string;
+
+    // Tamper with stored coefficients to ensure the maintenance endpoint recalculates them
+    await db.prepare(
+      'UPDATE registrations SET reshel_coefficient = 0, mccullough_coefficient = 0 WHERE id = ?'
+    ).bind(registrationId).run();
+
+    const maintenanceRes = await app.request('http://localhost/system/maintenance/recalculate-coefficients', {
+      method: 'POST',
+    }, env);
+    expect(maintenanceRes.status).toBe(200);
+    const maintenanceBody = await maintenanceRes.json();
+    expect(maintenanceBody.data).toMatchObject({ success: true, processed: expect.any(Number), updated: expect.any(Number) });
+    expect(maintenanceBody.data.updated).toBeGreaterThanOrEqual(1);
+
+    const registrationFetch = await app.request(`http://localhost/registrations/${registrationId}`, {}, env);
+    expect(registrationFetch.status).toBe(200);
+    const registrationBody = await registrationFetch.json();
+    expect(registrationBody.data.reshelCoefficient).toBeCloseTo(0.945, 3);
+    expect(registrationBody.data.mcculloughCoefficient).toBeCloseTo(1.0, 3);
+    expect(registrationBody.data.weightClassName).toBe('Do 95 kg');
+    expect(registrationBody.data.ageCategoryName).toBe('Open');
+  });
+
+  it('assigns flights and gates the attempt queue by active flight', async () => {
+    const contestRes = await createContest(app, env, {
+      name: 'Flight Meet',
+      date: '2025-04-10',
+      location: 'Katowice',
+      discipline: 'Powerlifting',
+    });
+    const contestId = (await contestRes.json()).data.id as string;
+
+    const lifterA = await app.request('http://localhost/competitors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        firstName: 'Anna',
+        lastName: 'FlightA',
+        birthDate: '1992-03-01',
+        gender: 'Female',
+      }),
+    }, env);
+    const lifterB = await app.request('http://localhost/competitors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        firstName: 'Basia',
+        lastName: 'FlightB',
+        birthDate: '1990-07-11',
+        gender: 'Female',
       }),
     }, env);
 
+    expect(lifterA.status).toBe(201);
+    expect(lifterB.status).toBe(201);
+
+    const lifterAId = (await lifterA.json()).data.id as string;
+    const lifterBId = (await lifterB.json()).data.id as string;
+
+    const registrationARes = await app.request(`http://localhost/contests/${contestId}/registrations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contestId,
+        competitorId: lifterAId,
+        bodyweight: 63.2,
+      }),
+    }, env);
+
+    const registrationBRes = await app.request(`http://localhost/contests/${contestId}/registrations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contestId,
+        competitorId: lifterBId,
+        bodyweight: 70.4,
+      }),
+    }, env);
+
+    expect(registrationARes.status).toBe(201);
+    expect(registrationBRes.status).toBe(201);
+
+    const registrationAId = (await registrationARes.json()).data.id as string;
+    const registrationBId = (await registrationBRes.json()).data.id as string;
+
+    const bulkFlightRes = await app.request(`http://localhost/contests/${contestId}/registrations/bulk-flight`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        assignments: [
+          { registrationId: registrationAId, flightCode: 'A', flightOrder: 1 },
+          { registrationId: registrationBId, flightCode: 'B', flightOrder: 1 },
+        ],
+      }),
+    }, env);
+
+    expect(bulkFlightRes.status).toBe(200);
+    const bulkPayload = await bulkFlightRes.json();
+    expect(bulkPayload.data.updated).toBe(2);
+
+    const stateRes = await app.request(`http://localhost/contests/${contestId}/state`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentLift: 'Squat', currentRound: 1 }),
+    }, env);
+    expect(stateRes.status).toBe(200);
+
+    // Upsert attempts for both lifters
+    const attemptARes = await app.request(`http://localhost/contests/${contestId}/registrations/${registrationAId}/attempts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        registrationId: registrationAId,
+        liftType: 'Squat',
+        attemptNumber: 1,
+        weight: 120,
+      }),
+    }, env);
+    const attemptBRes = await app.request(`http://localhost/contests/${contestId}/registrations/${registrationBId}/attempts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        registrationId: registrationBId,
+        liftType: 'Squat',
+        attemptNumber: 1,
+        weight: 130,
+      }),
+    }, env);
+
+    expect(attemptARes.status).toBe(200);
+    expect(attemptBRes.status).toBe(200);
+
+    // Without active flight all attempts should appear
+    const fullQueueRes = await app.request(`http://localhost/contests/${contestId}/attempts/queue`, {}, env);
+    const fullQueue = await fullQueueRes.json();
+    expect(fullQueueRes.status).toBe(200);
+    expect(fullQueue.data).toHaveLength(2);
+
+    // Activate flight A and ensure queue narrows
+    const activeFlightRes = await app.request(`http://localhost/contests/${contestId}/active-flight`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ activeFlight: 'A' }),
+    }, env);
+    expect(activeFlightRes.status).toBe(200);
+
+    const gatedQueueRes = await app.request(`http://localhost/contests/${contestId}/attempts/queue`, {}, env);
+    expect(gatedQueueRes.status).toBe(200);
+    const gatedQueue = await gatedQueueRes.json();
+    expect(gatedQueue.data).toHaveLength(1);
+    expect(gatedQueue.data[0]?.flightCode).toBe('A');
+    expect(gatedQueue.data[0]?.registrationId).toBe(registrationAId);
+  });
+
+  it('updates registration labels and returns arrays in responses', async () => {
+    const contestRes = await createContest(app, env, {
+      name: 'Labels Meet',
+      date: '2025-10-12',
+      location: 'Poznań',
+      discipline: 'Powerlifting',
+    });
+    const contestId = (await contestRes.json()).data.id as string;
+
+    const competitorRes = await app.request('http://localhost/competitors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        firstName: 'Cezary',
+        lastName: 'Label',
+        birthDate: '1985-09-09',
+        gender: 'Male',
+      }),
+    }, env);
+    expect(competitorRes.status).toBe(201);
+    const competitorId = (await competitorRes.json()).data.id as string;
+
+    const registrationRes = await app.request(`http://localhost/contests/${contestId}/registrations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contestId,
+        competitorId,
+        bodyweight: 95.3,
+      }),
+    }, env);
+    expect(registrationRes.status).toBe(201);
+    const registrationId = (await registrationRes.json()).data.id as string;
+
+    const labelPatch = await app.request(`http://localhost/registrations/${registrationId}/labels`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ labels: ['uniformed', 'vip'] }),
+    }, env);
+    expect(labelPatch.status).toBe(200);
+    const labelData = await labelPatch.json();
+    expect(labelData.data.labels).toEqual(['uniformed', 'vip']);
+
+    const registrationFetch = await app.request(`http://localhost/registrations/${registrationId}`, {}, env);
+    const registrationJson = await registrationFetch.json();
+    expect(registrationJson.data.labels).toEqual(['uniformed', 'vip']);
+
+    const contestRegistrationsRes = await app.request(`http://localhost/contests/${contestId}/registrations`, {}, env);
+    const contestRegistrationsJson = await contestRegistrationsRes.json();
+    const entry = contestRegistrationsJson.data.find((row: any) => row.id === registrationId);
+    expect(entry.labels).toEqual(['uniformed', 'vip']);
+  });
+
+  it('includes clamp weight when calculating plate plans', async () => {
+    const contestRes = await createContest(app, env, {
+      name: 'Clamp Classic',
+      date: '2025-03-20',
+      location: 'Warsaw',
+      discipline: 'Powerlifting',
+    });
+    const contestId = (await contestRes.json()).data.id as string;
+
+    const clampUpdate = await app.request(`http://localhost/contests/${contestId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clampWeight: 4 }),
+    }, env);
+    expect(clampUpdate.status).toBe(200);
+
+    // Provide a simple plate inventory
+    await app.request(`http://localhost/contests/${contestId}/platesets`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plateWeight: 25, quantity: 10 }),
+    }, env);
+    await app.request(`http://localhost/contests/${contestId}/platesets`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plateWeight: 20, quantity: 10 }),
+    }, env);
+
+    const planRes = await app.request(`http://localhost/contests/${contestId}/platesets/calculate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetWeight: 180 }),
+    }, env);
+
+    expect(planRes.status).toBe(200);
+    const planBody = await planRes.json();
+    expect(planBody.data.clampWeight).toBeCloseTo(4, 5);
+    expect(planBody.data.barWeight).toBeCloseTo(20, 5);
+
+    const barWeightsRes = await app.request(`http://localhost/contests/${contestId}/platesets/barweights`, {}, env);
+    const barWeights = await barWeightsRes.json();
+    expect(barWeights.data.clampWeight).toBeCloseTo(4, 5);
+  });
+
+  it('plate calculator respects limited small plates and returns best achievable <= target', async () => {
+    const contestRes = await createContest(app, env, {
+      name: 'Small Plates Limit',
+      date: '2025-03-21',
+      location: 'Poznań',
+      discipline: 'Powerlifting',
+    });
+    const contestId = (await contestRes.json()).data.id as string;
+
+    // Reduce inventory to only two pairs of 0.5 kg to simulate limited small plates
+    await db.prepare('DELETE FROM plate_sets WHERE contest_id = ?').bind(contestId).run();
+    await db.prepare('INSERT INTO plate_sets (contest_id, plate_weight, quantity, color) VALUES (?, ?, ?, ?)')
+      .bind(contestId, 0.5, 2, '#6B7280').run();
+
+    // 22.5 (bar+clamps): exact
+    let planRes = await app.request(`http://localhost/contests/${contestId}/platesets/calculate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetWeight: 22.5 }),
+    }, env);
+    expect(planRes.status).toBe(200);
+    let plan = await planRes.json();
+    expect(plan.data.totalLoaded).toBeCloseTo(22.5, 2);
+    expect(plan.data.exact).toBe(true);
+    expect(plan.data.increment).toBeCloseTo(1, 5); // min plate 0.5 -> step 1
+
+    // 23.5: exact with one pair of 0.5
+    planRes = await app.request(`http://localhost/contests/${contestId}/platesets/calculate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetWeight: 23.5 }),
+    }, env);
+    plan = await planRes.json();
+    expect(plan.data.totalLoaded).toBeCloseTo(23.5, 2);
+    expect(plan.data.exact).toBe(true);
+
+    // 24.5: exact with two pairs of 0.5
+    planRes = await app.request(`http://localhost/contests/${contestId}/platesets/calculate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetWeight: 24.5 }),
+    }, env);
+    plan = await planRes.json();
+    expect(plan.data.totalLoaded).toBeCloseTo(24.5, 2);
+    expect(plan.data.exact).toBe(true);
+
+    // 25.5: not enough 0.5 plates to go higher; returns best achievable 24.5
+    planRes = await app.request(`http://localhost/contests/${contestId}/platesets/calculate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetWeight: 25.5 }),
+    }, env);
+    plan = await planRes.json();
+    expect(plan.data.exact).toBe(false);
+    expect(plan.data.totalLoaded).toBeCloseTo(24.5, 2);
+
+    // Add one pair of 1.25 kg plates so that 25.0 becomes achievable
+    await db.prepare('INSERT INTO plate_sets (contest_id, plate_weight, quantity, color) VALUES (?, ?, ?, ?)')
+      .bind(contestId, 1.25, 1, '#16A34A').run();
+
+    planRes = await app.request(`http://localhost/contests/${contestId}/platesets/calculate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetWeight: 25.0 }),
+    }, env);
+    plan = await planRes.json();
+    expect(plan.data.exact).toBe(true);
+    expect(plan.data.totalLoaded).toBeCloseTo(25.0, 2);
+  });
+
+  it('manages contest-scoped categories via GET/PUT endpoints', async () => {
+    const contestRes = await createContest(app, env, {
+      name: 'Category Config Test',
+      date: '2025-09-01',
+      location: 'Gliwice',
+      discipline: 'Powerlifting',
+    });
+    const contestId = (await contestRes.json()).data.id as string;
+
+    const fetchInitial = await app.request(`http://localhost/contests/${contestId}/categories`, {}, env);
+    expect(fetchInitial.status).toBe(200);
+    const initialBody = await fetchInitial.json();
+
+    expect(initialBody.data.ageCategories.length).toBeGreaterThan(0);
+    expect(initialBody.data.weightClasses.length).toBeGreaterThan(0);
+
+    const t16 = initialBody.data.ageCategories.find((entry: any) => entry.code === 'T16');
+    const female52 = initialBody.data.weightClasses.find((entry: any) => entry.gender === 'Female' && entry.code === 'F_52');
+
+    expect(t16).toBeTruthy();
+    expect(female52).toBeTruthy();
+
+    const updatePayload = {
+      ageCategories: [
+        {
+          id: t16.id,
+          code: 'T16',
+          name: 'T16 / Młodzicy',
+          minAge: t16.minAge,
+          maxAge: t16.maxAge,
+          sortOrder: 5,
+        },
+        {
+          code: 'LEGENDS',
+          name: 'Legends 60+',
+          minAge: 60,
+          maxAge: null,
+          sortOrder: 90,
+        },
+      ],
+      weightClasses: [
+        {
+          id: female52.id,
+          gender: 'Female',
+          code: 'F_52',
+          name: 'Kobiety do 52 kg',
+          minWeight: female52.minWeight,
+          maxWeight: female52.maxWeight,
+          sortOrder: 10,
+        },
+        {
+          gender: 'Male',
+          code: 'M_SUPER',
+          name: 'Mężczyźni 140+ kg',
+          minWeight: 140,
+          maxWeight: null,
+          sortOrder: 95,
+        },
+      ],
+    };
+
+    const updateRes = await app.request(`http://localhost/contests/${contestId}/categories`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatePayload),
+    }, env);
+
+    expect(updateRes.status).toBe(200);
+    const updateBody = await updateRes.json();
+
+    expect(updateBody.data.ageCategories).toHaveLength(2);
+    expect(updateBody.data.weightClasses).toHaveLength(2);
+    const legends = updateBody.data.ageCategories.find((entry: any) => entry.code === 'LEGENDS');
+    expect(legends).toMatchObject({ name: 'Legends 60+', minAge: 60, maxAge: null });
+    const superMale = updateBody.data.weightClasses.find((entry: any) => entry.code === 'M_SUPER');
+    expect(superMale).toMatchObject({ minWeight: 140, maxWeight: null, gender: 'Male' });
+  });
+
+  it('prevents deleting in-use categories and blocks resetting defaults when registrations exist', async () => {
+    const contestRes = await createContest(app, env, {
+      name: 'Category Guard Test',
+      date: '2025-10-01',
+      location: 'Katowice',
+      discipline: 'Powerlifting',
+    });
+    const contestId = (await contestRes.json()).data.id as string;
+
+    const competitorRes = await app.request('http://localhost/competitors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        firstName: 'Guard',
+        lastName: 'Tester',
+        birthDate: '1990-03-15',
+        gender: 'Male',
+      }),
+    }, env);
+    expect(competitorRes.status).toBe(201);
+    const competitorId = (await competitorRes.json()).data.id as string;
+
+    const registrationRes = await app.request(`http://localhost/contests/${contestId}/registrations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contestId,
+        competitorId,
+        bodyweight: 95,
+      }),
+    }, env);
     expect(registrationRes.status).toBe(201);
     const registrationBody = await registrationRes.json();
-    expect(registrationBody.data).toMatchObject({
-      competitorId,
-      contestId,
-      ageCategoryId: expect.any(String),
-      weightClassId: expect.any(String),
-      reshelCoefficient: expect.any(Number),
-      mcculloughCoefficient: expect.any(Number),
-    });
+    const { ageCategoryId, weightClassId } = registrationBody.data;
+
+    const removalAttempt = await app.request(`http://localhost/contests/${contestId}/categories`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ageCategories: [
+          {
+            code: 'U23',
+            name: 'U23',
+            minAge: 0,
+            maxAge: 23,
+            sortOrder: 10,
+          },
+        ],
+        weightClasses: [
+          {
+            gender: 'Male',
+            code: 'M_140',
+            name: 'Mężczyźni 140 kg',
+            minWeight: 140,
+            maxWeight: null,
+            sortOrder: 95,
+          },
+        ],
+      }),
+    }, env);
+
+    expect(removalAttempt.status).toBe(409);
+    const removalBody = await removalAttempt.json();
+    expect(removalBody.error).toBe('AGE_CATEGORY_IN_USE');
+
+    const resetDefaults = await app.request(`http://localhost/contests/${contestId}/categories/defaults`, {
+      method: 'POST',
+    }, env);
+    expect(resetDefaults.status).toBe(409);
+    const resetBody = await resetDefaults.json();
+    expect(resetBody.error).toBe('CONTEST_HAS_REGISTRATIONS');
   });
 
   it('returns 404 when registering with an unknown competitor', async () => {
@@ -203,6 +720,24 @@ describe('Werewolf API – integration (Miniflare + D1)', () => {
     const body = await res.json();
     expect(body.data).toBeNull();
     expect(body.error).toContain('Validation failed');
+  });
+
+  it('rejects invalid payload for PATCH /settings/ui and keeps previous value', async () => {
+    const res = await app.request('http://localhost/settings/ui', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ showWeights: 'yes' }),
+    }, env);
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.data).toBeNull();
+    expect(body.error).toContain('Validation failed');
+
+    const settingsRes = await app.request('http://localhost/settings', {}, env);
+    expect(settingsRes.status).toBe(200);
+    const settingsBody = await settingsRes.json();
+    expect(settingsBody.data.ui.showWeights).toBe(true);
   });
 
   it('PATCH /attempts/:id/result updates status and judges', async () => {
@@ -327,6 +862,22 @@ describe('Werewolf API – integration (Miniflare + D1)', () => {
     ).bind(contestId).first();
     expect(Boolean(activeEntry?.is_active)).toBe(true);
 
+    const currentRes = await app.request(`http://localhost/contests/${contestId}/attempts/current`, {}, env);
+    expect(currentRes.status).toBe(200);
+    const currentBody = await currentRes.json();
+    expect(currentBody.error).toBeNull();
+    expect(currentBody.data).not.toBeNull();
+
+    const bundle = currentBody.data;
+    expect(bundle.contest).toMatchObject({ id: contestId, name: 'Clear Current Test' });
+    expect(bundle.attempt).toMatchObject({ id: attemptId, weight: 140, liftType: 'Bench', attemptNumber: 1 });
+    expect(bundle.registration).toMatchObject({
+      id: registrationId,
+      contestId,
+    });
+    expect(bundle.attemptsByLift.Bench?.[0]).toMatchObject({ id: attemptId, weight: 140, status: 'Pending' });
+    expect(bundle.platePlan).toMatchObject({ targetWeight: 140, barWeight: expect.any(Number) });
+
     const clearRes = await app.request(`http://localhost/contests/${contestId}/attempts/current`, {
       method: 'DELETE',
     }, env);
@@ -371,7 +922,9 @@ CREATE TABLE contests (
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     mens_bar_weight REAL NOT NULL DEFAULT 20,
     womens_bar_weight REAL NOT NULL DEFAULT 15,
-    bar_weight REAL NOT NULL DEFAULT 20
+    bar_weight REAL NOT NULL DEFAULT 20,
+    clamp_weight REAL NOT NULL DEFAULT 2.5,
+    active_flight TEXT
 );
 
 CREATE TABLE competitors (
@@ -407,6 +960,9 @@ CREATE TABLE registrations (
     mccullough_coefficient REAL,
     rack_height_squat INTEGER,
     rack_height_bench INTEGER,
+    flight_code TEXT,
+    flight_order INTEGER,
+    labels TEXT NOT NULL DEFAULT '[]',
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -476,52 +1032,46 @@ CREATE TABLE plate_sets (
     PRIMARY KEY (contest_id, plate_weight)
 );
 
-CREATE TABLE age_categories (
+CREATE TABLE reshel_coefficients (
+    gender TEXT NOT NULL,
+    bodyweight_kg REAL NOT NULL,
+    coefficient REAL NOT NULL,
+    source TEXT NOT NULL,
+    retrieved_at TEXT NOT NULL,
+    notes TEXT,
+    PRIMARY KEY (gender, bodyweight_kg)
+);
+
+CREATE TABLE mccullough_coefficients (
+    age INTEGER PRIMARY KEY,
+    coefficient REAL NOT NULL,
+    source TEXT NOT NULL,
+    retrieved_at TEXT NOT NULL,
+    notes TEXT
+);
+
+CREATE TABLE contest_age_categories (
     id TEXT PRIMARY KEY,
+    contest_id TEXT NOT NULL,
+    code TEXT NOT NULL,
     name TEXT NOT NULL,
     min_age INTEGER,
-    max_age INTEGER
+    max_age INTEGER,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    metadata TEXT
 );
 
-INSERT INTO age_categories (id, name, min_age, max_age) VALUES
- ('JUNIOR13', 'Junior 13', 13, 15),
- ('JUNIOR16', 'Junior 16', 16, 18),
- ('JUNIOR19', 'Junior 19', 19, 19),
- ('JUNIOR23', 'Junior 23', 20, 23),
- ('SENIOR', 'Senior', 24, 39),
- ('VETERAN40', 'Veteran 40', 40, 49),
- ('VETERAN50', 'Veteran 50', 50, 59),
- ('VETERAN60', 'Veteran 60', 60, 69),
- ('VETERAN70', 'Veteran 70', 70, NULL);
-
-CREATE TABLE weight_classes (
+CREATE TABLE contest_weight_classes (
     id TEXT PRIMARY KEY,
+    contest_id TEXT NOT NULL,
     gender TEXT NOT NULL,
+    code TEXT NOT NULL,
     name TEXT NOT NULL,
-    weight_min REAL,
-    weight_max REAL
+    min_weight REAL,
+    max_weight REAL,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    metadata TEXT
 );
-
-INSERT INTO weight_classes (id, gender, name, weight_min, weight_max) VALUES
- ('M_52', 'Male', 'DO 52 KG', NULL, 52.0),
- ('M_56', 'Male', 'DO 56 KG', 52.01, 56.0),
- ('M_60', 'Male', 'DO 60 KG', 56.01, 60.0),
- ('M_67_5', 'Male', 'DO 67.5 KG', 60.01, 67.5),
- ('M_75', 'Male', 'DO 75 KG', 67.51, 75.0),
- ('M_82_5', 'Male', 'DO 82.5 KG', 75.01, 82.5),
- ('M_90', 'Male', 'DO 90 KG', 82.51, 90.0),
- ('M_100', 'Male', 'DO 100 KG', 90.01, 100.0),
- ('M_110', 'Male', 'DO 110 KG', 100.01, 110.0),
- ('M_125', 'Male', 'DO 125 KG', 110.01, 125.0),
- ('M_140', 'Male', 'DO 140 KG', 125.01, 140.0),
- ('M_140_PLUS', 'Male', '+ 140 KG', 140.01, NULL),
- ('F_47', 'Female', 'DO 47 KG', NULL, 47.0),
- ('F_52', 'Female', 'DO 52 KG', 47.01, 52.0),
- ('F_57', 'Female', 'DO 57 KG', 52.01, 57.0),
- ('F_63', 'Female', 'DO 63 KG', 57.01, 63.0),
- ('F_72', 'Female', 'DO 72 KG', 63.01, 72.0),
- ('F_84', 'Female', 'DO 84 KG', 72.01, 84.0),
- ('F_84_PLUS', 'Female', '+ 84 KG', 84.01, NULL);
 
 CREATE TABLE settings (
     id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -550,6 +1100,10 @@ async function resetDatabase(db: D1Database) {
     'registrations',
     'contest_states',
     'plate_sets',
+    'reshel_coefficients',
+    'mccullough_coefficients',
+    'contest_weight_classes',
+    'contest_age_categories',
     'competitors',
     'contests',
     'settings'
@@ -563,6 +1117,38 @@ async function resetDatabase(db: D1Database) {
     `INSERT INTO settings (id, data, created_at, updated_at)
      VALUES (1, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
   ).bind(JSON.stringify(DEFAULT_SETTINGS)).run();
+
+  await seedCoefficientTables(db);
+}
+
+async function seedCoefficientTables(db: D1Database) {
+  const insertReshel = db.prepare(
+    `INSERT OR REPLACE INTO reshel_coefficients (gender, bodyweight_kg, coefficient, source, retrieved_at, notes)
+     VALUES (?, ?, ?, ?, ?, NULL)`
+  );
+
+  for (const entry of reshelMenData.entries) {
+    await insertReshel
+      .bind('male', entry.bodyweightKg, entry.coefficient, reshelMenData.source, reshelMenData.retrievedAt)
+      .run();
+  }
+
+  for (const entry of reshelWomenData.entries) {
+    await insertReshel
+      .bind('female', entry.bodyweightKg, entry.coefficient, reshelWomenData.source, reshelWomenData.retrievedAt)
+      .run();
+  }
+
+  const insertMc = db.prepare(
+    `INSERT OR REPLACE INTO mccullough_coefficients (age, coefficient, source, retrieved_at, notes)
+     VALUES (?, ?, ?, ?, NULL)`
+  );
+
+  for (const entry of mccData.entries) {
+    await insertMc
+      .bind(entry.age, entry.coefficient, mccData.source, mccData.retrievedAt)
+      .run();
+  }
 }
 
 async function clearKv(kv: KVNamespace) {

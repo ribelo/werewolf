@@ -3,6 +3,9 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import type { WerewolfEnvironment } from '../env';
 import { executeQuery, executeQueryOne, executeMutation, getCurrentTimestamp, convertKeysToCamelCase } from '../utils/database';
+import { getReshelCoefficient, getMcCulloughCoefficient, resetCoefficientCaches } from '../services/coefficients';
+import { determineAgeCategory, determineWeightClass, type AgeCategoryDescriptor, type WeightClassDescriptor } from '@werewolf/domain/services/coefficients';
+import { getContestAgeDescriptors, getContestWeightDescriptors, seedContestCategories } from '../utils/category-templates';
 
 const system = new Hono<WerewolfEnvironment>();
 
@@ -142,8 +145,8 @@ system.post('/backups', async (c) => {
       attempts: await executeQuery(db, 'SELECT * FROM attempts'),
       results: await executeQuery(db, 'SELECT * FROM results'),
       plate_sets: await executeQuery(db, 'SELECT * FROM plate_sets'),
-      age_categories: await executeQuery(db, 'SELECT * FROM age_categories'),
-      weight_classes: await executeQuery(db, 'SELECT * FROM weight_classes'),
+      contest_age_categories: await executeQuery(db, 'SELECT * FROM contest_age_categories'),
+      contest_weight_classes: await executeQuery(db, 'SELECT * FROM contest_weight_classes'),
       contest_states: await executeQuery(db, 'SELECT * FROM contest_states'),
       current_lifts: await executeQuery(db, 'SELECT * FROM current_lifts'),
       settings: await executeQuery(db, 'SELECT * FROM settings')
@@ -171,7 +174,9 @@ system.post('/backups', async (c) => {
         competitors: backupData.competitors.length,
         registrations: backupData.registrations.length,
         attempts: backupData.attempts.length,
-        results: backupData.results.length
+        results: backupData.results.length,
+        contestAgeCategories: backupData.contest_age_categories.length,
+        contestWeightClasses: backupData.contest_weight_classes.length,
       }
     };
     await c.env.KV.put(metadataKey, JSON.stringify(metadata));
@@ -241,35 +246,12 @@ system.post('/backups/:backupId/restore', async (c) => {
       attempts: 0,
       results: 0,
       plate_sets: 0,
-      age_categories: 0,
-      weight_classes: 0,
+      contest_age_categories: 0,
+      contest_weight_classes: 0,
       contest_states: 0,
       current_lifts: 0,
       settings: 0
     };
-
-    // Restore reference data first
-    if (backup.data.age_categories) {
-      for (const item of backup.data.age_categories) {
-        await executeMutation(
-          db,
-          'INSERT OR REPLACE INTO age_categories (id, name, min_age, max_age) VALUES (?, ?, ?, ?)',
-          [item.id, item.name, item.min_age, item.max_age]
-        );
-        restoreStats.age_categories++;
-      }
-    }
-
-    if (backup.data.weight_classes) {
-      for (const item of backup.data.weight_classes) {
-        await executeMutation(
-          db,
-          'INSERT OR REPLACE INTO weight_classes (id, gender, name, weight_min, weight_max) VALUES (?, ?, ?, ?, ?)',
-          [item.id, item.gender, item.name, item.weight_min, item.weight_max]
-        );
-        restoreStats.weight_classes++;
-      }
-    }
 
     // Restore contests
     if (backup.data.contests) {
@@ -452,6 +434,113 @@ system.post('/database/reset', zValidator('json', z.object({
       data: null,
       error: 'Failed to reset database',
       details: error instanceof Error ? error.message : 'Unknown error',
+      requestId: c.get('requestId'),
+    }, 500);
+  }
+});
+
+system.post('/maintenance/recalculate-coefficients', async (c) => {
+  const db = c.env.DB;
+
+  try {
+    const contests = await executeQuery<{ id: string; date: string }>(
+      db,
+      'SELECT id, date FROM contests'
+    );
+
+    let processed = 0;
+    let updated = 0;
+
+    for (const contest of contests) {
+      await seedContestCategories(db, contest.id);
+      const [ageDescriptors, weightDescriptors] = await Promise.all([
+        getContestAgeDescriptors(db, contest.id),
+        getContestWeightDescriptors(db, contest.id),
+      ]);
+
+      const registrations = await executeQuery<{
+        id: string;
+        bodyweight: number;
+        age_category_id: string;
+        weight_class_id: string;
+        reshel_coefficient: number;
+        mccullough_coefficient: number;
+        gender: string;
+        birth_date: string;
+      }>(
+        db,
+        `
+        SELECT
+          r.id,
+          r.bodyweight,
+          r.age_category_id,
+          r.weight_class_id,
+          r.reshel_coefficient,
+          r.mccullough_coefficient,
+          c.gender,
+          c.birth_date
+        FROM registrations r
+        JOIN competitors c ON r.competitor_id = c.id
+        WHERE r.contest_id = ?
+        `,
+        [contest.id]
+      );
+
+      for (const registration of registrations) {
+        processed += 1;
+
+        const ageCode = determineAgeCategory(registration.birth_date, contest.date, ageDescriptors);
+        const weightCode = determineWeightClass(registration.bodyweight, registration.gender, weightDescriptors);
+
+        const ageDescriptor = ageDescriptors.find((descriptor) => descriptor.code === ageCode) ?? ageDescriptors[0];
+        const weightDescriptor = weightDescriptors.find((descriptor) => descriptor.code === weightCode) ?? weightDescriptors[0];
+
+        const [reshel, mccullough] = await Promise.all([
+          getReshelCoefficient(db, registration.gender, registration.bodyweight),
+          getMcCulloughCoefficient(db, registration.birth_date, contest.date),
+        ]);
+
+        const requiresUpdate =
+          (ageDescriptor && registration.age_category_id !== ageDescriptor.id) ||
+          (weightDescriptor && registration.weight_class_id !== weightDescriptor.id) ||
+          Math.abs((registration.reshel_coefficient ?? 0) - reshel) > 0.0001 ||
+          Math.abs((registration.mccullough_coefficient ?? 0) - mccullough) > 0.0001;
+
+        if (!requiresUpdate || !ageDescriptor || !weightDescriptor) {
+          continue;
+        }
+
+        await executeMutation(
+          db,
+          `UPDATE registrations
+             SET age_category_id = ?,
+                 weight_class_id = ?,
+                 reshel_coefficient = ?,
+                 mccullough_coefficient = ?
+           WHERE id = ?`,
+          [ageDescriptor.id, weightDescriptor.id, reshel, mccullough, registration.id]
+        );
+
+        updated += 1;
+      }
+    }
+
+    resetCoefficientCaches();
+
+    return c.json({
+      data: {
+        success: true,
+        processed,
+        updated,
+        timestamp: getCurrentTimestamp(),
+      },
+      error: null,
+      requestId: c.get('requestId'),
+    });
+  } catch (error) {
+    return c.json({
+      data: null,
+      error: error instanceof Error ? error.message : 'Failed to recalculate coefficients',
       requestId: c.get('requestId'),
     }, 500);
   }

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const attemptStatusSchema = z.enum(['Pending', 'Successful', 'Failed', 'Skipped']);
+export const attemptStatusSchema = z.enum(['Pending', 'Successful', 'Failed']);
 export type AttemptStatus = z.infer<typeof attemptStatusSchema>;
 
 export const liftTypeSchema = z.enum(['Squat', 'Bench', 'Deadlift']);
@@ -40,7 +40,6 @@ export const attemptUpsertSchema = attemptSchema.pick({
 export type AttemptUpsertInput = z.infer<typeof attemptUpsertSchema>;
 
 export const attemptResultUpdateSchema = z.object({
-  attemptId: z.string().uuid(),
   status: attemptStatusSchema,
   judge1Decision: z.boolean().nullable().optional(),
   judge2Decision: z.boolean().nullable().optional(),

@@ -1,0 +1,88 @@
+Werewolf Cloud Execution Backlog — 2025-09-28
+
+Priority legend: P0 = immediate; P1 = next; P2 = later
+
+Legend: [ ] = open · [~] = in progress · [x] = done
+
+WP-AUTH — Login & Access Control
+- [ ] AU1: Simple username/password login (env-configured credentials) with HttpOnly session cookie (P0)
+- [ ] AU2: Auth middleware guarding mutating routes; public GET for displays (P0)
+- [ ] AU3: Logout endpoint and session expiry/refresh policy (P0)
+
+WP-API — Worker Services & Data Contracts
+- [x] A1: Contest, registration, attempt CRUD parity with legacy SQLite flows (P0)
+- [x] A2: `/results/export` CSV+JSON endpoints with base federation schema (P1 acceptable)
+- [~] A3: System diagnostics route surfacing KV status and backup recency (P0)
+- [ ] A4: Audit-event trail API + D1 table capturing before/after payloads (P1)
+- [ ] A5: Multi-contest routing model (namespacing Durable Objects + D1 queries) (P2)
+- [ ] A6: Remove competitor photo endpoints and related code paths; keep DB columns for now (P1)
+ - [~] A7: Rising-bar queue ordering in `/contests/:id/attempts/queue` (weight asc, lot asc; exclude unset weights); finalize active-flight gating and configurable N-per-flight ceiling (P0)
+ - [ ] A8: Attempt weight validation against min increment (smallest plate × 2) (P0)
+ - [ ] A9: Optional `POST /contests/:id/attempts/current/next` to set next in queue (P1)
+ - [~] A10: Enrich registrations list to include competitor `club`, `city`, `competition_order`, plus `flight_code`/`flight_order` and `labels`; align DTO/domain typing and add integration coverage (P0)
+ - [~] A11: Flights API: set/get `active_flight` for contest; bulk assign registrations to flights with order; add optimistic updates + tests (P0)
+ - [~] A12: Labels API: PATCH `registrations/:id/labels` add/remove; ensure results filtering + validation round-trips (P0)
+ - [~] A13: Plate plan honors `contests.clamp_weight` when validating loadable and computing per-side plates; update display/export consumers (P0)
+
+WP-REALTIME — Synchronisation & Offline Safety
+- [x] R1: Durable Object contest room broadcasting desk/display state (P0)
+- [x] R2: WebSocket transport with long-poll fallback and heartbeat timers (P0)
+- [~] R3: IndexedDB mutation queue with retry/backoff and UI controls (P0)
+- [ ] R4: Sync-on-reconnect: fetch latest snapshot and rehydrate client state (P0)
+- [ ] R5: Background resync job reconciling desk snapshots after reconnect (P1)
+- [ ] R6: Stress-suite simulating 50 concurrent display subscribers (P2)
+
+WP-FRONTEND — Organizer, Announcer, Display UI
+- [x] F1: Organizer desk parity (attempt grid, queue controls, judge overrides) (P0)
+- [x] F2: Announcer and big-screen displays with QR deep links (P0)
+- [~] F3: Settings diagnostics panel exposing KV, backup, and schema health (P0)
+ - [ ] F4: Responsive layout polish for tablet/mobile breakpoints (P1)
+ - [ ] F5: PWA app shell + offline cache via service worker (P0)
+ - [ ] F6: Background sync registration for queued mutations (P0)
+ - [ ] F7: Theme switcher and federation branding presets (P1)
+ - [x] F8: Rising-bar queue rendering and controls (hide unset weights; tie-break by lot) (P0)
+ - [x] F9: Streamlined live desk UX pass (single obvious workflow, hide setup-only controls) (P0)
+  - [~] F10: Unified meet table in Registrations tab with columns: place, name, city (club beneath), age, age category, bodyweight (inline-edit), weight class, M/SM flags, Reshel, McCullough, rack heights, 9 attempts (S/B/D × I/II/III), points, max lift; finish sticky columns + integrate in organizer page (P0)
+  - [~] F11: Sort any column in unified table; persist sort state; add Polish/English i18n column labels; sync selection with store (P0)
+  - [~] F12: Inline bodyweight editor triggers PATCH + coefficient recompute + optimistic UI; wire to toast errors + loading states (P0)
+  - [~] F13: Registration labels UI (chip editor) with add/remove; show `uniformed` prominently; ensure announcer/display respect label badges (P0)
+  - [~] F14: Flight filters/tabs + indicator of active flight in queue card; bulk-assign UI (modal) + actions (P0)
+  - [ ] F15: Results view: weight-class tabs; add “Uniformed (Open)” leaderboard (filter by label) (P0)
+  - [ ] F16: Announcer/Display views reflect flight-gated queue and render labels where relevant (P0)
+  - [ ] F17: Announcer/Display reuse unified table component in read-only mode with consistent columns and sorting (P0)
+
+WP-DATA — D1 Schema, Backups, Imports
+- [x] D1: D1 schema parity and migration history audit vs legacy SQLite (P0)
+- [x] D2: Wrangler dev auto-applies migrations and records version table (P0)
+ - [~] D3: Switch backup storage to R2 (objects) + KV metadata, update Wrangler bindings (P0)
+ - [ ] D4: Scheduled backup writer with retention policy (daily/weekly) (P1)
+ - [ ] D5: Legacy import utility to pull historical meets into D1 (P2)
+ - [x] D6: Migration 0011: add `registrations.flight_code` (TEXT), `registrations.flight_order` (INTEGER), `registrations.labels` (TEXT JSON), and `contests.active_flight` (TEXT) (P0)
+ - [x] D7: Migration 0012: add `contests.clamp_weight` (REAL DEFAULT 2.5) (P0)
+
+WP-OPS — Tooling, Deployment, Observability
+- [x] O1: Wrangler dev script + `.wrangler/state` bootstrap for local testing (P0)
+- [x] O2: Cloudflare Pages pipeline building SvelteKit bundles via `adapter-cloudflare` (P0)
+- [~] O3: Structured logging + dashboard panels for request IDs, error rates (P1)
+- [ ] O4: Playwright smoke gated in CI with preview deployments (P1)
+ - [ ] O5: On-call playbook for Cloudflare worker/durable outages (P2)
+  - [ ] O6: Multi-tenant plan doc: D1-per-tenant options and routing constraints (P2)
+
+WP-RULES — Contest Flow Controls
+- [ ] RL1: Manual round advance for P0; auto-increment round when queue becomes empty (P1)
+  - [~] RL2: Flight gating: queue only includes pending attempts for the active flight until all members in flight have a result for the round; capture completion detection + default/none handling (P0)
+
+WP-DOCS — Guidance, Runbooks, Legacy Coordination
+ - [x] Doc1: README, architecture, FAQ, and user guide published without TBDs (P0)
+ - [x] Doc2: Schema audit + migration decision log appended to docs (P0)
+ - [~] Doc3: Post-migration action plan checklist tracked through release (P0)
+- [ ] Doc4: Cloudflare credential rotation + secrets handling guide (P1)
+- [ ] Doc5: Legacy Tauri support policy outlining bugfix-only scope (P2)
+ - [ ] Doc6: Unified table operator guide (columns, sorting, inline editing, labels) with screenshots (P0)
+ - [ ] Doc7: Flights guide (how to assign, set active flight, desk workflow) (P0)
+ - [ ] Doc8: Clamp weights note in plate-plan docs and UI labels (P0)
+
+WP-LEGACY — Desktop Reference Maintenance
+- [x] L1: Clarify README/AGENTS that Tauri app is legacy-only (P0)
+- [ ] L2: Regression smoke (export + scoring) before each release candidate (P1)
+- [ ] L3: Archive plan for removing Tauri after cloud GA (decision doc + timeline) (P2)

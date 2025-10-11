@@ -1,5 +1,8 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
+import { visualizer } from 'rollup-plugin-visualizer';
+
+const shouldAnalyze = process.env.BUNDLE_ANALYZE === 'true';
 
 export default defineConfig({
 	plugins: [sveltekit()],
@@ -13,6 +16,17 @@ export default defineConfig({
 	},
 	build: {
 		rollupOptions: {
+			plugins: shouldAnalyze
+				? [
+					visualizer({
+						filename: 'stats/bundle.html',
+						title: 'Werewolf Web Bundle',
+						template: 'treemap',
+						gzipSize: true,
+						brotliSize: true
+					})
+				]
+				: [],
 			output: {
 				interop: 'auto'
 			}

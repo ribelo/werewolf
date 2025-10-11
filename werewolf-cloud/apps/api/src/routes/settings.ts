@@ -153,8 +153,8 @@ settings.patch('/competition', zValidator('json', z.object({
     competitionUpdate.defaultPlateSet = sanitizePlateSet(input.defaultPlateSet);
   }
 
-  const updates: Partial<SettingsData> = Object.keys(competitionUpdate).length
-    ? { competition: competitionUpdate }
+  const updates: Partial<SettingsData> = Object.keys(competitionUpdate).length > 0
+    ? { competition: competitionUpdate as SettingsData['competition'] }
     : {};
 
   const merged = mergeSettings(currentSettings, updates);

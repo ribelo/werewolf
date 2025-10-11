@@ -7,6 +7,12 @@ export const equipmentFlagsSchema = z.object({
   equipmentT: z.boolean().default(false),
 });
 
+const flightCodeSchema = z
+  .string()
+  .trim()
+  .regex(/^[A-Za-z]$/)
+  .transform((value) => value.toUpperCase());
+
 export const registrationSchema = z.object({
   id: z.string().uuid(),
   contestId: z.string().uuid(),
@@ -21,6 +27,9 @@ export const registrationSchema = z.object({
   mcculloughCoefficient: z.number().nullable().optional(),
   rackHeightSquat: z.number().int().nullable().optional(),
   rackHeightBench: z.number().int().nullable().optional(),
+  flightCode: flightCodeSchema.optional().nullable(),
+  flightOrder: z.number().int().optional().nullable(),
+  labels: z.array(z.string()).default([]),
   createdAt: z.string().datetime(),
   ...equipmentFlagsSchema.shape,
 });
@@ -39,6 +48,11 @@ export const registrationCreateSchema = registrationSchema.pick({
   equipmentM: true,
   equipmentSm: true,
   equipmentT: true,
+  ageCategoryId: true,
+  weightClassId: true,
+  flightCode: true,
+  flightOrder: true,
+  labels: true,
 }).extend({
   contestId: z.string().uuid().optional(),
 });

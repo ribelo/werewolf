@@ -1,6 +1,6 @@
 import { apiClient } from '$lib/api';
 import { OfflineCache } from '$lib/cache';
-import type { ContestDetail, Registration, Attempt, CurrentAttemptBundle, ReferenceData, WeightClass, AgeCategory } from '$lib/types';
+import type { ContestDetail, Registration, Attempt, CurrentAttemptBundle, ReferenceData, ContestCategories } from '$lib/types';
 
 export const load = async ({ url }) => {
   const contestId = url.searchParams.get('contestId');
@@ -29,12 +29,11 @@ export const load = async ({ url }) => {
     const regResponse = await apiClient.get<Registration[]>(`/contests/${contestId}/registrations`);
     const attemptsResponse = await apiClient.get<Attempt[]>(`/contests/${contestId}/attempts`);
     const currentAttemptResponse = await apiClient.get<CurrentAttemptBundle | null>(`/contests/${contestId}/attempts/current`);
-    const weightClassesResponse = await apiClient.get<WeightClass[]>(`/reference/weight-classes`);
-    const ageCategoriesResponse = await apiClient.get<AgeCategory[]>(`/reference/age-categories`);
+    const categoriesResponse = await apiClient.get<ContestCategories>(`/contests/${contestId}/categories`);
 
-    const referenceData: ReferenceData = {
-      weightClasses: weightClassesResponse.data ?? [],
-      ageCategories: ageCategoriesResponse.data ?? [],
+    const referenceData: ReferenceData = categoriesResponse.data ?? {
+      weightClasses: [],
+      ageCategories: [],
     };
 
     const data = {
@@ -43,7 +42,7 @@ export const load = async ({ url }) => {
       attempts: attemptsResponse.data ?? [],
       currentAttempt: currentAttemptResponse.data,
       referenceData,
-      error: contestResponse.error || regResponse.error || attemptsResponse.error || currentAttemptResponse.error || weightClassesResponse.error || ageCategoriesResponse.error,
+      error: contestResponse.error || regResponse.error || attemptsResponse.error || currentAttemptResponse.error || categoriesResponse.error,
       contestId,
       isOffline: false,
       cacheAge: null,

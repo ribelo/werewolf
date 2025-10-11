@@ -63,6 +63,43 @@ Logs stored at `tmp/wrangler-dev.log` and `tmp/curl-api.log`.
 
 ---
 
+**Command:** `cd apps/web && bun run check`
+
+**Date:** 2025-09-20
+
+**Environment:** Local development (SvelteKit workspace)
+
+**Output (excerpt):**
+```
+$ bunx svelte-kit sync && bunx svelte-check --tsconfig ./tsconfig.json
+====================================
+Loading svelte-check in workspace: /home/ribelo/projects/ribelo/werewolf/werewolf-cloud/apps/web
+Getting Svelte diagnostics...
+svelte-check found 0 errors and 9 warnings in 5 files
+```
+
+Warnings are the expected SvelteKit `export let params/form/errors` notices tracked in `docs/AGENTS.md`.
+
+---
+
+**Command:** `bun run test`
+
+**Date:** 2025-09-20
+
+**Environment:** Local development (Miniflare + Vitest integration harness)
+
+**Output (excerpt):**
+```
+$ vitest --run --watch=false --config config/vitest.config.ts
+✓ packages/domain/src/__tests__/attempt.test.ts (2 tests)
+✓ packages/domain/src/__tests__/score-engine.test.ts (15 tests)
+✓ apps/api/__tests__/integration.test.ts (10 tests) 40723ms
+```
+
+All 27 tests passed, covering coefficient recalculation, attempt result updates, and current-lift lifecycle routes.
+
+---
+
 **Command:** `bun scripts/import-sqlite.ts --local-path tmp/import-validation.sqlite --reset`
 
 **Date:** 2025-09-18
@@ -73,10 +110,8 @@ Logs stored at `tmp/wrangler-dev.log` and `tmp/curl-api.log`.
 ```
 📦 Importing data into local SQLite database: tmp/import-validation.sqlite
 🧹 Clearing existing data in local database...
-📊 Importing 10 records to age_categories...
-✅ Imported 10 records to age_categories
-📊 Importing 29 records to weight_classes...
-✅ Imported 29 records to weight_classes
+⏭️  Skipping contest_age_categories (seeded per contest)
+⏭️  Skipping contest_weight_classes (seeded per contest)
 📊 Importing 1 records to contests...
 ✅ Imported 1 records to contests
 📊 Importing 10 records to competitors...
@@ -94,8 +129,8 @@ contests: 1
 competitors: 10
 registrations: 20
 attempts: 180
-age_categories: 10
-weight_classes: 29
+contest_age_categories: seeded per contest
+contest_weight_classes: seeded per contest
 ```
 
 ---

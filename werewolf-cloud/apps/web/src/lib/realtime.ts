@@ -221,7 +221,34 @@ class RealtimeClientImpl {
       }
     }, 30000); // Send heartbeat every 30 seconds
   }
+
+  // Test helpers
+  __setConnectionStatusForTests(value: ConnectionStatus): void {
+    this._connectionStatus.set(value);
+  }
+
+  __setEventForTests(value: LiveEvent | null): void {
+    this._events.set(value);
+  }
+
+  __resetForTests(): void {
+    this.disconnect();
+    this._connectionStatus.set('connected');
+    this._events.set(null);
+  }
 }
 
 // Export singleton instance
 export const realtimeClient: RealtimeClientImpl = new RealtimeClientImpl();
+
+export const realtimeTestHelpers = {
+  setConnection(value: ConnectionStatus) {
+    realtimeClient.__setConnectionStatusForTests(value);
+  },
+  setEvent(value: LiveEvent | null) {
+    realtimeClient.__setEventForTests(value);
+  },
+  reset() {
+    realtimeClient.__resetForTests();
+  },
+};

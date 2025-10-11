@@ -361,8 +361,8 @@ The following commands were used to set up and apply migrations to the local D1 
 - [x] Table counts verified:
   - _sqlx_migrations: 3 records
   - contests: 1 record
-  - age_categories: 10 records
-  - weight_classes: 29 records
+  - contest_age_categories: (seeded per contest after import)
+  - contest_weight_classes: (seeded per contest after import)
   - competitors: 10 records
   - registrations: 20 records
   - attempts: 180 records
@@ -405,8 +405,8 @@ To validate the SQLite → D1 importer:
 🔧 Executing SQL dump...
 📊 Extracting _sqlx_migrations...
 📊 Extracting contests...
-📊 Extracting age_categories...
-📊 Extracting weight_classes...
+📊 Extracting contest_age_categories...
+📊 Extracting contest_weight_classes...
 📊 Extracting competitors...
 📊 Extracting registrations...
 📊 Extracting attempts...
@@ -417,8 +417,8 @@ To validate the SQLite → D1 importer:
 ✅ Extracted data for 11 tables
    _sqlx_migrations: 3 records
    contests: 1 records
-   age_categories: 10 records
-   weight_classes: 29 records
+   contest_age_categories: 0 records (seeded per contest after migration)
+   contest_weight_classes: 0 records (seeded per contest after migration)
    competitors: 10 records
    registrations: 20 records
    attempts: 180 records
@@ -429,10 +429,8 @@ To validate the SQLite → D1 importer:
 
 📦 Importing data into local SQLite database: tmp/import-validation.sqlite
 🧹 Clearing existing data in local database...
-📊 Importing 10 records to age_categories...
-✅ Imported 10 records to age_categories
-📊 Importing 29 records to weight_classes...
-✅ Imported 29 records to weight_classes
+⏭️  Skipping contest_age_categories (seeded per contest)
+⏭️  Skipping contest_weight_classes (seeded per contest)
 ⏭️  Skipping settings (no data)
 📊 Importing 1 records to contests...
 ✅ Imported 1 records to contests
@@ -457,8 +455,8 @@ contests: 1
 competitors: 10
 registrations: 20
 attempts: 180
-age_categories: 10
-weight_classes: 29
+contest_age_categories: seeded per contest
+contest_weight_classes: seeded per contest
 ```
 
 

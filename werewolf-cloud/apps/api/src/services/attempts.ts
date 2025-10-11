@@ -2,6 +2,21 @@ import type { Database } from '../utils/database';
 import { executeQuery, executeQueryOne, convertKeysToCamelCase } from '../utils/database';
 import { buildPlatePlan } from './plate-plan';
 
+function parseLabelText(input: unknown): string[] {
+  if (Array.isArray(input)) {
+    return input.map(String);
+  }
+  if (typeof input === 'string') {
+    try {
+      const parsed = JSON.parse(input);
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 export async function getAttemptWithRelations(
   db: Database,
   attemptId: string,
@@ -34,6 +49,9 @@ export async function getAttemptWithRelations(
         r.equipment_t,
         r.rack_height_squat,
         r.rack_height_bench,
+        r.flight_code,
+        r.flight_order,
+        COALESCE(r.labels, '[]') AS labels,
         comp.id AS competitor_id,
         comp.first_name,
         comp.last_name,
@@ -47,8 +65,8 @@ export async function getAttemptWithRelations(
       FROM attempts a
       JOIN registrations r ON a.registration_id = r.id
       JOIN competitors comp ON r.competitor_id = comp.id
-      LEFT JOIN weight_classes wc ON r.weight_class_id = wc.id
-      LEFT JOIN age_categories ac ON r.age_category_id = ac.id
+      LEFT JOIN contest_weight_classes wc ON r.weight_class_id = wc.id
+      LEFT JOIN contest_age_categories ac ON r.age_category_id = ac.id
       WHERE a.id = ?
       ${contestId ? 'AND r.contest_id = ?' : ''}
     `,
@@ -155,6 +173,9 @@ export async function buildCurrentAttemptPayload(
       rack_height_squat: attempt.rack_height_squat,
       rack_height_bench: attempt.rack_height_bench,
       competition_order: attempt.competitor_competition_order ?? null,
+      flight_code: attempt.flight_code,
+      flight_order: attempt.flight_order,
+      labels: parseLabelText(attempt.labels),
     },
     competitor: {
       id: attempt.competitor_id,

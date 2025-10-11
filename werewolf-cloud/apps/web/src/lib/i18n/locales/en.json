@@ -6,7 +6,7 @@
   "menu": {
     "settings": "Settings",
     "settings_description": "Configure application",
-    "create_competition": "Create Competition", 
+    "create_competition": "Create Competition",
     "create_competition_description": "New powerlifting competition",
     "manage_competition": "Manage Competition",
     "manage_competition_description": "Active competitions"
@@ -16,7 +16,7 @@
     "edit_title": "Edit Competition",
     "step_1_title": "Step 1: Basic Information",
     "step_1_description": "Start by providing the essential details for your competition.",
-    "step_2_title": "Step 2: Competition Details", 
+    "step_2_title": "Step 2: Competition Details",
     "step_2_description": "Specify the rules, discipline, and other organizational details.",
     "step_3_title": "Step 3: Competitors",
     "step_3_description": "Add competitors who will participate in the contest.",
@@ -32,131 +32,131 @@
     "discipline_label": "Discipline",
     "competition_type_label": "Competition Type (Optional)",
     "competition_type_placeholder": "e.g., National Qualifier",
-    "organizer_label": "Organizer (Optional)", 
+    "organizer_label": "Organizer (Optional)",
     "organizer_placeholder": "e.g., Powerlifting Club",
     "federation_rules_label": "Federation/Rules (Optional)",
     "federation_rules_placeholder": "e.g., IPF Rules",
     "notes_label": "Notes (Optional)",
-  "notes_placeholder": "Any additional details about the competition...",
-  "bar_weight_label": "Bar Weight (kg)",
-  "wizard_validation_warning": "Please complete the required fields before continuing.",
-  "edit_button": "Edit Competition",
+    "notes_placeholder": "Any additional details about the competition...",
+    "bar_weight_label": "Bar Weight (kg)",
+    "wizard_validation_warning": "Please complete the required fields before continuing.",
+    "edit_button": "Edit Competition",
     "details_tab": "Competition Details",
     "plates_tab": "Plate Inventory",
     "save_changes": "Save Changes",
     "cancel_changes": "Cancel",
     "saved_successfully": "Competition saved successfully",
-  "save_error": "Failed to save competition changes",
-  "wizard": {
-    "page_title": "Create Contest • Werewolf Powerlifting",
-    "layout_title": "Contest Wizard",
-    "layout_subtitle": "Create competition and optional roster",
-    "title": "Contest Setup",
-    "step_label": "Step",
-    "step_connector": "of",
-    "steps": {
-      "basic": "Basic information",
-      "basic_hint": "Tell us when and where the contest will take place.",
-      "details": "Competition details",
-      "details_hint": "Provide organizer info and optional notes.",
-      "competitors": "Initial competitor drafts",
-      "competitors_hint": "Optionally pre-register lifters to speed up meet day."
-    },
-    "actions": {
-      "previous": "Previous",
-      "next": "Next",
-      "submit": "Create Contest",
-      "submitting": "Creating…"
-    },
-    "fields": {
-      "name": {
-        "label": "Contest name",
-        "placeholder": "Werewolf Open"
+    "save_error": "Failed to save competition changes",
+    "wizard": {
+      "page_title": "Create Contest • Werewolf Powerlifting",
+      "layout_title": "Contest Wizard",
+      "layout_subtitle": "Create competition and optional roster",
+      "title": "Contest Setup",
+      "step_label": "Step",
+      "step_connector": "of",
+      "steps": {
+        "basic": "Basic information",
+        "basic_hint": "Tell us when and where the contest will take place.",
+        "details": "Competition details",
+        "details_hint": "Provide organizer info and optional notes.",
+        "competitors": "Initial competitor drafts",
+        "competitors_hint": "Optionally pre-register lifters to speed up meet day."
       },
-      "date": {
-        "label": "Contest date"
+      "actions": {
+        "previous": "Previous",
+        "next": "Next",
+        "submit": "Create Contest",
+        "submitting": "Creating…"
       },
-      "location": {
-        "label": "Location",
-        "placeholder": "Warsaw Power Arena"
+      "fields": {
+        "name": {
+          "label": "Contest name",
+          "placeholder": "Werewolf Open"
+        },
+        "date": {
+          "label": "Contest date"
+        },
+        "location": {
+          "label": "Location",
+          "placeholder": "Warsaw Power Arena"
+        },
+        "events": {
+          "label": "Events included"
+        },
+        "organizer": {
+          "label": "Organizer",
+          "placeholder": "Werewolf Club"
+        },
+        "federation_rules": {
+          "label": "Federation rules (optional)",
+          "placeholder": "IPF Classic"
+        },
+        "notes": {
+          "label": "Notes (optional)",
+          "placeholder": "Special equipment rules, schedule notes"
+        }
       },
       "events": {
-        "label": "Events included"
+        "squat": "Squat",
+        "bench": "Bench",
+        "deadlift": "Deadlift"
       },
-      "organizer": {
-        "label": "Organizer",
-        "placeholder": "Werewolf Club"
+      "genders": {
+        "male": "Male",
+        "female": "Female"
       },
-      "federation_rules": {
-        "label": "Federation rules (optional)",
-        "placeholder": "IPF Classic"
+      "messages": {
+        "events_hint": "Discipline is derived automatically from the selected events.",
+        "success": "Contest created successfully.",
+        "error": "Failed to create contest."
       },
-      "notes": {
-        "label": "Notes (optional)",
-        "placeholder": "Special equipment rules, schedule notes"
+      "validation": {
+        "warning": "Please complete the required fields before continuing.",
+        "name_required": "Contest name is required",
+        "location_required": "Location is required",
+        "date_required": "Date is required",
+        "organizer_required": "Organizer is required",
+        "first_name_required": "First name is required",
+        "last_name_required": "Last name is required",
+        "birth_date_required": "Birth date is required",
+        "bodyweight_positive": "Bodyweight must be greater than 0"
+      },
+      "competitor": {
+        "first_name": "First name",
+        "last_name": "Last name",
+        "birth_date": "Birth date",
+        "gender": "Gender",
+        "club": "Club",
+        "club_placeholder": "Werewolf Club",
+        "city": "City",
+        "city_placeholder": "Warsaw",
+        "bodyweight": "Bodyweight (kg)",
+        "rack_squat": "Rack height (Squat)",
+        "rack_bench": "Rack height (Bench)",
+        "equipment": {
+          "legend": "Equipment category",
+          "multi": "Multi-ply",
+          "single": "Single-ply",
+          "wraps": "Knee wraps"
+        },
+        "add_button": "Add competitor",
+        "reset_button": "Reset form"
+      },
+      "drafts": {
+        "title": "Pre-registered competitors",
+        "meta": "{birthDate} • {gender} • {bodyweight} kg",
+        "club_city": "{club} • {city}",
+        "no_club": "No club",
+        "no_city": "No city",
+        "remove": "Remove"
       }
-    },
-    "events": {
-      "squat": "Squat",
-      "bench": "Bench",
-      "deadlift": "Deadlift"
-    },
-    "genders": {
-      "male": "Male",
-      "female": "Female"
-    },
-    "messages": {
-      "events_hint": "Discipline is derived automatically from the selected events.",
-      "success": "Contest created successfully.",
-      "error": "Failed to create contest."
-    },
-    "validation": {
-      "warning": "Please complete the required fields before continuing.",
-      "name_required": "Contest name is required",
-      "location_required": "Location is required",
-      "date_required": "Date is required",
-      "organizer_required": "Organizer is required",
-      "first_name_required": "First name is required",
-      "last_name_required": "Last name is required",
-      "birth_date_required": "Birth date is required",
-      "bodyweight_positive": "Bodyweight must be greater than 0"
-    },
-    "competitor": {
-      "first_name": "First name",
-      "last_name": "Last name",
-      "birth_date": "Birth date",
-      "gender": "Gender",
-      "club": "Club",
-      "club_placeholder": "Werewolf Club",
-      "city": "City",
-      "city_placeholder": "Warsaw",
-      "bodyweight": "Bodyweight (kg)",
-      "rack_squat": "Rack height (Squat)",
-      "rack_bench": "Rack height (Bench)",
-      "equipment": {
-        "legend": "Equipment category",
-        "multi": "Multi-ply",
-        "single": "Single-ply",
-        "wraps": "Knee wraps"
-      },
-      "add_button": "Add competitor",
-      "reset_button": "Reset form"
-    },
-    "drafts": {
-      "title": "Pre-registered competitors",
-      "meta": "{birthDate} • {gender} • {bodyweight} kg",
-      "club_city": "{club} • {city}",
-      "no_club": "No club",
-      "no_city": "No city",
-      "remove": "Remove"
     }
-  }
   },
   "validation": {
     "name_required": "Contest name is required",
     "name_min_length": "Contest name must be at least 3 characters",
     "name_too_short": "Contest name must be at least 2 characters",
-    "date_required": "Contest date is required", 
+    "date_required": "Contest date is required",
     "date_past": "Contest date cannot be in the past",
     "rack_height_validation": "Rack height must be between 1 and 20",
     "location_required": "Location is required",
@@ -173,10 +173,12 @@
   "buttons": {
     "cancel": "Cancel",
     "next": "Next",
-    "back": "Back", 
+    "back": "Back",
     "create_contest": "Create Contest",
     "creating_contest": "Creating Contest...",
     "save": "Save",
+    "edit": "Edit",
+    "add": "Add",
     "good": "SUCCESSFUL",
     "bad": "FAILED",
     "create_backup": "Create Backup",
@@ -194,10 +196,49 @@
   "common": {
     "loading": "Loading..."
   },
+  "contest_table": {
+    "columns": {
+      "place": "Place",
+      "lifter": "Lifter",
+      "sex": "Sex",
+      "flight": "Flight",
+      "age": "Age",
+      "bodyweight": "Bodyweight",
+      "weight_class": "Weight class",
+      "age_class": "Age class",
+      "reshel": "Reshel",
+      "mccullough": "McC.",
+      "rack": "Rack",
+      "points": "Points",
+      "max": "Max",
+      "labels": "Labels",
+      "actions": "Actions"
+    },
+    "lifts": {
+      "squat": "Squat",
+      "bench": "Bench press",
+      "deadlift": "Deadlift"
+    },
+    "lifts_short": {
+      "squat": "SQ",
+      "bench": "BP",
+      "deadlift": "DL"
+    },
+    "labels": {
+      "placeholder": "Add label",
+      "remove": "Remove label {label}"
+    },
+    "actions": {
+      "edit_attempts": "Edit attempts",
+      "edit_competitor": "Edit competitor",
+      "view_details": "Details",
+      "set_live": "Set live"
+    }
+  },
   "ui": {
     "minimize": "Minimize",
     "maximize": "Maximize",
-    "restore": "Restore", 
+    "restore": "Restore",
     "close": "Close",
     "crop_area": "Crop area",
     "current_upload": "Current upload"
@@ -223,25 +264,13 @@
     "crop_loading": "Loading..."
   },
   "results": {
-    "competition_summary": "Competition Results Summary",
-    "competition_stats": "Competition Stats",
-    "total_competitors": "Total Competitors",
-    "successful_finishers": "Successful Finishers",
-    "bombed_out": "Bombed Out",
-    "winning_total": "Winning Total",
-    "best_lifts": "Best Lifts",
-    "best_squat": "Best Squat",
-    "best_bench": "Best Bench",
-    "best_deadlift": "Best Deadlift",
-    "top_3_finishers": "Top 3 Finishers",
-    "contest_results": "Contest Results",
-    "place": "Place",
-    "registration": "Registration",
-    "points": "Points",
-    "status": "Status",
-    "disqualified": "DQ",
-    "record": "RECORD",
-    "export_json": "Export JSON"
+    "calculate_results": "Calculate Results",
+    "no_results_available": "No results available. Click \"Calculate Results\" to generate rankings.",
+    "reset_database": "Reset Database",
+    "export_csv": "Export CSV",
+    "export_pdf": "Export PDF",
+    "select_contest_to_view": "Select a contest to view results.",
+    "loading": "Loading results..."
   },
   "errors": {
     "load_contests": "Failed to load contests",
@@ -256,7 +285,7 @@
     "subtitle": "Manage your competition data backups. Create backups before important operations and restore from previous versions if needed.",
     "available_backups": "Available Backups",
     "date_time": "Date & Time",
-    "details": "Details", 
+    "details": "Details",
     "actions": "Actions",
     "backup_type": "Database Backup",
     "no_backups_title": "No backups found",
@@ -272,18 +301,11 @@
     "confirm_restore_safety": "A safety backup of your current data will be created automatically."
   },
   "attempt": {
-    "competitor_label": "Competitor",
-    "lift_attempt": "- Attempt",
-    "weight_placeholder": "Weight (kg)",
-    "status_good": "✓ SUCCESSFUL",
-    "status_bad": "✗ FAILED", 
-    "status_pending": "◦ PENDING",
-    "status_saving": "⏳ SAVING...",
-    "shortcuts_help": "⌨️ Shortcuts:",
-    "shortcuts_text": "Enter=Save | Ctrl+Enter=Successful | Ctrl+X=Failed | +=Add 2.5kg | -=Remove 2.5kg | Esc=Clear",
-    "increment_add": "Add 2.5kg (+)",
-    "increment_remove": "Remove 2.5kg (-)",
-    "failed_update_weight": "Failed to update weight:"
+    "status": {
+      "pending": "Pending",
+      "successful": "Successful",
+      "failed": "Failed"
+    }
   },
   "plates": {
     "title": "Plate Inventory",
@@ -325,7 +347,7 @@
     "bar_weight": "Bar weight",
     "per_side": "Per side",
     "plate": "plate",
-    "plates": "plates", 
+    "plates": "plates",
     "bar_only": "Bar only"
   },
   "attempt_extra": {
@@ -350,7 +372,7 @@
       "missing": "Missing",
       "corrupted": "Corrupted",
       "migration_failed": "Migration Failed",
-      "permission_denied": "Permission Denied", 
+      "permission_denied": "Permission Denied",
       "using_fallback": "Using Fallback",
       "unknown": "Unknown"
     },
@@ -372,7 +394,7 @@
   },
   "disciplines": {
     "Bench": "Bench Press",
-    "Squat": "Squat", 
+    "Squat": "Squat",
     "Deadlift": "Deadlift",
     "Powerlifting": "Powerlifting"
   },
@@ -429,27 +451,22 @@
     "location": "Location:",
     "discipline": "Discipline:",
     "competition_type": "Competition Type:",
-    "organizer": "Organizer:", 
+    "organizer": "Organizer:",
     "federation_rules": "Federation/Rules:",
     "not_available": "N/A",
     "saving": "Saving..."
   },
-  "attempt": {
-    "status_pending": "Pending",
-    "status_successful": "Success",
-    "status_failed": "Failed"
-  },
   "help": {
     "best_practices": "💡 Best Practices",
     "before_competitions": "Before competitions: Create a backup before starting any competition",
-    "regular_backups": "Regular backups: Create backups after major data entry sessions", 
+    "regular_backups": "Regular backups: Create backups after major data entry sessions",
     "safe_restore": "Safe restore: The app automatically creates a safety backup before restoring",
     "after_restore": "After restore: Restart the application for best results"
   },
   "contest_view": {
     "select_contest": "Select Contest",
     "register_competitor": "Register Competitor",
-    "cancel": "Cancel", 
+    "cancel": "Cancel",
     "register_new_competitor": "Register New Competitor",
     "first_name": "First Name",
     "last_name": "Last Name",
@@ -503,24 +520,15 @@
     "rack_height_help": "Rack position (1-20)",
     "na": "N/A"
   },
-  "results": {
-    "calculate_results": "Calculate Results",
-    "no_results_available": "No results available. Click \"Calculate Results\" to generate rankings.",
-    "reset_database": "Reset Database",
-    "export_csv": "Export CSV",
-    "export_pdf": "Export PDF",
-    "select_contest_to_view": "Select a contest to view results.",
-    "loading": "Loading results..."
-  },
   "settings": {
     "title": "Settings",
     "subtitle": "Configure application and manage data",
     "language_title": "Application Language",
-  "language_description": "Choose your preferred user interface language.",
-  "current_language": "Current language",
-  "competition_title": "Competition Defaults",
-  "competition_description": "Defaults applied when creating a new contest.",
-  "database_title": "Database Management",
+    "language_description": "Choose your preferred user interface language.",
+    "current_language": "Current language",
+    "competition_title": "Competition Defaults",
+    "competition_description": "Defaults applied when creating a new contest.",
+    "database_title": "Database Management",
     "database_description": "Manage application data, create backups, and reset database.",
     "backup_description": "Create and restore backups of your contest data.",
     "reset_database_title": "Reset Database",
@@ -537,7 +545,7 @@
     "weight_class": "WEIGHT CLASS",
     "photo": "PHOTO",
     "attempt": "ATTEMPT",
-    "rack_height": "RACK HEIGHT", 
+    "rack_height": "RACK HEIGHT",
     "others": "OTHERS",
     "display": "Display"
   },
@@ -633,6 +641,81 @@
       "order": "Order"
     }
   },
+  "competitor_modal": {
+    "title": {
+      "create": "Create Competitor",
+      "edit": "Edit Competitor"
+    },
+    "metadata": {
+      "updated": "Updated {timestamp}"
+    },
+    "status": {
+      "loading": "Loading competitor...",
+      "success_create": "Competitor created.",
+      "success_update": "Competitor updated.",
+      "error_load": "Could not load competitor.",
+      "error_save": "Could not save competitor.",
+      "validation": {
+        "name_required": "First and last name are required.",
+        "birth_required": "Birth date is required.",
+        "gender_invalid": "Select a valid gender.",
+        "bodyweight_positive": "Enter a valid bodyweight above 0 kg."
+      }
+    },
+    "fields": {
+      "first_name": "First name",
+      "last_name": "Last name",
+      "birth_date": "Birth date",
+      "gender": "Gender",
+      "club": "Club",
+      "city": "City",
+      "notes": "Notes"
+    },
+    "registration": {
+      "title": "Registration details",
+      "subtitle": "Adjust meet-specific settings for this lifter."
+    },
+    "registration_fields": {
+      "bodyweight": "Bodyweight (kg)",
+      "lot_number": "Lot number",
+      "lot_number_placeholder": "e.g. 12",
+      "personal_record": "Personal record at entry (kg)",
+      "personal_record_placeholder": "e.g. 250",
+      "weight_class": "Weight class",
+      "select_weight_class": "Select weight class",
+      "age_category": "Age category",
+      "select_age_category": "Select age category",
+      "rack_squat": "Rack height — squat",
+      "rack_bench": "Rack height — bench",
+      "equipment": "Equipment"
+    },
+    "placeholders": {
+      "club": "Club name",
+      "city": "City",
+      "notes": "Coach notes, best lifts, etc."
+    },
+    "gender": {
+      "male": "Male",
+      "female": "Female"
+    },
+    "cloud_note": {
+      "title": "Cloud sync",
+      "description": "Changes sync automatically once the app reconnects."
+    },
+    "competition_order": {
+      "title": "Competition order",
+      "subtitle": "Set the rotation position announced for attempts.",
+      "aria": "Competition order"
+    },
+    "actions": {
+      "reset": "Reset",
+      "cancel": "Cancel",
+      "close": "Close",
+      "save": "Save changes",
+      "create": "Create competitor",
+      "saving": "Saving..."
+    }
+  },
   "settings_page": {
     "show_weights": "Show weights by default",
     "show_weights_desc": "Toggle attempt table weight visibility.",
@@ -674,6 +757,361 @@
     "competitors_count": "Competitors: PLACEHOLDER_COUNT",
     "registrations_count": "Registrations: PLACEHOLDER_COUNT"
   },
+  "contest_detail": {
+    "fallback_title": "Contest",
+    "subtitle": "Control registrations, attempts, results, and backups from one place.",
+    "connection": {
+      "live": "Online",
+      "connecting": "Connecting...",
+      "offline": "Offline"
+    },
+    "tabs": {
+      "desk": "Desk",
+      "main_table": "Main table",
+      "results": "Results",
+      "plates": "Plate sets",
+      "backups": "Backups"
+    },
+    "lifts": {
+      "squat": "Squat",
+      "bench": "Bench press",
+      "deadlift": "Deadlift"
+    },
+    "cards": {
+      "status": {
+        "title": "Contest status",
+        "meta": "{location} • {date}"
+      },
+      "lifters": {
+        "title": "Registered lifters",
+        "hint": "Competitors entered into the meet."
+      },
+      "queue": {
+        "title": "Queued attempts",
+        "hint": "Attempts waiting to be loaded onto the platform."
+      },
+      "last_update": {
+        "title": "Last update",
+        "connection_prefix": "Connection: "
+      }
+    },
+    "links": {
+      "announcer": {
+        "title": "Announcer table",
+        "description": "Desk-facing table view with live queue and statuses."
+      },
+      "display": {
+        "title": "Stage display",
+        "description": "Audience screen with current lifter and plate plan."
+      }
+    },
+    "current": {
+      "title": "Current attempt",
+      "subtitle": "Verify the call and capture the official result.",
+      "lifter_label": "Lifter",
+      "attempt_meta": "Attempt {number} • {lift}",
+      "weight_label": "Weight on bar",
+      "actions": {
+        "mark_good": "Good lift",
+        "mark_fail": "No lift",
+        "go_live": "Go live",
+        "queue_set_current": "Set live",
+        "setting_current": "Sending...",
+        "is_current": "Live now"
+      },
+      "clear_button": "Clear current attempt",
+      "clearing_label": "Clearing...",
+      "empty_title": "No attempt is live right now.",
+      "empty_hint": "Select the next lifter from the queue to start the platform.",
+      "queue_header": "{lift} — attempt {round}",
+      "queue_badge_next": "Up next",
+      "queue_empty": "Queue is empty."
+    },
+    "recent": {
+      "title": "Recent attempts",
+      "meta": "{lift} • Attempt {number} • {weight} kg",
+      "time": "Updated {time}"
+    },
+    "registrations": {
+      "title": "Registrations",
+      "subtitle": "Maintain lifter data, categories, and rack settings.",
+      "total": "{count, plural, one {# lifter registered} other {# lifters registered}}",
+      "unknown_competitor": "Unknown lifter",
+      "manage_categories": "Manage categories",
+      "coefficient_notice": "Bodyweight changes automatically refresh coefficients.",
+      "columns": {
+        "order": "Lot #",
+        "lifter": "Lifter",
+        "sex": "Sex",
+        "age_class": "Age class",
+        "weight_class": "Weight class",
+        "bodyweight": "Bodyweight",
+        "equipment": "Equipment",
+        "reshel": "Reshel",
+        "mccullough": "McC.",
+        "rack_heights": "Rack heights",
+        "actions": "Actions",
+        "place": "Place",
+        "flight": "Flight",
+        "flight_order": "Flight order",
+        "age": "Age",
+        "total": "Total",
+        "points": "Points",
+        "max": "Max lift",
+        "labels": "Labels"
+      },
+      "actions": {
+        "edit_attempts": "Edit attempts",
+        "view_details": "View details"
+      },
+      "reshel_tooltip": {
+        "source": "Source: {source}",
+        "retrieved": "Retrieved: {date}"
+      },
+      "mccullough_tooltip": {
+        "source": "Source: {source}",
+        "retrieved": "Retrieved: {date}"
+      },
+      "empty": "No registrations yet.",
+      "manage_flights": "Manage flights",
+      "manage_flights_title": "Assign flights",
+      "auto_assign_size_label": "Athletes per flight",
+      "auto_assign_action": "Distribute flights",
+      "reset_flights": "Reset to flight A",
+      "flight_placeholder": "e.g. A",
+      "empty_filter": "No lifters in this flight.",
+      "filters": {
+        "flights": "Flights",
+        "weights": "Weight classes",
+        "sex": "Sex",
+        "age": "Age categories",
+        "labels": "Labels",
+        "all": "All",
+        "unassigned": "Unassigned",
+        "open": "Open",
+        "sex_all": "All",
+        "sex_female": "Female",
+        "sex_male": "Male",
+        "age_all": "All",
+        "age_unassigned": "Unassigned",
+        "labels_all": "All",
+        "labels_unlabeled": "Without labels"
+      },
+      "active_flight_label": "Active flight",
+      "active_flight_none": "None",
+      "apply_active_flight": "Apply"
+    },
+    "registration_detail": {
+      "title": "Registration • {name}",
+      "sections": {
+        "profile": "Profile",
+        "coefficients": "Coefficients"
+      },
+      "fields": {
+        "lifter": "Lifter",
+        "bodyweight": "Bodyweight",
+        "weight_class": "Weight class",
+        "age_class": "Age class",
+        "equipment": "Equipment"
+      },
+      "coefficients": {
+        "auto_notice": "Coefficient values refresh automatically when bodyweight or categories change.",
+        "source_label": "Source",
+        "retrieved_at": "Retrieved {date}",
+        "reshel": "Reshel coefficient",
+        "mcc": "McCulloch coefficient"
+      },
+      "actions": {
+        "edit_competitor": "Edit competitor"
+      }
+    },
+    "attempts": {
+      "title": "Attempts log",
+      "subtitle": "Review every recorded attempt and adjust results.",
+      "entries": "{count, plural, one {# attempt tracked} other {# attempts tracked}}",
+      "columns": {
+        "lifter": "Lifter",
+        "lift": "Lift",
+        "attempt": "Attempt",
+        "weight": "Weight",
+        "status": "Status",
+        "updated": "Updated",
+        "actions": "Actions"
+      },
+      "actions": {
+        "setting": "Setting...",
+        "current": "Live now",
+        "set_current": "Set live",
+        "quick_creating": "Creating...",
+        "quick_add": "Quick add next attempt"
+      },
+      "empty": "No attempts recorded yet."
+    },
+    "results": {
+      "title": "Results",
+      "subtitle": "Monitor standings by division or category.",
+      "entries": "{count, plural, one {# result} other {# results}}",
+      "views": {
+        "open": "Overall",
+        "age": "Age classes",
+        "weight": "Weight classes"
+      },
+      "loading": "Loading results...",
+      "empty": "No results calculated yet.",
+      "recalculate": "Recalculate standings",
+      "recalculating": "Recalculating...",
+      "export_csv": "Export CSV",
+      "export_json": "Export JSON",
+      "exporting": "Exporting...",
+      "columns": {
+        "lifter": "Lifter",
+        "place": "Place",
+        "age_category": "Age category",
+        "weight_class": "Weight class",
+        "best_squat": "Best squat",
+        "best_bench": "Best bench",
+        "best_deadlift": "Best deadlift",
+        "total": "Total",
+        "points": "Points",
+        "status": "Status"
+      },
+      "lot_number": "Lot #{lot}",
+      "disqualified": "Disqualified",
+      "record": "Record",
+      "status_ok": "Validated",
+      "unknown_category": "Unclassified",
+      "reload_failed": "Unable to refresh results.",
+      "toast_recalc_success": "Standings recalculated.",
+      "toast_recalc_error": "Could not recalculate standings.",
+      "toast_export_success": "Export generated.",
+      "toast_export_error": "Failed to export results."
+    },
+    "plates": {
+      "title": "Plate sets",
+      "subtitle": "Reference bar weights and available plates.",
+      "bar_weight_men": "Men's bar: {weight}",
+      "bar_weight_women": "Women's bar: {weight}",
+      "bar_weight_default": "Default bar: {weight}",
+      "columns": {
+        "weight": "Weight",
+        "quantity": "Quantity",
+        "color": "Color"
+      },
+      "empty": "No plate sets configured.",
+      "manage_link": "Configure plate sets"
+    },
+    "backups": {
+      "title": "Backups",
+      "subtitle": "Track scheduled snapshots stored in R2.",
+      "manage_link": "Open backup settings",
+      "total": "{count, plural, one {# backup} other {# backups}}",
+      "last_run": "Last run: {timestamp}",
+      "last_size": "Last size: {size}",
+      "columns": {
+        "timestamp": "Timestamp",
+        "size": "Size",
+        "contests": "Contests",
+        "competitors": "Competitors",
+        "registrations": "Registrations",
+        "attempts": "Attempts"
+      },
+      "empty": "No backup runs yet.",
+      "not_available": "Backups are not configured for this contest."
+    },
+    "error": {
+      "loading_title": "Unable to load contest data.",
+      "not_found": "We could not find this contest."
+    },
+    "toast": {
+      "attempts_saved": "Attempts saved.",
+      "attempt_modal_failed": "Unable to open the attempt editor.",
+      "quick_attempt_max": "All attempts for this lift are already scheduled.",
+      "quick_attempt_exists": "That attempt already exists.",
+      "quick_attempt_error": "Failed to create the next attempt.",
+      "quick_attempt_created": "Added attempt {number} {lift} at {weight} kg.",
+      "attempt_updated": "Attempt marked as {status}.",
+      "attempt_update_failed": "Could not update attempt status.",
+      "current_set": "Current attempt updated.",
+      "current_set_failed": "Unable to set the current attempt.",
+      "current_cleared": "Current attempt cleared.",
+      "current_cleared_failed": "Failed to clear the current attempt.",
+      "competitor_updated": "Competitor updated.",
+      "competitor_update_failed": "Could not update competitor.",
+      "registration_detail_failed": "Unable to open registration details.",
+      "bodyweight_updated": "Bodyweight updated.",
+      "bodyweight_update_failed": "Could not update bodyweight.",
+      "bodyweight_update_invalid": "Enter a valid bodyweight.",
+      "attempt_weight_invalid": "Enter a valid attempt weight.",
+      "attempt_updated_short": "Attempt updated.",
+      "label_exists": "Label already applied.",
+      "label_added": "Label added.",
+      "label_removed": "Label removed.",
+      "label_update_failed": "Could not update labels.",
+      "flights_updated": "Flights updated.",
+      "flights_update_failed": "Could not update flights.",
+      "active_flight_set": "Active flight set to {flight}.",
+      "active_flight_cleared": "Active flight cleared.",
+      "active_flight_failed": "Could not update active flight."
+    },
+    "modal": {
+      "edit_attempts_title": "Edit attempts • {name}",
+      "edit_competitor_title": "Edit competitor • {name}"
+    }
+  },
+  "display_table": {
+    "head": {
+      "default_contest": "Contest",
+      "subtitle": "Werewolf announcer desk"
+    },
+    "header": {
+      "tagline": "Live queue and results feed"
+    },
+    "connection": {
+      "live": "Live feed",
+      "connecting": "Connecting...",
+      "cached_with_age": "Cached copy • {minutes} min ago",
+      "cached": "Cached copy",
+      "offline": "Offline",
+      "retry": "Retry connection"
+    },
+    "errors": {
+      "load_failed_title": "Unable to load contest data"
+    },
+    "metrics": {
+      "lifters": "Registered lifters",
+      "pending": "Attempts in queue",
+      "last_update": "Last update"
+    },
+    "queue": {
+      "title": "Upcoming attempts",
+      "subtitle": "Rotation ordered by rising bar",
+      "empty": "No attempts are queued.",
+      "label": "{name} • {order}",
+      "meta": "{lift} • Attempt {number}",
+      "lot": "Lot #{lot}",
+      "lot_unknown": "Lot pending"
+    },
+    "recent": {
+      "title": "Recent results",
+      "subtitle": "Latest judged attempts",
+      "empty": "No attempts have been judged yet.",
+      "meta": "{lift} • Attempt {number}",
+      "updated": "Updated {time}"
+    },
+    "current": {
+      "title": "Live on platform",
+      "subtitle": "Current lifter and plate plan",
+      "lifter": "Lifter",
+      "lift": "Lift",
+      "attempt": "Attempt",
+      "weight": "Weight",
+      "plate_title": "Plate plan",
+      "plate_meta": "Total {total} kg • Bar {bar} kg"
+    },
+    "common": {
+      "weight_kg": "{weight} kg"
+    }
+  },
   "display_page": {
     "connection_retry": "Retry Connection",
     "awaiting_attempt": "Awaiting First Attempt",
@@ -684,5 +1122,47 @@
     "queue_desc": "Next lifters ordered by platform rotation.",
     "current_attempt": "Current Attempt",
     "current_desc": "Live attempt on the platform right now."
+  },
+  "display_current": {
+    "head": {
+      "default_contest": "Contest",
+      "subtitle": "Live platform display"
+    },
+    "errors": {
+      "load_failed_title": "Unable to load contest data",
+      "not_found_title": "Contest not found",
+      "not_found_hint": "Double-check the link or create a new contest."
+    },
+    "waiting": {
+      "first_title": "Awaiting first attempt",
+      "first_hint": "Once the first lifter goes live, the platform view will appear here.",
+      "next_title": "Waiting for the next lifter",
+      "next_hint": "Set the next attempt live from the desk view to update this screen."
+    },
+    "hero": {
+      "club_placeholder": "Independent lifter"
+    },
+    "info": {
+      "weight_class": "Weight class"
+    },
+    "meta": {
+      "bodyweight": "Bodyweight",
+      "order_label": "Queue #{order}"
+    },
+    "tiles": {
+      "attempt": "Attempt {number}"
+    },
+    "footer": {
+      "rack_height": "Rack height"
+    },
+    "sidebar": {
+      "share_title": "Share screen",
+      "no_plates": "Plate plan unavailable"
+    },
+    "lifts": {
+      "squat": "Squat",
+      "bench": "Bench press",
+      "deadlift": "Deadlift"
+    }
   }
 }

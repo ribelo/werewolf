@@ -72,12 +72,11 @@ describe('Score Engine', () => {
       expect(result.coefficientPoints).toBe(300 * 1.0 * 1.0); // Should use defaults
     });
 
-    it('ignores pending and skipped attempts', () => {
+    it('ignores pending attempts', () => {
       const context: ScoreComputationContext = {
         attempts: [
           { status: 'Successful', weight: 200, liftType: 'Squat' },
           { status: 'Pending', weight: 250, liftType: 'Squat' }, // Should be ignored
-          { status: 'Skipped', weight: 150, liftType: 'Bench' }, // Should be ignored
           { status: 'Successful', weight: 100, liftType: 'Bench' },
           { status: 'Successful', weight: 250, liftType: 'Deadlift' },
         ],
@@ -187,14 +186,12 @@ describe('Coefficient Calculations', () => {
   describe('calculateReshelCoefficient', () => {
     it('calculates coefficient for male lifter', () => {
       const coeff = calculateReshelCoefficient(82.5, 'Male');
-      expect(coeff).toBeGreaterThan(0.6);
-      expect(coeff).toBeLessThan(0.8);
+      expect(coeff).toBeCloseTo(1.029, 3);
     });
 
     it('calculates coefficient for female lifter', () => {
       const coeff = calculateReshelCoefficient(63, 'Female');
-      expect(coeff).toBeGreaterThan(0.9);
-      expect(coeff).toBeLessThan(1.2);
+      expect(coeff).toBeCloseTo(1.715, 3);
     });
 
     it('returns default coefficient for unknown gender', () => {
@@ -216,7 +213,7 @@ describe('Coefficient Calculations', () => {
 
     it('calculates veteran coefficient', () => {
       const coeff = calculateMcCulloughCoefficient('1960-01-01', '2025-01-01');
-      expect(coeff).toBe(1.12); // Veteran 60-64 (age 65)
+      expect(coeff).toBeCloseTo(1.48, 2); // Masters table entry for age 65
     });
 
     it('handles invalid dates gracefully', () => {

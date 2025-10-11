@@ -48,7 +48,7 @@ function createToastStore(): ToastStore {
       id,
       createdAt: Date.now(),
       duration: config.duration ?? DEFAULT_DURATION,
-      position: config.position ?? 'top-right',
+      position: config.position ?? 'bottom-right',
     };
 
     update(toasts => {

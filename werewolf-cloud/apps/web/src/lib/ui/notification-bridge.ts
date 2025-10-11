@@ -133,11 +133,6 @@ function handleAttemptUpserted(event: LiveEvent<Attempt>) {
       level = 'error';
       break;
 
-    case 'Skipped':
-      message = `${liftType} ${attemptNumber}: ${weight}kg - Skipped`;
-      level = 'warning';
-      break;
-
     case 'Pending':
       message = `${liftType} ${attemptNumber}: ${weight}kg - Ready`;
       level = 'info';

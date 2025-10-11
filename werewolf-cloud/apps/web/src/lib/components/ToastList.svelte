@@ -14,7 +14,11 @@
     action.callback();
   }
 
-  function getPositionClasses(position: string = 'top-right') {
+  function isBottomPosition(position: string = 'bottom-right') {
+    return position?.startsWith('bottom');
+  }
+
+  function getPositionClasses(position: string = 'bottom-right') {
     switch (position) {
       case 'top-left':
         return 'top-4 left-4';
@@ -47,10 +51,10 @@
 {#if mounted}
   <!-- Group toasts by position -->
   {#each ['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'] as position}
-    {@const positionToasts = $toast.filter(t => (t.position || 'top-right') === position)}
+    {@const positionToasts = $toast.filter(t => (t.position || 'bottom-right') === position)}
     {#if positionToasts.length > 0}
       <div class={`fixed z-50 pointer-events-none ${getPositionClasses(position)}`}>
-        <div class="flex flex-col gap-2 pointer-events-auto">
+        <div class={`flex ${isBottomPosition(position) ? 'flex-col-reverse' : 'flex-col'} gap-2 pointer-events-auto`}>
           {#each positionToasts as toastItem (toastItem.id)}
             <div
               class="max-w-sm w-full"

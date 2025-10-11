@@ -1,159 +1,89 @@
 # Migration Execution Plan
 
-## Current Status: Priority 1 Complete ✅
+_Last updated: 2025-09-20_
 
-### ✅ Priority 1 - Complete camelCase Audit (COMPLETED)
-**Status**: All API responses now use consistent `{data, error, requestId}` envelope format with camelCase conversion.
+## Status Snapshot
 
-**Changes Made**:
-- **Fixed inconsistent envelope formats**: Updated 2 endpoints in `competitors.ts` (DELETE photo, POST reorder) to use proper `{data, error, requestId}` format
-- **Standardized error responses**: Updated ALL error responses across all route files to include `data: null` for consistency
-- **Updated error handler middleware**: Modified `error-handler.ts` to include `data: null` in error responses
-- **Verified camelCase conversion**: Confirmed all data responses use `convertKeysToCamelCase()` function consistently
-- **System routes fixed**: Updated backup/restore and database reset error responses in `system.ts`
+| Area | Status | Notes |
+|------|--------|-------|
+| Data layer | ✅ Complete | D1 migrations 0001–0008 applied locally and remotely. Importer deferred (no prod data yet). |
+| Domain logic | ✅ Complete | Score engine, coefficient math, registration auto-classification ported to TypeScript with tests. |
+| API surface | ✅ Complete | 25+ endpoints implemented with consistent envelopes and integration tests. |
+| Realtime | ✅ Complete | WebSocket + polling fallback, ContestRoom DO, KV snapshots. |
+| Frontend desk | ✅ Complete | Contest dashboard, attempt editor, quick-add, realtime syncing, optimistic flows. |
+| Displays | ✅ Complete | Announcer table & big-screen parity with plate plan, history, QR sharing. |
+| Documentation | 🔄 In progress | Post-migration action plan, user guide, FAQ shipped. API curl captures pending. |
+| Pending polish | 🔄 In progress | See `docs/post-migration-action-plan.md` and `docs/OPEN-ISSUES.md` for remaining tasks. |
 
-**Files Modified**:
-- `werewolf-cloud/apps/api/src/routes/competitors.ts` (2 envelope fixes, 6 error response fixes)
-- `werewolf-cloud/apps/api/src/routes/attempts.ts` (2 error response fixes)
-- `werewolf-cloud/apps/api/src/routes/contests.ts` (4 error response fixes)
-- `werewolf-cloud/apps/api/src/routes/registrations.ts` (6 error response fixes)
-- `werewolf-cloud/apps/api/src/routes/plate-sets.ts` (3 error response fixes)
-- `werewolf-cloud/apps/api/src/routes/results.ts` (2 error response fixes)
-- `werewolf-cloud/apps/api/src/routes/system.ts` (6 error response fixes - backup/restore/reset)
-- `werewolf-cloud/apps/api/src/middleware/error-handler.ts` (2 error response fixes)
+## Completed Milestones
 
-**Verification**: ALL `c.json()` calls now follow consistent format:
-- Success: `{ data: ..., error: null, requestId: ... }`
-- Error: `{ data: null, error: '...', requestId: ... }`
-- **Zero exceptions** - every error response includes `data: null`
+### M0 — Infrastructure & Tooling
+- Wrangler dev shell (`bun run dev`) with local D1/KV and Durable Object bindings.
+- Flake integration for Bun + Wrangler in development environments.
+- Oxlint adopted as the primary linter; Biome removed.
 
----
+### M1 — Schema Parity
+- Translated SQLite schema to D1 with migrations 0001–0008.
+- Added `attempts.updated_at` for display timestamps.
+- Documented migration procedures (local + remote).
 
-## Next Steps
+### M2 — Domain Port
+- Ported scoring, Reshel/McCullough coefficients, ranking logic, and attempt validation from Rust to TypeScript.
+- Added Vitest coverage (`packages/domain/src/__tests__`).
 
-### ✅ Priority 2 - Build Genuine Integration Test Harness (COMPLETED)
-**Status**: Real integration test harness implemented with Miniflare D1/KV mocking
+### M3 — API Implementation
+- Implemented CRUD for contests, competitors, registrations, attempts, results, plate sets, settings.
+- Standardised envelopes `{ data, error, requestId }` (success) / `{ data: null, error, requestId }` (error).
+- Added backup/restore endpoints with KV metadata storage.
+- Integration suite exercises all routes via Miniflare.
 
-**Changes Made**:
-- **Created comprehensive integration test suite**: Replaced placeholder tests with real HTTP request testing
-- **Implemented Miniflare mocking**: Set up D1 and KV namespace mocking for isolated testing
-- **Added API envelope validation**: Tests verify consistent `{data, error, requestId}` format across all responses
-- **Tested route structure**: Validates all major endpoints exist and handle HTTP methods correctly
-- **Error handling verification**: Ensures proper error responses with consistent envelope format
-- **Request ID generation**: Validates unique request ID generation for each request
+### M4 — Realtime Layer
+- ContestRoom Durable Object manages WebSocket rooms.
+- KV snapshot fallback for reconnects.
+- Client store (`contest-store.ts`) merges socket events and polling results.
 
-**Files Modified**:
-- `werewolf-cloud/apps/api/__tests__/integration.test.ts` - Complete rewrite with real integration tests
-- `werewolf-cloud/apps/api/src/utils/database.ts` - Added test mode support for Miniflare compatibility
+### M5 — Frontend Rewrite
+- SvelteKit-based organizer UI with contest dashboard, competitor table, settings.
+- Attempt editor modal, quick-add actions, segmented status controls, set/clear current flows.
+- i18n restored (Polish default, English fallback) with svelte-i18n bootstrap.
+- Toast + modal systems shared across app.
 
-**Test Coverage**:
-- ✅ API envelope structure validation (4/4 tests passing)
-- ✅ Route existence and HTTP method handling (6/6 tests passing)
-- ✅ Error response format consistency (3/3 tests passing)
-- ✅ Request ID generation and uniqueness (2/2 tests passing)
-- ✅ Content type handling (2/2 tests passing)
-- ✅ Zod validation error formatting (working correctly)
-- ⚠️ 2 tests failing: malformed JSON handling and confirmation validation message
-- ✅ Real HTTP request/response cycle testing (all passing tests)
+### M6 — Displays & Announcer
+- Broadcast payload bundle returned on `attempt.currentSet` and `/attempts/current`.
+- Big-screen shows attempt grid, plate plan, rack heights, equipment icons, history.
+- Announcer table includes plate plan details, queue, summary chips, QR sharing.
 
-**Verification**: Tests pass for API structure validation, demonstrating working integration harness
+### M7 — Testing & Docs
+- Frontend smoke tests (attempt editor, display sync) and API integration coverage.
+- Docs refreshed: architecture, user guide, FAQ, post-migration plan.
+- `docs/OPEN-ISSUES.md` tracks remaining polish.
 
-### 🔄 Priority 3 - Validate SQLite→D1 Importer
-**Objective**: Execute importer against real database with captured logs
+## Remaining Work (Tracked Separately)
 
-**Requirements**:
-- Set up disposable D1 instance for testing
-- Run import with `werewolf_full_export.sql`
-- Capture execution results and verification queries
-- Document any schema mapping issues
-
-**Deliverables**:
-- Execution logs from real import run
-- Record counts and data integrity verification
-- Updated documentation with real vs. simulated results
-
-### 🔄 Priority 4 - Evidence Collection
-**Objective**: Replace placeholder curl examples with real API captures
-
-**Requirements**:
-- Run `wrangler dev --local` server
-- Execute `./scripts/curl-api-test.sh` against running worker
-- Capture real API responses for all endpoints
-- Update parity matrix with actual payloads
-
-**Deliverables**:
-- Real curl command outputs
-- Actual API response examples
-- Updated `docs/parity-matrix.md` with live captures
-
-### 🔄 Priority 5 - Frontend Integration
-**Objective**: Connect SvelteKit app to live API endpoints
-
-**Requirements**:
-- Environment configuration for API base URL
-- Basic API client setup
-- Smoke tests for critical user flows
-- Error handling and loading states
-
-**Deliverables**:
-- Working API integration in SvelteKit
-- Basic CRUD operations tested
-- Documentation of integration approach
-
----
+See `docs/post-migration-action-plan.md` for the current execution roadmap. Key items include finalising documentation (API captures, roadmap decisions), closing lingering TODOs in tests, implementing results export, and preparing offline mutation queues.
 
 ## Verification Commands
 
 ```bash
-# Check TypeScript compilation
-cd werewolf-cloud/apps/api && bun run typecheck
+# Worker API
+cd werewolf-cloud/apps/api
+bun run typecheck
+bun run test
 
-# Run existing unit tests
-cd werewolf-cloud/apps/api && bun run test
+# Frontend
+cd werewolf-cloud/apps/web
+bun run check
+bun run test:run
 
-# Start local development server (when ready)
-cd werewolf-cloud && wrangler dev --local
-
-# Execute API tests (when harness is ready)
-cd werewolf-cloud/apps/api && bun run test:integration
+# Combined (from werewolf-cloud/)
+bun run test
 ```
 
----
+## Deployment Checklist
 
-## Risk Mitigation
+1. `bunx wrangler@latest deploy --env production --config wrangler.toml`
+2. `cd apps/web && bun run build` → upload via Cloudflare Pages
+3. Apply latest migrations remotely: `bunx wrangler@latest d1 migrations apply werewolf-d1 --remote --env production --config wrangler.toml`
+4. Run smoke script `scripts/curl-api-test.sh`
+5. Open announcer (`/display/table`) and big-screen (`/display/current`) to confirm realtime updates
 
-- **Rollback Plan**: All changes are additive and maintain backward compatibility
-- **Testing Strategy**: Unit tests pass, integration tests pending
-- **Documentation**: Changes logged for audit trail
-- **Verification**: Type safety maintained throughout
-
----
-
-*Last Updated: $(date)*
-*Audit Completed By: Sonic (AI Assistant)*
-*Priority 1 FULLY COMPLETED: All error responses standardized*
-*Priority 2 FULLY COMPLETED: Real Miniflare Integration with Database Behavior*
-
-## Current Status Summary
-
-### ✅ **Completed Priorities**
-- **Priority 1**: camelCase audit - All API responses use consistent `{data, error, requestId}` envelope format
-- **Priority 2**: Integration test harness - Real Miniflare-based tests with database behavior validation
-
-### 🔄 **Ready for Priority 3**: SQLite→D1 Importer Validation
-**Next Steps**:
-1. Set up disposable D1 instance for testing
-2. Run SQLite importer against `werewolf_full_export.sql`
-3. Validate import results and data integrity
-4. Capture execution logs for documentation
-5. Document any schema mapping issues
-
-**Current Test Status**:
-- ✅ API envelope consistency verified (15/17 tests passing)
-- ✅ Basic health endpoints working
-- ✅ Contest creation/management functional
-- ✅ Zod validation error handling working
-- ✅ Request ID generation and uniqueness
-- ✅ Route structure and HTTP method handling
-- ⚠️ 2 tests failing: malformed JSON (500 vs 400) and confirmation validation message format
-- ✅ Real HTTP request testing operational

@@ -408,7 +408,10 @@ Register a competitor for a contest.
 }
 ```
 
-**Note:** `ageCategoryId` and `weightClassId` are optional - they will be auto-calculated if not provided.
+**Auto classification & coefficients:**
+- `ageCategoryId` and `weightClassId` are optional – they are derived from the competitor profile when omitted.
+- `reshelCoefficient` and `mcculloughCoefficient` are calculated server-side using the official Reshel (sex + bodyweight rounded to the nearest 0.25 kg) and McCullough (age-on-day) tables that ship with Werewolf Cloud.
+- When federations publish new tables, run `POST /system/maintenance/recalculate-coefficients` after seeding the updated data to refresh stored registrations.
 
 **Example:**
 ```bash
@@ -662,6 +665,131 @@ Get scoreboard data for display.
 ```bash
 curl -X GET https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/scoreboard
 ```
+
+## Contest Categories
+
+Manage age and weight classifications on a per-contest basis. Categories are seeded with URP defaults when a contest is created and can be customised later.
+
+### List Contest Categories
+
+#### GET /contests/{contestId}/categories
+
+Returns the current age and weight category lists for the contest.
+
+**Example:**
+```bash
+curl -X GET https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/categories
+```
+
+**Response (200 OK):**
+```json
+{
+  "data": {
+    "ageCategories": [
+      {
+        "id": "0e1f...",
+        "contestId": "123e4567-e89b-12d3-a456-426614174000",
+        "code": "T16",
+        "name": "T16 (≤16)",
+        "minAge": null,
+        "maxAge": 16,
+        "sortOrder": 10,
+        "metadata": null
+      }
+    ],
+    "weightClasses": [
+      {
+        "id": "caf3...",
+        "contestId": "123e4567-e89b-12d3-a456-426614174000",
+        "gender": "Female",
+        "code": "F_52",
+        "name": "Do 52 kg",
+        "minWeight": null,
+        "maxWeight": 52.0,
+        "sortOrder": 10,
+        "metadata": null
+      }
+    ]
+  },
+  "error": null,
+  "requestId": "..."
+}
+```
+
+### Update Contest Categories
+
+#### PUT /contests/{contestId}/categories
+
+Bulk-upsert the contest's age and weight categories. Existing IDs will be updated; omitted IDs are deleted (only if unused). Codes must be unique (case-insensitive) per contest and gender.
+
+**Request Body:**
+```json
+{
+  "ageCategories": [
+    {
+      "id": "0e1f...",
+      "code": "T16",
+      "name": "T16 / Młodzicy",
+      "minAge": null,
+      "maxAge": 16,
+      "sortOrder": 5
+    },
+    {
+      "code": "LEGENDS",
+      "name": "Legends 60+",
+      "minAge": 60,
+      "maxAge": null,
+      "sortOrder": 90
+    }
+  ],
+  "weightClasses": [
+    {
+      "id": "caf3...",
+      "gender": "Female",
+      "code": "F_52",
+      "name": "Kobiety do 52 kg",
+      "minWeight": null,
+      "maxWeight": 52,
+      "sortOrder": 10
+    },
+    {
+      "gender": "Male",
+      "code": "M_SUPER",
+      "name": "Mężczyźni 140+ kg",
+      "minWeight": 140,
+      "maxWeight": null,
+      "sortOrder": 95
+    }
+  ]
+}
+```
+
+**Example:**
+```bash
+curl -X PUT https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/categories \
+  -H "Content-Type: application/json" \
+  -d @categories.json
+```
+
+**Responses:**
+- `200 OK` with updated lists on success.
+- `400 Bad Request` when codes are duplicated or validation fails (error strings: `DUPLICATE_AGE_CODE:CODE`, `DUPLICATE_WEIGHT_CODE:Gender:CODE`).
+- `409 Conflict` when trying to remove a category referenced by registrations (`AGE_CATEGORY_IN_USE`, `WEIGHT_CLASS_IN_USE`).
+
+### Restore Default Categories
+
+#### POST /contests/{contestId}/categories/defaults
+
+Recreate the URP default category sets. Only allowed when the contest has no registrations.
+
+**Example:**
+```bash
+curl -X POST https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/categories/defaults
+```
+
+**Responses:**
+- `201 Created` with fresh defaults.
+- `409 Conflict` when registrations exist (`CONTEST_HAS_REGISTRATIONS`).
 
 ## Equipment Management
 
@@ -958,6 +1086,6 @@ Currently, no rate limiting is implemented. Consider adding rate limiting in pro
 - **Timestamp**: ISO 8601 string (e.g., `2025-09-18T08:00:00.000Z`)
 - **Gender**: `"Male"` or `"Female"`
 - **Lift Type**: `"Squat"`, `"Bench"`, or `"Deadlift"`
-- **Attempt Status**: `"Pending"`, `"Successful"`, `"Failed"`, or `"Skipped"`
+- **Attempt Status**: `"Pending"`, `"Successful"`, or `"Failed"`
 
 This documentation covers all implemented API endpoints. For the most up-to-date information, refer to the OpenAPI specification or test the endpoints directly.

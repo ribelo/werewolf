@@ -1,8 +1,12 @@
 <script lang="ts">
   import Layout from '$lib/components/Layout.svelte';
   import { PAGE_LINKS } from '$lib/nav';
+  import { apiClient } from '$lib/api';
+  import { toast } from '$lib/ui/toast';
   import { _ } from 'svelte-i18n';
+  import { get } from 'svelte/store';
   import type { PageData } from './$types';
+  import type { ContestSummary } from '$lib/types';
 
   export let data: PageData;
   export let params: Record<string, string> = {};
@@ -17,9 +21,43 @@
   const { contests, error, database, databaseError, apiBase } = data;
 
   const stats = database?.stats;
-  const totalContests = contests.length;
   const totalCompetitors = stats?.competitors ?? 0;
   const totalRegistrations = stats?.registrations ?? 0;
+
+  const translate = (key: string, values?: Record<string, unknown>) => get(_)(key, values) as string;
+
+  let contestList: ContestSummary[] = [...contests];
+  let deleting: Record<string, boolean> = {};
+  $: totalContests = contestList.length;
+
+  async function handleDeleteContest(contestId: string, name: string) {
+    if (deleting[contestId]) return;
+
+    const confirmed = typeof window === 'undefined'
+      ? true
+      : window.confirm(translate('dashboard.contest.delete_confirm', { values: { name } }));
+
+    if (!confirmed) {
+      return;
+    }
+
+    deleting = { ...deleting, [contestId]: true };
+
+    try {
+      const response = await apiClient.delete(`/contests/${contestId}`);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      contestList = contestList.filter((contest) => contest.id !== contestId);
+      toast.success(translate('dashboard.contest.delete_success', { values: { name } }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : translate('dashboard.contest.delete_error');
+      toast.error(message);
+    } finally {
+      deleting = { ...deleting, [contestId]: false };
+    }
+  }
 </script>
 
 <svelte:head>
@@ -96,24 +134,38 @@
         <h3 class="text-h3 text-status-error mb-2">{$_('dashboard.active.error_title')}</h3>
         <p class="text-body text-text-secondary">{error}</p>
       </div>
-    {:else if contests.length === 0}
+    {:else if contestList.length === 0}
       <div class="card">
         <p class="text-body text-text-secondary">{$_('dashboard.active.empty')}</p>
       </div>
     {:else}
       <div class="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-        {#each contests as contest}
-          <a href={`/contests/${contest.id}`} class="card hover:border-primary-red transition-colors">
-            <header class="card-header flex items-center justify-between">
+        {#each contestList as contest}
+          <a href={`/contests/${contest.id}`} class="card hover:border-primary-red transition-colors relative">
+            <header class="card-header flex items-start justify-between gap-3">
               <div>
                 <h3 class="text-h2 text-text-primary">{contest.name}</h3>
                 <p class="text-caption text-text-secondary">
                   {contest.location} • {new Date(contest.date).toLocaleDateString()}
                 </p>
               </div>
-              <span class={`status-badge ${contest.status === 'Active' ? 'status-active' : contest.status === 'Paused' ? 'status-warning' : 'status-neutral'}`}>
-                {contest.status}
-              </span>
+              <div class="flex flex-col items-end gap-2">
+                <span class={`status-badge ${contest.status === 'Active' ? 'status-active' : contest.status === 'Paused' ? 'status-warning' : 'status-neutral'}`}>
+                  {contest.status}
+                </span>
+                <button
+                  type="button"
+                  class="btn-secondary px-2 py-1 text-xxs"
+                  on:click|stopPropagation|preventDefault={() => handleDeleteContest(contest.id, contest.name)}
+                  disabled={deleting[contest.id]}
+                >
+                  {#if deleting[contest.id]}
+                    {$_('dashboard.contest.deleting')}
+                  {:else}
+                    {$_('dashboard.contest.delete_button')}
+                  {/if}
+                </button>
+              </div>
             </header>
             <dl class="space-y-2 text-body text-text-secondary">
               <div class="flex justify-between">

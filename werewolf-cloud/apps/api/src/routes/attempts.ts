@@ -7,6 +7,106 @@ import { executeQuery, executeQueryOne, executeMutation, generateId, getCurrentT
 import { publishEvent } from '../live/publish';
 import { attemptUpsertSchema, attemptResultUpdateSchema, attemptStatusSchema, liftTypeSchema } from '@werewolf/domain/models/attempt';
 import { getAttemptWithRelations, buildCurrentAttemptPayload } from '../services/attempts';
+import { buildPlatePlan } from '../services/plate-plan';
+
+const FLOAT_EPSILON = 1e-6;
+
+function parseLabels(input: unknown): string[] {
+  if (Array.isArray(input)) {
+    return input.map(String);
+  }
+  if (typeof input === 'string') {
+    try {
+      const parsed = JSON.parse(input);
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+async function getRegistrationGender(
+  db: Database,
+  contestId: string,
+  registrationId: string
+): Promise<string | null | undefined> {
+  const row = await executeQueryOne<{ gender: string | null }>(
+    db,
+    `
+      SELECT c.gender
+      FROM registrations r
+      JOIN competitors c ON r.competitor_id = c.id
+      WHERE r.id = ? AND r.contest_id = ?
+    `,
+    [registrationId, contestId]
+  );
+
+  if (!row) {
+    return undefined;
+  }
+
+  return row.gender ?? null;
+}
+
+async function validateAttemptWeight(
+  db: Database,
+  contestId: string,
+  registrationId: string,
+  weight: number
+): Promise<
+  | { ok: true; barWeight: number; increment: number }
+  | { ok: false; status?: number; error: string; details?: Record<string, unknown> }
+> {
+  if (!Number.isFinite(weight) || weight <= 0) {
+    return {
+      ok: false,
+      error: 'INVALID_WEIGHT',
+      details: { weight },
+    };
+  }
+
+  const gender = await getRegistrationGender(db, contestId, registrationId);
+  if (gender === undefined) {
+    return {
+      ok: false,
+      status: 404,
+      error: 'REGISTRATION_NOT_FOUND',
+    };
+  }
+
+  const platePlan = await buildPlatePlan(db, contestId, weight, { gender: gender ?? null });
+  const barWeight = platePlan.barWeight ?? 0;
+  const increment = platePlan.increment > 0 ? platePlan.increment : 2.5;
+
+  const loadable = weight - barWeight;
+  if (loadable < -FLOAT_EPSILON) {
+    return {
+      ok: false,
+      error: 'BELOW_BAR_WEIGHT',
+      details: { weight, barWeight },
+    };
+  }
+
+  if (loadable <= FLOAT_EPSILON) {
+    return { ok: true, barWeight, increment };
+  }
+
+  if (!platePlan.exact || Math.abs(platePlan.total - weight) > FLOAT_EPSILON) {
+    return {
+      ok: false,
+      error: 'UNLOADABLE_WEIGHT',
+      details: {
+        weight,
+        barWeight,
+        increment,
+        achievableWeight: platePlan.total,
+      },
+    };
+  }
+
+  return { ok: true, barWeight, increment };
+}
 
 export const registrationAttempts = new Hono<WerewolfEnvironment>();
 
@@ -16,6 +116,31 @@ registrationAttempts.post('/', zValidator('json', attemptUpsertSchema), async (c
   const contestId = c.req.param('contestId');
   const registrationId = c.req.param('registrationId');
   const input = c.req.valid('json');
+
+  if (!contestId || !registrationId) {
+    return c.json(
+      {
+        data: null,
+        error: 'MISSING_IDENTIFIERS',
+        requestId: c.get('requestId'),
+      },
+      400
+    );
+  }
+
+  const validation = await validateAttemptWeight(db, contestId, registrationId, input.weight);
+  if (!validation.ok) {
+    const response: Record<string, unknown> = {
+      data: null,
+      error: validation.error,
+      requestId: c.get('requestId'),
+    };
+    if (validation.details) {
+      response['details'] = validation.details;
+    }
+    const status = validation.status === 404 ? 404 : 400;
+    return c.json(response, status);
+  }
 
   // Check if attempt already exists
   const existing = await executeQueryOne(
@@ -70,6 +195,25 @@ registrationAttempts.post('/', zValidator('json', attemptUpsertSchema), async (c
         status: 'Pending',
       },
     });
+
+    // Check if this attempt is the current attempt and refresh current bundle
+    const currentLift = await executeQueryOne(db, 
+      `SELECT * FROM current_lifts 
+       WHERE contest_id = ? AND registration_id = ? 
+       AND lift_type = ? AND attempt_number = ? AND is_active = true`,
+      [contestId, registrationId, input.liftType, input.attemptNumber]
+    );
+
+    if (currentLift && typeof attemptId === 'string') {
+      // Re-fetch and publish updated current attempt bundle
+      const bundle = await buildCurrentAttemptPayload(db, contestId, attemptId);
+      if (bundle) {
+        await publishEvent(c.env, contestId, {
+          type: 'attempt.currentSet',
+          payload: bundle
+        });
+      }
+    }
   }
 
   return c.json({
@@ -171,7 +315,7 @@ contestAttempts.get('/current', async (c) => {
     });
   }
 
-  const payload = currentLift.id ? await buildCurrentAttemptPayload(db, contestId, String(currentLift.id)) : null;
+  const payload = (currentLift.id && typeof currentLift.id === 'string' && contestId) ? await buildCurrentAttemptPayload(db, contestId, currentLift.id) : null;
 
   return c.json({
     data: payload,
@@ -370,6 +514,14 @@ contestAttempts.get('/queue', async (c) => {
     [contestId]
   );
 
+  const contestMeta = await executeQueryOne<{ active_flight: string | null }>(
+    db,
+    'SELECT active_flight FROM contests WHERE id = ?',
+    [contestId]
+  );
+
+  const activeFlight = contestMeta?.active_flight ?? null;
+
   if (!contestState || !contestState.current_lift) {
     return c.json({
       data: [],
@@ -386,18 +538,38 @@ contestAttempts.get('/queue', async (c) => {
       a.status, a.timestamp, a.judge1_decision, a.judge2_decision, a.judge3_decision,
       a.notes, a.created_at, a.updated_at,
       comp.first_name, comp.last_name, comp.competition_order, r.lot_number,
-      comp.first_name || ' ' || comp.last_name AS competitor_name
+      comp.first_name || ' ' || comp.last_name AS competitor_name,
+      r.flight_code, r.flight_order,
+      COALESCE(r.labels, '[]') AS labels
     FROM attempts a
     JOIN registrations r ON a.registration_id = r.id
     JOIN competitors comp ON r.competitor_id = comp.id
-    WHERE r.contest_id = ? AND a.lift_type = ? AND a.attempt_number = ? AND a.status = 'Pending'
-    ORDER BY comp.competition_order ASC, comp.last_name ASC, comp.first_name ASC
+    WHERE r.contest_id = ?
+      AND a.lift_type = ?
+      AND a.attempt_number = ?
+      AND a.status = 'Pending'
+      AND a.weight IS NOT NULL
+      ${activeFlight ? 'AND r.flight_code = ?' : ''}
+    ORDER BY a.weight ASC,
+      COALESCE(r.flight_order, comp.competition_order, 9999) ASC,
+      COALESCE(r.lot_number, 9999) ASC,
+      comp.competition_order ASC,
+      comp.last_name ASC,
+      comp.first_name ASC
     `,
-    [contestId, contestState.current_lift, contestState.current_round]
+    activeFlight
+      ? [contestId, contestState.current_lift, contestState.current_round, activeFlight]
+      : [contestId, contestState.current_lift, contestState.current_round]
   );
 
+  const camel = convertKeysToCamelCase(attempts) as any[];
+  const enriched = camel.map((row) => ({
+    ...row,
+    labels: parseLabels(row.labels),
+  }));
+
   return c.json({
-    data: convertKeysToCamelCase(attempts),
+    data: enriched,
     error: null,
     requestId: c.get('requestId'),
   });

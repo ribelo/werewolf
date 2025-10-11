@@ -15,6 +15,9 @@ export interface ContestSummary {
   status: string;
   mensBarWeight: number;
   womensBarWeight: number;
+  competitionType?: string | null;
+  organizer?: string | null;
+  notes?: string | null;
 }
 
 export interface CompetitorSummary {
@@ -60,7 +63,9 @@ export interface Registration {
   club?: string;
   city?: string;
   weightClassId: string;
-  ageClassId: string;
+  weightClassName?: string | null;
+  ageCategoryId: string;
+  ageCategoryName?: string | null;
   bodyweight: number;
   lotNumber: string | null;
   equipmentM: boolean;
@@ -72,6 +77,9 @@ export interface Registration {
   reshelCoefficient?: number | null;
   mcculloughCoefficient?: number | null;
   competitionOrder?: number;
+  flightCode?: string | null;
+  flightOrder?: number | null;
+  labels?: string[];
 }
 
 export interface RegistrationSummary {
@@ -88,6 +96,9 @@ export interface RegistrationSummary {
   rackHeightSquat?: number | null;
   rackHeightBench?: number | null;
   competitionOrder?: number | null;
+  flightCode?: string | null;
+  flightOrder?: number | null;
+  labels?: string[];
 }
 
 export interface ContestDetail {
@@ -99,8 +110,14 @@ export interface ContestDetail {
   status: string;
   mensBarWeight: number;
   womensBarWeight: number;
+  clampWeight: number;
+  activeFlight?: string | null;
   registrations: Registration[];
   updatedAt?: string;
+  competitionType?: string | null;
+  organizer?: string | null;
+  notes?: string | null;
+  federationRules?: string | null;
 }
 
 export interface ContestLiveSummary {
@@ -113,6 +130,8 @@ export interface ContestLiveSummary {
   barWeight?: number | null;
   mensBarWeight?: number | null;
   womensBarWeight?: number | null;
+  clampWeight?: number | null;
+  competitionType?: string | null;
 }
 
 export interface UI {
@@ -122,6 +141,14 @@ export interface UI {
 
 export interface PlateDefinition {
   weight: number;
+  quantity: number;
+  color: string;
+}
+
+export interface ContestPlateSetEntry {
+  contestId?: string;
+  plateWeight?: number;
+  weight?: number;
   quantity: number;
   color: string;
 }
@@ -140,11 +167,18 @@ export interface PlatePlan {
   targetWeight: number;
   barWeight: number;
   weightToLoad: number;
+  clampWeight: number;
 }
 
 export interface Competition {
   defaultBarWeight: number;
   defaultPlateSet: PlateDefinition[];
+}
+
+export interface ContestBarWeights {
+  mensBarWeight: number;
+  womensBarWeight: number;
+  barWeight?: number | null;
 }
 
 export interface Database {
@@ -202,23 +236,55 @@ export interface DatabaseInfo {
   stats: DatabaseStats;
 }
 
-export interface WeightClass {
+export interface ContestRankingEntry {
   id: string;
+  registrationId: string;
+  contestId: string;
+  bestBench?: number | null;
+  bestSquat?: number | null;
+  bestDeadlift?: number | null;
+  totalWeight?: number | null;
+  coefficientPoints?: number | null;
+  placeOpen?: number | null;
+  placeInAgeClass?: number | null;
+  placeInWeightClass?: number | null;
+  isDisqualified?: boolean | null;
+  disqualificationReason?: string | null;
+  brokeRecord?: boolean | null;
+  recordType?: string | null;
+  calculatedAt?: string | null;
+  firstName: string;
+  lastName: string;
+  lotNumber?: string | null;
+  ageCategory?: string | null;
+  weightClass?: string | null;
+}
+
+export interface WeightClass {
+  id?: string;
+  contestId?: string;
+  code: string;
   name: string;
   gender: string;
-  minWeight: number;
-  maxWeight: number;
+  minWeight: number | null;
+  maxWeight: number | null;
+  sortOrder?: number | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface AgeCategory {
-  id: string;
+  id?: string;
+  contestId?: string;
+  code: string;
   name: string;
-  minAge: number;
-  maxAge: number;
+  minAge: number | null;
+  maxAge: number | null;
+  sortOrder?: number | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 export type LiftType = 'Squat' | 'Bench' | 'Deadlift';
-export type AttemptStatus = 'Pending' | 'Successful' | 'Failed' | 'Skipped';
+export type AttemptStatus = 'Pending' | 'Successful' | 'Failed';
 export type AttemptNumber = 1 | 2 | 3 | 4;
 
 export interface Attempt {
@@ -283,10 +349,12 @@ export interface CurrentAttemptBundle {
   };
 }
 
-export interface ReferenceData {
+export interface ContestCategories {
   weightClasses: WeightClass[];
   ageCategories: AgeCategory[];
 }
+
+export type ReferenceData = ContestCategories;
 
 export class ApiError extends Error {
   constructor(public override message: string, public status: number) {

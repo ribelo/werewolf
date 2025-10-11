@@ -23,6 +23,8 @@ export const contestSchema = z.object({
   mensBarWeight: z.number().nonnegative().default(20),
   womensBarWeight: z.number().nonnegative().default(15),
   barWeight: z.number().nonnegative().default(20),
+  clampWeight: z.number().nonnegative().default(2.5),
+  activeFlight: z.string().min(1).nullable().optional(),
 });
 export type Contest = z.infer<typeof contestSchema>;
 
@@ -43,5 +45,7 @@ export const contestUpdateSchema = contestCreateSchema.partial().extend({
   isArchived: z.boolean().optional(),
   mensBarWeight: z.number().positive().optional(),
   womensBarWeight: z.number().positive().optional(),
+  clampWeight: z.number().positive().optional(),
+  activeFlight: z.string().min(1).nullable().optional(),
 });
 export type ContestUpdateInput = z.infer<typeof contestUpdateSchema>;

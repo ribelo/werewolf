@@ -1,0 +1,2101 @@
+{
+  "source": "http://www.irp-powerlifting.com/pdf/reshel_men.pdf",
+  "retrievedAt": "2025-09-20T10:45:46.800987+00:00",
+  "unit": "kg",
+  "gender": "male",
+  "incrementKg": 0.25,
+  "entries": [
+    {
+      "bodyweightKg": 50.0,
+      "coefficient": 1.955
+    },
+    {
+      "bodyweightKg": 50.25,
+      "coefficient": 1.937
+    },
+    {
+      "bodyweightKg": 50.5,
+      "coefficient": 1.92
+    },
+    {
+      "bodyweightKg": 50.75,
+      "coefficient": 1.902
+    },
+    {
+      "bodyweightKg": 51.0,
+      "coefficient": 1.885
+    },
+    {
+      "bodyweightKg": 51.25,
+      "coefficient": 1.867
+    },
+    {
+      "bodyweightKg": 51.5,
+      "coefficient": 1.851
+    },
+    {
+      "bodyweightKg": 51.75,
+      "coefficient": 1.835
+    },
+    {
+      "bodyweightKg": 52.0,
+      "coefficient": 1.818
+    },
+    {
+      "bodyweightKg": 52.25,
+      "coefficient": 1.803
+    },
+    {
+      "bodyweightKg": 52.5,
+      "coefficient": 1.788
+    },
+    {
+      "bodyweightKg": 52.75,
+      "coefficient": 1.773
+    },
+    {
+      "bodyweightKg": 53.0,
+      "coefficient": 1.758
+    },
+    {
+      "bodyweightKg": 53.25,
+      "coefficient": 1.743
+    },
+    {
+      "bodyweightKg": 53.5,
+      "coefficient": 1.727
+    },
+    {
+      "bodyweightKg": 53.75,
+      "coefficient": 1.712
+    },
+    {
+      "bodyweightKg": 54.0,
+      "coefficient": 1.697
+    },
+    {
+      "bodyweightKg": 54.25,
+      "coefficient": 1.682
+    },
+    {
+      "bodyweightKg": 54.5,
+      "coefficient": 1.667
+    },
+    {
+      "bodyweightKg": 54.75,
+      "coefficient": 1.655
+    },
+    {
+      "bodyweightKg": 55.0,
+      "coefficient": 1.642
+    },
+    {
+      "bodyweightKg": 55.25,
+      "coefficient": 1.63
+    },
+    {
+      "bodyweightKg": 55.5,
+      "coefficient": 1.617
+    },
+    {
+      "bodyweightKg": 55.75,
+      "coefficient": 1.605
+    },
+    {
+      "bodyweightKg": 56.0,
+      "coefficient": 1.593
+    },
+    {
+      "bodyweightKg": 56.25,
+      "coefficient": 1.58
+    },
+    {
+      "bodyweightKg": 56.5,
+      "coefficient": 1.568
+    },
+    {
+      "bodyweightKg": 56.75,
+      "coefficient": 1.555
+    },
+    {
+      "bodyweightKg": 57.0,
+      "coefficient": 1.543
+    },
+    {
+      "bodyweightKg": 57.25,
+      "coefficient": 1.531
+    },
+    {
+      "bodyweightKg": 57.5,
+      "coefficient": 1.518
+    },
+    {
+      "bodyweightKg": 57.75,
+      "coefficient": 1.506
+    },
+    {
+      "bodyweightKg": 58.0,
+      "coefficient": 1.497
+    },
+    {
+      "bodyweightKg": 58.25,
+      "coefficient": 1.488
+    },
+    {
+      "bodyweightKg": 58.5,
+      "coefficient": 1.478
+    },
+    {
+      "bodyweightKg": 58.75,
+      "coefficient": 1.469
+    },
+    {
+      "bodyweightKg": 59.0,
+      "coefficient": 1.46
+    },
+    {
+      "bodyweightKg": 59.25,
+      "coefficient": 1.451
+    },
+    {
+      "bodyweightKg": 59.5,
+      "coefficient": 1.442
+    },
+    {
+      "bodyweightKg": 59.75,
+      "coefficient": 1.432
+    },
+    {
+      "bodyweightKg": 60.0,
+      "coefficient": 1.423
+    },
+    {
+      "bodyweightKg": 60.25,
+      "coefficient": 1.414
+    },
+    {
+      "bodyweightKg": 60.5,
+      "coefficient": 1.405
+    },
+    {
+      "bodyweightKg": 60.75,
+      "coefficient": 1.398
+    },
+    {
+      "bodyweightKg": 61.0,
+      "coefficient": 1.391
+    },
+    {
+      "bodyweightKg": 61.25,
+      "coefficient": 1.384
+    },
+    {
+      "bodyweightKg": 61.5,
+      "coefficient": 1.377
+    },
+    {
+      "bodyweightKg": 61.75,
+      "coefficient": 1.371
+    },
+    {
+      "bodyweightKg": 62.0,
+      "coefficient": 1.364
+    },
+    {
+      "bodyweightKg": 62.25,
+      "coefficient": 1.357
+    },
+    {
+      "bodyweightKg": 62.5,
+      "coefficient": 1.35
+    },
+    {
+      "bodyweightKg": 62.75,
+      "coefficient": 1.343
+    },
+    {
+      "bodyweightKg": 63.0,
+      "coefficient": 1.336
+    },
+    {
+      "bodyweightKg": 63.25,
+      "coefficient": 1.329
+    },
+    {
+      "bodyweightKg": 63.5,
+      "coefficient": 1.322
+    },
+    {
+      "bodyweightKg": 63.75,
+      "coefficient": 1.317
+    },
+    {
+      "bodyweightKg": 64.0,
+      "coefficient": 1.311
+    },
+    {
+      "bodyweightKg": 64.25,
+      "coefficient": 1.306
+    },
+    {
+      "bodyweightKg": 64.5,
+      "coefficient": 1.3
+    },
+    {
+      "bodyweightKg": 64.75,
+      "coefficient": 1.295
+    },
+    {
+      "bodyweightKg": 65.0,
+      "coefficient": 1.29
+    },
+    {
+      "bodyweightKg": 65.25,
+      "coefficient": 1.284
+    },
+    {
+      "bodyweightKg": 65.5,
+      "coefficient": 1.279
+    },
+    {
+      "bodyweightKg": 65.75,
+      "coefficient": 1.273
+    },
+    {
+      "bodyweightKg": 66.0,
+      "coefficient": 1.268
+    },
+    {
+      "bodyweightKg": 66.25,
+      "coefficient": 1.263
+    },
+    {
+      "bodyweightKg": 66.5,
+      "coefficient": 1.257
+    },
+    {
+      "bodyweightKg": 66.75,
+      "coefficient": 1.252
+    },
+    {
+      "bodyweightKg": 67.0,
+      "coefficient": 1.246
+    },
+    {
+      "bodyweightKg": 67.25,
+      "coefficient": 1.242
+    },
+    {
+      "bodyweightKg": 67.5,
+      "coefficient": 1.237
+    },
+    {
+      "bodyweightKg": 67.75,
+      "coefficient": 1.233
+    },
+    {
+      "bodyweightKg": 68.0,
+      "coefficient": 1.228
+    },
+    {
+      "bodyweightKg": 68.25,
+      "coefficient": 1.224
+    },
+    {
+      "bodyweightKg": 68.5,
+      "coefficient": 1.219
+    },
+    {
+      "bodyweightKg": 68.75,
+      "coefficient": 1.215
+    },
+    {
+      "bodyweightKg": 69.0,
+      "coefficient": 1.21
+    },
+    {
+      "bodyweightKg": 69.25,
+      "coefficient": 1.206
+    },
+    {
+      "bodyweightKg": 69.5,
+      "coefficient": 1.202
+    },
+    {
+      "bodyweightKg": 69.75,
+      "coefficient": 1.198
+    },
+    {
+      "bodyweightKg": 70.0,
+      "coefficient": 1.194
+    },
+    {
+      "bodyweightKg": 70.25,
+      "coefficient": 1.19
+    },
+    {
+      "bodyweightKg": 70.5,
+      "coefficient": 1.186
+    },
+    {
+      "bodyweightKg": 70.75,
+      "coefficient": 1.182
+    },
+    {
+      "bodyweightKg": 71.0,
+      "coefficient": 1.178
+    },
+    {
+      "bodyweightKg": 71.25,
+      "coefficient": 1.174
+    },
+    {
+      "bodyweightKg": 71.5,
+      "coefficient": 1.17
+    },
+    {
+      "bodyweightKg": 71.75,
+      "coefficient": 1.166
+    },
+    {
+      "bodyweightKg": 72.0,
+      "coefficient": 1.162
+    },
+    {
+      "bodyweightKg": 72.25,
+      "coefficient": 1.158
+    },
+    {
+      "bodyweightKg": 72.5,
+      "coefficient": 1.155
+    },
+    {
+      "bodyweightKg": 72.75,
+      "coefficient": 1.151
+    },
+    {
+      "bodyweightKg": 73.0,
+      "coefficient": 1.147
+    },
+    {
+      "bodyweightKg": 73.25,
+      "coefficient": 1.143
+    },
+    {
+      "bodyweightKg": 73.5,
+      "coefficient": 1.139
+    },
+    {
+      "bodyweightKg": 73.75,
+      "coefficient": 1.136
+    },
+    {
+      "bodyweightKg": 74.0,
+      "coefficient": 1.132
+    },
+    {
+      "bodyweightKg": 74.25,
+      "coefficient": 1.128
+    },
+    {
+      "bodyweightKg": 74.5,
+      "coefficient": 1.124
+    },
+    {
+      "bodyweightKg": 74.75,
+      "coefficient": 1.12
+    },
+    {
+      "bodyweightKg": 75.0,
+      "coefficient": 1.117
+    },
+    {
+      "bodyweightKg": 75.25,
+      "coefficient": 1.114
+    },
+    {
+      "bodyweightKg": 75.5,
+      "coefficient": 1.11
+    },
+    {
+      "bodyweightKg": 75.75,
+      "coefficient": 1.107
+    },
+    {
+      "bodyweightKg": 76.0,
+      "coefficient": 1.103
+    },
+    {
+      "bodyweightKg": 76.25,
+      "coefficient": 1.1
+    },
+    {
+      "bodyweightKg": 76.5,
+      "coefficient": 1.096
+    },
+    {
+      "bodyweightKg": 76.75,
+      "coefficient": 1.093
+    },
+    {
+      "bodyweightKg": 77.0,
+      "coefficient": 1.09
+    },
+    {
+      "bodyweightKg": 77.25,
+      "coefficient": 1.087
+    },
+    {
+      "bodyweightKg": 77.5,
+      "coefficient": 1.084
+    },
+    {
+      "bodyweightKg": 77.75,
+      "coefficient": 1.081
+    },
+    {
+      "bodyweightKg": 78.0,
+      "coefficient": 1.078
+    },
+    {
+      "bodyweightKg": 78.25,
+      "coefficient": 1.075
+    },
+    {
+      "bodyweightKg": 78.5,
+      "coefficient": 1.072
+    },
+    {
+      "bodyweightKg": 78.75,
+      "coefficient": 1.069
+    },
+    {
+      "bodyweightKg": 79.0,
+      "coefficient": 1.066
+    },
+    {
+      "bodyweightKg": 79.25,
+      "coefficient": 1.063
+    },
+    {
+      "bodyweightKg": 79.5,
+      "coefficient": 1.06
+    },
+    {
+      "bodyweightKg": 79.75,
+      "coefficient": 1.057
+    },
+    {
+      "bodyweightKg": 80.0,
+      "coefficient": 1.054
+    },
+    {
+      "bodyweightKg": 80.25,
+      "coefficient": 1.051
+    },
+    {
+      "bodyweightKg": 80.5,
+      "coefficient": 1.048
+    },
+    {
+      "bodyweightKg": 80.75,
+      "coefficient": 1.046
+    },
+    {
+      "bodyweightKg": 81.0,
+      "coefficient": 1.044
+    },
+    {
+      "bodyweightKg": 81.25,
+      "coefficient": 1.041
+    },
+    {
+      "bodyweightKg": 81.5,
+      "coefficient": 1.039
+    },
+    {
+      "bodyweightKg": 81.75,
+      "coefficient": 1.036
+    },
+    {
+      "bodyweightKg": 82.0,
+      "coefficient": 1.034
+    },
+    {
+      "bodyweightKg": 82.25,
+      "coefficient": 1.031
+    },
+    {
+      "bodyweightKg": 82.5,
+      "coefficient": 1.029
+    },
+    {
+      "bodyweightKg": 82.75,
+      "coefficient": 1.026
+    },
+    {
+      "bodyweightKg": 83.0,
+      "coefficient": 1.024
+    },
+    {
+      "bodyweightKg": 83.25,
+      "coefficient": 1.022
+    },
+    {
+      "bodyweightKg": 83.5,
+      "coefficient": 1.019
+    },
+    {
+      "bodyweightKg": 83.75,
+      "coefficient": 1.017
+    },
+    {
+      "bodyweightKg": 84.0,
+      "coefficient": 1.015
+    },
+    {
+      "bodyweightKg": 84.25,
+      "coefficient": 1.013
+    },
+    {
+      "bodyweightKg": 84.5,
+      "coefficient": 1.011
+    },
+    {
+      "bodyweightKg": 84.75,
+      "coefficient": 1.008
+    },
+    {
+      "bodyweightKg": 85.0,
+      "coefficient": 1.006
+    },
+    {
+      "bodyweightKg": 85.25,
+      "coefficient": 1.004
+    },
+    {
+      "bodyweightKg": 85.5,
+      "coefficient": 1.002
+    },
+    {
+      "bodyweightKg": 85.75,
+      "coefficient": 1.0
+    },
+    {
+      "bodyweightKg": 86.0,
+      "coefficient": 0.998
+    },
+    {
+      "bodyweightKg": 86.25,
+      "coefficient": 0.996
+    },
+    {
+      "bodyweightKg": 86.5,
+      "coefficient": 0.994
+    },
+    {
+      "bodyweightKg": 86.75,
+      "coefficient": 0.992
+    },
+    {
+      "bodyweightKg": 87.0,
+      "coefficient": 0.99
+    },
+    {
+      "bodyweightKg": 87.25,
+      "coefficient": 0.988
+    },
+    {
+      "bodyweightKg": 87.5,
+      "coefficient": 0.987
+    },
+    {
+      "bodyweightKg": 87.75,
+      "coefficient": 0.985
+    },
+    {
+      "bodyweightKg": 88.0,
+      "coefficient": 0.983
+    },
+    {
+      "bodyweightKg": 88.25,
+      "coefficient": 0.981
+    },
+    {
+      "bodyweightKg": 88.5,
+      "coefficient": 0.979
+    },
+    {
+      "bodyweightKg": 88.75,
+      "coefficient": 0.978
+    },
+    {
+      "bodyweightKg": 89.0,
+      "coefficient": 0.976
+    },
+    {
+      "bodyweightKg": 89.25,
+      "coefficient": 0.974
+    },
+    {
+      "bodyweightKg": 89.5,
+      "coefficient": 0.972
+    },
+    {
+      "bodyweightKg": 89.75,
+      "coefficient": 0.97
+    },
+    {
+      "bodyweightKg": 90.0,
+      "coefficient": 0.969
+    },
+    {
+      "bodyweightKg": 90.25,
+      "coefficient": 0.967
+    },
+    {
+      "bodyweightKg": 90.5,
+      "coefficient": 0.965
+    },
+    {
+      "bodyweightKg": 90.75,
+      "coefficient": 0.963
+    },
+    {
+      "bodyweightKg": 91.0,
+      "coefficient": 0.961
+    },
+    {
+      "bodyweightKg": 91.25,
+      "coefficient": 0.96
+    },
+    {
+      "bodyweightKg": 91.5,
+      "coefficient": 0.958
+    },
+    {
+      "bodyweightKg": 91.75,
+      "coefficient": 0.956
+    },
+    {
+      "bodyweightKg": 92.0,
+      "coefficient": 0.954
+    },
+    {
+      "bodyweightKg": 92.25,
+      "coefficient": 0.952
+    },
+    {
+      "bodyweightKg": 92.5,
+      "coefficient": 0.951
+    },
+    {
+      "bodyweightKg": 92.75,
+      "coefficient": 0.95
+    },
+    {
+      "bodyweightKg": 93.0,
+      "coefficient": 0.948
+    },
+    {
+      "bodyweightKg": 93.25,
+      "coefficient": 0.947
+    },
+    {
+      "bodyweightKg": 93.5,
+      "coefficient": 0.945
+    },
+    {
+      "bodyweightKg": 93.75,
+      "coefficient": 0.944
+    },
+    {
+      "bodyweightKg": 94.0,
+      "coefficient": 0.942
+    },
+    {
+      "bodyweightKg": 94.25,
+      "coefficient": 0.941
+    },
+    {
+      "bodyweightKg": 94.5,
+      "coefficient": 0.939
+    },
+    {
+      "bodyweightKg": 94.75,
+      "coefficient": 0.938
+    },
+    {
+      "bodyweightKg": 95.0,
+      "coefficient": 0.937
+    },
+    {
+      "bodyweightKg": 95.25,
+      "coefficient": 0.935
+    },
+    {
+      "bodyweightKg": 95.5,
+      "coefficient": 0.934
+    },
+    {
+      "bodyweightKg": 95.75,
+      "coefficient": 0.933
+    },
+    {
+      "bodyweightKg": 96.0,
+      "coefficient": 0.932
+    },
+    {
+      "bodyweightKg": 96.25,
+      "coefficient": 0.931
+    },
+    {
+      "bodyweightKg": 96.5,
+      "coefficient": 0.929
+    },
+    {
+      "bodyweightKg": 96.75,
+      "coefficient": 0.928
+    },
+    {
+      "bodyweightKg": 97.0,
+      "coefficient": 0.927
+    },
+    {
+      "bodyweightKg": 97.25,
+      "coefficient": 0.926
+    },
+    {
+      "bodyweightKg": 97.5,
+      "coefficient": 0.925
+    },
+    {
+      "bodyweightKg": 97.75,
+      "coefficient": 0.924
+    },
+    {
+      "bodyweightKg": 98.0,
+      "coefficient": 0.923
+    },
+    {
+      "bodyweightKg": 98.25,
+      "coefficient": 0.922
+    },
+    {
+      "bodyweightKg": 98.5,
+      "coefficient": 0.921
+    },
+    {
+      "bodyweightKg": 98.75,
+      "coefficient": 0.92
+    },
+    {
+      "bodyweightKg": 99.0,
+      "coefficient": 0.919
+    },
+    {
+      "bodyweightKg": 99.25,
+      "coefficient": 0.918
+    },
+    {
+      "bodyweightKg": 99.5,
+      "coefficient": 0.917
+    },
+    {
+      "bodyweightKg": 99.75,
+      "coefficient": 0.916
+    },
+    {
+      "bodyweightKg": 100.0,
+      "coefficient": 0.915
+    },
+    {
+      "bodyweightKg": 100.25,
+      "coefficient": 0.914
+    },
+    {
+      "bodyweightKg": 100.5,
+      "coefficient": 0.913
+    },
+    {
+      "bodyweightKg": 100.75,
+      "coefficient": 0.912
+    },
+    {
+      "bodyweightKg": 101.0,
+      "coefficient": 0.911
+    },
+    {
+      "bodyweightKg": 101.25,
+      "coefficient": 0.91
+    },
+    {
+      "bodyweightKg": 101.5,
+      "coefficient": 0.909
+    },
+    {
+      "bodyweightKg": 101.75,
+      "coefficient": 0.909
+    },
+    {
+      "bodyweightKg": 102.0,
+      "coefficient": 0.909
+    },
+    {
+      "bodyweightKg": 102.25,
+      "coefficient": 0.908
+    },
+    {
+      "bodyweightKg": 102.5,
+      "coefficient": 0.906
+    },
+    {
+      "bodyweightKg": 102.75,
+      "coefficient": 0.905
+    },
+    {
+      "bodyweightKg": 103.0,
+      "coefficient": 0.904
+    },
+    {
+      "bodyweightKg": 103.25,
+      "coefficient": 0.904
+    },
+    {
+      "bodyweightKg": 103.5,
+      "coefficient": 0.903
+    },
+    {
+      "bodyweightKg": 103.75,
+      "coefficient": 0.902
+    },
+    {
+      "bodyweightKg": 104.0,
+      "coefficient": 0.901
+    },
+    {
+      "bodyweightKg": 104.25,
+      "coefficient": 0.9
+    },
+    {
+      "bodyweightKg": 104.5,
+      "coefficient": 0.899
+    },
+    {
+      "bodyweightKg": 104.75,
+      "coefficient": 0.899
+    },
+    {
+      "bodyweightKg": 105.0,
+      "coefficient": 0.898
+    },
+    {
+      "bodyweightKg": 105.25,
+      "coefficient": 0.898
+    },
+    {
+      "bodyweightKg": 105.5,
+      "coefficient": 0.897
+    },
+    {
+      "bodyweightKg": 105.75,
+      "coefficient": 0.896
+    },
+    {
+      "bodyweightKg": 106.0,
+      "coefficient": 0.895
+    },
+    {
+      "bodyweightKg": 106.25,
+      "coefficient": 0.894
+    },
+    {
+      "bodyweightKg": 106.5,
+      "coefficient": 0.894
+    },
+    {
+      "bodyweightKg": 106.75,
+      "coefficient": 0.893
+    },
+    {
+      "bodyweightKg": 107.0,
+      "coefficient": 0.892
+    },
+    {
+      "bodyweightKg": 107.25,
+      "coefficient": 0.892
+    },
+    {
+      "bodyweightKg": 107.5,
+      "coefficient": 0.891
+    },
+    {
+      "bodyweightKg": 107.75,
+      "coefficient": 0.89
+    },
+    {
+      "bodyweightKg": 108.0,
+      "coefficient": 0.89
+    },
+    {
+      "bodyweightKg": 108.25,
+      "coefficient": 0.889
+    },
+    {
+      "bodyweightKg": 108.5,
+      "coefficient": 0.889
+    },
+    {
+      "bodyweightKg": 108.75,
+      "coefficient": 0.888
+    },
+    {
+      "bodyweightKg": 109.0,
+      "coefficient": 0.887
+    },
+    {
+      "bodyweightKg": 109.25,
+      "coefficient": 0.887
+    },
+    {
+      "bodyweightKg": 109.5,
+      "coefficient": 0.886
+    },
+    {
+      "bodyweightKg": 109.75,
+      "coefficient": 0.885
+    },
+    {
+      "bodyweightKg": 110.0,
+      "coefficient": 0.885
+    },
+    {
+      "bodyweightKg": 110.25,
+      "coefficient": 0.884
+    },
+    {
+      "bodyweightKg": 110.5,
+      "coefficient": 0.883
+    },
+    {
+      "bodyweightKg": 110.75,
+      "coefficient": 0.883
+    },
+    {
+      "bodyweightKg": 111.0,
+      "coefficient": 0.882
+    },
+    {
+      "bodyweightKg": 111.25,
+      "coefficient": 0.881
+    },
+    {
+      "bodyweightKg": 111.5,
+      "coefficient": 0.881
+    },
+    {
+      "bodyweightKg": 111.75,
+      "coefficient": 0.88
+    },
+    {
+      "bodyweightKg": 112.0,
+      "coefficient": 0.879
+    },
+    {
+      "bodyweightKg": 112.25,
+      "coefficient": 0.879
+    },
+    {
+      "bodyweightKg": 112.5,
+      "coefficient": 0.878
+    },
+    {
+      "bodyweightKg": 112.75,
+      "coefficient": 0.878
+    },
+    {
+      "bodyweightKg": 113.0,
+      "coefficient": 0.877
+    },
+    {
+      "bodyweightKg": 113.25,
+      "coefficient": 0.876
+    },
+    {
+      "bodyweightKg": 113.5,
+      "coefficient": 0.876
+    },
+    {
+      "bodyweightKg": 113.75,
+      "coefficient": 0.875
+    },
+    {
+      "bodyweightKg": 114.0,
+      "coefficient": 0.875
+    },
+    {
+      "bodyweightKg": 114.25,
+      "coefficient": 0.874
+    },
+    {
+      "bodyweightKg": 114.5,
+      "coefficient": 0.873
+    },
+    {
+      "bodyweightKg": 114.75,
+      "coefficient": 0.873
+    },
+    {
+      "bodyweightKg": 115.0,
+      "coefficient": 0.873
+    },
+    {
+      "bodyweightKg": 115.25,
+      "coefficient": 0.872
+    },
+    {
+      "bodyweightKg": 115.5,
+      "coefficient": 0.872
+    },
+    {
+      "bodyweightKg": 115.75,
+      "coefficient": 0.871
+    },
+    {
+      "bodyweightKg": 116.0,
+      "coefficient": 0.871
+    },
+    {
+      "bodyweightKg": 116.25,
+      "coefficient": 0.87
+    },
+    {
+      "bodyweightKg": 116.5,
+      "coefficient": 0.87
+    },
+    {
+      "bodyweightKg": 116.75,
+      "coefficient": 0.869
+    },
+    {
+      "bodyweightKg": 117.0,
+      "coefficient": 0.869
+    },
+    {
+      "bodyweightKg": 117.25,
+      "coefficient": 0.868
+    },
+    {
+      "bodyweightKg": 117.5,
+      "coefficient": 0.868
+    },
+    {
+      "bodyweightKg": 117.75,
+      "coefficient": 0.868
+    },
+    {
+      "bodyweightKg": 118.0,
+      "coefficient": 0.867
+    },
+    {
+      "bodyweightKg": 118.25,
+      "coefficient": 0.867
+    },
+    {
+      "bodyweightKg": 118.5,
+      "coefficient": 0.866
+    },
+    {
+      "bodyweightKg": 118.75,
+      "coefficient": 0.866
+    },
+    {
+      "bodyweightKg": 119.0,
+      "coefficient": 0.866
+    },
+    {
+      "bodyweightKg": 119.25,
+      "coefficient": 0.865
+    },
+    {
+      "bodyweightKg": 119.5,
+      "coefficient": 0.865
+    },
+    {
+      "bodyweightKg": 119.75,
+      "coefficient": 0.864
+    },
+    {
+      "bodyweightKg": 120.0,
+      "coefficient": 0.864
+    },
+    {
+      "bodyweightKg": 120.25,
+      "coefficient": 0.864
+    },
+    {
+      "bodyweightKg": 120.5,
+      "coefficient": 0.863
+    },
+    {
+      "bodyweightKg": 120.75,
+      "coefficient": 0.863
+    },
+    {
+      "bodyweightKg": 121.0,
+      "coefficient": 0.862
+    },
+    {
+      "bodyweightKg": 121.25,
+      "coefficient": 0.862
+    },
+    {
+      "bodyweightKg": 121.5,
+      "coefficient": 0.862
+    },
+    {
+      "bodyweightKg": 121.75,
+      "coefficient": 0.861
+    },
+    {
+      "bodyweightKg": 122.0,
+      "coefficient": 0.861
+    },
+    {
+      "bodyweightKg": 122.25,
+      "coefficient": 0.861
+    },
+    {
+      "bodyweightKg": 122.5,
+      "coefficient": 0.861
+    },
+    {
+      "bodyweightKg": 122.75,
+      "coefficient": 0.86
+    },
+    {
+      "bodyweightKg": 123.0,
+      "coefficient": 0.86
+    },
+    {
+      "bodyweightKg": 123.25,
+      "coefficient": 0.86
+    },
+    {
+      "bodyweightKg": 123.5,
+      "coefficient": 0.86
+    },
+    {
+      "bodyweightKg": 123.75,
+      "coefficient": 0.859
+    },
+    {
+      "bodyweightKg": 124.0,
+      "coefficient": 0.859
+    },
+    {
+      "bodyweightKg": 124.25,
+      "coefficient": 0.859
+    },
+    {
+      "bodyweightKg": 124.5,
+      "coefficient": 0.858
+    },
+    {
+      "bodyweightKg": 124.75,
+      "coefficient": 0.858
+    },
+    {
+      "bodyweightKg": 125.0,
+      "coefficient": 0.858
+    },
+    {
+      "bodyweightKg": 125.25,
+      "coefficient": 0.857
+    },
+    {
+      "bodyweightKg": 125.5,
+      "coefficient": 0.857
+    },
+    {
+      "bodyweightKg": 125.75,
+      "coefficient": 0.857
+    },
+    {
+      "bodyweightKg": 126.0,
+      "coefficient": 0.857
+    },
+    {
+      "bodyweightKg": 126.25,
+      "coefficient": 0.856
+    },
+    {
+      "bodyweightKg": 126.5,
+      "coefficient": 0.856
+    },
+    {
+      "bodyweightKg": 126.75,
+      "coefficient": 0.856
+    },
+    {
+      "bodyweightKg": 127.0,
+      "coefficient": 0.855
+    },
+    {
+      "bodyweightKg": 127.25,
+      "coefficient": 0.855
+    },
+    {
+      "bodyweightKg": 127.5,
+      "coefficient": 0.854
+    },
+    {
+      "bodyweightKg": 127.75,
+      "coefficient": 0.854
+    },
+    {
+      "bodyweightKg": 128.0,
+      "coefficient": 0.854
+    },
+    {
+      "bodyweightKg": 128.25,
+      "coefficient": 0.854
+    },
+    {
+      "bodyweightKg": 128.5,
+      "coefficient": 0.853
+    },
+    {
+      "bodyweightKg": 128.75,
+      "coefficient": 0.853
+    },
+    {
+      "bodyweightKg": 129.0,
+      "coefficient": 0.853
+    },
+    {
+      "bodyweightKg": 129.25,
+      "coefficient": 0.852
+    },
+    {
+      "bodyweightKg": 129.5,
+      "coefficient": 0.852
+    },
+    {
+      "bodyweightKg": 129.75,
+      "coefficient": 0.852
+    },
+    {
+      "bodyweightKg": 130.0,
+      "coefficient": 0.851
+    },
+    {
+      "bodyweightKg": 130.25,
+      "coefficient": 0.851
+    },
+    {
+      "bodyweightKg": 130.5,
+      "coefficient": 0.851
+    },
+    {
+      "bodyweightKg": 130.75,
+      "coefficient": 0.851
+    },
+    {
+      "bodyweightKg": 131.0,
+      "coefficient": 0.85
+    },
+    {
+      "bodyweightKg": 131.25,
+      "coefficient": 0.85
+    },
+    {
+      "bodyweightKg": 131.5,
+      "coefficient": 0.85
+    },
+    {
+      "bodyweightKg": 131.75,
+      "coefficient": 0.849
+    },
+    {
+      "bodyweightKg": 132.0,
+      "coefficient": 0.849
+    },
+    {
+      "bodyweightKg": 132.25,
+      "coefficient": 0.849
+    },
+    {
+      "bodyweightKg": 132.5,
+      "coefficient": 0.848
+    },
+    {
+      "bodyweightKg": 132.75,
+      "coefficient": 0.848
+    },
+    {
+      "bodyweightKg": 133.0,
+      "coefficient": 0.848
+    },
+    {
+      "bodyweightKg": 133.25,
+      "coefficient": 0.848
+    },
+    {
+      "bodyweightKg": 133.5,
+      "coefficient": 0.847
+    },
+    {
+      "bodyweightKg": 133.75,
+      "coefficient": 0.847
+    },
+    {
+      "bodyweightKg": 134.0,
+      "coefficient": 0.847
+    },
+    {
+      "bodyweightKg": 134.25,
+      "coefficient": 0.847
+    },
+    {
+      "bodyweightKg": 134.5,
+      "coefficient": 0.847
+    },
+    {
+      "bodyweightKg": 134.75,
+      "coefficient": 0.846
+    },
+    {
+      "bodyweightKg": 135.0,
+      "coefficient": 0.846
+    },
+    {
+      "bodyweightKg": 135.25,
+      "coefficient": 0.846
+    },
+    {
+      "bodyweightKg": 135.5,
+      "coefficient": 0.845
+    },
+    {
+      "bodyweightKg": 135.75,
+      "coefficient": 0.845
+    },
+    {
+      "bodyweightKg": 136.0,
+      "coefficient": 0.845
+    },
+    {
+      "bodyweightKg": 136.25,
+      "coefficient": 0.845
+    },
+    {
+      "bodyweightKg": 136.5,
+      "coefficient": 0.844
+    },
+    {
+      "bodyweightKg": 136.75,
+      "coefficient": 0.844
+    },
+    {
+      "bodyweightKg": 137.0,
+      "coefficient": 0.844
+    },
+    {
+      "bodyweightKg": 137.25,
+      "coefficient": 0.843
+    },
+    {
+      "bodyweightKg": 137.5,
+      "coefficient": 0.843
+    },
+    {
+      "bodyweightKg": 137.75,
+      "coefficient": 0.843
+    },
+    {
+      "bodyweightKg": 138.0,
+      "coefficient": 0.842
+    },
+    {
+      "bodyweightKg": 138.25,
+      "coefficient": 0.842
+    },
+    {
+      "bodyweightKg": 138.5,
+      "coefficient": 0.842
+    },
+    {
+      "bodyweightKg": 138.75,
+      "coefficient": 0.842
+    },
+    {
+      "bodyweightKg": 139.0,
+      "coefficient": 0.841
+    },
+    {
+      "bodyweightKg": 139.25,
+      "coefficient": 0.841
+    },
+    {
+      "bodyweightKg": 139.5,
+      "coefficient": 0.841
+    },
+    {
+      "bodyweightKg": 139.75,
+      "coefficient": 0.84
+    },
+    {
+      "bodyweightKg": 140.0,
+      "coefficient": 0.84
+    },
+    {
+      "bodyweightKg": 140.25,
+      "coefficient": 0.84
+    },
+    {
+      "bodyweightKg": 140.5,
+      "coefficient": 0.84
+    },
+    {
+      "bodyweightKg": 140.75,
+      "coefficient": 0.84
+    },
+    {
+      "bodyweightKg": 141.0,
+      "coefficient": 0.839
+    },
+    {
+      "bodyweightKg": 141.25,
+      "coefficient": 0.839
+    },
+    {
+      "bodyweightKg": 141.5,
+      "coefficient": 0.839
+    },
+    {
+      "bodyweightKg": 141.75,
+      "coefficient": 0.839
+    },
+    {
+      "bodyweightKg": 142.0,
+      "coefficient": 0.838
+    },
+    {
+      "bodyweightKg": 142.25,
+      "coefficient": 0.838
+    },
+    {
+      "bodyweightKg": 142.5,
+      "coefficient": 0.838
+    },
+    {
+      "bodyweightKg": 142.75,
+      "coefficient": 0.838
+    },
+    {
+      "bodyweightKg": 143.0,
+      "coefficient": 0.837
+    },
+    {
+      "bodyweightKg": 143.25,
+      "coefficient": 0.837
+    },
+    {
+      "bodyweightKg": 143.5,
+      "coefficient": 0.837
+    },
+    {
+      "bodyweightKg": 143.75,
+      "coefficient": 0.837
+    },
+    {
+      "bodyweightKg": 144.0,
+      "coefficient": 0.836
+    },
+    {
+      "bodyweightKg": 144.25,
+      "coefficient": 0.836
+    },
+    {
+      "bodyweightKg": 144.5,
+      "coefficient": 0.836
+    },
+    {
+      "bodyweightKg": 144.75,
+      "coefficient": 0.836
+    },
+    {
+      "bodyweightKg": 145.0,
+      "coefficient": 0.835
+    },
+    {
+      "bodyweightKg": 145.25,
+      "coefficient": 0.835
+    },
+    {
+      "bodyweightKg": 145.5,
+      "coefficient": 0.835
+    },
+    {
+      "bodyweightKg": 145.75,
+      "coefficient": 0.835
+    },
+    {
+      "bodyweightKg": 146.0,
+      "coefficient": 0.834
+    },
+    {
+      "bodyweightKg": 146.25,
+      "coefficient": 0.834
+    },
+    {
+      "bodyweightKg": 146.5,
+      "coefficient": 0.834
+    },
+    {
+      "bodyweightKg": 146.75,
+      "coefficient": 0.834
+    },
+    {
+      "bodyweightKg": 147.0,
+      "coefficient": 0.833
+    },
+    {
+      "bodyweightKg": 147.25,
+      "coefficient": 0.833
+    },
+    {
+      "bodyweightKg": 147.5,
+      "coefficient": 0.833
+    },
+    {
+      "bodyweightKg": 147.75,
+      "coefficient": 0.833
+    },
+    {
+      "bodyweightKg": 148.0,
+      "coefficient": 0.832
+    },
+    {
+      "bodyweightKg": 148.25,
+      "coefficient": 0.832
+    },
+    {
+      "bodyweightKg": 148.5,
+      "coefficient": 0.832
+    },
+    {
+      "bodyweightKg": 148.75,
+      "coefficient": 0.832
+    },
+    {
+      "bodyweightKg": 149.0,
+      "coefficient": 0.831
+    },
+    {
+      "bodyweightKg": 149.25,
+      "coefficient": 0.831
+    },
+    {
+      "bodyweightKg": 149.5,
+      "coefficient": 0.831
+    },
+    {
+      "bodyweightKg": 149.75,
+      "coefficient": 0.831
+    },
+    {
+      "bodyweightKg": 150.0,
+      "coefficient": 0.831
+    },
+    {
+      "bodyweightKg": 150.25,
+      "coefficient": 0.83
+    },
+    {
+      "bodyweightKg": 150.5,
+      "coefficient": 0.83
+    },
+    {
+      "bodyweightKg": 150.75,
+      "coefficient": 0.83
+    },
+    {
+      "bodyweightKg": 151.0,
+      "coefficient": 0.83
+    },
+    {
+      "bodyweightKg": 151.25,
+      "coefficient": 0.83
+    },
+    {
+      "bodyweightKg": 151.5,
+      "coefficient": 0.829
+    },
+    {
+      "bodyweightKg": 151.75,
+      "coefficient": 0.829
+    },
+    {
+      "bodyweightKg": 152.0,
+      "coefficient": 0.829
+    },
+    {
+      "bodyweightKg": 152.25,
+      "coefficient": 0.829
+    },
+    {
+      "bodyweightKg": 152.5,
+      "coefficient": 0.829
+    },
+    {
+      "bodyweightKg": 152.75,
+      "coefficient": 0.828
+    },
+    {
+      "bodyweightKg": 153.0,
+      "coefficient": 0.828
+    },
+    {
+      "bodyweightKg": 153.25,
+      "coefficient": 0.828
+    },
+    {
+      "bodyweightKg": 153.5,
+      "coefficient": 0.828
+    },
+    {
+      "bodyweightKg": 153.75,
+      "coefficient": 0.828
+    },
+    {
+      "bodyweightKg": 154.0,
+      "coefficient": 0.828
+    },
+    {
+      "bodyweightKg": 154.25,
+      "coefficient": 0.827
+    },
+    {
+      "bodyweightKg": 154.5,
+      "coefficient": 0.827
+    },
+    {
+      "bodyweightKg": 154.75,
+      "coefficient": 0.827
+    },
+    {
+      "bodyweightKg": 155.0,
+      "coefficient": 0.827
+    },
+    {
+      "bodyweightKg": 155.25,
+      "coefficient": 0.827
+    },
+    {
+      "bodyweightKg": 155.5,
+      "coefficient": 0.827
+    },
+    {
+      "bodyweightKg": 155.75,
+      "coefficient": 0.826
+    },
+    {
+      "bodyweightKg": 156.0,
+      "coefficient": 0.826
+    },
+    {
+      "bodyweightKg": 156.25,
+      "coefficient": 0.826
+    },
+    {
+      "bodyweightKg": 156.5,
+      "coefficient": 0.826
+    },
+    {
+      "bodyweightKg": 156.75,
+      "coefficient": 0.826
+    },
+    {
+      "bodyweightKg": 157.0,
+      "coefficient": 0.826
+    },
+    {
+      "bodyweightKg": 157.25,
+      "coefficient": 0.825
+    },
+    {
+      "bodyweightKg": 157.5,
+      "coefficient": 0.825
+    },
+    {
+      "bodyweightKg": 157.75,
+      "coefficient": 0.825
+    },
+    {
+      "bodyweightKg": 158.0,
+      "coefficient": 0.825
+    },
+    {
+      "bodyweightKg": 158.25,
+      "coefficient": 0.825
+    },
+    {
+      "bodyweightKg": 158.5,
+      "coefficient": 0.825
+    },
+    {
+      "bodyweightKg": 158.75,
+      "coefficient": 0.825
+    },
+    {
+      "bodyweightKg": 159.0,
+      "coefficient": 0.824
+    },
+    {
+      "bodyweightKg": 159.25,
+      "coefficient": 0.824
+    },
+    {
+      "bodyweightKg": 159.5,
+      "coefficient": 0.824
+    },
+    {
+      "bodyweightKg": 159.75,
+      "coefficient": 0.824
+    },
+    {
+      "bodyweightKg": 160.0,
+      "coefficient": 0.824
+    },
+    {
+      "bodyweightKg": 160.25,
+      "coefficient": 0.824
+    },
+    {
+      "bodyweightKg": 160.5,
+      "coefficient": 0.824
+    },
+    {
+      "bodyweightKg": 160.75,
+      "coefficient": 0.823
+    },
+    {
+      "bodyweightKg": 161.0,
+      "coefficient": 0.823
+    },
+    {
+      "bodyweightKg": 161.25,
+      "coefficient": 0.823
+    },
+    {
+      "bodyweightKg": 161.5,
+      "coefficient": 0.823
+    },
+    {
+      "bodyweightKg": 161.75,
+      "coefficient": 0.823
+    },
+    {
+      "bodyweightKg": 162.0,
+      "coefficient": 0.823
+    },
+    {
+      "bodyweightKg": 162.25,
+      "coefficient": 0.823
+    },
+    {
+      "bodyweightKg": 162.5,
+      "coefficient": 0.822
+    },
+    {
+      "bodyweightKg": 162.75,
+      "coefficient": 0.822
+    },
+    {
+      "bodyweightKg": 163.0,
+      "coefficient": 0.822
+    },
+    {
+      "bodyweightKg": 163.25,
+      "coefficient": 0.822
+    },
+    {
+      "bodyweightKg": 163.5,
+      "coefficient": 0.822
+    },
+    {
+      "bodyweightKg": 163.75,
+      "coefficient": 0.822
+    },
+    {
+      "bodyweightKg": 164.0,
+      "coefficient": 0.822
+    },
+    {
+      "bodyweightKg": 164.25,
+      "coefficient": 0.821
+    },
+    {
+      "bodyweightKg": 164.5,
+      "coefficient": 0.821
+    },
+    {
+      "bodyweightKg": 165.0,
+      "coefficient": 0.821
+    },
+    {
+      "bodyweightKg": 165.25,
+      "coefficient": 0.821
+    },
+    {
+      "bodyweightKg": 165.5,
+      "coefficient": 0.821
+    },
+    {
+      "bodyweightKg": 165.75,
+      "coefficient": 0.821
+    },
+    {
+      "bodyweightKg": 166.0,
+      "coefficient": 0.82
+    },
+    {
+      "bodyweightKg": 166.25,
+      "coefficient": 0.82
+    },
+    {
+      "bodyweightKg": 166.5,
+      "coefficient": 0.82
+    },
+    {
+      "bodyweightKg": 166.75,
+      "coefficient": 0.82
+    },
+    {
+      "bodyweightKg": 167.0,
+      "coefficient": 0.82
+    },
+    {
+      "bodyweightKg": 167.25,
+      "coefficient": 0.82
+    },
+    {
+      "bodyweightKg": 167.5,
+      "coefficient": 0.82
+    },
+    {
+      "bodyweightKg": 167.75,
+      "coefficient": 0.819
+    },
+    {
+      "bodyweightKg": 168.0,
+      "coefficient": 0.819
+    },
+    {
+      "bodyweightKg": 168.25,
+      "coefficient": 0.819
+    },
+    {
+      "bodyweightKg": 168.5,
+      "coefficient": 0.819
+    },
+    {
+      "bodyweightKg": 168.75,
+      "coefficient": 0.819
+    },
+    {
+      "bodyweightKg": 169.0,
+      "coefficient": 0.819
+    },
+    {
+      "bodyweightKg": 169.25,
+      "coefficient": 0.819
+    },
+    {
+      "bodyweightKg": 169.5,
+      "coefficient": 0.818
+    },
+    {
+      "bodyweightKg": 169.75,
+      "coefficient": 0.818
+    },
+    {
+      "bodyweightKg": 170.0,
+      "coefficient": 0.818
+    },
+    {
+      "bodyweightKg": 170.25,
+      "coefficient": 0.818
+    },
+    {
+      "bodyweightKg": 170.5,
+      "coefficient": 0.818
+    },
+    {
+      "bodyweightKg": 170.75,
+      "coefficient": 0.818
+    },
+    {
+      "bodyweightKg": 171.0,
+      "coefficient": 0.818
+    },
+    {
+      "bodyweightKg": 171.25,
+      "coefficient": 0.818
+    },
+    {
+      "bodyweightKg": 171.5,
+      "coefficient": 0.817
+    },
+    {
+      "bodyweightKg": 171.75,
+      "coefficient": 0.817
+    },
+    {
+      "bodyweightKg": 172.0,
+      "coefficient": 0.817
+    },
+    {
+      "bodyweightKg": 172.25,
+      "coefficient": 0.817
+    },
+    {
+      "bodyweightKg": 172.5,
+      "coefficient": 0.817
+    },
+    {
+      "bodyweightKg": 172.75,
+      "coefficient": 0.817
+    },
+    {
+      "bodyweightKg": 173.0,
+      "coefficient": 0.817
+    },
+    {
+      "bodyweightKg": 173.25,
+      "coefficient": 0.817
+    },
+    {
+      "bodyweightKg": 173.5,
+      "coefficient": 0.817
+    },
+    {
+      "bodyweightKg": 173.75,
+      "coefficient": 0.817
+    },
+    {
+      "bodyweightKg": 174.0,
+      "coefficient": 0.816
+    },
+    {
+      "bodyweightKg": 174.25,
+      "coefficient": 0.816
+    },
+    {
+      "bodyweightKg": 174.5,
+      "coefficient": 0.816
+    },
+    {
+      "bodyweightKg": 174.75,
+      "coefficient": 0.816
+    },
+    {
+      "bodyweightKg": 175.0,
+      "coefficient": 0.816
+    },
+    {
+      "bodyweightKg": 175.25,
+      "coefficient": 0.816
+    },
+    {
+      "bodyweightKg": 175.5,
+      "coefficient": 0.816
+    },
+    {
+      "bodyweightKg": 175.75,
+      "coefficient": 0.816
+    },
+    {
+      "bodyweightKg": 176.0,
+      "coefficient": 0.816
+    },
+    {
+      "bodyweightKg": 176.25,
+      "coefficient": 0.816
+    },
+    {
+      "bodyweightKg": 176.5,
+      "coefficient": 0.816
+    },
+    {
+      "bodyweightKg": 176.75,
+      "coefficient": 0.816
+    },
+    {
+      "bodyweightKg": 177.0,
+      "coefficient": 0.815
+    },
+    {
+      "bodyweightKg": 177.25,
+      "coefficient": 0.815
+    },
+    {
+      "bodyweightKg": 177.5,
+      "coefficient": 0.815
+    },
+    {
+      "bodyweightKg": 177.75,
+      "coefficient": 0.815
+    },
+    {
+      "bodyweightKg": 178.0,
+      "coefficient": 0.815
+    },
+    {
+      "bodyweightKg": 178.25,
+      "coefficient": 0.815
+    },
+    {
+      "bodyweightKg": 178.5,
+      "coefficient": 0.815
+    },
+    {
+      "bodyweightKg": 178.75,
+      "coefficient": 0.815
+    },
+    {
+      "bodyweightKg": 179.0,
+      "coefficient": 0.815
+    },
+    {
+      "bodyweightKg": 179.25,
+      "coefficient": 0.815
+    },
+    {
+      "bodyweightKg": 179.5,
+      "coefficient": 0.815
+    },
+    {
+      "bodyweightKg": 179.75,
+      "coefficient": 0.815
+    },
+    {
+      "bodyweightKg": 180.0,
+      "coefficient": 0.815
+    },
+    {
+      "bodyweightKg": 180.25,
+      "coefficient": 0.815
+    },
+    {
+      "bodyweightKg": 180.5,
+      "coefficient": 0.814
+    },
+    {
+      "bodyweightKg": 180.75,
+      "coefficient": 0.814
+    }
+  ]
+}

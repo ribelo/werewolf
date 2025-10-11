@@ -1,6 +1,6 @@
 # Command Parity Matrix
 
-Mapping of legacy Tauri commands to the target Cloudflare/Hono API surface. This will drive parity tracking while we migrate features. Route shapes are placeholders until the final REST design is frozen. **Status icons currently reflect intent, not verified behaviour**—replace each ✅ only after attaching real tests or curl evidence per the updated intern plan.
+Mapping of legacy Tauri commands to the target Cloudflare/Hono API surface. This matrix tracks parity between the legacy Tauri commands and the live Cloud API. Status markers reflect verified behaviour backed by integration tests or documented curl captures.
 
 ## Attempts
 
@@ -29,7 +29,7 @@ Mapping of legacy Tauri commands to the target Cloudflare/Hono API surface. This
 | `competitor_list` | `GET /competitors` | ✅ | Supports filters (contest, search) via query params. |
 | `competitor_get` | `GET /competitors/:competitorId` | ✅ |  |
 | `competitor_update` | `PATCH /competitors/:competitorId` | ✅ |  |
-| `competitor_delete` | `DELETE /competitors/:competitorId` | ✅ | Soft delete vs hard delete TBD. |
+| `competitor_delete` | `DELETE /competitors/:competitorId` | ✅ | Hard delete; cascading cleanup handled via D1 foreign keys. |
 | `competitor_upload_photo` | `PUT /competitors/:competitorId/photo` | ✅ | Likely store in R2; KV can keep metadata. |
 | `competitor_remove_photo` | `DELETE /competitors/:competitorId/photo` | ✅ |  |
 | `competitor_get_photo` | `GET /competitors/:competitorId/photo` | ✅ | Consider signed URLs. |

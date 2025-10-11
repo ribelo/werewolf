@@ -4,26 +4,42 @@
   import type {
     CompetitorSummary,
     CompetitorDetail,
-    CompetitorPhoto,
+    Registration,
+    WeightClass,
+    AgeCategory
   } from '$lib/types';
+  import { get } from 'svelte/store';
+  import { _ } from 'svelte-i18n';
 
   export let competitor: CompetitorSummary | null = null;
+  export let registration: Registration | null = null;
+  export let weightClasses: WeightClass[] = [];
+  export let ageCategories: AgeCategory[] = [];
   export let mode: 'create' | 'edit' = 'create';
-  export let onClose: () => void = () => {};
-  export let onSaved: () => void = () => {};
+  export let onClose: (result?: unknown) => void = () => {};
+  export let onSaved: (result?: unknown) => void = () => {};
 
-  const genderOptions = ['Male', 'Female'];
+  const genderOptions = ['Male', 'Female'] as const;
+  type GenderOption = (typeof genderOptions)[number];
+
+  type MessageValues = Record<string, string | number | boolean | Date | null | undefined>;
+
+  function t(key: string, values?: MessageValues): string {
+    const translate = get(_);
+    return translate(key, values ? { values } : undefined);
+  }
+
+  function genderLabel(option: GenderOption): string {
+    return option === 'Male'
+      ? t('competitor_modal.gender.male')
+      : t('competitor_modal.gender.female');
+  }
 
   let detail: CompetitorDetail | null = null;
   let isLoading = false;
   let isSaving = false;
   let error: string | null = null;
   let success: string | null = null;
-
-  let photo: CompetitorPhoto | null = null;
-  let newPhotoBase64: string | null = null;
-  let newPhotoFilename: string | null = null;
-  let removeExistingPhoto = false;
 
   let reorderValue: number | null = null;
 
@@ -37,7 +53,73 @@
     notes: '',
   };
 
-  let fileInput: HTMLInputElement | null = null;
+  type RegistrationFormState = {
+    bodyweight: string;
+    lotNumber: string;
+    personalRecordAtEntry: string;
+    rackHeightSquat: string;
+    rackHeightBench: string;
+    equipmentM: boolean;
+    equipmentSm: boolean;
+    equipmentT: boolean;
+    weightClassId: string;
+    ageCategoryId: string;
+  };
+
+  function createRegistrationForm(source: Registration | null): RegistrationFormState {
+    return {
+      bodyweight: source?.bodyweight != null ? String(source.bodyweight) : '',
+      lotNumber: source?.lotNumber ?? '',
+      personalRecordAtEntry:
+        source?.personalRecordAtEntry != null ? String(source.personalRecordAtEntry) : '',
+      rackHeightSquat: source?.rackHeightSquat != null ? String(source.rackHeightSquat) : '',
+      rackHeightBench: source?.rackHeightBench != null ? String(source.rackHeightBench) : '',
+      equipmentM: source?.equipmentM ?? false,
+      equipmentSm: source?.equipmentSm ?? false,
+      equipmentT: source?.equipmentT ?? false,
+      weightClassId: source?.weightClassId ?? '',
+      ageCategoryId: source?.ageCategoryId ?? '',
+    };
+  }
+
+  let registrationForm: RegistrationFormState = createRegistrationForm(registration);
+  type SelectOption = { id: string; label: string };
+  let weightClassOptions: SelectOption[] = [];
+  let ageCategoryOptions: SelectOption[] = [];
+
+  $: weightClassOptions = (() => {
+    const map = new Map<string, string>();
+    for (const entry of weightClasses) {
+      if (!entry) continue;
+      const id = entry.id ?? entry.code ?? '';
+      if (!id) continue;
+      const label = entry.name ?? entry.code ?? id;
+      if (!map.has(id)) {
+        map.set(id, label);
+      }
+    }
+    if (registration?.weightClassId && registration?.weightClassName && !map.has(registration.weightClassId)) {
+      map.set(registration.weightClassId, registration.weightClassName);
+    }
+    return Array.from(map.entries()).map(([id, label]) => ({ id, label }));
+  })();
+
+  $: ageCategoryOptions = (() => {
+    const map = new Map<string, string>();
+    for (const entry of ageCategories) {
+      if (!entry) continue;
+      const id = entry.id ?? entry.code ?? '';
+      if (!id) continue;
+      const label = entry.name ?? entry.code ?? id;
+      if (!map.has(id)) {
+        map.set(id, label);
+      }
+    }
+    if (registration?.ageCategoryId && registration?.ageCategoryName && !map.has(registration.ageCategoryId)) {
+      map.set(registration.ageCategoryId, registration.ageCategoryName);
+    }
+    return Array.from(map.entries()).map(([id, label]) => ({ id, label }));
+  })();
 
   onMount(async () => {
     if (mode === 'edit' && competitor) {
@@ -49,13 +131,7 @@
     isLoading = true;
     error = null;
     try {
-      const [detailResp, photoResp] = await Promise.all([
-        apiClient.get<CompetitorDetail>(`/competitors/${id}`),
-        apiClient.get<CompetitorPhoto>(`/competitors/${id}/photo`).catch(() => {
-          // photo endpoint returns 404 when not present; ignore
-          return { data: null, error: null };
-        }),
-      ]);
+      const detailResp = await apiClient.get<CompetitorDetail>(`/competitors/${id}`);
 
       if (detailResp.data) {
         detail = detailResp.data;
@@ -72,14 +148,8 @@
       } else if (detailResp.error) {
         error = detailResp.error;
       }
-
-      if (photoResp && photoResp.data) {
-        photo = photoResp.data;
-      } else {
-        photo = null;
-      }
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Failed to load competitor';
+      error = err instanceof Error ? err.message : t('competitor_modal.status.error_load');
     } finally {
       isLoading = false;
     }
@@ -97,65 +167,51 @@
         notes: detail.notes ?? '',
       };
       reorderValue = detail.competitionOrder ?? null;
-      newPhotoBase64 = null;
-      newPhotoFilename = null;
-      removeExistingPhoto = false;
       success = null;
       error = null;
     }
+    resetRegistrationState();
   }
 
-  function openFilePicker() {
-    fileInput?.click();
+  function resetRegistrationState() {
+    registrationForm = createRegistrationForm(registration);
   }
 
-  function handleFileSelected(event: Event) {
-    const input = event.currentTarget as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      error = 'Please select an image file.';
-      input.value = '';
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result;
-      if (typeof result === 'string') {
-        const [, base64] = result.split('base64,');
-        newPhotoBase64 = base64 ?? null;
-        newPhotoFilename = file.name;
-        removeExistingPhoto = false;
-        success = null;
-      }
-    };
-    reader.readAsDataURL(file);
+  function parseFloatInput(value: string): number | null {
+    if (value === undefined || value === null) return null;
+    const trimmed = value.toString().trim();
+    if (trimmed === '') return null;
+    const parsed = Number.parseFloat(trimmed.replace(',', '.'));
+    return Number.isFinite(parsed) ? parsed : null;
   }
 
-  function handleRemovePhoto() {
-    if (photo || newPhotoBase64) {
-      newPhotoBase64 = null;
-      newPhotoFilename = null;
-      if (photo) {
-        removeExistingPhoto = true;
-      }
-    }
+  function parseIntInput(value: string): number | null {
+    if (value === undefined || value === null) return null;
+    const trimmed = value.toString().trim();
+    if (trimmed === '') return null;
+    const parsed = Number.parseInt(trimmed, 10);
+    return Number.isNaN(parsed) ? null : parsed;
   }
 
   function validateForm(): boolean {
     if (!form.firstName.trim() || !form.lastName.trim()) {
-      error = 'First and last name are required.';
+      error = t('competitor_modal.status.validation.name_required');
       return false;
     }
     if (!form.birthDate) {
-      error = 'Birth date is required.';
+      error = t('competitor_modal.status.validation.birth_required');
       return false;
     }
-    if (!genderOptions.includes(form.gender)) {
-      error = 'Gender must be Male or Female.';
+    if (form.gender !== 'Male' && form.gender !== 'Female') {
+      error = t('competitor_modal.status.validation.gender_invalid');
       return false;
+    }
+    if (registration) {
+      const parsedBodyweight = parseFloatInput(registrationForm.bodyweight);
+      if (parsedBodyweight === null || parsedBodyweight <= 0) {
+        error = t('competitor_modal.status.validation.bodyweight_positive');
+        return false;
+      }
     }
     return true;
   }
@@ -195,24 +251,6 @@
         }
       }
 
-      if (targetId && newPhotoBase64) {
-        const response = await apiClient.put(`/competitors/${targetId}/photo`, {
-          photoData: newPhotoBase64,
-          filename: newPhotoFilename,
-        });
-        if (response.error) {
-          throw new Error(response.error);
-        }
-      }
-
-      if (targetId && removeExistingPhoto) {
-        const response = await apiClient.delete(`/competitors/${targetId}/photo`);
-        if (response.error) {
-          throw new Error(response.error);
-        }
-        removeExistingPhoto = false;
-      }
-
       if (
         mode === 'edit' &&
         targetId &&
@@ -228,183 +266,285 @@
         }
       }
 
-      success = mode === 'create' ? 'Competitor created successfully.' : 'Competitor updated successfully.';
-      await onSaved();
-      onClose();
+      let updatedRegistration: Registration | null = registration;
+
+      if (registration && mode === 'edit') {
+        const bodyweightValue = parseFloatInput(registrationForm.bodyweight);
+        if (bodyweightValue === null || bodyweightValue <= 0) {
+          throw new Error(t('competitor_modal.status.validation.bodyweight_positive'));
+        }
+
+        const registrationPayload: Record<string, unknown> = {
+          bodyweight: bodyweightValue,
+          lotNumber: registrationForm.lotNumber.trim() || null,
+          personalRecordAtEntry: parseFloatInput(registrationForm.personalRecordAtEntry),
+          rackHeightSquat: parseIntInput(registrationForm.rackHeightSquat),
+          rackHeightBench: parseIntInput(registrationForm.rackHeightBench),
+          equipmentM: registrationForm.equipmentM,
+          equipmentSm: registrationForm.equipmentSm,
+          equipmentT: registrationForm.equipmentT,
+        };
+
+        const weightClassId = registrationForm.weightClassId.trim();
+        const ageCategoryId = registrationForm.ageCategoryId.trim();
+
+        if (weightClassId) {
+          registrationPayload.weightClassId = weightClassId;
+        }
+        if (ageCategoryId) {
+          registrationPayload.ageCategoryId = ageCategoryId;
+        }
+
+        const response = await apiClient.patch<Registration>(
+          `/registrations/${registration.id}`,
+          registrationPayload
+        );
+        if (response.error) {
+          throw new Error(response.error);
+        }
+        updatedRegistration = response.data ?? updatedRegistration;
+      }
+
+      const resultPayload: { registration?: Registration } = {};
+      if (updatedRegistration) {
+        resultPayload.registration = updatedRegistration;
+      }
+
+      success =
+        mode === 'create'
+          ? t('competitor_modal.status.success_create')
+          : t('competitor_modal.status.success_update');
+
+      onClose(resultPayload);
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Failed to save competitor';
+      error = err instanceof Error ? err.message : t('competitor_modal.status.error_save');
     } finally {
       isSaving = false;
     }
   }
 
-  const photoSrc = () => {
-    if (newPhotoBase64) {
-      return `data:image/*;base64,${newPhotoBase64}`;
-    }
-    if (photo?.data) {
-      return `data:image/${photo.format ?? 'webp'};base64,${photo.data}`;
-    }
-    return null;
-  };
 </script>
 
-<div class="fixed inset-0 z-40 flex items-center justify-center">
-  <button
-    type="button"
-    class="absolute inset-0 bg-black/70"
-    aria-label="Close competitor modal"
-    on:click={onClose}
-  ></button>
+<div class="space-y-6">
+  {#if detail && mode === 'edit'}
+    <p class="text-caption text-text-secondary uppercase tracking-[0.3em]">
+      {t('competitor_modal.metadata.updated', {
+        timestamp: new Date(detail.updatedAt).toLocaleString()
+      })}
+    </p>
+  {/if}
 
-  <div class="relative z-50 w-full max-w-3xl card focus:outline-none max-h-[90vh] overflow-hidden">
-    <header class="flex items-center justify-between mb-6">
-      <div>
-        <h2 class="text-h2 text-text-primary">
-          {mode === 'create' ? 'Add Competitor' : 'Edit Competitor'}
-        </h2>
-        {#if detail && mode === 'edit'}
-          <p class="text-caption text-text-secondary uppercase tracking-[0.3em] mt-1">
-            Updated {new Date(detail.updatedAt).toLocaleString()}
-          </p>
-        {/if}
-      </div>
-      <button type="button" class="btn-secondary px-3 py-1" on:click={onClose}>
-        Close
-      </button>
-    </header>
+  {#if error}
+    <div class="bg-status-error/20 border border-status-error text-status-error px-4 py-2 text-sm">
+      {error}
+    </div>
+  {/if}
 
-    {#if error}
-      <div class="bg-status-error/20 border border-status-error text-status-error px-4 py-2 mb-4 text-sm">
-        {error}
-      </div>
-    {/if}
+  {#if success}
+    <div class="bg-status-success/20 border border-status-success text-green-100 px-4 py-2 text-sm">
+      {success}
+    </div>
+  {/if}
 
-    {#if success}
-      <div class="bg-status-success/20 border border-status-success text-green-100 px-4 py-2 mb-4 text-sm">
-        {success}
+  {#if isLoading}
+    <div class="py-12 text-center text-text-secondary text-body">
+      {t('competitor_modal.status.loading')}
+    </div>
+  {:else}
+    <form class="space-y-6" on:submit|preventDefault={handleSubmit}>
+      <div class="grid gap-4 md:grid-cols-2">
+        <label class="flex flex-col gap-2">
+          <span class="input-label">{t('competitor_modal.fields.first_name')} *</span>
+          <input
+            class="input-field"
+            bind:value={form.firstName}
+            autocomplete="given-name"
+            required
+          />
+        </label>
+        <label class="flex flex-col gap-2">
+          <span class="input-label">{t('competitor_modal.fields.last_name')} *</span>
+          <input
+            class="input-field"
+            bind:value={form.lastName}
+            autocomplete="family-name"
+            required
+          />
+        </label>
+        <label class="flex flex-col gap-2">
+          <span class="input-label">{t('competitor_modal.fields.birth_date')} *</span>
+          <input
+            class="input-field"
+            type="date"
+            bind:value={form.birthDate}
+            required
+          />
+        </label>
+        <label class="flex flex-col gap-2">
+          <span class="input-label">{t('competitor_modal.fields.gender')} *</span>
+          <select class="input-field" bind:value={form.gender}>
+            {#each genderOptions as option}
+              <option value={option}>{genderLabel(option)}</option>
+            {/each}
+          </select>
+        </label>
+        <label class="flex flex-col gap-2">
+          <span class="input-label">{t('competitor_modal.fields.club')}</span>
+          <input class="input-field" bind:value={form.club} placeholder={t('competitor_modal.placeholders.club')} />
+        </label>
+        <label class="flex flex-col gap-2">
+          <span class="input-label">{t('competitor_modal.fields.city')}</span>
+          <input class="input-field" bind:value={form.city} placeholder={t('competitor_modal.placeholders.city')} />
+        </label>
       </div>
-    {/if}
 
-    {#if isLoading}
-      <div class="py-12 text-center text-text-secondary text-body">
-        Loading competitor details...
-      </div>
-    {:else}
-      <form class="space-y-6 overflow-y-auto pr-2" on:submit|preventDefault={handleSubmit}>
-        <div class="grid gap-4 md:grid-cols-2">
-          <label class="flex flex-col gap-2">
-            <span class="input-label">First Name *</span>
-            <input
-              class="input-field"
-              bind:value={form.firstName}
-              autocomplete="given-name"
-              required
-            />
-          </label>
-          <label class="flex flex-col gap-2">
-            <span class="input-label">Last Name *</span>
-            <input
-              class="input-field"
-              bind:value={form.lastName}
-              autocomplete="family-name"
-              required
-            />
-          </label>
-          <label class="flex flex-col gap-2">
-            <span class="input-label">Birth Date *</span>
-            <input
-              class="input-field"
-              type="date"
-              bind:value={form.birthDate}
-              required
-            />
-          </label>
-          <label class="flex flex-col gap-2">
-            <span class="input-label">Gender *</span>
-            <select class="input-field" bind:value={form.gender}>
-              {#each genderOptions as option}
-                <option value={option}>{option}</option>
-              {/each}
-            </select>
-          </label>
-          <label class="flex flex-col gap-2">
-            <span class="input-label">Club</span>
-            <input class="input-field" bind:value={form.club} placeholder="Club name" />
-          </label>
-          <label class="flex flex-col gap-2">
-            <span class="input-label">City</span>
-            <input class="input-field" bind:value={form.city} placeholder="City" />
-          </label>
+      <label class="flex flex-col gap-2">
+        <span class="input-label">{t('competitor_modal.fields.notes')}</span>
+        <textarea class="input-field" rows={3} bind:value={form.notes} placeholder={t('competitor_modal.placeholders.notes')}></textarea>
+      </label>
+
+      {#if registration}
+        <section class="space-y-4">
+          <div>
+            <h3 class="text-label text-text-secondary">{t('competitor_modal.registration.title')}</h3>
+            <p class="text-caption text-text-secondary">{t('competitor_modal.registration.subtitle')}</p>
+          </div>
+
+          <div class="grid gap-4 md:grid-cols-2">
+            <label class="flex flex-col gap-2">
+              <span class="input-label">{t('competitor_modal.registration_fields.bodyweight')}</span>
+              <input
+                class="input-field"
+                type="number"
+                step="0.1"
+                min="0"
+                bind:value={registrationForm.bodyweight}
+              />
+            </label>
+            <label class="flex flex-col gap-2">
+              <span class="input-label">{t('competitor_modal.registration_fields.lot_number')}</span>
+              <input
+                class="input-field"
+                bind:value={registrationForm.lotNumber}
+                placeholder={t('competitor_modal.registration_fields.lot_number_placeholder')}
+              />
+            </label>
+            <label class="flex flex-col gap-2">
+              <span class="input-label">{t('competitor_modal.registration_fields.personal_record')}</span>
+              <input
+                class="input-field"
+                type="number"
+                step="0.5"
+                min="0"
+                bind:value={registrationForm.personalRecordAtEntry}
+                placeholder={t('competitor_modal.registration_fields.personal_record_placeholder')}
+              />
+            </label>
+            <label class="flex flex-col gap-2">
+              <span class="input-label">{t('competitor_modal.registration_fields.weight_class')}</span>
+              <select class="input-field" bind:value={registrationForm.weightClassId}>
+                <option value="">{t('competitor_modal.registration_fields.select_weight_class')}</option>
+                {#each weightClassOptions as option}
+                  <option value={option.id}>{option.label}</option>
+                {/each}
+              </select>
+            </label>
+            <label class="flex flex-col gap-2">
+              <span class="input-label">{t('competitor_modal.registration_fields.age_category')}</span>
+              <select class="input-field" bind:value={registrationForm.ageCategoryId}>
+                <option value="">{t('competitor_modal.registration_fields.select_age_category')}</option>
+                {#each ageCategoryOptions as option}
+                  <option value={option.id}>{option.label}</option>
+                {/each}
+              </select>
+            </label>
+            <label class="flex flex-col gap-2">
+              <span class="input-label">{t('competitor_modal.registration_fields.rack_squat')}</span>
+              <input
+                class="input-field"
+                type="number"
+                step="1"
+                min="0"
+                bind:value={registrationForm.rackHeightSquat}
+              />
+            </label>
+            <label class="flex flex-col gap-2">
+              <span class="input-label">{t('competitor_modal.registration_fields.rack_bench')}</span>
+              <input
+                class="input-field"
+                type="number"
+                step="1"
+                min="0"
+                bind:value={registrationForm.rackHeightBench}
+              />
+            </label>
+          </div>
+
+          <fieldset class="space-y-2">
+            <legend class="input-label">{t('competitor_modal.registration_fields.equipment')}</legend>
+            <div class="flex flex-wrap gap-3 text-body">
+              <label class="flex items-center gap-2">
+                <input type="checkbox" bind:checked={registrationForm.equipmentM} />
+                {t('contest.wizard.competitor.equipment.multi')}
+              </label>
+              <label class="flex items-center gap-2">
+                <input type="checkbox" bind:checked={registrationForm.equipmentSm} />
+                {t('contest.wizard.competitor.equipment.single')}
+              </label>
+              <label class="flex items-center gap-2">
+                <input type="checkbox" bind:checked={registrationForm.equipmentT} />
+                {t('contest.wizard.competitor.equipment.wraps')}
+              </label>
+            </div>
+          </fieldset>
+        </section>
+      {/if}
+
+      <section class="grid gap-4 md:grid-cols-2">
+        <div class="space-y-3">
+          <h3 class="text-label text-text-secondary">{t('competitor_modal.cloud_note.title')}</h3>
+          <p class="text-caption text-text-secondary">{t('competitor_modal.cloud_note.description')}</p>
         </div>
 
-        <label class="flex flex-col gap-2">
-          <span class="input-label">Notes</span>
-          <textarea class="input-field" rows={3} bind:value={form.notes} placeholder="Coach notes, best lifts, etc."></textarea>
-        </label>
-
-        <section class="grid gap-4 md:grid-cols-2">
+        {#if mode === 'edit'}
           <div class="space-y-3">
-            <h3 class="text-label text-text-secondary">Photo</h3>
+            <h3 class="text-label text-text-secondary">{t('competitor_modal.competition_order.title')}</h3>
+            <p class="text-caption text-text-secondary">
+              {t('competitor_modal.competition_order.subtitle')}
+            </p>
             <input
-              bind:this={fileInput}
-              type="file"
-              accept="image/*"
-              class="hidden"
-              on:change={handleFileSelected}
+              type="number"
+              min="1"
+              class="input-field w-32"
+              bind:value={reorderValue}
+              aria-label={t('competitor_modal.competition_order.aria')}
             />
-            {#if photoSrc()}
-              <div class="flex flex-col items-start gap-3">
-                <img src={photoSrc()} alt="Competitor portrait" class="w-40 h-52 object-cover border border-border-color" />
-                <div class="flex gap-3">
-                  <button type="button" class="btn-primary px-3 py-1" on:click={openFilePicker} disabled={isSaving}>
-                    Replace Photo
-                  </button>
-                  <button type="button" class="btn-secondary px-3 py-1" on:click={handleRemovePhoto} disabled={isSaving}>
-                    Remove
-                  </button>
-                </div>
-              </div>
-            {:else}
-              <div class="flex flex-col gap-3">
-                <p class="text-caption text-text-secondary">No photo uploaded yet.</p>
-                <button type="button" class="btn-primary px-3 py-1" on:click={openFilePicker} disabled={isSaving}>
-                  Upload Photo
-                </button>
-              </div>
-            {/if}
           </div>
+        {/if}
+      </section>
 
-          {#if mode === 'edit'}
-            <div class="space-y-3">
-              <h3 class="text-label text-text-secondary">Competition Order</h3>
-              <p class="text-caption text-text-secondary">
-                Adjust the queue order for lifter introductions and attempt rotation.
-              </p>
-              <input
-                type="number"
-                min="1"
-                class="input-field w-32"
-                bind:value={reorderValue}
-              />
-            </div>
-          {/if}
-        </section>
-
-        <div class="flex items-center justify-between">
-          <div class="space-x-3">
-            <button type="button" class="btn-secondary px-4 py-2" on:click={() => (mode === 'edit' ? resetState() : onClose())} disabled={isSaving}>
-              {mode === 'edit' ? 'Reset' : 'Cancel'}
-            </button>
-            <button type="button" class="btn-secondary px-4 py-2" on:click={onClose} disabled={isSaving}>
-              Close
-            </button>
-          </div>
-          <button type="submit" class="btn-primary px-6 py-2" disabled={isSaving}>
-            {isSaving ? 'Saving…' : mode === 'create' ? 'Create Competitor' : 'Save Changes'}
+      <div class="flex items-center justify-between">
+        <div class="space-x-3">
+          <button
+            type="button"
+            class="btn-secondary px-4 py-2"
+            on:click={() => (mode === 'edit' ? resetState() : onClose())}
+            disabled={isSaving}
+          >
+            {mode === 'edit' ? t('competitor_modal.actions.reset') : t('competitor_modal.actions.cancel')}
+          </button>
+          <button type="button" class="btn-secondary px-4 py-2" on:click={onClose} disabled={isSaving}>
+            {t('competitor_modal.actions.close')}
           </button>
         </div>
-      </form>
-    {/if}
-  </div>
+        <button type="submit" class="btn-primary px-6 py-2" disabled={isSaving}>
+          {isSaving
+            ? t('competitor_modal.actions.saving')
+            : mode === 'create'
+              ? t('competitor_modal.actions.create')
+              : t('competitor_modal.actions.save')}
+        </button>
+      </div>
+    </form>
+  {/if}
 </div>

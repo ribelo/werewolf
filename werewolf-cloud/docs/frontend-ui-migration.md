@@ -99,6 +99,11 @@ function bootstrapContest(data: { contest: ContestDetail; registrations: Registr
 $: registrations = $currentRegistrations;
 ```
 
+## Pending Follow-ups
+- Lazy-load locale dictionaries so the default bundle only ships the active language.
+- Defer contest desk modals (`AttemptEditorModal`, `RegistrationDetailModal`, etc.) with dynamic imports to shrink the initial route chunk.
+- Serve coefficient tables via the Cloud API (D1/KV) instead of bundling JSON so display routes load faster.
+
 ---
 
-_Last updated: 2025-09-19_
+_Last updated: 2025-09-20_

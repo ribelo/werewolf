@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { realtimeClient } from '$lib/realtime';
-  import QRShare from '$lib/components/QRShare.svelte';
   import type { PageData } from './$types';
   import type {
     Attempt,
@@ -14,6 +13,21 @@
     AttemptNumber,
   } from '$lib/types';
   import { bundleToCurrentAttempt } from '$lib/current-attempt';
+  import { get } from 'svelte/store';
+  import { _ } from 'svelte-i18n';
+  import { statusBadgeClass, getAttemptStatusLabel, getAttemptStatusClass } from '$lib/ui/status';
+  import { buildRisingBarQueue } from '$lib/rising-bar';
+  import UnifiedContestTable from '$lib/components/UnifiedContestTable.svelte';
+  import { buildUnifiedRows, deriveContestLifts, sortUnifiedRows, filterRowsByFlight, type UnifiedRow, type LiftKind } from '$lib/contest-table';
+
+  type MessageValues = Record<string, string | number | boolean | Date | null | undefined>;
+
+  function t(key: string, values?: MessageValues): string {
+    const translate = get(_);
+    return translate(key, values ? { values } : undefined);
+  }
+
+  type FlightFilter = 'ALL' | 'UNASSIGNED' | string;
 
   export let data: PageData;
 
@@ -32,10 +46,22 @@
   // Real-time state
   let connectionStatus: ConnectionStatus = 'offline';
 let liveAttempts: Attempt[] = [...attempts];
+let contestLifts: LiftKind[] = deriveContestLifts(contest, liveAttempts);
 let liveCurrentBundle: CurrentAttemptBundle | null = currentAttempt;
 let liveCurrentAttempt: CurrentAttempt | null = currentAttempt ? bundleToCurrentAttempt(currentAttempt) : null;
 let lastUpdateTime: Date | null = null;
-let recentResultsContainer: HTMLElement | null = null;
+
+let sortColumn = 'order';
+let sortDirection: 'asc' | 'desc' = 'asc';
+let selectedFlightFilter: FlightFilter = 'ALL';
+let availableFlights: string[] = [];
+let unifiedRows: UnifiedRow[] = [];
+let sortedRows: UnifiedRow[] = [];
+let filteredRows: UnifiedRow[] = [];
+let mensBarWeightSetting: number | null = contest?.mensBarWeight ?? null;
+let womensBarWeightSetting: number | null = contest?.womensBarWeight ?? null;
+let defaultBarWeightSetting: number | null = contest?.mensBarWeight ?? null;
+let clampWeightSetting: number | null = contest?.clampWeight ?? 2.5;
 
   // Derived metrics
   $: lifterCount = registrations.length;
@@ -44,10 +70,6 @@ let recentResultsContainer: HTMLElement | null = null;
   $: recentAttempts = computeRecentAttempts();
 
   // Shareable link for QR code
-  $: shareableUrl = typeof window !== 'undefined' && contestId
-    ? `${window.location.origin}${window.location.pathname}?contestId=${contestId}`
-    : '';
-
   const unsubscribeStatus = realtimeClient.connectionStatus.subscribe((status) => {
     connectionStatus = status;
   });
@@ -117,20 +139,34 @@ function handleLiveEvent(event: LiveEvent) {
     }
 }
 
-function computePendingAttempts(): Attempt[] {
-    return liveAttempts
-      .filter((attempt) => attempt.status === 'Pending')
-      .sort((a, b) => {
-        const registrationA = registrations.find((entry) => entry.id === a.registrationId);
-        const registrationB = registrations.find((entry) => entry.id === b.registrationId);
-        const orderA = registrationA?.competitionOrder ?? Number.POSITIVE_INFINITY;
-        const orderB = registrationB?.competitionOrder ?? Number.POSITIVE_INFINITY;
-        if (orderA !== orderB) return orderA - orderB;
-        const priority: Record<string, number> = { Squat: 1, Bench: 2, Deadlift: 3 };
-        return (priority[a.liftType] ?? 4) - (priority[b.liftType] ?? 4);
-      })
-      .slice(0, 12);
-}
+  function computePendingAttempts(): Attempt[] {
+    return buildRisingBarQueue(liveAttempts, {
+      currentAttempt: liveCurrentAttempt,
+      registrations,
+      limit: 12,
+    }).attempts;
+  }
+
+$: availableFlights = Array.from(new Set(registrations
+        .map((reg) => reg.flightCode)
+        .filter((code): code is string => Boolean(code)))).sort((a, b) => a.localeCompare(b));
+$: unifiedRows = buildUnifiedRows({
+        registrations,
+        attempts: liveAttempts,
+        contest,
+      });
+$: contestLifts = deriveContestLifts(contest, liveAttempts);
+$: mensBarWeightSetting = contest?.mensBarWeight ?? null;
+$: womensBarWeightSetting = contest?.womensBarWeight ?? null;
+$: defaultBarWeightSetting = contest?.mensBarWeight ?? null;
+$: clampWeightSetting = contest?.clampWeight ?? 2.5;
+  $: sortedRows = sortUnifiedRows(unifiedRows, sortColumn, sortDirection);
+  $: filteredRows = selectedFlightFilter === 'UNASSIGNED'
+        ? sortedRows.filter((row) => !row.registration.flightCode)
+        : filterRowsByFlight(sortedRows, selectedFlightFilter === 'ALL' ? null : selectedFlightFilter);
+  $: if (selectedFlightFilter !== 'ALL' && selectedFlightFilter !== 'UNASSIGNED' && !availableFlights.includes(selectedFlightFilter)) {
+        selectedFlightFilter = availableFlights.length > 0 ? availableFlights[0] : 'ALL';
+      }
 
   function toCurrentAttemptSummary(input: CurrentAttemptBundle | Attempt | CurrentAttempt): CurrentAttempt {
     if ('attempt' in (input as any)) {
@@ -170,6 +206,29 @@ function computePendingAttempts(): Attempt[] {
       .slice(0, 16);
   }
 
+  function handleSortChange(column: string) {
+    if (sortColumn === column) {
+      sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortColumn = column;
+      sortDirection = 'asc';
+    }
+  }
+
+  function selectFlightFilter(filter: FlightFilter) {
+    selectedFlightFilter = filter;
+  }
+
+  function liftLabel(liftType: string): string {
+    if (!liftType) return '';
+    const key = liftType.toLowerCase();
+    const translated = t(`display_current.lifts.${key}`);
+    if (translated && translated !== `display_current.lifts.${key}`) {
+      return translated;
+    }
+    return liftType;
+  }
+
   function getCompetitor(registrationId: string): Registration | undefined {
     return registrations.find((entry) => entry.id === registrationId);
   }
@@ -181,16 +240,25 @@ function computePendingAttempts(): Attempt[] {
 
   function queueLabel(attempt: Attempt): string {
     const competitor = getCompetitor(attempt.registrationId);
-    const order = competitor?.competitionOrder ?? '—';
-    return `#${order} ${competitorName(attempt.registrationId)}`;
+    const lotRaw = (attempt.lotNumber ?? competitor?.lotNumber ?? '').trim();
+    const orderLabel = lotRaw
+      ? t('display_table.queue.lot', { lot: lotRaw })
+      : t('display_table.queue.lot_unknown');
+    return t('display_table.queue.label', {
+      order: orderLabel,
+      name: competitorName(attempt.registrationId)
+    });
   }
 
-  import { attemptToneClass, statusBadgeClass } from '$lib/ui/status';
-
   function connectionLabel(): string {
-    if (connectionStatus === 'connected') return 'Live';
-    if (connectionStatus === 'connecting') return 'Connecting';
-    return isOffline ? `Cached ${cacheAge ? `${cacheAge} min ago` : ''}` : 'Offline';
+    if (connectionStatus === 'connected') return t('display_table.connection.live');
+    if (connectionStatus === 'connecting') return t('display_table.connection.connecting');
+    if (isOffline) {
+      return cacheAge
+        ? t('display_table.connection.cached_with_age', { minutes: cacheAge })
+        : t('display_table.connection.cached');
+    }
+    return t('display_table.connection.offline');
   }
 
   function connectionBadge(): string {
@@ -208,157 +276,172 @@ function computePendingAttempts(): Attempt[] {
 </script>
 
 <svelte:head>
-  <title>{contest?.name ?? 'Contest'} • Live Table</title>
+  <title>{(contest?.name ?? t('display_table.head.default_contest')) + ' • ' + t('display_table.head.subtitle')}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 </svelte:head>
 
-<div class="min-h-screen bg-main-bg text-text-primary">
-  <header class="border-b-2 border-border-color px-6 py-6 lg:px-10">
-    <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
-      <div>
-        <h1 class="text-display uppercase tracking-[0.3em]">{contest?.name ?? 'Contest'}</h1>
-        <p class="text-caption text-text-secondary uppercase tracking-[0.4em]">
-          {contest?.location ?? 'Unknown venue'} • {contest?.date ? new Date(contest.date).toLocaleDateString() : 'Date TBC'}
-        </p>
-      </div>
-      <div class="flex flex-wrap items-center gap-3">
+<div class="min-h-screen bg-black text-white flex flex-col">
+  <header class="w-full bg-black px-10 py-10">
+    <div class="flex flex-col items-center gap-4 text-center">
+      <h1 class="font-display text-5xl uppercase tracking-[0.2rem] text-white" style="text-shadow: 0 0 20px rgba(220, 20, 60, 0.5), 0 0 40px rgba(220, 20, 60, 0.3);">{contest?.name ?? t('display_table.head.default_contest')}</h1>
+      <p class="text-caption text-text-secondary uppercase tracking-[0.4em]">{t('display_table.header.tagline')}</p>
+      <div class="flex items-center gap-4">
         <span class={connectionBadge()}>{connectionLabel()}</span>
         {#if connectionStatus !== 'connected'}
-          <button type="button" class="btn-secondary px-4 py-2" on:click={reconnect}>
-            Retry Connection
+          <button type="button" class="btn-secondary px-4 py-2 text-xxs" on:click={reconnect}>
+            {t('display_table.connection.retry')}
           </button>
-        {/if}
-        {#if shareableUrl}
-          <div class="w-full lg:w-auto">
-            <QRShare url={shareableUrl} title="Share Display" />
-          </div>
         {/if}
       </div>
     </div>
   </header>
 
-  <main class="px-6 py-8 lg:px-10 space-y-8">
+  <main class="flex-1 container-full py-12 space-y-10">
     {#if error}
-      <div class="card border-status-error">
-        <h2 class="text-h3 text-status-error mb-2">Failed to load contest data</h2>
+      <div class="card border-primary-red text-center space-y-4">
+        <h2 class="text-h2 text-status-error">{t('display_table.errors.load_failed_title')}</h2>
         <p class="text-body text-text-secondary">{error}</p>
       </div>
     {:else}
-      <section class="grid gap-4 lg:grid-cols-3">
-        <div class="card">
-          <h3 class="text-label text-text-secondary mb-2">Lifters Checked In</h3>
+      <section class="grid gap-6 md:grid-cols-3">
+        <div class="card text-center space-y-3">
+          <p class="text-label text-text-secondary uppercase tracking-[0.4em]">{t('display_table.metrics.lifters')}</p>
           <p class="text-h1 text-text-primary">{lifterCount}</p>
         </div>
-        <div class="card">
-          <h3 class="text-label text-text-secondary mb-2">Pending Attempts</h3>
+        <div class="card text-center space-y-3">
+          <p class="text-label text-text-secondary uppercase tracking-[0.4em]">{t('display_table.metrics.pending')}</p>
           <p class="text-h1 text-text-primary">{pendingCount}</p>
         </div>
-        <div class="card">
-          <h3 class="text-label text-text-secondary mb-2">Last Update</h3>
+        <div class="card text-center space-y-3">
+          <p class="text-label text-text-secondary uppercase tracking-[0.4em]">{t('display_table.metrics.last_update')}</p>
           <p class="text-h1 text-text-primary">{lastUpdateTime ? lastUpdateTime.toLocaleTimeString() : '—'}</p>
         </div>
       </section>
 
-      <section class="grid gap-6 xl:grid-cols-2">
-        <div class="card flex flex-col">
-          <header class="card-header flex items-center justify-between">
-            <div>
-              <h2 class="text-h3 text-text-primary">Attempt Queue</h2>
-              <p class="text-body text-text-secondary">Next lifters ordered by platform rotation.</p>
-            </div>
+      <section class="card space-y-6">
+        <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 class="text-h2 text-text-primary uppercase tracking-[0.3em]">{$_('contest_detail.registrations.title')}</h2>
+            <p class="text-caption text-text-secondary uppercase tracking-[0.3em]">{$_('contest_detail.registrations.subtitle')}</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <button type="button" class={`px-3 py-1 text-xxs ${selectedFlightFilter === 'ALL' ? 'btn-primary text-black' : 'btn-secondary'}`} on:click={() => selectFlightFilter('ALL')}>
+              {$_('contest_detail.registrations.filters.all')}
+            </button>
+            <button type="button" class={`px-3 py-1 text-xxs ${selectedFlightFilter === 'UNASSIGNED' ? 'btn-primary text-black' : 'btn-secondary'}`} on:click={() => selectFlightFilter('UNASSIGNED')}>
+              {$_('contest_detail.registrations.filters.unassigned')}
+            </button>
+            {#each availableFlights as flight}
+              <button type="button" class={`px-3 py-1 text-xxs ${selectedFlightFilter === flight ? 'btn-primary text-black' : 'btn-secondary'}`} on:click={() => selectFlightFilter(flight)}>{flight}</button>
+            {/each}
+          </div>
+        </header>
+        {#if filteredRows.length === 0}
+          <p class="text-caption text-text-secondary text-center py-8">{$_('contest_detail.registrations.empty_filter')}</p>
+        {:else}
+          <div class="overflow-x-auto">
+            <UnifiedContestTable
+              rows={filteredRows}
+              sortColumn={sortColumn}
+              sortDirection={sortDirection}
+              readOnly={true}
+              activeFlight={contest?.activeFlight ?? null}
+              lifts={contestLifts}
+              weightClasses={referenceData?.weightClasses ?? []}
+              ageCategories={referenceData?.ageCategories ?? []}
+              onSortChange={handleSortChange}
+            />
+          </div>
+        {/if}
+      </section>
+
+      <section class="grid gap-8 xl:grid-cols-2">
+        <div class="card space-y-6">
+          <header class="card-header">
+            <h2 class="text-h2 text-text-primary uppercase tracking-[0.3em]">{t('display_table.queue.title')}</h2>
+            <p class="text-caption text-text-secondary uppercase tracking-[0.3em]">{t('display_table.queue.subtitle')}</p>
           </header>
           {#if pendingAttempts.length === 0}
-            <p class="text-body text-text-secondary text-center py-8">All attempts are complete.</p>
+            <p class="text-caption text-text-secondary text-center py-8">{t('display_table.queue.empty')}</p>
           {:else}
-            <div class="overflow-hidden">
-              <ul class="divide-y divide-border-color">
-                {#each pendingAttempts as attempt}
-                  <li class="py-4 flex flex-col gap-2">
-                    <div class="flex items-baseline justify-between">
-                      <div>
-                        <p class="text-body text-text-primary font-semibold uppercase tracking-[0.3em]">{queueLabel(attempt)}</p>
-                        <p class="text-caption text-text-secondary">{attempt.liftType} • Attempt {attempt.attemptNumber}</p>
-                      </div>
-                      <p class="text-h2 text-text-primary">{attempt.weight}kg</p>
-                    </div>
-                  </li>
-                {/each}
-              </ul>
-            </div>
+            <ul class="space-y-4">
+              {#each pendingAttempts as attempt}
+                <li class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between border border-border-color bg-element-bg/60 px-4 py-3">
+                  <div class="space-y-1">
+                    <p class="text-body text-text-primary font-semibold uppercase tracking-[0.3em]">{queueLabel(attempt)}</p>
+                    <p class="text-caption text-text-secondary uppercase tracking-[0.3em]">{t('display_table.queue.meta', { lift: liftLabel(attempt.liftType), number: attempt.attemptNumber })}</p>
+                  </div>
+                  <p class="weight-medium text-text-primary font-mono">{t('display_table.common.weight_kg', { weight: attempt.weight })}</p>
+                </li>
+              {/each}
+            </ul>
           {/if}
         </div>
 
-        <div class="card flex flex-col">
-          <header class="card-header flex items-center justify-between">
-            <div>
-              <h2 class="text-h3 text-text-primary">Recent Results</h2>
-              <p class="text-body text-text-secondary">Most recent judged attempts with outcomes.</p>
-            </div>
+        <div class="card space-y-6">
+          <header class="card-header">
+            <h2 class="text-h2 text-text-primary uppercase tracking-[0.3em]">{t('display_table.recent.title')}</h2>
+            <p class="text-caption text-text-secondary uppercase tracking-[0.3em]">{t('display_table.recent.subtitle')}</p>
           </header>
           {#if recentAttempts.length === 0}
-            <p class="text-body text-text-secondary text-center py-8">No scored attempts yet.</p>
+            <p class="text-caption text-text-secondary text-center py-8">{t('display_table.recent.empty')}</p>
           {:else}
-            <div class="overflow-hidden" bind:this={recentResultsContainer}>
-              <ul class="divide-y divide-border-color">
-                {#each recentAttempts as attempt}
-                  <li class="py-4 flex flex-col gap-2">
-                    <div class="flex items-baseline justify-between">
-                      <div>
-                        <p class="text-body text-text-primary font-semibold uppercase tracking-[0.3em]">{competitorName(attempt.registrationId)}</p>
-                        <p class="text-caption text-text-secondary">{attempt.liftType} • Attempt {attempt.attemptNumber}</p>
-                      </div>
-                      <div class="flex items-center gap-4">
-                        <p class="text-h2 text-text-primary">{attempt.weight}kg</p>
-                        <span class={`px-3 py-1 text-xs font-semibold uppercase tracking-[0.3em] rounded ${attemptToneClass(attempt.status)}`}>
-                          {attempt.status}
-                        </span>
-                      </div>
+            <ul class="space-y-4">
+              {#each recentAttempts as attempt}
+                <li class="border border-border-color bg-element-bg/60 px-4 py-3">
+                  <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div class="space-y-1">
+                      <p class="text-body text-text-primary font-semibold uppercase tracking-[0.3em]">{competitorName(attempt.registrationId)}</p>
+                      <p class="text-caption text-text-secondary uppercase tracking-[0.3em]">{t('display_table.recent.meta', { lift: liftLabel(attempt.liftType), number: attempt.attemptNumber })}</p>
                     </div>
-                    <p class="text-caption text-text-secondary">Updated {new Date(attempt.updatedAt).toLocaleTimeString()}</p>
-                  </li>
-                {/each}
-              </ul>
-            </div>
+                    <div class="flex flex-col items-end gap-2 lg:flex-row lg:items-center lg:gap-4">
+                      <p class="weight-medium text-text-primary font-mono">{t('display_table.common.weight_kg', { weight: attempt.weight })}</p>
+                      <span class={`${getAttemptStatusClass(attempt.status)} px-3 py-1 text-xxs font-semibold uppercase tracking-[0.3em] rounded`}>{getAttemptStatusLabel(attempt.status)}</span>
+                    </div>
+                  </div>
+                  <p class="text-xxs text-text-secondary uppercase tracking-[0.3em] mt-2">{t('display_table.recent.updated', { time: new Date(attempt.updatedAt).toLocaleTimeString() })}</p>
+                </li>
+              {/each}
+            </ul>
           {/if}
         </div>
       </section>
 
       {#if liveCurrentAttempt}
-        <section class="card">
-          <header class="card-header flex items-center justify-between">
-            <div>
-              <h2 class="text-h3 text-text-primary">Current Attempt</h2>
-              <p class="text-body text-text-secondary">Live attempt on the platform right now.</p>
-            </div>
+        <section class="card border-primary-red shadow-[0_0_35px_rgba(220,20,60,0.35)] space-y-8">
+          <header class="card-header space-y-2">
+            <h2 class="text-h2 text-primary-red uppercase tracking-[0.3em]">{t('display_table.current.title')}</h2>
+            <p class="text-caption text-text-secondary uppercase tracking-[0.3em]">{t('display_table.current.subtitle')}</p>
           </header>
-          <div class="grid gap-4 md:grid-cols-4">
-            <div class="col-span-2">
-              <p class="text-label text-text-secondary mb-1">Lifter</p>
-              <p class="text-h2 text-text-primary">{competitorName(liveCurrentAttempt.registrationId)}</p>
+          <div class="grid gap-6 md:grid-cols-4">
+            <div class="md:col-span-2 space-y-2">
+              <p class="text-label text-text-secondary uppercase tracking-[0.4em]">{t('display_table.current.lifter')}</p>
+              <p class="text-h2 text-text-primary uppercase tracking-[0.3em]">{competitorName(liveCurrentAttempt.registrationId)}</p>
             </div>
-            <div>
-              <p class="text-label text-text-secondary mb-1">Lift</p>
-              <p class="text-h2 text-text-primary">{liveCurrentAttempt.liftType}</p>
+            <div class="space-y-2">
+              <p class="text-label text-text-secondary uppercase tracking-[0.4em]">{t('display_table.current.lift')}</p>
+              <p class="text-h3 text-text-primary uppercase tracking-[0.3em]">{liftLabel(liveCurrentAttempt.liftType)}</p>
             </div>
-            <div>
-              <p class="text-label text-text-secondary mb-1">Attempt</p>
-              <p class="text-h2 text-text-primary">#{liveCurrentAttempt.attemptNumber}</p>
+            <div class="space-y-2">
+              <p class="text-label text-text-secondary uppercase tracking-[0.4em]">{t('display_table.current.attempt')}</p>
+              <p class="text-h3 text-text-primary uppercase tracking-[0.3em]">#{liveCurrentAttempt.attemptNumber}</p>
             </div>
-            <div class="md:col-span-4">
-              <p class="text-label text-text-secondary mb-1">Declared Weight</p>
-              <p class="text-display text-primary-red">{liveCurrentAttempt.weight}kg</p>
+            <div class="md:col-span-4 space-y-4">
+              <p class="text-label text-text-secondary uppercase tracking-[0.4em]">{t('display_table.current.weight')}</p>
+              <div class="flex items-baseline gap-4">
+                <span class="text-[6rem] leading-none font-mono text-primary-red">{liveCurrentAttempt.weight}</span>
+                <span class="text-3xl font-mono text-text-secondary uppercase tracking-[0.3em]">kg</span>
+              </div>
             </div>
-            {#if livePlatePlan}
-              <div class="md:col-span-4 space-y-2">
-                <p class="text-label text-text-secondary mb-1">Plate Plan</p>
-                <p class="text-body text-text-secondary">
-                  Bar {livePlatePlan.barWeight}kg • Total {livePlatePlan.total}kg
-                </p>
-                <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {#each livePlatePlan.plates as plate}
-                    <div class="flex items-center justify-between bg-element-bg border border-border-color rounded px-3 py-2">
-                      <span>{plate.plateWeight}kg</span>
-                      <span>× {plate.count}</span>
+            {#if livePlatePlan && livePlatePlan.plates.length > 0}
+              <div class="md:col-span-4 space-y-4">
+                <p class="text-label text-text-secondary uppercase tracking-[0.4em]">{t('display_table.current.plate_title')}</p>
+                <p class="text-caption text-text-secondary uppercase tracking-[0.3em]">{t('display_table.current.plate_meta', { total: livePlatePlan.total, bar: livePlatePlan.barWeight })}</p>
+                <div class="flex flex-wrap items-center gap-6">
+                  {#each livePlatePlan.plates as plate, index (plate.plateWeight + '-' + index)}
+                    <div class="flex items-end gap-3 text-text-secondary uppercase tracking-[0.2em]">
+                      <span class="text-text-primary font-mono text-4xl">{plate.plateWeight} kg</span>
+                      <span class="text-text-secondary font-mono text-2xl opacity-70">×{plate.count}</span>
                     </div>
                   {/each}
                 </div>

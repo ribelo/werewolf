@@ -11,6 +11,7 @@ type ContestBarWeightsRow = {
   mens_bar_weight?: number | null;
   womens_bar_weight?: number | null;
   bar_weight?: number | null;
+  clamp_weight?: number | null;
 };
 
 export type PlatePlanEntry = {
@@ -27,6 +28,7 @@ export type PlatePlan = {
   targetWeight: number;
   barWeight: number;
   weightToLoad: number;
+  clampWeight: number;
 };
 
 const DEFAULT_MENS_BAR_WEIGHT = 20;
@@ -90,12 +92,14 @@ export async function buildPlatePlan(
 ): Promise<PlatePlan> {
   const barWeightsRow = await executeQueryOne<ContestBarWeightsRow>(
     db,
-    'SELECT mens_bar_weight, womens_bar_weight, bar_weight FROM contests WHERE id = ?',
+    'SELECT mens_bar_weight, womens_bar_weight, bar_weight, clamp_weight FROM contests WHERE id = ?',
     [contestId]
   );
 
   const barWeight = deriveBarWeight(barWeightsRow, options?.gender ?? undefined, options?.barWeightOverride ?? undefined);
-  const weightToLoad = Math.max(0, targetWeight - barWeight);
+  const clampWeight = barWeightsRow?.clamp_weight ?? 2.5;
+  const baseAssemblyWeight = barWeight + clampWeight;
+  const weightToLoad = Math.max(0, targetWeight - baseAssemblyWeight);
 
   const availablePlates = await executeQuery<PlateDbRow>(
     db,
@@ -119,10 +123,11 @@ export async function buildPlatePlan(
     return {
       plates: [],
       exact: weightToLoad <= EPSILON,
-      total: barWeight,
+      total: baseAssemblyWeight,
       increment,
       targetWeight,
       barWeight,
+      clampWeight,
       weightToLoad,
     };
   }
@@ -158,7 +163,7 @@ export async function buildPlatePlan(
   }
 
   const actualSideLoad = Math.max(0, weightToLoad / 2 - remainingPerSide);
-  const actualTotal = barWeight + actualSideLoad * 2;
+  const actualTotal = baseAssemblyWeight + actualSideLoad * 2;
 
   return {
     plates,
@@ -167,6 +172,7 @@ export async function buildPlatePlan(
     increment,
     targetWeight,
     barWeight,
+    clampWeight,
     weightToLoad,
   };
 }

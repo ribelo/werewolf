@@ -4,7 +4,7 @@
   import type { ActiveModal } from '$lib/ui/modal';
 
   export let modal: ActiveModal;
-  export let zIndex: number = 40;
+export let zIndex: number = 80;
 
 
 

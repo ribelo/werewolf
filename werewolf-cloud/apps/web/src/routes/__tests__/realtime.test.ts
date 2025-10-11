@@ -8,18 +8,25 @@ vi.mock('$lib/config', () => ({
 import { realtimeClient } from '$lib/realtime';
 import type { LiveEvent, ConnectionStatus } from '$lib/types';
 
-// Mock WebSocket
-const mockWebSocket = {
-  readyState: WebSocket.OPEN,
-  send: vi.fn(),
-  close: vi.fn(),
-  onopen: vi.fn(),
-  onmessage: vi.fn(),
-  onclose: vi.fn(),
-  onerror: vi.fn(),
+// Mock WebSocket constructor with required readyState constants
+const WebSocketCtor = vi.fn();
+(WebSocketCtor as unknown as { OPEN: number; CLOSED: number; CLOSING: number; CONNECTING: number }).OPEN = 1;
+(WebSocketCtor as unknown as { OPEN: number; CLOSED: number; CLOSING: number; CONNECTING: number }).CLOSED = 3;
+(WebSocketCtor as unknown as { OPEN: number; CLOSED: number; CLOSING: number; CONNECTING: number }).CLOSING = 2;
+(WebSocketCtor as unknown as { OPEN: number; CLOSED: number; CLOSING: number; CONNECTING: number }).CONNECTING = 0;
+
+let mockWebSocket: {
+  readyState: number;
+  send: ReturnType<typeof vi.fn>;
+  close: ReturnType<typeof vi.fn>;
+  onopen: () => void;
+  onmessage: (event: { data: string }) => void;
+  onclose: (event: { code: number; reason?: string }) => void;
+  onerror: (error: unknown) => void;
 };
 
-global.WebSocket = vi.fn().mockImplementation(() => mockWebSocket) as any;
+// Assign mocked constructor to global WebSocket
+(globalThis as any).WebSocket = WebSocketCtor as unknown as typeof WebSocket;
 
 // Mock localStorage
 const localStorageMock = {
@@ -28,19 +35,50 @@ const localStorageMock = {
   removeItem: vi.fn(),
   clear: vi.fn(),
 };
-global.localStorage = localStorageMock as any;
+(globalThis as any).localStorage = localStorageMock as any;
 
 describe('RealtimeClient', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     vi.useFakeTimers();
+
+    mockWebSocket = {
+      readyState: (WebSocket as any).OPEN ?? 1,
+      send: vi.fn(),
+      close: vi.fn(),
+      onopen: () => undefined,
+      onmessage: () => undefined,
+      onclose: () => undefined,
+      onerror: () => undefined,
+    };
+
+    WebSocketCtor.mockClear();
+    WebSocketCtor.mockImplementation(() => mockWebSocket);
+
+    localStorageMock.getItem.mockReset();
+    localStorageMock.setItem.mockReset();
+    localStorageMock.removeItem.mockReset();
+    localStorageMock.clear.mockReset();
+
+    vi.clearAllMocks();
+
+    // Provide default fetch stub (tests can override)
+    (globalThis as any).fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ data: null }),
+    });
 
     // Reset client state
     realtimeClient.disconnect();
+    (realtimeClient as any).__setEventForTests?.(null);
+    (realtimeClient as any).__setConnectionStatusForTests?.('offline');
   });
 
   afterEach(() => {
+    realtimeClient.disconnect();
+    vi.runOnlyPendingTimers();
+    vi.clearAllTimers();
     vi.useRealTimers();
+    delete (globalThis as any).fetch;
   });
 
   describe('Connection Management', () => {
@@ -112,9 +150,36 @@ describe('RealtimeClient', () => {
       unsubscribe();
     });
 
-    it.skip('should filter events by contest ID', () => {
-      // TODO: Fix test isolation issue - events from polling interfere with test
-      expect(true).toBe(true);
+    it('should ignore events for other contests', () => {
+      const received: LiveEvent[] = [];
+      const unsubscribe = realtimeClient.events.subscribe((event) => {
+        if (event) received.push(event);
+      });
+
+      realtimeClient.connect('contest-a');
+
+      const foreignEvent: LiveEvent = {
+        type: 'attempt.upserted',
+        contestId: 'contest-b',
+        timestamp: new Date().toISOString(),
+        data: { id: 'foreign', weight: 100 },
+      };
+
+      mockWebSocket.onmessage({ data: JSON.stringify(foreignEvent) });
+      expect(received).toHaveLength(0);
+
+      const localEvent: LiveEvent = {
+        type: 'attempt.upserted',
+        contestId: 'contest-a',
+        timestamp: new Date().toISOString(),
+        data: { id: 'local', weight: 120 },
+      };
+
+      mockWebSocket.onmessage({ data: JSON.stringify(localEvent) });
+      expect(received).toHaveLength(1);
+      expect(received[0]?.data).toMatchObject({ id: 'local' });
+
+      unsubscribe();
     });
   });
 
@@ -190,9 +255,15 @@ describe('RealtimeClient', () => {
   });
 
   describe('Heartbeat', () => {
-    it.skip('should send heartbeat messages when connected', () => {
-      // TODO: Fix timer mocking for heartbeat test
-      expect(true).toBe(true);
+    it('should send heartbeat ping while connected', () => {
+      realtimeClient.connect('contest-heartbeat');
+      mockWebSocket.onopen();
+
+      vi.advanceTimersByTime(30000);
+      expect(mockWebSocket.send).toHaveBeenCalledWith(JSON.stringify({ type: 'ping' }));
+
+      vi.advanceTimersByTime(30000);
+      expect(mockWebSocket.send).toHaveBeenCalledTimes(2);
     });
   });
 });

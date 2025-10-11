@@ -6,7 +6,7 @@
   "menu": {
     "settings": "Ustawienia",
     "settings_description": "Konfiguruj aplikację",
-    "create_competition": "Stwórz Zawody", 
+    "create_competition": "Stwórz Zawody",
     "create_competition_description": "Nowe zawody powerlifting",
     "manage_competition": "Zarządzaj Zawodami",
     "manage_competition_description": "Aktywne zawody"
@@ -16,7 +16,7 @@
     "edit_title": "Edytuj Zawody",
     "step_1_title": "Krok 1: Podstawowe Informacje",
     "step_1_description": "Zacznij od podania podstawowych szczegółów zawodów.",
-    "step_2_title": "Krok 2: Szczegóły Zawodów", 
+    "step_2_title": "Krok 2: Szczegóły Zawodów",
     "step_2_description": "Określ regulamin, dyscyplinę i inne szczegóły organizacyjne.",
     "step_3_title": "Krok 3: Zawodnicy",
     "step_3_description": "Dodaj zawodników którzy będą uczestniczyć w zawodach.",
@@ -32,131 +32,131 @@
     "discipline_label": "Dyscyplina",
     "competition_type_label": "Typ Zawodów (Opcjonalne)",
     "competition_type_placeholder": "np. Kwalifikacje Krajowe",
-    "organizer_label": "Organizator (Opcjonalne)", 
+    "organizer_label": "Organizator (Opcjonalne)",
     "organizer_placeholder": "np. Klub Powerlifting",
     "federation_rules_label": "Federacja/Regulamin (Opcjonalne)",
     "federation_rules_placeholder": "np. Regulamin PZP",
     "notes_label": "Notatki (Opcjonalne)",
-  "notes_placeholder": "Dodatkowe szczegóły o zawodach...",
-  "bar_weight_label": "Waga sztangi (kg)",
-  "wizard_validation_warning": "Uzupełnij wymagane pola przed przejściem dalej.",
-  "edit_button": "Edytuj Zawody",
+    "notes_placeholder": "Dodatkowe szczegóły o zawodach...",
+    "bar_weight_label": "Waga sztangi (kg)",
+    "wizard_validation_warning": "Uzupełnij wymagane pola przed przejściem dalej.",
+    "edit_button": "Edytuj Zawody",
     "details_tab": "Szczegóły Zawodów",
     "plates_tab": "Obciążenie",
     "save_changes": "Zapisz Zmiany",
     "cancel_changes": "Anuluj",
     "saved_successfully": "Zawody zapisane pomyślnie",
-  "save_error": "Nie udało się zapisać zmian",
-  "wizard": {
-    "page_title": "Utwórz zawody • Werewolf Powerlifting",
-    "layout_title": "Kreator zawodów",
-    "layout_subtitle": "Utwórz zawody i opcjonalną listę startową",
-    "title": "Konfiguracja zawodów",
-    "step_label": "Krok",
-    "step_connector": "z",
-    "steps": {
-      "basic": "Informacje podstawowe",
-      "basic_hint": "Podaj datę i miejsce rozgrywania zawodów.",
-      "details": "Szczegóły zawodów",
-      "details_hint": "Uzupełnij dane organizatora oraz ewentualne dodatkowe informacje.",
-      "competitors": "Wstępna lista zawodników",
-      "competitors_hint": "Możesz dodać zawodników z wyprzedzeniem, aby przyspieszyć pracę w dniu zawodów."
-    },
-    "actions": {
-      "previous": "Wstecz",
-      "next": "Dalej",
-      "submit": "Utwórz zawody",
-      "submitting": "Tworzenie…"
-    },
-    "fields": {
-      "name": {
-        "label": "Nazwa zawodów",
-        "placeholder": "Werewolf Open"
+    "save_error": "Nie udało się zapisać zmian",
+    "wizard": {
+      "page_title": "Utwórz zawody • Werewolf Powerlifting",
+      "layout_title": "Kreator zawodów",
+      "layout_subtitle": "Utwórz zawody i opcjonalną listę startową",
+      "title": "Konfiguracja zawodów",
+      "step_label": "Krok",
+      "step_connector": "z",
+      "steps": {
+        "basic": "Informacje podstawowe",
+        "basic_hint": "Podaj datę i miejsce rozgrywania zawodów.",
+        "details": "Szczegóły zawodów",
+        "details_hint": "Uzupełnij dane organizatora oraz ewentualne dodatkowe informacje.",
+        "competitors": "Wstępna lista zawodników",
+        "competitors_hint": "Możesz dodać zawodników z wyprzedzeniem, aby przyspieszyć pracę w dniu zawodów."
       },
-      "date": {
-        "label": "Data zawodów"
+      "actions": {
+        "previous": "Wstecz",
+        "next": "Dalej",
+        "submit": "Utwórz zawody",
+        "submitting": "Tworzenie…"
       },
-      "location": {
-        "label": "Lokalizacja",
-        "placeholder": "Warszawa Power Arena"
+      "fields": {
+        "name": {
+          "label": "Nazwa zawodów",
+          "placeholder": "Werewolf Open"
+        },
+        "date": {
+          "label": "Data zawodów"
+        },
+        "location": {
+          "label": "Lokalizacja",
+          "placeholder": "Warszawa Power Arena"
+        },
+        "events": {
+          "label": "Dyscypliny"
+        },
+        "organizer": {
+          "label": "Organizator",
+          "placeholder": "Klub Werewolf"
+        },
+        "federation_rules": {
+          "label": "Regulamin (opcjonalnie)",
+          "placeholder": "Regulamin IPF"
+        },
+        "notes": {
+          "label": "Notatki (opcjonalnie)",
+          "placeholder": "Np. zasady sprzętowe, uwagi do harmonogramu"
+        }
       },
       "events": {
-        "label": "Dyscypliny"
+        "squat": "Przysiad",
+        "bench": "Wyciskanie leżąc",
+        "deadlift": "Martwy ciąg"
       },
-      "organizer": {
-        "label": "Organizator",
-        "placeholder": "Klub Werewolf"
+      "genders": {
+        "male": "Mężczyzna",
+        "female": "Kobieta"
       },
-      "federation_rules": {
-        "label": "Regulamin (opcjonalnie)",
-        "placeholder": "Regulamin IPF"
+      "messages": {
+        "events_hint": "Dyscyplina jest ustalana automatycznie na podstawie wybranych prób.",
+        "success": "Zawody zostały utworzone.",
+        "error": "Nie udało się utworzyć zawodów."
       },
-      "notes": {
-        "label": "Notatki (opcjonalnie)",
-        "placeholder": "Np. zasady sprzętowe, uwagi do harmonogramu"
+      "validation": {
+        "warning": "Uzupełnij wymagane pola przed kontynuacją.",
+        "name_required": "Nazwa zawodów jest wymagana",
+        "location_required": "Lokalizacja jest wymagana",
+        "date_required": "Data jest wymagana",
+        "organizer_required": "Organizator jest wymagany",
+        "first_name_required": "Imię jest wymagane",
+        "last_name_required": "Nazwisko jest wymagane",
+        "birth_date_required": "Data urodzenia jest wymagana",
+        "bodyweight_positive": "Waga ciała musi być większa od 0"
+      },
+      "competitor": {
+        "first_name": "Imię",
+        "last_name": "Nazwisko",
+        "birth_date": "Data urodzenia",
+        "gender": "Płeć",
+        "club": "Klub",
+        "club_placeholder": "Klub Werewolf",
+        "city": "Miasto",
+        "city_placeholder": "Warszawa",
+        "bodyweight": "Waga ciała (kg)",
+        "rack_squat": "Wysokość stojaków (przysiad)",
+        "rack_bench": "Wysokość stojaków (wyciskanie)",
+        "equipment": {
+          "legend": "Sprzęt",
+          "multi": "Wielo-warstwowy",
+          "single": "Jedno-warstwowy",
+          "wraps": "Owinięcia kolan"
+        },
+        "add_button": "Dodaj zawodnika",
+        "reset_button": "Wyczyść formularz"
+      },
+      "drafts": {
+        "title": "Zarejestrowani zawodnicy",
+        "meta": "{birthDate} • {gender} • {bodyweight} kg",
+        "club_city": "{club} • {city}",
+        "no_club": "Brak klubu",
+        "no_city": "Brak miasta",
+        "remove": "Usuń"
       }
-    },
-    "events": {
-      "squat": "Przysiad",
-      "bench": "Wyciskanie leżąc",
-      "deadlift": "Martwy ciąg"
-    },
-    "genders": {
-      "male": "Mężczyzna",
-      "female": "Kobieta"
-    },
-    "messages": {
-      "events_hint": "Dyscyplina jest ustalana automatycznie na podstawie wybranych prób.",
-      "success": "Zawody zostały utworzone.",
-      "error": "Nie udało się utworzyć zawodów."
-    },
-    "validation": {
-      "warning": "Uzupełnij wymagane pola przed kontynuacją.",
-      "name_required": "Nazwa zawodów jest wymagana",
-      "location_required": "Lokalizacja jest wymagana",
-      "date_required": "Data jest wymagana",
-      "organizer_required": "Organizator jest wymagany",
-      "first_name_required": "Imię jest wymagane",
-      "last_name_required": "Nazwisko jest wymagane",
-      "birth_date_required": "Data urodzenia jest wymagana",
-      "bodyweight_positive": "Waga ciała musi być większa od 0"
-    },
-    "competitor": {
-      "first_name": "Imię",
-      "last_name": "Nazwisko",
-      "birth_date": "Data urodzenia",
-      "gender": "Płeć",
-      "club": "Klub",
-      "club_placeholder": "Klub Werewolf",
-      "city": "Miasto",
-      "city_placeholder": "Warszawa",
-      "bodyweight": "Waga ciała (kg)",
-      "rack_squat": "Wysokość stojaków (przysiad)",
-      "rack_bench": "Wysokość stojaków (wyciskanie)",
-      "equipment": {
-        "legend": "Sprzęt",
-        "multi": "Wielo-warstwowy",
-        "single": "Jedno-warstwowy",
-        "wraps": "Owinięcia kolan"
-      },
-      "add_button": "Dodaj zawodnika",
-      "reset_button": "Wyczyść formularz"
-    },
-    "drafts": {
-      "title": "Zarejestrowani zawodnicy",
-      "meta": "{birthDate} • {gender} • {bodyweight} kg",
-      "club_city": "{club} • {city}",
-      "no_club": "Brak klubu",
-      "no_city": "Brak miasta",
-      "remove": "Usuń"
     }
-  }
   },
   "validation": {
     "name_required": "Nazwa zawodów jest wymagana",
     "name_min_length": "Nazwa zawodów musi mieć co najmniej 3 znaki",
     "name_too_short": "Nazwa zawodów musi mieć co najmniej 2 znaki",
-    "date_required": "Data zawodów jest wymagana", 
+    "date_required": "Data zawodów jest wymagana",
     "date_past": "Data zawodów nie może być w przeszłości",
     "rack_height_validation": "Wysokość stojaka musi być między 1 a 20",
     "location_required": "Miejsce jest wymagane",
@@ -173,10 +173,12 @@
   "buttons": {
     "cancel": "Anuluj",
     "next": "Dalej",
-    "back": "Wróć", 
+    "back": "Wróć",
     "create_contest": "Stwórz Zawody",
     "creating_contest": "Tworzenie Zawodów...",
     "save": "Zapisz",
+    "edit": "Edytuj",
+    "add": "Dodaj",
     "good": "UDANA",
     "bad": "NIEUDANA",
     "create_backup": "Stwórz Kopię Zapasową",
@@ -194,9 +196,48 @@
   "common": {
     "loading": "Ładowanie..."
   },
+  "contest_table": {
+    "columns": {
+      "place": "Miejsce",
+      "lifter": "Zawodnik",
+      "sex": "Płeć",
+      "flight": "Flight",
+      "age": "Wiek",
+      "bodyweight": "Waga ciała",
+      "weight_class": "Kategoria wagowa",
+      "age_class": "Kategoria wiekowa",
+      "reshel": "Reshel",
+      "mccullough": "McC.",
+      "rack": "Stojak",
+      "points": "Punkty",
+      "max": "Maks.",
+      "labels": "Etykiety",
+      "actions": "Akcje"
+    },
+    "lifts": {
+      "squat": "Przysiad",
+      "bench": "Wyciskanie leżąc",
+      "deadlift": "Martwy ciąg"
+    },
+    "lifts_short": {
+      "squat": "SQ",
+      "bench": "BP",
+      "deadlift": "DL"
+    },
+    "labels": {
+      "placeholder": "Dodaj etykietę",
+      "remove": "Usuń etykietę {label}"
+    },
+    "actions": {
+      "edit_attempts": "Edytuj próby",
+      "edit_competitor": "Edytuj zawodnika",
+      "view_details": "Szczegóły",
+      "set_live": "Ustaw na żywo"
+    }
+  },
   "ui": {
     "minimize": "Minimalizuj",
-    "maximize": "Maksymalizuj", 
+    "maximize": "Maksymalizuj",
     "restore": "Przywróć",
     "close": "Zamknij",
     "crop_area": "Obszar przycinania",
@@ -223,29 +264,17 @@
     "crop_loading": "Ładowanie..."
   },
   "results": {
-    "competition_summary": "Podsumowanie Wyników Zawodów",
-    "competition_stats": "Statystyki Zawodów",
-    "total_competitors": "Łącznie Zawodników",
-    "successful_finishers": "Pomyślnie Ukończyli",
-    "bombed_out": "Bez Wyniku",
-    "winning_total": "Najlepszy Wynik",
-    "best_lifts": "Najlepsze Wyniki",
-    "best_squat": "Najlepszy Przysiad",
-    "best_bench": "Najlepsze Wyciskanie",
-    "best_deadlift": "Najlepszy Martwy Ciąg",
-    "top_3_finishers": "Top 3 Zawodnicy",
-    "contest_results": "Wyniki Zawodów",
-    "place": "Miejsce",
-    "registration": "Rejestracja",
-    "points": "Punkty",
-    "status": "Status",
-    "disqualified": "DYS",
-    "record": "REKORD",
-    "export_json": "Eksportuj JSON"
+    "calculate_results": "Oblicz Wyniki",
+    "no_results_available": "Brak dostępnych wyników. Kliknij \"Oblicz Wyniki\" aby wygenerować ranking.",
+    "reset_database": "Zresetuj Bazę Danych",
+    "export_csv": "Eksportuj CSV",
+    "export_pdf": "Eksportuj PDF",
+    "select_contest_to_view": "Wybierz zawody aby zobaczyć wyniki.",
+    "loading": "Ładowanie wyników..."
   },
   "errors": {
     "load_contests": "Nie udało się wczytać zawodów",
-    "load_contest_data": "Nie udało się wczytać danych zawodów", 
+    "load_contest_data": "Nie udało się wczytać danych zawodów",
     "update_attempt": "Nie udało się zaktualizować próby",
     "reorder_competitor": "Nie udało się zmienić kolejności zawodnika",
     "load_results": "Nie udało się wczytać wyników",
@@ -256,7 +285,7 @@
     "subtitle": "Zarządzaj kopiami zapasowymi danych zawodów. Twórz kopie zapasowe przed ważnymi operacjami i przywracaj z poprzednich wersji w razie potrzeby.",
     "available_backups": "Dostępne Kopie Zapasowe",
     "date_time": "Data i Czas",
-    "details": "Szczegóły", 
+    "details": "Szczegóły",
     "actions": "Akcje",
     "backup_type": "Kopia Zapasowa Bazy Danych",
     "no_backups_title": "Nie znaleziono kopii zapasowych",
@@ -272,18 +301,11 @@
     "confirm_restore_safety": "Automatycznie zostanie stworzona kopia bezpieczeństwa twoich obecnych danych."
   },
   "attempt": {
-    "competitor_label": "Zawodnik",
-    "lift_attempt": "- Próba",
-    "weight_placeholder": "Waga (kg)",
-    "status_good": "✓ UDANA",
-    "status_bad": "✗ NIEUDANA", 
-    "status_pending": "◦ OCZEKUJE",
-    "status_saving": "⏳ ZAPISYWANIE...",
-    "shortcuts_help": "⌨️ Skróty:",
-    "shortcuts_text": "Enter=Zapisz | Ctrl+Enter=Udana | Ctrl+X=Nieudana | +=Dodaj 2.5kg | -=Odejmij 2.5kg | Esc=Wyczyść",
-    "increment_add": "Dodaj 2.5kg (+)",
-    "increment_remove": "Odejmij 2.5kg (-)",
-    "failed_update_weight": "Nie udało się zaktualizować wagi:"
+    "status": {
+      "pending": "Oczekuje",
+      "successful": "Udana",
+      "failed": "Nieudana"
+    }
   },
   "plates": {
     "title": "Obciążenie",
@@ -372,7 +394,7 @@
   },
   "disciplines": {
     "Bench": "Wyciskanie",
-    "Squat": "Przysiad", 
+    "Squat": "Przysiad",
     "Deadlift": "Martwy Ciąg",
     "Powerlifting": "Powerlifting"
   },
@@ -409,7 +431,7 @@
     "about": "O programie",
     "action_irreversible": "Ta operacja nie może być cofnięta",
     "male": "Mężczyzna",
-    "female": "Kobieta", 
+    "female": "Kobieta",
     "first_name": "Imię",
     "last_name": "Nazwisko",
     "birth_date": "Data urodzenia",
@@ -429,27 +451,22 @@
     "location": "Miejsce:",
     "discipline": "Dyscyplina:",
     "competition_type": "Typ Zawodów:",
-    "organizer": "Organizator:", 
+    "organizer": "Organizator:",
     "federation_rules": "Federacja/Regulamin:",
     "not_available": "Niedostępne",
     "saving": "Zapisywanie..."
   },
-  "attempt": {
-    "status_pending": "Oczekuje",
-    "status_successful": "Udana",
-    "status_failed": "Nieudana"
-  },
   "help": {
     "best_practices": "💡 Najlepsze Praktyki",
     "before_competitions": "Przed zawodami: Stwórz kopię zapasową przed rozpoczęciem zawodów",
-    "regular_backups": "Regularne kopie: Twórz kopie zapasowe po dużych sesjach wprowadzania danych", 
+    "regular_backups": "Regularne kopie: Twórz kopie zapasowe po dużych sesjach wprowadzania danych",
     "safe_restore": "Bezpieczne przywracanie: Aplikacja automatycznie tworzy kopię bezpieczeństwa przed przywróceniem",
     "after_restore": "Po przywróceniu: Zrestartuj aplikację dla najlepszych rezultatów"
   },
   "contest_view": {
     "select_contest": "Wybierz Zawody",
     "register_competitor": "Zarejestruj Zawodnika",
-    "cancel": "Anuluj", 
+    "cancel": "Anuluj",
     "register_new_competitor": "Zarejestruj Nowego Zawodnika",
     "first_name": "Imię",
     "last_name": "Nazwisko",
@@ -491,37 +508,27 @@
     "open_display": "Otwórz Wyświetlacz",
     "open_display_window": "Otwórz Okno Wyświetlacza",
     "close_display_window": "Zamknij Wyświetlacz",
-    "show_on_display": "Pokaż",
+    "show_on_display": "Pokaż na wyświetlaczu",
     "attempt_ordinal_1": "1.",
     "attempt_ordinal_2": "2.",
     "attempt_ordinal_3": "3.",
     "attempt": "Podejście",
     "edit_weight": "Edytuj Wagę",
     "weight_input_help": "Przeciągnij ↕ | Kółko myszy | Podwójne kliknięcie",
-    "show_on_display": "Pokaż na wyświetlaczu",
     "rack_height_squat": "Wysokość stojaka - Przysiad",
     "rack_height_bench": "Wysokość stojaka - Wyciskanie",
     "rack_height_help": "Pozycja stojaka (1-20)",
     "na": "N/D"
   },
-  "results": {
-    "calculate_results": "Oblicz Wyniki",
-    "no_results_available": "Brak dostępnych wyników. Kliknij \"Oblicz Wyniki\" aby wygenerować ranking.",
-    "reset_database": "Zresetuj Bazę Danych",
-    "export_csv": "Eksportuj CSV",
-    "export_pdf": "Eksportuj PDF",
-    "select_contest_to_view": "Wybierz zawody aby zobaczyć wyniki.",
-    "loading": "Ładowanie wyników..."
-  },
   "settings": {
     "title": "Ustawienia",
     "subtitle": "Konfiguruj aplikację i zarządzaj danymi",
-  "language_title": "Język Aplikacji",
-  "language_description": "Wybierz preferowany język interfejsu użytkownika.",
-  "current_language": "Aktualny język",
-  "competition_title": "Domyślne ustawienia zawodów",
-  "competition_description": "Wartości używane przy zakładaniu nowych zawodów.",
-  "database_title": "Zarządzanie Bazą Danych",
+    "language_title": "Język Aplikacji",
+    "language_description": "Wybierz preferowany język interfejsu użytkownika.",
+    "current_language": "Aktualny język",
+    "competition_title": "Domyślne ustawienia zawodów",
+    "competition_description": "Wartości używane przy zakładaniu nowych zawodów.",
+    "database_title": "Zarządzanie Bazą Danych",
     "database_description": "Zarządzaj danymi aplikacji, twórz kopie zapasowe i resetuj bazę danych.",
     "backup_description": "Twórz i przywracaj kopie zapasowe danych zawodów.",
     "reset_database_title": "Zresetuj Bazę Danych",
@@ -535,7 +542,7 @@
   },
   "display": {
     "lift": "KONKURENCJA",
-    "weight_class": "KATEGORIA WAGOWA", 
+    "weight_class": "KATEGORIA WAGOWA",
     "photo": "ZDJĘCIE",
     "attempt": "PODEJŚCIE",
     "rack_height": "WYSOKOŚĆ STOJAKA",
@@ -634,6 +641,81 @@
       "order": "Kolejność"
     }
   },
+  "competitor_modal": {
+    "title": {
+      "create": "Dodaj zawodnika",
+      "edit": "Edytuj zawodnika"
+    },
+    "metadata": {
+      "updated": "Zaktualizowano {timestamp}"
+    },
+    "status": {
+      "loading": "Wczytywanie danych zawodnika...",
+      "success_create": "Zawodnik został dodany.",
+      "success_update": "Zmiany zapisano.",
+      "error_load": "Nie udało się wczytać danych zawodnika.",
+      "error_save": "Nie udało się zapisać danych zawodnika.",
+      "validation": {
+        "name_required": "Imię i nazwisko są wymagane.",
+        "birth_required": "Data urodzenia jest wymagana.",
+        "gender_invalid": "Wybierz prawidłową płeć.",
+        "bodyweight_positive": "Podaj poprawną masę ciała większą od 0 kg."
+      }
+    },
+    "fields": {
+      "first_name": "Imię",
+      "last_name": "Nazwisko",
+      "birth_date": "Data urodzenia",
+      "gender": "Płeć",
+      "club": "Klub",
+      "city": "Miasto",
+      "notes": "Notatki"
+    },
+    "registration": {
+      "title": "Dane zgłoszenia",
+      "subtitle": "Dostosuj parametry startowe tego zawodnika."
+    },
+    "registration_fields": {
+      "bodyweight": "Masa ciała (kg)",
+      "lot_number": "Numer losowania",
+      "lot_number_placeholder": "np. 12",
+      "personal_record": "Rekord zgłoszeniowy (kg)",
+      "personal_record_placeholder": "np. 250",
+      "weight_class": "Kategoria wagowa",
+      "select_weight_class": "Wybierz kategorię wagową",
+      "age_category": "Kategoria wiekowa",
+      "select_age_category": "Wybierz kategorię wiekową",
+      "rack_squat": "Wysokość stojaka — przysiad",
+      "rack_bench": "Wysokość stojaka — wyciskanie",
+      "equipment": "Sprzęt"
+    },
+    "placeholders": {
+      "club": "Nazwa klubu",
+      "city": "Miasto",
+      "notes": "Notatki trenera, najlepsze wyniki itp."
+    },
+    "gender": {
+      "male": "Mężczyzna",
+      "female": "Kobieta"
+    },
+    "cloud_note": {
+      "title": "Synchronizacja z chmurą",
+      "description": "Zmiany zapisują się automatycznie po odzyskaniu połączenia."
+    },
+    "competition_order": {
+      "title": "Kolejność startowa",
+      "subtitle": "Ustal pozycję zawodnika w rotacji prób.",
+      "aria": "Kolejność startowa"
+    },
+    "actions": {
+      "reset": "Przywróć",
+      "cancel": "Anuluj",
+      "close": "Zamknij",
+      "save": "Zapisz zmiany",
+      "create": "Utwórz zawodnika",
+      "saving": "Zapisywanie..."
+    }
+  },
   "settings_page": {
     "show_weights": "Domyślnie pokazuj ciężary",
     "show_weights_desc": "Przełącz widoczność ciężarów w tabelach prób.",
@@ -675,6 +757,361 @@
     "competitors_count": "Zawodnicy: PLACEHOLDER_COUNT",
     "registrations_count": "Rejestracje: PLACEHOLDER_COUNT"
   },
+  "contest_detail": {
+    "fallback_title": "Zawody",
+    "subtitle": "Zarządzaj rejestracjami, próbami, wynikami i kopiami zapasowymi w jednym miejscu.",
+    "connection": {
+      "live": "Połączono",
+      "connecting": "Łączenie...",
+      "offline": "Offline"
+    },
+    "tabs": {
+      "desk": "Stanowisko",
+      "main_table": "Główna tabela",
+      "results": "Wyniki",
+      "plates": "Obciążenia",
+      "backups": "Kopie zapasowe"
+    },
+    "lifts": {
+      "squat": "Przysiad",
+      "bench": "Wyciskanie leżąc",
+      "deadlift": "Martwy ciąg"
+    },
+    "cards": {
+      "status": {
+        "title": "Status zawodów",
+        "meta": "{location} • {date}"
+      },
+      "lifters": {
+        "title": "Zarejestrowani zawodnicy",
+        "hint": "Liczba startujących z aktywnym zgłoszeniem."
+      },
+      "queue": {
+        "title": "Próby w kolejce",
+        "hint": "Próby oczekujące na załadowanie na pomost."
+      },
+      "last_update": {
+        "title": "Ostatnia aktualizacja",
+        "connection_prefix": "Połączenie: "
+      }
+    },
+    "links": {
+      "announcer": {
+        "title": "Tabela spikera",
+        "description": "Widok stołu z kolejką i statusami na żywo."
+      },
+      "display": {
+        "title": "Ekran sceniczny",
+        "description": "Ekran dla publiczności z aktualnym zawodnikiem i planem talerzy."
+      }
+    },
+    "current": {
+      "title": "Aktualna próba",
+      "subtitle": "Potwierdź ciężar i zanotuj wynik.",
+      "lifter_label": "Zawodnik",
+      "attempt_meta": "Podejście {number} • {lift}",
+      "weight_label": "Ciężar na gryfie",
+      "actions": {
+        "mark_good": "Zaliczona",
+        "mark_fail": "Niezaliczona",
+        "go_live": "Na pomost",
+        "queue_set_current": "Ustaw jako bieżącą",
+        "setting_current": "Wysyłam...",
+        "is_current": "W trakcie"
+      },
+      "clear_button": "Wyczyść bieżącą próbę",
+      "clearing_label": "Czyszczenie...",
+      "empty_title": "Żadna próba nie jest teraz aktywna.",
+      "empty_hint": "Wybierz kolejnego zawodnika z kolejki, aby rozpocząć.",
+      "queue_header": "{lift} — podejście {round}",
+      "queue_badge_next": "Następny",
+      "queue_empty": "Kolejka jest pusta."
+    },
+    "recent": {
+      "title": "Ostatnie próby",
+      "meta": "{lift} • Podejście {number} • {weight} kg",
+      "time": "Aktualizacja {time}"
+    },
+    "registrations": {
+      "title": "Rejestracje",
+      "subtitle": "Zarządzaj zawodnikami, kategoriami i ustawieniami stojaków.",
+      "total": "{count, plural, one {# zawodnik zgłoszony} few {# zawodników zgłoszonych} many {# zawodników zgłoszonych} other {# zawodników zgłoszonych}}",
+      "unknown_competitor": "Nieznany zawodnik",
+      "manage_categories": "Zarządzaj kategoriami",
+      "coefficient_notice": "Zmiana masy ciała automatycznie przelicza współczynniki.",
+      "columns": {
+        "order": "Losowanie",
+        "lifter": "Zawodnik",
+        "sex": "Płeć",
+        "age_class": "Kategoria wiekowa",
+        "weight_class": "Kategoria wagowa",
+        "bodyweight": "Waga ciała",
+        "equipment": "Sprzęt",
+        "reshel": "Reshel",
+        "mccullough": "McC.",
+        "rack_heights": "Wys. stojaka",
+        "actions": "Akcje",
+        "place": "Miejsce",
+        "flight": "Flight",
+        "flight_order": "Kolejność w flighcie",
+        "age": "Wiek",
+        "total": "Suma",
+        "points": "Punkty",
+        "max": "Maks. ciężar",
+        "labels": "Etykiety"
+      },
+      "actions": {
+        "edit_attempts": "Edytuj próby",
+        "view_details": "Szczegóły"
+      },
+      "reshel_tooltip": {
+        "source": "Źródło: {source}",
+        "retrieved": "Pobrano: {date}"
+      },
+      "mccullough_tooltip": {
+        "source": "Źródło: {source}",
+        "retrieved": "Pobrano: {date}"
+      },
+      "empty": "Brak rejestracji.",
+      "manage_flights": "Zarządzaj flightami",
+      "manage_flights_title": "Przypisz flighty",
+      "auto_assign_size_label": "Zawodnicy na flight",
+      "auto_assign_action": "Podziel flighty",
+      "reset_flights": "Przywróć flight A",
+      "flight_placeholder": "np. A",
+      "empty_filter": "Brak zawodników w tym flighcie.",
+      "filters": {
+        "flights": "Flighty",
+        "weights": "Kategorie wagowe",
+        "sex": "Płeć",
+        "age": "Kategorie wiekowe",
+        "labels": "Etykiety",
+        "all": "Wszystkie",
+        "unassigned": "Bez przypisania",
+        "open": "Open",
+        "sex_all": "Wszystkie",
+        "sex_female": "Kobiety",
+        "sex_male": "Mężczyźni",
+        "age_all": "Wszystkie",
+        "age_unassigned": "Bez kategorii",
+        "labels_all": "Wszystkie",
+        "labels_unlabeled": "Bez etykiety"
+      },
+      "active_flight_label": "Aktywny flight",
+      "active_flight_none": "Brak",
+      "apply_active_flight": "Ustaw"
+    },
+    "registration_detail": {
+      "title": "Zgłoszenie • {name}",
+      "sections": {
+        "profile": "Profil",
+        "coefficients": "Współczynniki"
+      },
+      "fields": {
+        "lifter": "Zawodnik",
+        "bodyweight": "Masa ciała",
+        "weight_class": "Kategoria wagowa",
+        "age_class": "Kategoria wiekowa",
+        "equipment": "Sprzęt"
+      },
+      "coefficients": {
+        "auto_notice": "Wartości odświeżają się automatycznie po zmianie danych.",
+        "source_label": "Źródło",
+        "retrieved_at": "Pobrano {date}",
+        "reshel": "Współczynnik Reshel",
+        "mcc": "Współczynnik McCullocha"
+      },
+      "actions": {
+        "edit_competitor": "Edytuj zawodnika"
+      }
+    },
+    "attempts": {
+      "title": "Dziennik prób",
+      "subtitle": "Przeglądaj wszystkie próby i aktualizuj wyniki.",
+      "entries": "{count, plural, one {# próba zarejestrowana} few {# próby zarejestrowane} many {# prób zarejestrowanych} other {# prób zarejestrowanych}}",
+      "columns": {
+        "lifter": "Zawodnik",
+        "lift": "Bój",
+        "attempt": "Podejście",
+        "weight": "Ciężar",
+        "status": "Status",
+        "updated": "Aktualizacja",
+        "actions": "Akcje"
+      },
+      "actions": {
+        "setting": "Ustawiam...",
+        "current": "W trakcie",
+        "set_current": "Ustaw jako bieżącą",
+        "quick_creating": "Dodawanie...",
+        "quick_add": "Dodaj kolejne podejście"
+      },
+      "empty": "Brak zapisanych prób."
+    },
+    "results": {
+      "title": "Wyniki",
+      "subtitle": "Monitoruj klasyfikacje według kategorii.",
+      "entries": "{count, plural, one {# wynik} few {# wyniki} many {# wyników} other {# wyników}}",
+      "views": {
+        "open": "Open",
+        "age": "Kategorie wiekowe",
+        "weight": "Kategorie wagowe"
+      },
+      "loading": "Ładowanie wyników...",
+      "empty": "Brak obliczonych wyników.",
+      "recalculate": "Przelicz wyniki",
+      "recalculating": "Przeliczanie...",
+      "export_csv": "Eksportuj CSV",
+      "export_json": "Eksportuj JSON",
+      "exporting": "Eksport...",
+      "columns": {
+        "lifter": "Zawodnik",
+        "place": "Miejsce",
+        "age_category": "Kategoria wiekowa",
+        "weight_class": "Kategoria wagowa",
+        "best_squat": "Najlepszy przysiad",
+        "best_bench": "Najlepsze wyciskanie",
+        "best_deadlift": "Najlepszy martwy ciąg",
+        "total": "Suma",
+        "points": "Punkty",
+        "status": "Status"
+      },
+      "lot_number": "Losowanie #{lot}",
+      "disqualified": "Dyskwalifikacja",
+      "record": "Rekord",
+      "status_ok": "Zatwierdzone",
+      "unknown_category": "Bez kategorii",
+      "reload_failed": "Nie udało się odświeżyć wyników.",
+      "toast_recalc_success": "Klasyfikacje przeliczone.",
+      "toast_recalc_error": "Nie udało się przeliczyć klasyfikacji.",
+      "toast_export_success": "Eksport gotowy.",
+      "toast_export_error": "Nie udało się wyeksportować wyników."
+    },
+    "plates": {
+      "title": "Obciążenia",
+      "subtitle": "Podgląd ciężarów gryfów i talerzy.",
+      "bar_weight_men": "Gryf męski: {weight}",
+      "bar_weight_women": "Gryf żeński: {weight}",
+      "bar_weight_default": "Gryf domyślny: {weight}",
+      "columns": {
+        "weight": "Waga",
+        "quantity": "Ilość",
+        "color": "Kolor"
+      },
+      "empty": "Brak zdefiniowanych obciążeń.",
+      "manage_link": "Skonfiguruj obciążenia"
+    },
+    "backups": {
+      "title": "Kopie zapasowe",
+      "subtitle": "Monitoruj zaplanowane migawki w R2.",
+      "manage_link": "Przejdź do ustawień kopii",
+      "total": "{count, plural, one {# kopia} few {# kopie} many {# kopii} other {# kopii}}",
+      "last_run": "Ostatnie uruchomienie: {timestamp}",
+      "last_size": "Ostatni rozmiar: {size}",
+      "columns": {
+        "timestamp": "Czas",
+        "size": "Rozmiar",
+        "contests": "Zawody",
+        "competitors": "Zawodnicy",
+        "registrations": "Rejestracje",
+        "attempts": "Próby"
+      },
+      "empty": "Brak wykonanych kopii.",
+      "not_available": "Kopie zapasowe nie są skonfigurowane dla tych zawodów."
+    },
+    "error": {
+      "loading_title": "Nie udało się załadować danych zawodów.",
+      "not_found": "Nie znaleziono tych zawodów."
+    },
+    "toast": {
+      "attempts_saved": "Próby zapisane.",
+      "attempt_modal_failed": "Nie udało się otworzyć edytora prób.",
+      "quick_attempt_max": "Wszystkie podejścia w tym boju są już zaplanowane.",
+      "quick_attempt_exists": "Takie podejście już istnieje.",
+      "quick_attempt_error": "Nie udało się dodać kolejnego podejścia.",
+      "quick_attempt_created": "Dodano podejście {number} {lift} z ciężarem {weight} kg.",
+      "attempt_updated": "Próba oznaczona jako {status}.",
+      "attempt_update_failed": "Nie udało się zaktualizować próby.",
+      "current_set": "Bieżąca próba zaktualizowana.",
+      "current_set_failed": "Nie udało się ustawić bieżącej próby.",
+      "current_cleared": "Bieżąca próba wyczyszczona.",
+      "current_cleared_failed": "Nie udało się wyczyścić bieżącej próby.",
+      "competitor_updated": "Zawodnik zaktualizowany.",
+      "competitor_update_failed": "Nie udało się zaktualizować zawodnika.",
+      "registration_detail_failed": "Nie udało się otworzyć szczegółów zgłoszenia.",
+      "bodyweight_updated": "Zaktualizowano wagę.",
+      "bodyweight_update_failed": "Nie udało się zapisać wagi.",
+      "bodyweight_update_invalid": "Podaj poprawną wagę.",
+      "attempt_weight_invalid": "Podaj poprawny ciężar podejścia.",
+      "attempt_updated_short": "Podejście zaktualizowane.",
+      "label_exists": "Etykieta już istnieje.",
+      "label_added": "Dodano etykietę.",
+      "label_removed": "Usunięto etykietę.",
+      "label_update_failed": "Nie udało się zaktualizować etykiet.",
+      "flights_updated": "Zaktualizowano flighty.",
+      "flights_update_failed": "Nie udało się zapisać flightów.",
+      "active_flight_set": "Aktywny flight ustawiono na {flight}.",
+      "active_flight_cleared": "Aktywny flight usunięty.",
+      "active_flight_failed": "Nie udało się ustawić aktywnego flightu."
+    },
+    "modal": {
+      "edit_attempts_title": "Edytuj próby • {name}",
+      "edit_competitor_title": "Edytuj zawodnika • {name}"
+    }
+  },
+  "display_table": {
+    "head": {
+      "default_contest": "Zawody",
+      "subtitle": "Stół spikera Werewolf"
+    },
+    "header": {
+      "tagline": "Kolejka i wyniki na żywo"
+    },
+    "connection": {
+      "live": "Na żywo",
+      "connecting": "Łączenie...",
+      "cached_with_age": "Pamięć podręczna • {minutes} min temu",
+      "cached": "Pamięć podręczna",
+      "offline": "Offline",
+      "retry": "Ponów próbę połączenia"
+    },
+    "errors": {
+      "load_failed_title": "Nie udało się załadować danych zawodów"
+    },
+    "metrics": {
+      "lifters": "Zarejestrowani zawodnicy",
+      "pending": "Próby w kolejce",
+      "last_update": "Ostatnia aktualizacja"
+    },
+    "queue": {
+      "title": "Nadchodzące próby",
+      "subtitle": "Kolejność według rosnącego ciężaru",
+      "empty": "Brak prób w kolejce.",
+      "label": "{name} • {order}",
+      "meta": "{lift} • Podejście {number}",
+      "lot": "Losowanie #{lot}",
+      "lot_unknown": "Losowanie w toku"
+    },
+    "recent": {
+      "title": "Ostatnie wyniki",
+      "subtitle": "Najnowsze ocenione próby",
+      "empty": "Brak ocenionych prób.",
+      "meta": "{lift} • Podejście {number}",
+      "updated": "Aktualizacja {time}"
+    },
+    "current": {
+      "title": "Aktualnie na pomoście",
+      "subtitle": "Bieżący zawodnik i plan talerzy",
+      "lifter": "Zawodnik",
+      "lift": "Bój",
+      "attempt": "Podejście",
+      "weight": "Ciężar",
+      "plate_title": "Plan talerzy",
+      "plate_meta": "Łącznie {total} kg • Gryf {bar} kg"
+    },
+    "common": {
+      "weight_kg": "{weight} kg"
+    }
+  },
   "display_page": {
     "connection_retry": "Spróbuj ponownie",
     "awaiting_attempt": "Oczekiwanie na próbę",
@@ -685,5 +1122,47 @@
     "queue_desc": "Następni zawodnicy w kolejności na pomoście.",
     "current_attempt": "Aktualna próba",
     "current_desc": "Próba na żywo na pomoście."
+  },
+  "display_current": {
+    "head": {
+      "default_contest": "Zawody",
+      "subtitle": "Wyświetlacz pomostu na żywo"
+    },
+    "errors": {
+      "load_failed_title": "Nie udało się załadować danych zawodów",
+      "not_found_title": "Nie znaleziono zawodów",
+      "not_found_hint": "Sprawdź poprawność linku lub utwórz nowe zawody."
+    },
+    "waiting": {
+      "first_title": "Oczekiwanie na pierwszą próbę",
+      "first_hint": "Gdy tylko pierwsza próba zostanie ustawiona na żywo, ekran zaktualizuje się automatycznie.",
+      "next_title": "Czekamy na kolejnego zawodnika",
+      "next_hint": "Ustaw kolejne podejście w widoku stołu, aby zaktualizować ekran."
+    },
+    "hero": {
+      "club_placeholder": "Zawodnik niezależny"
+    },
+    "info": {
+      "weight_class": "Kategoria wagowa"
+    },
+    "meta": {
+      "bodyweight": "Masa ciała",
+      "order_label": "Kolejność #{order}"
+    },
+    "tiles": {
+      "attempt": "Podejście {number}"
+    },
+    "footer": {
+      "rack_height": "Wysokość stojaka"
+    },
+    "sidebar": {
+      "share_title": "Udostępnij ekran",
+      "no_plates": "Brak planu talerzy"
+    },
+    "lifts": {
+      "squat": "Przysiad",
+      "bench": "Wyciskanie leżąc",
+      "deadlift": "Martwy ciąg"
+    }
   }
 }

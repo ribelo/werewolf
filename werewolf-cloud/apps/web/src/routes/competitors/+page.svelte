@@ -1,10 +1,12 @@
 <script lang="ts">
   import Layout from '$lib/components/Layout.svelte';
   import CompetitorModal from '$lib/components/CompetitorModal.svelte';
+  import { modalStore } from '$lib/ui/modal';
   import { apiClient } from '$lib/api';
   import type { CompetitorSummary } from '$lib/types';
   import type { PageData } from './$types';
   import { _ } from 'svelte-i18n';
+  import { get } from 'svelte/store';
 
   export let data: PageData;
   export let params: Record<string, string> = {};
@@ -19,10 +21,6 @@
   let searchTerm = '';
   let runtimeError: string | null = null;
   let reloading = false;
-
-  let showModal = false;
-  let modalMode: 'create' | 'edit' = 'create';
-  let selectedCompetitor: CompetitorSummary | null = null;
 
   $: filterCompetitors();
   $: visibleCount = filteredCompetitors.length;
@@ -41,20 +39,41 @@
     });
   }
 
-  function openCreateModal() {
-    modalMode = 'create';
-    selectedCompetitor = null;
-    showModal = true;
+  async function openCreateModal() {
+    const translate = get(_);
+
+    const result = await modalStore.open({
+      title: translate('competitor_modal.title.create'),
+      size: 'xl',
+      component: CompetitorModal,
+      data: {
+        competitor: null,
+        mode: 'create' as const,
+      },
+    });
+
+    if (result) {
+      await refreshCompetitors();
+    }
   }
 
-  function openEditModal(competitor: CompetitorSummary) {
-    modalMode = 'edit';
-    selectedCompetitor = competitor;
-    showModal = true;
-  }
+  async function openEditModal(competitor: CompetitorSummary) {
+    const translate = get(_);
+    const name = `${competitor.firstName} ${competitor.lastName}`;
 
-  function closeModal() {
-    showModal = false;
+    const result = await modalStore.open({
+      title: `${translate('competitor_modal.title.edit')} • ${name}`,
+      size: 'xl',
+      component: CompetitorModal,
+      data: {
+        competitor,
+        mode: 'edit' as const,
+      },
+    });
+
+    if (result) {
+      await refreshCompetitors();
+    }
   }
 
   async function refreshCompetitors() {
@@ -76,9 +95,6 @@
     }
   }
 
-  async function handleModalSaved() {
-    await refreshCompetitors();
-  }
 </script>
 
 <svelte:head>
@@ -101,7 +117,7 @@
         <span class="text-caption text-text-secondary uppercase tracking-[0.4em]">
           {$_('competitors_page.visible', { values: { visible: visibleCount, total: competitors.length } })}
         </span>
-        <button type="button" class="btn-primary px-4 py-2" on:click={openCreateModal}>
+        <button type="button" class="btn-primary px-4 py-2" on:click={() => void openCreateModal()}>
           {$_('competitors_page.add')}
         </button>
       </div>
@@ -179,7 +195,11 @@
                   <td class="px-4 py-3">{competitor.city ?? '—'}</td>
                   <td class="px-4 py-3">{competitor.competitionOrder ?? '—'}</td>
                   <td class="px-4 py-3 text-right">
-                    <button type="button" class="btn-secondary px-3 py-1 text-xxs" on:click={() => openEditModal(competitor)}>
+                    <button
+                      type="button"
+                      class="btn-secondary px-3 py-1 text-xxs"
+                      on:click={() => void openEditModal(competitor)}
+                    >
                       Edit
                     </button>
                   </td>
@@ -191,13 +211,4 @@
       {/if}
     </div>
   </div>
-
-  {#if showModal}
-    <CompetitorModal
-      competitor={selectedCompetitor}
-      mode={modalMode}
-      onClose={closeModal}
-      onSaved={handleModalSaved}
-    />
-  {/if}
 </Layout>

@@ -76,11 +76,12 @@ export function formatRanking(position: number): string {
 }
 
 /**
- * Format attempt with competition notation (125✓ for good, 125✗ for failed)
+ * Format attempt with competition notation (125✓ for successful, 125✗ for failed)
  */
 export function formatAttemptNotation(weight: number, status: string): string {
-  const statusSymbol = status.toLowerCase() === 'successful' || status.toLowerCase() === 'good' ? '✓' :
-                      status.toLowerCase() === 'failed' || status.toLowerCase() === 'bad' ? '✗' : '';
+  const normalized = status.toLowerCase();
+  const statusSymbol = normalized === 'successful' ? '✓' :
+                      normalized === 'failed' ? '✗' : '';
   return `${weight}${statusSymbol}`;
 }
 

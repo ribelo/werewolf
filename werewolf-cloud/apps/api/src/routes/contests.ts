@@ -4,7 +4,12 @@ import { z } from 'zod';
 import type { WerewolfEnvironment } from '../env';
 import { executeQuery, executeQueryOne, executeMutation, generateId, getCurrentTimestamp, convertKeysToCamelCase } from '../utils/database';
 import { sanitizePlateSet, DEFAULT_PLATE_SET, getPlateColor, sanitizeSettings } from '../utils/settings-helpers';
+import { seedContestCategories } from '../utils/category-templates';
 import { contestSchema, contestCreateSchema, contestUpdateSchema, contestStatusSchema } from '@werewolf/domain/models/contest';
+
+const activeFlightSchema = z.object({
+  activeFlight: z.string().min(1).nullable().optional(),
+});
 
 const contests = new Hono<WerewolfEnvironment>();
 
@@ -31,7 +36,9 @@ contests.get('/', async (c) => {
       updated_at,
       mens_bar_weight,
       womens_bar_weight,
-      bar_weight
+      bar_weight,
+      clamp_weight,
+      active_flight
     FROM contests
     ORDER BY date DESC
     `
@@ -59,8 +66,8 @@ contests.post('/', zValidator('json', contestCreateSchema), async (c) => {
       id, name, date, location, discipline, status,
       federation_rules, competition_type, organizer, notes,
       is_archived, created_at, updated_at,
-      mens_bar_weight, womens_bar_weight, bar_weight
-    ) VALUES (?, ?, ?, ?, ?, 'Setup', ?, ?, ?, ?, false, ?, ?, 20, 15, 20)
+      mens_bar_weight, womens_bar_weight, bar_weight, clamp_weight, active_flight
+    ) VALUES (?, ?, ?, ?, ?, 'Setup', ?, ?, ?, ?, false, ?, ?, 20, 15, 20, 2.5, NULL)
     `,
     [
       id,
@@ -79,6 +86,7 @@ contests.post('/', zValidator('json', contestCreateSchema), async (c) => {
 
   // Create default plate sets for the contest
   await createDefaultPlateSets(db, id);
+  await seedContestCategories(db, id);
 
   const contest = await executeQueryOne(
     db,
@@ -87,7 +95,7 @@ contests.post('/', zValidator('json', contestCreateSchema), async (c) => {
       id, name, date, location, discipline, status,
       federation_rules, competition_type, organizer, notes,
       is_archived, created_at, updated_at,
-      mens_bar_weight, womens_bar_weight, bar_weight
+      mens_bar_weight, womens_bar_weight, bar_weight, clamp_weight, active_flight
     FROM contests
     WHERE id = ?
     `,
@@ -113,7 +121,7 @@ contests.get('/:contestId', async (c) => {
       id, name, date, location, discipline, status,
       federation_rules, competition_type, organizer, notes,
       is_archived, created_at, updated_at,
-      mens_bar_weight, womens_bar_weight, bar_weight
+      mens_bar_weight, womens_bar_weight, bar_weight, clamp_weight, active_flight
     FROM contests
     WHERE id = ?
     `,
@@ -189,6 +197,14 @@ contests.patch('/:contestId', zValidator('json', contestUpdateSchema), async (c)
     updates.push('womens_bar_weight = ?');
     params.push(input.womensBarWeight);
   }
+  if (input.clampWeight !== undefined) {
+    updates.push('clamp_weight = ?');
+    params.push(input.clampWeight);
+  }
+  if (input.activeFlight !== undefined) {
+    updates.push('active_flight = ?');
+    params.push(input.activeFlight ?? null);
+  }
 
   if (updates.length === 0) {
     return c.json({ data: null, error: 'No fields to update', requestId: c.get('requestId') }, 400);
@@ -211,7 +227,7 @@ contests.patch('/:contestId', zValidator('json', contestUpdateSchema), async (c)
       id, name, date, location, discipline, status,
       federation_rules, competition_type, organizer, notes,
       is_archived, created_at, updated_at,
-      mens_bar_weight, womens_bar_weight, bar_weight
+      mens_bar_weight, womens_bar_weight, bar_weight, clamp_weight, active_flight
     FROM contests
     WHERE id = ?
     `,
@@ -221,6 +237,41 @@ contests.patch('/:contestId', zValidator('json', contestUpdateSchema), async (c)
   if (!contest) {
     return c.json({ data: null, error: 'Contest not found', requestId: c.get('requestId') }, 404);
   }
+
+  return c.json({
+    data: convertKeysToCamelCase(contest),
+    error: null,
+    requestId: c.get('requestId'),
+  });
+});
+
+contests.patch('/:contestId/active-flight', zValidator('json', activeFlightSchema), async (c) => {
+  const db = c.env.DB;
+  const contestId = c.req.param('contestId');
+  const { activeFlight } = c.req.valid('json');
+
+  const now = getCurrentTimestamp();
+
+  const result = await executeMutation(
+    db,
+    'UPDATE contests SET active_flight = ?, updated_at = ? WHERE id = ?',
+    [activeFlight ?? null, now, contestId]
+  );
+
+  if (result.changes === 0) {
+    return c.json({ data: null, error: 'Contest not found', requestId: c.get('requestId') }, 404);
+  }
+
+  const contest = await executeQueryOne(
+    db,
+    `
+    SELECT
+      id, active_flight
+    FROM contests
+    WHERE id = ?
+    `,
+    [contestId]
+  );
 
   return c.json({
     data: convertKeysToCamelCase(contest),
