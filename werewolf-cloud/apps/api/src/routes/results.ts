@@ -356,10 +356,11 @@ async function updateAllRankings(db: D1Database, contestId: string) {
   const openRankings = await executeQuery(
     db,
     `
-    SELECT id, coefficient_points
-    FROM results
-    WHERE contest_id = ? AND is_disqualified = false
-    ORDER BY coefficient_points DESC, total_weight DESC
+    SELECT r.id, r.coefficient_points
+    FROM results r
+    JOIN registrations reg ON r.registration_id = reg.id
+    WHERE r.contest_id = ? AND r.is_disqualified = false
+    ORDER BY r.coefficient_points DESC, r.total_weight DESC, reg.bodyweight ASC, r.registration_id ASC
     `,
     [contestId]
   );
@@ -387,7 +388,7 @@ async function updateAllRankings(db: D1Database, contestId: string) {
       FROM results r
       JOIN registrations reg ON r.registration_id = reg.id
       WHERE r.contest_id = ? AND reg.age_category_id = ? AND r.is_disqualified = false
-      ORDER BY r.coefficient_points DESC, r.total_weight DESC
+      ORDER BY r.coefficient_points DESC, r.total_weight DESC, reg.bodyweight ASC, r.registration_id ASC
       `,
       [contestId, category.age_category_id]
     );
@@ -416,7 +417,7 @@ async function updateAllRankings(db: D1Database, contestId: string) {
       FROM results r
       JOIN registrations reg ON r.registration_id = reg.id
       WHERE r.contest_id = ? AND reg.weight_class_id = ? AND r.is_disqualified = false
-      ORDER BY r.coefficient_points DESC, r.total_weight DESC
+      ORDER BY r.coefficient_points DESC, r.total_weight DESC, reg.bodyweight ASC, r.registration_id ASC
       `,
       [contestId, weightClass.weight_class_id]
     );

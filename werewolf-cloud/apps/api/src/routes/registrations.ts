@@ -32,6 +32,35 @@ function parseLabels(input: unknown): string[] {
   return [];
 }
 
+function normaliseFlag(value: unknown): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') {
+    const normalised = value.trim().toLowerCase();
+    return normalised === 'true' || normalised === '1';
+  }
+  return false;
+}
+
+function mapRegistrationRow(row: Record<string, any>): Record<string, any> {
+  const normalised: Record<string, any> = { ...row };
+
+  if ('equipmentM' in normalised) {
+    normalised.equipmentM = normaliseFlag(normalised.equipmentM);
+  }
+  if ('equipmentSm' in normalised) {
+    normalised.equipmentSm = normaliseFlag(normalised.equipmentSm);
+  }
+  if ('equipmentT' in normalised) {
+    normalised.equipmentT = normaliseFlag(normalised.equipmentT);
+  }
+  if ('labels' in normalised) {
+    normalised.labels = parseLabels(normalised.labels);
+  }
+
+  return normalised;
+}
+
 const bulkFlightSchema = z.object({
   assignments: z
     .array(
@@ -184,10 +213,9 @@ contestRegistrations.post('/', zValidator('json', registrationCreateSchema), asy
     [id]
   );
 
-  const registrationData = registration ? convertKeysToCamelCase(registration) : null;
-  if (registrationData) {
-    registrationData.labels = parseLabels(registrationData.labels);
-  }
+  const registrationData = registration
+    ? mapRegistrationRow(convertKeysToCamelCase(registration))
+    : null;
 
   return c.json({
     data: registrationData,
@@ -283,10 +311,7 @@ contestRegistrations.get('/', async (c) => {
   );
 
   const camel = convertKeysToCamelCase(registrations) as any[];
-  const enriched = camel.map((row) => ({
-    ...row,
-    labels: parseLabels(row.labels),
-  }));
+  const enriched = camel.map((row) => mapRegistrationRow(row));
 
   return c.json({
     data: enriched,
@@ -327,8 +352,7 @@ registrations.get('/:registrationId', async (c) => {
     return c.json({ data: null, error: 'Registration not found', requestId: c.get('requestId') }, 404);
   }
 
-  const registrationData = convertKeysToCamelCase(registration);
-  registrationData.labels = parseLabels(registrationData.labels);
+  const registrationData = mapRegistrationRow(convertKeysToCamelCase(registration));
 
   return c.json({
     data: registrationData,
@@ -536,8 +560,7 @@ registrations.patch('/:registrationId', zValidator('json', registrationUpdateSch
     return c.json({ data: null, error: 'Registration not found', requestId: c.get('requestId') }, 404);
   }
 
-  const registrationData = convertKeysToCamelCase(registration);
-  registrationData.labels = parseLabels(registrationData.labels);
+  const registrationData = mapRegistrationRow(convertKeysToCamelCase(registration));
 
   return c.json({
     data: registrationData,

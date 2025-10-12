@@ -5,7 +5,7 @@
   import RegistrationDetailModal from '$lib/components/RegistrationDetailModal.svelte';
   import AttemptEditorModal from '$lib/components/AttemptEditorModal.svelte';
   import ContestCategoryModal from '$lib/components/ContestCategoryModal.svelte';
-import { getStatusClasses, formatCompetitorName, formatWeight } from '$lib/utils';
+import { getStatusClasses, formatCompetitorName, formatWeight, normaliseAgeCategoryLabel } from '$lib/utils';
 import { apiClient, ApiError } from '$lib/api';
 import { realtimeClient } from '$lib/realtime';
 import { modalStore } from '$lib/ui/modal';
@@ -101,8 +101,8 @@ import type {
     return parsed.toLocaleDateString();
   }
 
-  type WeightFilter = 'OPEN' | string;
-  type SexFilter = 'ALL' | 'FEMALE' | 'MALE';
+  type WeightFilter = 'ALL' | 'FEMALE_OPEN' | 'MALE_OPEN' | string;
+  type WeightFilterOption = { id: WeightFilter; label: string };
   type AgeFilter = 'ALL' | 'UNASSIGNED' | string;
   type LabelFilter = 'ALL' | 'UNLABELED' | `LABEL:${string}`;
   const LABEL_FILTER_PREFIX = 'LABEL:';
@@ -158,10 +158,21 @@ import type {
 
   let sortColumn = 'order';
   let sortDirection: 'asc' | 'desc' = 'asc';
-  let selectedWeightFilter: WeightFilter = 'OPEN';
+  let selectedWeightFilter: WeightFilter = 'ALL';
+  let weightFilterGroups: {
+    femaleOpen: WeightFilterOption;
+    maleOpen: WeightFilterOption;
+    female: WeightFilterOption[];
+    male: WeightFilterOption[];
+  } = {
+    femaleOpen: { id: 'FEMALE_OPEN', label: '' },
+    maleOpen: { id: 'MALE_OPEN', label: '' },
+    female: [],
+    male: [],
+  };
   let availableWeightFilters: Array<{ id: WeightFilter; label: string }> = [];
-  let selectedSexFilter: SexFilter = 'ALL';
-  let availableSexFilters: Array<{ id: SexFilter; label: string }> = [];
+  let femaleWeightFilters: WeightFilterOption[] = [];
+  let maleWeightFilters: WeightFilterOption[] = [];
   let selectedAgeFilter: AgeFilter = 'ALL';
   let availableAgeFilters: Array<{ id: AgeFilter; label: string }> = [];
   let selectedLabelFilter: LabelFilter = 'ALL';
@@ -183,7 +194,6 @@ import type {
       sortColumn = prefs.sortColumn || sortColumn;
       sortDirection = prefs.sortDirection;
       selectedWeightFilter = prefs.weightFilter ?? selectedWeightFilter;
-      selectedSexFilter = prefs.sexFilter ?? selectedSexFilter;
       selectedAgeFilter = prefs.ageFilter ?? selectedAgeFilter;
       selectedLabelFilter = prefs.labelFilter ?? selectedLabelFilter;
     }
@@ -221,7 +231,6 @@ import type {
     sortColumn: string;
     sortDirection: 'asc' | 'desc';
     weightFilter: WeightFilter;
-    sexFilter: SexFilter;
     ageFilter: AgeFilter;
     labelFilter: LabelFilter;
   };
@@ -246,13 +255,13 @@ import type {
           ? parsed.weightFilter
           : typeof parsed.flightFilter === 'string'
             ? parsed.flightFilter
-            : 'OPEN';
-      const weightPref: WeightFilter =
-        savedWeightFilter && savedWeightFilter.length > 0 ? savedWeightFilter : 'OPEN';
-      const savedSexFilter =
-        typeof parsed.sexFilter === 'string' && (parsed.sexFilter === 'FEMALE' || parsed.sexFilter === 'MALE')
-          ? (parsed.sexFilter as SexFilter)
-          : 'ALL';
+            : 'ALL';
+      let weightPref: WeightFilter = 'ALL';
+      if (savedWeightFilter === 'FEMALE_OPEN' || savedWeightFilter === 'MALE_OPEN' || savedWeightFilter === 'ALL') {
+        weightPref = savedWeightFilter as WeightFilter;
+      } else if (savedWeightFilter && savedWeightFilter.length > 0 && savedWeightFilter !== 'OPEN') {
+        weightPref = savedWeightFilter as WeightFilter;
+      }
       const savedAgeFilter =
         typeof parsed.ageFilter === 'string' && parsed.ageFilter.length > 0
           ? (parsed.ageFilter as AgeFilter)
@@ -265,7 +274,6 @@ import type {
         sortColumn: sortColumnPref,
         sortDirection: sortDirectionPref,
         weightFilter: weightPref,
-        sexFilter: savedSexFilter,
         ageFilter: savedAgeFilter,
         labelFilter: savedLabelFilter,
       };
@@ -282,48 +290,12 @@ import type {
         sortColumn,
         sortDirection,
         weightFilter: selectedWeightFilter,
-        sexFilter: selectedSexFilter,
         ageFilter: selectedAgeFilter,
         labelFilter: selectedLabelFilter,
       };
       localStorage.setItem(getTablePrefsKey(contestId), JSON.stringify(payload));
     } catch (error) {
       console.warn('Failed to persist table preferences', error);
-    }
-  }
-
-  function resolveSexFilterId(value: string | null | undefined): SexFilter | null {
-    const raw = (value ?? '').trim();
-    if (!raw) return null;
-    const lowered = raw.toLowerCase();
-    if (lowered.startsWith('f') || lowered.startsWith('k')) {
-      return 'FEMALE';
-    }
-    if (lowered.startsWith('m')) {
-      return 'MALE';
-    }
-    return null;
-  }
-
-  function sexSortOrder(id: SexFilter): number {
-    switch (id) {
-      case 'FEMALE':
-        return 0;
-      case 'MALE':
-        return 1;
-      default:
-        return 10;
-    }
-  }
-
-  function sexFilterLabel(id: SexFilter): string {
-    switch (id) {
-      case 'FEMALE':
-        return t('contest_detail.registrations.filters.sex_female');
-      case 'MALE':
-        return t('contest_detail.registrations.filters.sex_male');
-      default:
-        return t('contest_detail.registrations.filters.sex_all');
     }
   }
 
@@ -365,7 +337,13 @@ import type {
   }
 
   function getResultCategory(entry: ContestRankingEntry, view: ResultView): string {
-    if (view === 'age') return entry.ageCategory ?? t('contest_detail.results.unknown_category');
+    if (view === 'age') {
+      const rawLabel = normaliseAgeCategoryLabel(entry.ageCategory ?? null, null);
+      if (!rawLabel) return t('contest_detail.results.unknown_category');
+      return rawLabel.toLowerCase() === 'senior'
+        ? t('contest_detail.registrations.filters.age_senior')
+        : rawLabel;
+    }
     if (view === 'weight') return entry.weightClass ?? t('contest_detail.results.unknown_category');
     return '';
   }
@@ -522,9 +500,27 @@ import type {
   $: weightClasses = referenceData?.weightClasses ?? [];
   $: ageCategories = referenceData?.ageCategories ?? [];
   $: registrationsSummary = t('contest_detail.registrations.total', { count: liftersCount });
-  $: availableWeightFilters = (() => {
-        const seen = new Set<string>();
-        const entries: Array<{ id: string; label: string }> = [];
+
+  function weightFilterLabel(entry: WeightClass): string {
+    return (entry.name ?? entry.code ?? '').toString();
+  }
+
+  function isFemaleGender(value: string | null | undefined): boolean {
+    const lowered = (value ?? '').trim().toLowerCase();
+    return lowered.startsWith('f') || lowered.startsWith('k');
+  }
+
+  function isMaleGender(value: string | null | undefined): boolean {
+    const lowered = (value ?? '').trim().toLowerCase();
+    return lowered.startsWith('m');
+  }
+
+  $: weightFilterGroups = (() => {
+        const female: WeightFilterOption[] = [];
+        const male: WeightFilterOption[] = [];
+        const femaleSeen = new Set<string>();
+        const maleSeen = new Set<string>();
+
         weightClasses
           .slice()
           .sort((a, b) => {
@@ -537,32 +533,50 @@ import type {
           })
           .forEach((entry) => {
             const id = (entry.id ?? entry.code ?? '').toString();
-            const label = (entry.name ?? entry.code ?? '').toString();
+            const label = weightFilterLabel(entry);
             if (!id || !label) return;
-            if (seen.has(id)) return;
-            seen.add(id);
-            entries.push({ id, label });
+
+            const gender = (entry.gender ?? '').toString().toLowerCase();
+            if (gender.startsWith('f')) {
+              if (femaleSeen.has(id)) return;
+              femaleSeen.add(id);
+              female.push({ id: id as WeightFilter, label });
+            } else if (gender.startsWith('m')) {
+              if (maleSeen.has(id)) return;
+              maleSeen.add(id);
+              male.push({ id: id as WeightFilter, label });
+            }
           });
 
-        return [
-          { id: 'OPEN' as WeightFilter, label: t('contest_detail.registrations.filters.open') },
-          ...entries.map((entry) => ({ id: entry.id as WeightFilter, label: entry.label })),
-        ];
+        return {
+          femaleOpen: { id: 'FEMALE_OPEN' as WeightFilter, label: t('contest_detail.registrations.filters.open') },
+          maleOpen: { id: 'MALE_OPEN' as WeightFilter, label: t('contest_detail.registrations.filters.open') },
+          female,
+          male,
+        };
       })();
-  $: availableSexFilters = (() => {
-        const seen = new Set<SexFilter>();
-        registrations.forEach((registration) => {
-          const resolved = resolveSexFilterId(registration.gender);
-          if (resolved) {
-            seen.add(resolved);
-          }
-        });
-        const ordered = Array.from(seen).sort((a, b) => sexSortOrder(a) - sexSortOrder(b));
-        return [
-          { id: 'ALL' as SexFilter, label: t('contest_detail.registrations.filters.sex_all') },
-          ...ordered.map((id) => ({ id, label: sexFilterLabel(id) })),
-        ];
+
+  $: femaleWeightFilters = (() => {
+        const hasFemaleData = weightFilterGroups.female.length > 0 || registrations.some((reg) => isFemaleGender(reg.gender));
+        if (!hasFemaleData) {
+          return [] as WeightFilterOption[];
+        }
+        return [weightFilterGroups.femaleOpen, ...weightFilterGroups.female];
       })();
+  $: maleWeightFilters = (() => {
+        const hasMaleData = weightFilterGroups.male.length > 0 || registrations.some((reg) => isMaleGender(reg.gender));
+        if (!hasMaleData) {
+          return [] as WeightFilterOption[];
+        }
+        return [weightFilterGroups.maleOpen, ...weightFilterGroups.male];
+      })();
+
+  $: availableWeightFilters = [
+        weightFilterGroups.femaleOpen,
+        weightFilterGroups.maleOpen,
+        ...weightFilterGroups.female,
+        ...weightFilterGroups.male,
+      ];
   $: availableAgeFilters = (() => {
         const entries: Array<{ id: AgeFilter; label: string }> = [
           { id: 'ALL', label: t('contest_detail.registrations.filters.age_all') },
@@ -582,13 +596,16 @@ import type {
             const orderA = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
             const orderB = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
             if (orderA !== orderB) return orderA - orderB;
-            const labelA = (a.name ?? a.code ?? '').toString();
-            const labelB = (b.name ?? b.code ?? '').toString();
+            const labelA = normaliseAgeCategoryLabel(a.name, a.code) || (a.code ?? '').toString();
+            const labelB = normaliseAgeCategoryLabel(b.name, b.code) || (b.code ?? '').toString();
             return labelA.localeCompare(labelB, undefined, { sensitivity: 'base' });
           })
           .forEach((category) => {
             const id = (category.id ?? category.code ?? '').toString();
-            const label = (category.name ?? category.code ?? '').toString();
+            let label = normaliseAgeCategoryLabel(category.name, category.code) || id;
+            if (label.toLowerCase() === 'senior') {
+              label = t('contest_detail.registrations.filters.age_senior');
+            }
             if (!id || !label) return;
             if (seen.has(id)) return;
             seen.add(id);
@@ -653,15 +670,17 @@ import type {
   $: sortedRows = sortUnifiedRows(unifiedRows, sortColumn, sortDirection);
   $: filteredRows = sortedRows.filter((row) => {
         const registration = row.registration;
-        const weightMatch =
-          selectedWeightFilter === 'OPEN' || registration.weightClassId === selectedWeightFilter;
+        let weightMatch = false;
+        if (selectedWeightFilter === 'ALL') {
+          weightMatch = true;
+        } else if (selectedWeightFilter === 'FEMALE_OPEN') {
+          weightMatch = isFemaleGender(registration.gender);
+        } else if (selectedWeightFilter === 'MALE_OPEN') {
+          weightMatch = isMaleGender(registration.gender);
+        } else {
+          weightMatch = registration.weightClassId === selectedWeightFilter;
+        }
         if (!weightMatch) return false;
-
-        const resolvedSex = resolveSexFilterId(registration.gender);
-        const sexMatch =
-          selectedSexFilter === 'ALL' ||
-          (resolvedSex !== null && resolvedSex === selectedSexFilter);
-        if (!sexMatch) return false;
 
         const ageId = registration.ageCategoryId ?? '';
         const ageMatch =
@@ -684,11 +703,8 @@ import type {
         return labels.some((label) => normaliseLabelKey(label) === targetKey);
       });
   $: activeFlight = contest?.activeFlight ?? null;
-  $: if (selectedWeightFilter !== 'OPEN' && !availableWeightFilters.some((item) => item.id === selectedWeightFilter)) {
-        selectedWeightFilter = 'OPEN';
-      }
-  $: if (selectedSexFilter !== 'ALL' && !availableSexFilters.some((item) => item.id === selectedSexFilter)) {
-        selectedSexFilter = 'ALL';
+  $: if (selectedWeightFilter !== 'ALL' && !availableWeightFilters.some((item) => item.id === selectedWeightFilter)) {
+        selectedWeightFilter = 'ALL';
       }
   $: if (selectedAgeFilter !== 'ALL' && !availableAgeFilters.some((item) => item.id === selectedAgeFilter)) {
         selectedAgeFilter = 'ALL';
@@ -1033,11 +1049,7 @@ import type {
   }
 
   function selectWeightFilter(filter: WeightFilter) {
-    selectedWeightFilter = filter;
-  }
-
-  function selectSexFilter(filter: SexFilter) {
-    selectedSexFilter = filter;
+    selectedWeightFilter = selectedWeightFilter === filter ? 'ALL' : filter;
   }
 
   function selectAgeFilter(filter: AgeFilter) {
@@ -1406,6 +1418,40 @@ import type {
     }
   }
 
+  async function openCreateCompetitorModal() {
+    if (!contestId) return;
+    try {
+      const result = await modalStore.open<{
+        registration?: Registration;
+      }>({
+        title: t('contest_detail.modal.create_competitor_title'),
+        size: 'xl',
+        component: CompetitorModal,
+        data: {
+          competitor: null,
+          registration: null,
+          mode: 'create' as const,
+          contestId,
+          weightClasses,
+          ageCategories,
+        },
+      });
+
+      if (result?.registration) {
+        const created = result.registration;
+        registrations = [...registrations, created];
+        contestStore.addRegistration(created);
+        selectedWeightFilter = isFemaleGender(created.gender) ? 'FEMALE_OPEN' : 'MALE_OPEN';
+        toast.success(t('contest_detail.toast.competitor_created'));
+      } else if (result) {
+        toast.error(t('contest_detail.toast.competitor_create_failed'));
+      }
+    } catch (error) {
+      console.error('Create competitor modal error:', error);
+      toast.error(t('contest_detail.toast.competitor_create_failed'));
+    }
+  }
+
   async function openRegistrationDetailModal(registration: Registration) {
     try {
       const reshelMeta = getReshelMetadataForRegistration(registration);
@@ -1720,6 +1766,9 @@ import type {
                 <p class="text-caption text-text-secondary mt-1">{$_('contest_detail.registrations.coefficient_notice')}</p>
               </div>
               <div class="flex flex-wrap items-center gap-3">
+                <button type="button" class="btn-primary px-3 py-1" on:click={() => void openCreateCompetitorModal()}>
+                  {t('contest_detail.registrations.add_competitor')}
+                </button>
                 <button type="button" class="btn-secondary px-3 py-1" on:click={openCategoryManager}>
                   {$_('contest_detail.registrations.manage_categories')}
                 </button>
@@ -1730,30 +1779,34 @@ import type {
               </div>
             </header>
             <div class="space-y-2">
-              <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.weights')}>
-                <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights')}</span>
-                {#each availableWeightFilters as filter}
-                  <button
-                    type="button"
-                    class={`px-3 py-1 text-xxs ${selectedWeightFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
-                    on:click={() => selectWeightFilter(filter.id)}
-                  >
-                    {filter.label}
-                  </button>
-                {/each}
-              </div>
-              <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.sex')}>
-                <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.sex')}</span>
-                {#each availableSexFilters as filter}
-                  <button
-                    type="button"
-                    class={`px-3 py-1 text-xxs ${selectedSexFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
-                    on:click={() => selectSexFilter(filter.id)}
-                  >
-                    {filter.label}
-                  </button>
-                {/each}
-              </div>
+              {#if femaleWeightFilters.length > 0}
+                <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.weights_female')}>
+                  <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_female')}</span>
+                  {#each femaleWeightFilters as filter}
+                    <button
+                      type="button"
+                      class={`px-3 py-1 text-xxs ${selectedWeightFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
+                      on:click={() => selectWeightFilter(filter.id)}
+                    >
+                      {filter.label}
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+              {#if maleWeightFilters.length > 0}
+                <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.weights_male')}>
+                  <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_male')}</span>
+                  {#each maleWeightFilters as filter}
+                    <button
+                      type="button"
+                      class={`px-3 py-1 text-xxs ${selectedWeightFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
+                      on:click={() => selectWeightFilter(filter.id)}
+                    >
+                      {filter.label}
+                    </button>
+                  {/each}
+                </div>
+              {/if}
               <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.age')}>
                 <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.age')}</span>
                 {#each availableAgeFilters as filter}

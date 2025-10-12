@@ -687,7 +687,14 @@
       "select_age_category": "Select age category",
       "rack_squat": "Rack height — squat",
       "rack_bench": "Rack height — bench",
-      "equipment": "Equipment"
+      "equipment": "Equipment",
+      "weight_class_hint": "Assigned automatically based on bodyweight and gender.",
+      "age_category_hint": "Assigned automatically based on birth date.",
+      "weight_class_auto_assigned": "Assigned automatically",
+      "weight_class_pending": "Will be assigned after saving",
+      "age_category_auto_assigned": "Assigned automatically",
+      "age_category_pending": "Will be assigned after saving",
+      "auto_chip": "AUTO"
     },
     "placeholders": {
       "club": "Club name",
@@ -883,6 +890,8 @@
       "filters": {
         "flights": "Flights",
         "weights": "Weight classes",
+        "weights_female": "Female weight classes",
+        "weights_male": "Male weight classes",
         "sex": "Sex",
         "age": "Age categories",
         "labels": "Labels",
@@ -895,11 +904,13 @@
         "age_all": "All",
         "age_unassigned": "Unassigned",
         "labels_all": "All",
-        "labels_unlabeled": "Without labels"
+        "labels_unlabeled": "Without labels",
+        "age_senior": "Senior"
       },
       "active_flight_label": "Active flight",
       "active_flight_none": "None",
-      "apply_active_flight": "Apply"
+      "apply_active_flight": "Apply",
+      "add_competitor": "Add competitor"
     },
     "registration_detail": {
       "title": "Registration • {name}",
@@ -1051,11 +1062,14 @@
       "flights_update_failed": "Could not update flights.",
       "active_flight_set": "Active flight set to {flight}.",
       "active_flight_cleared": "Active flight cleared.",
-      "active_flight_failed": "Could not update active flight."
+      "active_flight_failed": "Could not update active flight.",
+      "competitor_created": "Competitor added",
+      "competitor_create_failed": "Failed to add competitor"
     },
     "modal": {
       "edit_attempts_title": "Edit attempts • {name}",
-      "edit_competitor_title": "Edit competitor • {name}"
+      "edit_competitor_title": "Edit competitor • {name}",
+      "create_competitor_title": "Add competitor"
     }
   },
   "display_table": {

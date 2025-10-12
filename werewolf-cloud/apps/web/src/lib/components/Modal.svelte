@@ -165,7 +165,7 @@ export let zIndex: number = 80;
 
   <!-- Modal Content -->
   <div
-    class="relative z-10 w-full {sizeClasses[config.size]} card focus:outline-none max-h-[90vh] overflow-hidden transform transition-all duration-300 ease-out"
+    class="relative z-10 w-full {sizeClasses[config.size]} card focus:outline-none max-h-[90vh] overflow-hidden flex flex-col transform transition-all duration-300 ease-out"
     role="document"
     on:click|stopPropagation
     on:keydown={handleKeydown}
@@ -194,7 +194,7 @@ export let zIndex: number = 80;
     {/if}
 
     <!-- Content -->
-    <div class="flex-1 overflow-y-auto pr-2">
+    <div class="flex-1 overflow-y-auto pr-2 min-h-0">
       {#if config.content}
         <div id="modal-content-{modal.id}" class="text-body text-text-primary mb-6">
           {config.content}

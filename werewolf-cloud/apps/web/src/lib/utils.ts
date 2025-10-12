@@ -122,10 +122,36 @@ export function formatWeightClass(weightClassId: string, weightClasses: WeightCl
   return weightClass ? weightClass.name : weightClassId;
 }
 
+export function normaliseAgeCategoryLabel(
+  label: string | null | undefined,
+  code: string | null | undefined = null
+): string {
+  const trimmedLabel = (label ?? '').trim();
+  const upperCode = (code ?? '').trim().toUpperCase();
+
+  if (upperCode === 'OPEN' || trimmedLabel.toLowerCase() === 'open') {
+    return 'Senior';
+  }
+
+  if (trimmedLabel.length > 0) {
+    return trimmedLabel;
+  }
+
+  if (upperCode.length > 0) {
+    return upperCode;
+  }
+
+  return '';
+}
+
 /**
  * Format age class ID into display text
  */
 export function formatAgeClass(ageCategoryId: string, ageCategories: AgeCategory[]): string {
   const ageCategory = ageCategories.find((ac) => ac.id === ageCategoryId || ac.code === ageCategoryId);
-  return ageCategory ? ageCategory.name : ageCategoryId;
+  if (!ageCategory) {
+    return ageCategoryId;
+  }
+  const label = normaliseAgeCategoryLabel(ageCategory.name, ageCategory.code);
+  return label || ageCategoryId;
 }

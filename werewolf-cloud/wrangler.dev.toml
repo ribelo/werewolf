@@ -10,6 +10,10 @@ ENV = "development"
 name = "werewolf-contest-room"
 class_name = "ContestRoom"
 
+[[migrations]]
+tag = "v1"
+new_classes = [ "ContestRoom" ]
+
 [[d1_databases]]
 binding = "DB"
 database_name = "werewolf-d1-dev"

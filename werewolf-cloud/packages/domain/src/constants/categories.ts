@@ -21,7 +21,7 @@ export const DEFAULT_CONTEST_AGE_CATEGORY_TEMPLATES: readonly ContestAgeCategory
   { code: 'T16', name: 'T16 (≤16)', minAge: null, maxAge: 16, sortOrder: 10 },
   { code: 'T19', name: 'T19 (16-19)', minAge: 16, maxAge: 19, sortOrder: 20 },
   { code: 'JUNIOR', name: 'Junior (20-23)', minAge: 20, maxAge: 23, sortOrder: 30 },
-  { code: 'OPEN', name: 'Open', minAge: 24, maxAge: null, sortOrder: 40 },
+  { code: 'OPEN', name: 'Senior', minAge: 24, maxAge: null, sortOrder: 40 },
   { code: 'M40', name: 'Master 40-49', minAge: 40, maxAge: 49, sortOrder: 50 },
   { code: 'M50', name: 'Master 50-59', minAge: 50, maxAge: 59, sortOrder: 60 },
   { code: 'M60', name: 'Master 60+', minAge: 60, maxAge: null, sortOrder: 70 },

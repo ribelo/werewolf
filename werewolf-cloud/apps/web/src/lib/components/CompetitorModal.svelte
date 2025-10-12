@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { apiClient } from '$lib/api';
+  import { normaliseAgeCategoryLabel } from '$lib/utils';
   import type {
     CompetitorSummary,
     CompetitorDetail,
@@ -15,7 +16,8 @@
   export let registration: Registration | null = null;
   export let weightClasses: WeightClass[] = [];
   export let ageCategories: AgeCategory[] = [];
-  export let mode: 'create' | 'edit' = 'create';
+export let mode: 'create' | 'edit' = 'create';
+export let contestId: string | null = null;
   export let onClose: (result?: unknown) => void = () => {};
   export let onSaved: (result?: unknown) => void = () => {};
 
@@ -66,6 +68,16 @@
     ageCategoryId: string;
   };
 
+  const parseFlag = (value: unknown): boolean => {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value !== 0;
+    if (typeof value === 'string') {
+      const normalised = value.trim().toLowerCase();
+      return normalised === 'true' || normalised === '1';
+    }
+    return false;
+  };
+
   function createRegistrationForm(source: Registration | null): RegistrationFormState {
     return {
       bodyweight: source?.bodyweight != null ? String(source.bodyweight) : '',
@@ -74,9 +86,9 @@
         source?.personalRecordAtEntry != null ? String(source.personalRecordAtEntry) : '',
       rackHeightSquat: source?.rackHeightSquat != null ? String(source.rackHeightSquat) : '',
       rackHeightBench: source?.rackHeightBench != null ? String(source.rackHeightBench) : '',
-      equipmentM: source?.equipmentM ?? false,
-      equipmentSm: source?.equipmentSm ?? false,
-      equipmentT: source?.equipmentT ?? false,
+      equipmentM: parseFlag(source?.equipmentM),
+      equipmentSm: parseFlag(source?.equipmentSm),
+      equipmentT: parseFlag(source?.equipmentT),
       weightClassId: source?.weightClassId ?? '',
       ageCategoryId: source?.ageCategoryId ?? '',
     };
@@ -86,6 +98,9 @@
   type SelectOption = { id: string; label: string };
   let weightClassOptions: SelectOption[] = [];
   let ageCategoryOptions: SelectOption[] = [];
+  let showRegistrationSection = false;
+  let weightClassDisplay = '';
+  let ageCategoryDisplay = '';
 
   $: weightClassOptions = (() => {
     const map = new Map<string, string>();
@@ -110,15 +125,58 @@
       if (!entry) continue;
       const id = entry.id ?? entry.code ?? '';
       if (!id) continue;
-      const label = entry.name ?? entry.code ?? id;
+      const rawLabel = normaliseAgeCategoryLabel(entry.name, entry.code) || entry.code || id;
+      const label = rawLabel.toLowerCase() === 'senior'
+        ? t('contest_detail.registrations.filters.age_senior')
+        : rawLabel;
       if (!map.has(id)) {
         map.set(id, label);
       }
     }
     if (registration?.ageCategoryId && registration?.ageCategoryName && !map.has(registration.ageCategoryId)) {
-      map.set(registration.ageCategoryId, registration.ageCategoryName);
+      const rawLabel = normaliseAgeCategoryLabel(registration.ageCategoryName, registration.ageCategoryId) || registration.ageCategoryName;
+      const label = rawLabel && rawLabel.toLowerCase() === 'senior'
+        ? t('contest_detail.registrations.filters.age_senior')
+        : rawLabel;
+      map.set(registration.ageCategoryId, label ?? registration.ageCategoryName ?? registration.ageCategoryId);
     }
     return Array.from(map.entries()).map(([id, label]) => ({ id, label }));
+  })();
+
+  $: showRegistrationSection = mode === 'edit'
+    ? Boolean(registration)
+    : Boolean(contestId);
+
+  $: weightClassDisplay = (() => {
+    if (registration?.weightClassName) {
+      return registration.weightClassName;
+    }
+    if (registrationForm.weightClassId) {
+      const option = weightClassOptions.find((item) => item.id === registrationForm.weightClassId);
+      if (option) {
+        return option.label;
+      }
+    }
+    if (mode === 'edit') {
+      return t('competitor_modal.registration_fields.weight_class_auto_assigned');
+    }
+    return t('competitor_modal.registration_fields.weight_class_pending');
+  })();
+
+  $: ageCategoryDisplay = (() => {
+    if (registration?.ageCategoryName) {
+      return registration.ageCategoryName;
+    }
+    if (registrationForm.ageCategoryId) {
+      const option = ageCategoryOptions.find((item) => item.id === registrationForm.ageCategoryId);
+      if (option) {
+        return option.label;
+      }
+    }
+    if (mode === 'edit') {
+      return t('competitor_modal.registration_fields.age_category_auto_assigned');
+    }
+    return t('competitor_modal.registration_fields.age_category_pending');
   })();
 
   onMount(async () => {
@@ -285,16 +343,6 @@
           equipmentT: registrationForm.equipmentT,
         };
 
-        const weightClassId = registrationForm.weightClassId.trim();
-        const ageCategoryId = registrationForm.ageCategoryId.trim();
-
-        if (weightClassId) {
-          registrationPayload.weightClassId = weightClassId;
-        }
-        if (ageCategoryId) {
-          registrationPayload.ageCategoryId = ageCategoryId;
-        }
-
         const response = await apiClient.patch<Registration>(
           `/registrations/${registration.id}`,
           registrationPayload
@@ -303,6 +351,44 @@
           throw new Error(response.error);
         }
         updatedRegistration = response.data ?? updatedRegistration;
+      }
+
+      if (!registration && mode === 'create' && contestId && targetId) {
+        const bodyweightValue = parseFloatInput(registrationForm.bodyweight);
+        if (bodyweightValue === null || bodyweightValue <= 0) {
+          throw new Error(t('competitor_modal.status.validation.bodyweight_positive'));
+        }
+
+        const registrationPayload: Record<string, unknown> = {
+          competitorId: targetId,
+          bodyweight: bodyweightValue,
+          lotNumber: registrationForm.lotNumber.trim() || null,
+          personalRecordAtEntry: parseFloatInput(registrationForm.personalRecordAtEntry),
+          rackHeightSquat: parseIntInput(registrationForm.rackHeightSquat),
+          rackHeightBench: parseIntInput(registrationForm.rackHeightBench),
+          equipmentM: registrationForm.equipmentM,
+          equipmentSm: registrationForm.equipmentSm,
+          equipmentT: registrationForm.equipmentT,
+        };
+
+        const response = await apiClient.post<Registration>(
+          `/contests/${contestId}/registrations`,
+          registrationPayload
+        );
+        if (response.error) {
+          throw new Error(response.error);
+        }
+
+        if (response.data) {
+          const next = { ...response.data } as Registration;
+          next.firstName = form.firstName;
+          next.lastName = form.lastName;
+          next.gender = form.gender;
+          next.club = form.club.trim() || null;
+          next.city = form.city.trim() || null;
+
+          updatedRegistration = next;
+        }
       }
 
       const resultPayload: { registration?: Registration } = {};
@@ -314,6 +400,10 @@
         mode === 'create'
           ? t('competitor_modal.status.success_create')
           : t('competitor_modal.status.success_update');
+
+      if (typeof onSaved === 'function') {
+        onSaved(resultPayload);
+      }
 
       onClose(resultPayload);
     } catch (err) {
@@ -403,7 +493,7 @@
         <textarea class="input-field" rows={3} bind:value={form.notes} placeholder={t('competitor_modal.placeholders.notes')}></textarea>
       </label>
 
-      {#if registration}
+      {#if showRegistrationSection}
         <section class="space-y-4">
           <div>
             <h3 class="text-label text-text-secondary">{t('competitor_modal.registration.title')}</h3>
@@ -441,22 +531,32 @@
               />
             </label>
             <label class="flex flex-col gap-2">
-              <span class="input-label">{t('competitor_modal.registration_fields.weight_class')}</span>
-              <select class="input-field" bind:value={registrationForm.weightClassId}>
-                <option value="">{t('competitor_modal.registration_fields.select_weight_class')}</option>
-                {#each weightClassOptions as option}
-                  <option value={option.id}>{option.label}</option>
-                {/each}
-              </select>
+              <span class="input-label flex items-center gap-2">
+                {t('competitor_modal.registration_fields.weight_class')}
+                <span class="text-caption text-text-secondary uppercase tracking-[0.3em]">
+                  {t('competitor_modal.registration_fields.auto_chip')}
+                </span>
+              </span>
+              <div class="input-field bg-element-bg/60 text-text-secondary">
+                {weightClassDisplay}
+              </div>
+              <p class="text-caption text-text-tertiary">
+                {t('competitor_modal.registration_fields.weight_class_hint')}
+              </p>
             </label>
             <label class="flex flex-col gap-2">
-              <span class="input-label">{t('competitor_modal.registration_fields.age_category')}</span>
-              <select class="input-field" bind:value={registrationForm.ageCategoryId}>
-                <option value="">{t('competitor_modal.registration_fields.select_age_category')}</option>
-                {#each ageCategoryOptions as option}
-                  <option value={option.id}>{option.label}</option>
-                {/each}
-              </select>
+              <span class="input-label flex items-center gap-2">
+                {t('competitor_modal.registration_fields.age_category')}
+                <span class="text-caption text-text-secondary uppercase tracking-[0.3em]">
+                  {t('competitor_modal.registration_fields.auto_chip')}
+                </span>
+              </span>
+              <div class="input-field bg-element-bg/60 text-text-secondary">
+                {ageCategoryDisplay}
+              </div>
+              <p class="text-caption text-text-tertiary">
+                {t('competitor_modal.registration_fields.age_category_hint')}
+              </p>
             </label>
             <label class="flex flex-col gap-2">
               <span class="input-label">{t('competitor_modal.registration_fields.rack_squat')}</span>

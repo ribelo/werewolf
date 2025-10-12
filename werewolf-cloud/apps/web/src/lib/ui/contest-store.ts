@@ -16,6 +16,7 @@ interface ContestStore extends Readable<ContestState> {
     registrations?: Registration[],
     categories?: Partial<ContestCategories>,
   ) => void;
+  addRegistration: (registration: Registration) => void;
   updateRegistration: (registration: Registration) => void;
   updateAttempt: (attempt: Attempt) => void;
   setAttempts: (attempts: Attempt[]) => void;
@@ -59,6 +60,13 @@ function createContestStore(): ContestStore {
         registrations: state.registrations.map(reg =>
           reg.id === registration.id ? registration : reg
         ),
+        lastUpdated: new Date().toISOString(),
+      }));
+    },
+    addRegistration: (registration: Registration) => {
+      update(state => ({
+        ...state,
+        registrations: [...state.registrations, registration],
         lastUpdated: new Date().toISOString(),
       }));
     },

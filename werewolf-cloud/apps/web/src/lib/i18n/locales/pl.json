@@ -687,7 +687,14 @@
       "select_age_category": "Wybierz kategorię wiekową",
       "rack_squat": "Wysokość stojaka — przysiad",
       "rack_bench": "Wysokość stojaka — wyciskanie",
-      "equipment": "Sprzęt"
+      "equipment": "Sprzęt",
+      "weight_class_hint": "Przypisywana automatycznie na podstawie masy ciała i płci.",
+      "age_category_hint": "Przypisywana automatycznie na podstawie daty urodzenia.",
+      "weight_class_auto_assigned": "Przydzielone automatycznie",
+      "weight_class_pending": "Zostanie przydzielona po zapisaniu",
+      "age_category_auto_assigned": "Przydzielona automatycznie",
+      "age_category_pending": "Zostanie przydzielona po zapisaniu",
+      "auto_chip": "AUTO"
     },
     "placeholders": {
       "club": "Nazwa klubu",
@@ -883,6 +890,8 @@
       "filters": {
         "flights": "Flighty",
         "weights": "Kategorie wagowe",
+        "weights_female": "Kategorie wagowe kobiet",
+        "weights_male": "Kategorie wagowe mężczyzn",
         "sex": "Płeć",
         "age": "Kategorie wiekowe",
         "labels": "Etykiety",
@@ -895,11 +904,13 @@
         "age_all": "Wszystkie",
         "age_unassigned": "Bez kategorii",
         "labels_all": "Wszystkie",
-        "labels_unlabeled": "Bez etykiety"
+        "labels_unlabeled": "Bez etykiety",
+        "age_senior": "Senior"
       },
       "active_flight_label": "Aktywny flight",
       "active_flight_none": "Brak",
-      "apply_active_flight": "Ustaw"
+      "apply_active_flight": "Ustaw",
+      "add_competitor": "Dodaj zawodnika"
     },
     "registration_detail": {
       "title": "Zgłoszenie • {name}",
@@ -1051,11 +1062,14 @@
       "flights_update_failed": "Nie udało się zapisać flightów.",
       "active_flight_set": "Aktywny flight ustawiono na {flight}.",
       "active_flight_cleared": "Aktywny flight usunięty.",
-      "active_flight_failed": "Nie udało się ustawić aktywnego flightu."
+      "active_flight_failed": "Nie udało się ustawić aktywnego flightu.",
+      "competitor_created": "Zawodnik dodany",
+      "competitor_create_failed": "Nie udało się dodać zawodnika"
     },
     "modal": {
       "edit_attempts_title": "Edytuj próby • {name}",
-      "edit_competitor_title": "Edytuj zawodnika • {name}"
+      "edit_competitor_title": "Edytuj zawodnika • {name}",
+      "create_competitor_title": "Dodaj zawodnika"
     }
   },
   "display_table": {

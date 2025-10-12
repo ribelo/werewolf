@@ -209,6 +209,19 @@ function compareBodyweightAscending(rowA: UnifiedRow, rowB: UnifiedRow): number 
   return weightA - weightB;
 }
 
+function compareTotalTieBreakers(
+  rowA: UnifiedRow,
+  rowB: UnifiedRow,
+  direction: 'asc' | 'desc'
+): number {
+  const bodyweightComparison = compareBodyweightAscending(rowA, rowB);
+  if (bodyweightComparison !== 0) {
+    return direction === 'asc' ? -bodyweightComparison : bodyweightComparison;
+  }
+
+  return compareByName(rowA.registration, rowB.registration);
+}
+
 function findEarliestSuccess(attempts: AttemptCell[], targetWeight: number): number {
   for (const cell of attempts) {
     const attempt = cell.attempt;
@@ -291,15 +304,15 @@ function compareMaxTieBreakers(
   rowB: UnifiedRow,
   direction: 'asc' | 'desc'
 ): number {
+  const bodyweightComparison = compareBodyweightAscending(rowA, rowB);
+  if (bodyweightComparison !== 0) {
+    return direction === 'asc' ? -bodyweightComparison : bodyweightComparison;
+  }
+
   const attemptComparison = compareAttemptProgressionDescending(rowA, rowB);
   const attemptAdjusted = direction === 'asc' ? -attemptComparison : attemptComparison;
   if (attemptAdjusted !== 0) {
     return attemptAdjusted;
-  }
-
-  const bodyweightComparison = compareBodyweightAscending(rowA, rowB);
-  if (bodyweightComparison !== 0) {
-    return bodyweightComparison;
   }
 
   return compareByName(rowA.registration, rowB.registration);
@@ -371,7 +384,17 @@ export function sortUnifiedRows(
         return compareMaxTieBreakers(a, b, direction);
       }
       case 'total': {
-        return (a.total - b.total) * modifier;
+        const totalComparison = (a.total - b.total) * modifier;
+        if (totalComparison !== 0) {
+          return totalComparison;
+        }
+
+        const tieBreaker = compareTotalTieBreakers(a, b, direction);
+        if (tieBreaker !== 0) {
+          return tieBreaker;
+        }
+
+        return compareMaxTieBreakers(a, b, direction);
       }
       case 'max': {
         const maxComparison = direction === 'asc'
