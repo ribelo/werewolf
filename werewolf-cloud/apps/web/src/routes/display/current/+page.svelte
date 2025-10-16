@@ -365,7 +365,7 @@
 
           <div class="flex flex-col gap-4 lg:flex-row lg:items-stretch flex-1">
             {#each attemptTiles as tile}
-              <div class={`flex-1 min-w-[160px] px-6 py-6 flex flex-col tracking-[0.3em] uppercase text-center shadow-inner transition-all duration-300 ${attemptBackgroundClass(tile.status)} ${tile.isHighlighted ? 'border-2 border-primary-red shadow-[0_0_35px_rgba(220,20,60,0.55)]' : ''}`}>
+              <div class={`flex-1 min-w-[160px] px-6 py-6 flex flex-col tracking-[0.3em] uppercase text-center shadow-inner transition-all duration-300 ${attemptBackgroundClass(tile.status)} ${tile.isHighlighted ? 'border-2 border-white shadow-[0_0_90px_rgba(255,255,255,0.55),0_0_65px_rgba(220,20,60,0.65)]' : ''}`}>
                 <p class="text-h3 text-text-secondary">
                   {t('display_current.tiles.attempt', { number: tile.number })}
                 </p>
