@@ -27,13 +27,8 @@ const registration = {
   ageCategoryId: 'ac1',
   ageCategoryName: 'Open',
   bodyweight: 63.5,
-  lotNumber: null,
-  equipmentM: false,
-  equipmentSm: false,
-  equipmentT: false,
   rackHeightSquat: 42,
   rackHeightBench: 36,
-  personalRecordAtEntry: null,
   reshelCoefficient: null,
   mcculloughCoefficient: null,
   competitionOrder: 1,
@@ -58,7 +53,6 @@ function buildAttempt(overrides: Partial<Attempt> = {}): Attempt {
     lastName: registration.lastName,
     competitorName: `${registration.firstName} ${registration.lastName}`,
     competitionOrder: registration.competitionOrder ?? null,
-    lotNumber: registration.lotNumber,
     ...overrides,
   };
 }

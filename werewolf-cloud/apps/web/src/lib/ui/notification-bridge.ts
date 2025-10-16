@@ -180,7 +180,6 @@ function handleCurrentAttemptSet(event: LiveEvent<CurrentAttemptBundle | Current
       weight: attempt.weight,
       status: attempt.status,
       competitionOrder: attempt.competitionOrder ?? null,
-      lotNumber: attempt.lotNumber ?? null,
       updatedAt: attempt.updatedAt ?? null,
     };
   }

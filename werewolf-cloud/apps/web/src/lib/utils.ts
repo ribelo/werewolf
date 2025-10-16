@@ -1,6 +1,6 @@
 // Utility functions for the Werewolf Powerlifting app
 
-import type { WeightClass, AgeCategory, Registration } from './types';
+import type { WeightClass, AgeCategory } from './types';
 
 /**
  * Get Tailwind CSS classes for status badges
@@ -45,33 +45,6 @@ export function formatAttempt(weight: number, status: string): string {
   const formattedWeight = formatWeight(weight);
   const statusSymbol = formatStatus(status);
   return statusSymbol ? `${formattedWeight}${statusSymbol}` : formattedWeight;
-}
-
-/**
- * Format equipment type for display
- */
-export function formatEquipment(equipment: string): string;
-export function formatEquipment(reg: Registration): string;
-export function formatEquipment(equipmentOrReg: string | Registration): string {
-  if (typeof equipmentOrReg === 'string') {
-    // Handle string equipment type
-    const equipmentKey = equipmentOrReg.toLowerCase();
-    const equipmentMap: Record<string, string> = {
-      raw: 'Raw',
-      'single-ply': 'Single-ply',
-      'multi-ply': 'Multi-ply',
-      wraps: 'Wraps',
-      'raw-with-wraps': 'Raw with Wraps'
-    };
-    return equipmentMap[equipmentKey] ?? equipmentOrReg;
-  } else {
-    // Handle Registration object (existing logic)
-    const equipment: string[] = [];
-    if (equipmentOrReg.equipmentM) equipment.push('Multi-ply');
-    if (equipmentOrReg.equipmentSm) equipment.push('Single-ply');
-    if (equipmentOrReg.equipmentT) equipment.push('Wraps');
-    return equipment.length > 0 ? equipment.join(', ') : 'Raw';
-  }
 }
 
 /**
@@ -130,7 +103,7 @@ export function normaliseAgeCategoryLabel(
   const upperCode = (code ?? '').trim().toUpperCase();
 
   if (upperCode === 'OPEN' || trimmedLabel.toLowerCase() === 'open') {
-    return 'Senior';
+    return 'Senior (24-39)';
   }
 
   if (trimmedLabel.length > 0) {

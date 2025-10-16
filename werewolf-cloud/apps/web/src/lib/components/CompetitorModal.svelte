@@ -7,10 +7,13 @@
     CompetitorDetail,
     Registration,
     WeightClass,
-    AgeCategory
+    AgeCategory,
+    LiftType,
   } from '$lib/types';
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
+  import { determineAgeCategory, determineWeightClass } from '@werewolf/domain/services/coefficients';
+  import { currentContest } from '$lib/ui/contest-store';
 
   export let competitor: CompetitorSummary | null = null;
   export let registration: Registration | null = null;
@@ -18,6 +21,7 @@
   export let ageCategories: AgeCategory[] = [];
 export let mode: 'create' | 'edit' = 'create';
 export let contestId: string | null = null;
+export let lifts: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
   export let onClose: (result?: unknown) => void = () => {};
   export let onSaved: (result?: unknown) => void = () => {};
 
@@ -31,6 +35,35 @@ export let contestId: string | null = null;
     return translate(key, values ? { values } : undefined);
   }
 
+  async function handleDelete() {
+    if (!competitor) return;
+    const confirmed =
+      typeof window === 'undefined'
+        ? true
+        : window.confirm(t('competitor_modal.actions.confirm_delete'));
+
+    if (!confirmed) {
+      return;
+    }
+
+    isDeleting = true;
+    error = null;
+    try {
+      await apiClient.delete<{ success: boolean }>(`/competitors/${competitor.id}`);
+      const payload: { deletedCompetitorId: string; deletedRegistrationId?: string } = {
+        deletedCompetitorId: competitor.id,
+      };
+      if (registration?.id) {
+        payload.deletedRegistrationId = registration.id;
+      }
+      onClose(payload);
+    } catch (err) {
+      error = err instanceof Error ? err.message : t('competitor_modal.status.error_delete');
+    } finally {
+      isDeleting = false;
+    }
+  }
+
   function genderLabel(option: GenderOption): string {
     return option === 'Male'
       ? t('competitor_modal.gender.male')
@@ -42,8 +75,13 @@ export let contestId: string | null = null;
   let isSaving = false;
   let error: string | null = null;
   let success: string | null = null;
+  let openingAttemptByLift: Record<LiftType, string> = { Squat: '', Bench: '', Deadlift: '' };
+  let liveAgeCategoryName: string | null = registration?.ageCategoryName ?? null;
 
-  let reorderValue: number | null = null;
+  $: contestDate = (get(currentContest)?.date ?? '').toString();
+  let isDeleting = false;
+
+  // competition order removed
 
   let form = {
     firstName: '',
@@ -55,40 +93,23 @@ export let contestId: string | null = null;
     notes: '',
   };
 
+  if (competitor?.gender) {
+    form.gender = competitor.gender;
+  }
+
   type RegistrationFormState = {
     bodyweight: string;
-    lotNumber: string;
-    personalRecordAtEntry: string;
     rackHeightSquat: string;
     rackHeightBench: string;
-    equipmentM: boolean;
-    equipmentSm: boolean;
-    equipmentT: boolean;
     weightClassId: string;
     ageCategoryId: string;
-  };
-
-  const parseFlag = (value: unknown): boolean => {
-    if (typeof value === 'boolean') return value;
-    if (typeof value === 'number') return value !== 0;
-    if (typeof value === 'string') {
-      const normalised = value.trim().toLowerCase();
-      return normalised === 'true' || normalised === '1';
-    }
-    return false;
   };
 
   function createRegistrationForm(source: Registration | null): RegistrationFormState {
     return {
       bodyweight: source?.bodyweight != null ? String(source.bodyweight) : '',
-      lotNumber: source?.lotNumber ?? '',
-      personalRecordAtEntry:
-        source?.personalRecordAtEntry != null ? String(source.personalRecordAtEntry) : '',
       rackHeightSquat: source?.rackHeightSquat != null ? String(source.rackHeightSquat) : '',
       rackHeightBench: source?.rackHeightBench != null ? String(source.rackHeightBench) : '',
-      equipmentM: parseFlag(source?.equipmentM),
-      equipmentSm: parseFlag(source?.equipmentSm),
-      equipmentT: parseFlag(source?.equipmentT),
       weightClassId: source?.weightClassId ?? '',
       ageCategoryId: source?.ageCategoryId ?? '',
     };
@@ -101,6 +122,7 @@ export let contestId: string | null = null;
   let showRegistrationSection = false;
   let weightClassDisplay = '';
   let ageCategoryDisplay = '';
+  let liveWeightClassName: string | null = registration?.weightClassName ?? null;
 
   $: weightClassOptions = (() => {
     const map = new Map<string, string>();
@@ -148,14 +170,20 @@ export let contestId: string | null = null;
     : Boolean(contestId);
 
   $: weightClassDisplay = (() => {
-    if (registration?.weightClassName) {
-      return registration.weightClassName;
-    }
     if (registrationForm.weightClassId) {
       const option = weightClassOptions.find((item) => item.id === registrationForm.weightClassId);
       if (option) {
         return option.label;
       }
+      if (liveWeightClassName) {
+        return liveWeightClassName;
+      }
+    }
+    if (liveWeightClassName) {
+      return liveWeightClassName;
+    }
+    if (registration?.weightClassName) {
+      return registration.weightClassName;
     }
     if (mode === 'edit') {
       return t('competitor_modal.registration_fields.weight_class_auto_assigned');
@@ -164,20 +192,29 @@ export let contestId: string | null = null;
   })();
 
   $: ageCategoryDisplay = (() => {
-    if (registration?.ageCategoryName) {
-      return registration.ageCategoryName;
-    }
     if (registrationForm.ageCategoryId) {
       const option = ageCategoryOptions.find((item) => item.id === registrationForm.ageCategoryId);
-      if (option) {
-        return option.label;
-      }
+      if (option) return option.label;
+      if (liveAgeCategoryName) return liveAgeCategoryName;
     }
-    if (mode === 'edit') {
-      return t('competitor_modal.registration_fields.age_category_auto_assigned');
-    }
+    if (liveAgeCategoryName) return liveAgeCategoryName;
+    if (registration?.ageCategoryName) return registration.ageCategoryName;
+    if (mode === 'edit') return t('competitor_modal.registration_fields.age_category_auto_assigned');
     return t('competitor_modal.registration_fields.age_category_pending');
   })();
+
+  function liftLabel(lift: LiftType): string {
+    const key = `contest_table.lifts.${lift.toLowerCase()}`;
+    const translated = t(key);
+    return translated === key ? lift : translated;
+  }
+
+  $: if (showRegistrationSection && weightClasses.length > 0) {
+    autoAssignWeightClass();
+  }
+  $: if (showRegistrationSection && ageCategories.length > 0) {
+    autoAssignAgeCategory();
+  }
 
   onMount(async () => {
     if (mode === 'edit' && competitor) {
@@ -202,7 +239,7 @@ export let contestId: string | null = null;
           city: detailResp.data.city ?? '',
           notes: detailResp.data.notes ?? '',
         };
-        reorderValue = detailResp.data.competitionOrder ?? null;
+        // competition order removed
       } else if (detailResp.error) {
         error = detailResp.error;
       }
@@ -224,7 +261,7 @@ export let contestId: string | null = null;
         city: detail.city ?? '',
         notes: detail.notes ?? '',
       };
-      reorderValue = detail.competitionOrder ?? null;
+      // competition order removed
       success = null;
       error = null;
     }
@@ -233,6 +270,9 @@ export let contestId: string | null = null;
 
   function resetRegistrationState() {
     registrationForm = createRegistrationForm(registration);
+    openingAttemptByLift = { Squat: '', Bench: '', Deadlift: '' };
+    liveWeightClassName = registration?.weightClassName ?? null;
+    liveAgeCategoryName = registration?.ageCategoryName ?? null;
   }
 
   function parseFloatInput(value: string): number | null {
@@ -249,6 +289,127 @@ export let contestId: string | null = null;
     if (trimmed === '') return null;
     const parsed = Number.parseInt(trimmed, 10);
     return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  function resolveGenderForClassification(): string | null {
+    const candidates = [form.gender, registration?.gender, competitor?.gender];
+    for (const candidate of candidates) {
+      if (!candidate) continue;
+      const trimmed = candidate.toString().trim();
+      if (!trimmed) continue;
+      const lower = trimmed.toLowerCase();
+      if (lower.startsWith('f')) return 'Female';
+      if (lower.startsWith('m')) return 'Male';
+    }
+    return null;
+  }
+
+  function autoAssignWeightClass() {
+    if (!showRegistrationSection) return;
+    if (!Array.isArray(weightClasses) || weightClasses.length === 0) return;
+
+    const weight = parseFloatInput(registrationForm.bodyweight);
+    if (weight === null || weight <= 0) {
+      return;
+    }
+
+    const gender = resolveGenderForClassification();
+    if (!gender) return;
+
+    const descriptors = weightClasses
+      .filter((cls) => cls && (cls.id || cls.code))
+      .map((cls) => ({
+        id: cls.id ?? cls.code,
+        code: cls.code,
+        gender: cls.gender,
+        minWeight: cls.minWeight,
+        maxWeight: cls.maxWeight,
+        sortOrder: cls.sortOrder ?? undefined,
+      }));
+
+    if (descriptors.length === 0) {
+      return;
+    }
+
+    try {
+      const resolvedCode = determineWeightClass(weight, gender, descriptors);
+      const normalisedGender = gender.toLowerCase().startsWith('f') ? 'female' : 'male';
+
+      const match =
+        weightClasses.find((cls) => {
+          if (!cls) return false;
+          const sameCode = cls.code === resolvedCode || cls.id === resolvedCode;
+          if (!sameCode) return false;
+          const clsGender = (cls.gender ?? '').toLowerCase();
+          if (clsGender && clsGender !== normalisedGender) {
+            return false;
+          }
+          return true;
+        }) ?? weightClasses.find((cls) => cls.code === resolvedCode);
+
+      if (!match) {
+        return;
+      }
+
+      const nextId = match.id ?? match.code;
+      const nextName = match.name ?? match.code;
+
+      if (nextId && registrationForm.weightClassId !== nextId) {
+        registrationForm = {
+          ...registrationForm,
+          weightClassId: nextId,
+        };
+      }
+
+      if (nextName && liveWeightClassName !== nextName) {
+        liveWeightClassName = nextName;
+      }
+    } catch (error) {
+      console.warn('Failed to auto-assign weight class', error);
+    }
+  }
+
+  function handleBodyweightInput() {
+    autoAssignWeightClass();
+  }
+
+  function handleGenderChange() {
+    autoAssignWeightClass();
+  }
+
+  function autoAssignAgeCategory() {
+    if (!showRegistrationSection) return;
+    if (!Array.isArray(ageCategories) || ageCategories.length === 0) return;
+    const birth = (form.birthDate ?? '').toString().trim();
+    const cDate = (contestDate ?? '').toString().trim();
+    if (!birth || !cDate) return;
+
+    const descriptors = ageCategories
+      .filter((cat) => cat && (cat.id || cat.code))
+      .map((cat) => ({
+        id: cat.id ?? cat.code,
+        code: cat.code,
+        minAge: cat.minAge,
+        maxAge: cat.maxAge,
+        sortOrder: cat.sortOrder ?? undefined,
+      }));
+    if (descriptors.length === 0) return;
+
+    try {
+      const resolvedCode = determineAgeCategory(birth, cDate, descriptors);
+      const match = ageCategories.find((cat) => cat.code === resolvedCode || cat.id === resolvedCode);
+      if (!match) return;
+      const nextId = match.id ?? match.code;
+      const nextName = match.name ?? match.code;
+      if (nextId && registrationForm.ageCategoryId !== nextId) {
+        registrationForm = { ...registrationForm, ageCategoryId: nextId };
+      }
+      if (nextName && liveAgeCategoryName !== nextName) {
+        liveAgeCategoryName = nextName;
+      }
+    } catch (error) {
+      console.warn('Failed to auto-assign age category', error);
+    }
   }
 
   function validateForm(): boolean {
@@ -272,6 +433,16 @@ export let contestId: string | null = null;
       }
     }
     return true;
+  }
+
+  async function upsertOpeningAttempt(registrationId: string, liftType: LiftType, weight: number) {
+    if (!contestId) return;
+    await apiClient.post(`/contests/${contestId}/registrations/${registrationId}/attempts`, {
+      registrationId,
+      liftType,
+      attemptNumber: 1,
+      weight,
+    });
   }
 
   async function handleSubmit() {
@@ -309,20 +480,7 @@ export let contestId: string | null = null;
         }
       }
 
-      if (
-        mode === 'edit' &&
-        targetId &&
-        reorderValue !== null &&
-        reorderValue > 0 &&
-        reorderValue !== detail?.competitionOrder
-      ) {
-        const response = await apiClient.post(`/competitors/${targetId}/reorder`, {
-          newOrder: reorderValue,
-        });
-        if (response.error) {
-          throw new Error(response.error);
-        }
-      }
+      // competition order removed
 
       let updatedRegistration: Registration | null = registration;
 
@@ -334,13 +492,8 @@ export let contestId: string | null = null;
 
         const registrationPayload: Record<string, unknown> = {
           bodyweight: bodyweightValue,
-          lotNumber: registrationForm.lotNumber.trim() || null,
-          personalRecordAtEntry: parseFloatInput(registrationForm.personalRecordAtEntry),
           rackHeightSquat: parseIntInput(registrationForm.rackHeightSquat),
           rackHeightBench: parseIntInput(registrationForm.rackHeightBench),
-          equipmentM: registrationForm.equipmentM,
-          equipmentSm: registrationForm.equipmentSm,
-          equipmentT: registrationForm.equipmentT,
         };
 
         const response = await apiClient.patch<Registration>(
@@ -362,13 +515,8 @@ export let contestId: string | null = null;
         const registrationPayload: Record<string, unknown> = {
           competitorId: targetId,
           bodyweight: bodyweightValue,
-          lotNumber: registrationForm.lotNumber.trim() || null,
-          personalRecordAtEntry: parseFloatInput(registrationForm.personalRecordAtEntry),
           rackHeightSquat: parseIntInput(registrationForm.rackHeightSquat),
           rackHeightBench: parseIntInput(registrationForm.rackHeightBench),
-          equipmentM: registrationForm.equipmentM,
-          equipmentSm: registrationForm.equipmentSm,
-          equipmentT: registrationForm.equipmentT,
         };
 
         const response = await apiClient.post<Registration>(
@@ -388,6 +536,22 @@ export let contestId: string | null = null;
           next.city = form.city.trim() || null;
 
           updatedRegistration = next;
+      }
+    }
+
+      if (contestId && updatedRegistration) {
+        try {
+          for (const lift of lifts) {
+            const raw = openingAttemptByLift[lift as LiftType] ?? '';
+            const weight = parseFloatInput(raw);
+            if (weight !== null && weight > 0) {
+              await upsertOpeningAttempt(updatedRegistration.id, lift as LiftType, weight);
+            }
+          }
+        } catch (err) {
+          error = err instanceof Error ? err.message : t('competitor_modal.status.error_opening_attempt');
+          isSaving = false;
+          return;
         }
       }
 
@@ -467,12 +631,13 @@ export let contestId: string | null = null;
             class="input-field"
             type="date"
             bind:value={form.birthDate}
+            on:input={autoAssignAgeCategory}
             required
           />
         </label>
         <label class="flex flex-col gap-2">
           <span class="input-label">{t('competitor_modal.fields.gender')} *</span>
-          <select class="input-field" bind:value={form.gender}>
+          <select class="input-field" bind:value={form.gender} on:change={handleGenderChange}>
             {#each genderOptions as option}
               <option value={option}>{genderLabel(option)}</option>
             {/each}
@@ -509,25 +674,7 @@ export let contestId: string | null = null;
                 step="0.1"
                 min="0"
                 bind:value={registrationForm.bodyweight}
-              />
-            </label>
-            <label class="flex flex-col gap-2">
-              <span class="input-label">{t('competitor_modal.registration_fields.lot_number')}</span>
-              <input
-                class="input-field"
-                bind:value={registrationForm.lotNumber}
-                placeholder={t('competitor_modal.registration_fields.lot_number_placeholder')}
-              />
-            </label>
-            <label class="flex flex-col gap-2">
-              <span class="input-label">{t('competitor_modal.registration_fields.personal_record')}</span>
-              <input
-                class="input-field"
-                type="number"
-                step="0.5"
-                min="0"
-                bind:value={registrationForm.personalRecordAtEntry}
-                placeholder={t('competitor_modal.registration_fields.personal_record_placeholder')}
+                on:input={handleBodyweightInput}
               />
             </label>
             <label class="flex flex-col gap-2">
@@ -540,9 +687,7 @@ export let contestId: string | null = null;
               <div class="input-field bg-element-bg/60 text-text-secondary">
                 {weightClassDisplay}
               </div>
-              <p class="text-caption text-text-tertiary">
-                {t('competitor_modal.registration_fields.weight_class_hint')}
-              </p>
+              
             </label>
             <label class="flex flex-col gap-2">
               <span class="input-label flex items-center gap-2">
@@ -554,9 +699,6 @@ export let contestId: string | null = null;
               <div class="input-field bg-element-bg/60 text-text-secondary">
                 {ageCategoryDisplay}
               </div>
-              <p class="text-caption text-text-tertiary">
-                {t('competitor_modal.registration_fields.age_category_hint')}
-              </p>
             </label>
             <label class="flex flex-col gap-2">
               <span class="input-label">{t('competitor_modal.registration_fields.rack_squat')}</span>
@@ -578,50 +720,48 @@ export let contestId: string | null = null;
                 bind:value={registrationForm.rackHeightBench}
               />
             </label>
+            {#if contestId}
+              <div class="grid gap-4 md:grid-cols-2">
+                {#each lifts as lift}
+                  <label class="flex flex-col gap-2">
+                    <span class="input-label">{t('competitor_modal.registration_fields.opening_attempt', { lift: liftLabel(lift) })}</span>
+                    <input
+                      class="input-field"
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      bind:value={openingAttemptByLift[lift]}
+                    />
+                  </label>
+                {/each}
+              </div>
+            {/if}
           </div>
-
-          <fieldset class="space-y-2">
-            <legend class="input-label">{t('competitor_modal.registration_fields.equipment')}</legend>
-            <div class="flex flex-wrap gap-3 text-body">
-              <label class="flex items-center gap-2">
-                <input type="checkbox" bind:checked={registrationForm.equipmentM} />
-                {t('contest.wizard.competitor.equipment.multi')}
-              </label>
-              <label class="flex items-center gap-2">
-                <input type="checkbox" bind:checked={registrationForm.equipmentSm} />
-                {t('contest.wizard.competitor.equipment.single')}
-              </label>
-              <label class="flex items-center gap-2">
-                <input type="checkbox" bind:checked={registrationForm.equipmentT} />
-                {t('contest.wizard.competitor.equipment.wraps')}
-              </label>
-            </div>
-          </fieldset>
         </section>
       {/if}
 
-      <section class="grid gap-4 md:grid-cols-2">
-        <div class="space-y-3">
-          <h3 class="text-label text-text-secondary">{t('competitor_modal.cloud_note.title')}</h3>
-          <p class="text-caption text-text-secondary">{t('competitor_modal.cloud_note.description')}</p>
-        </div>
+<!-- Competition order removed -->
 
-        {#if mode === 'edit'}
-          <div class="space-y-3">
-            <h3 class="text-label text-text-secondary">{t('competitor_modal.competition_order.title')}</h3>
-            <p class="text-caption text-text-secondary">
-              {t('competitor_modal.competition_order.subtitle')}
+      {#if mode === 'edit' && competitor}
+        <div class="rounded-lg border border-status-error/40 bg-status-error/10 px-4 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p class="text-caption text-status-error uppercase tracking-[0.3em]">
+              {t('competitor_modal.danger_zone.title')}
             </p>
-            <input
-              type="number"
-              min="1"
-              class="input-field w-32"
-              bind:value={reorderValue}
-              aria-label={t('competitor_modal.competition_order.aria')}
-            />
+            <p class="text-body text-text-secondary">
+              {t('competitor_modal.danger_zone.description')}
+            </p>
           </div>
-        {/if}
-      </section>
+          <button
+            type="button"
+            class="btn-danger px-4 py-2"
+            on:click={handleDelete}
+            disabled={isDeleting || isSaving}
+          >
+            {isDeleting ? t('competitor_modal.actions.deleting') : t('competitor_modal.actions.delete')}
+          </button>
+        </div>
+      {/if}
 
       <div class="flex items-center justify-between">
         <div class="space-x-3">
@@ -629,15 +769,15 @@ export let contestId: string | null = null;
             type="button"
             class="btn-secondary px-4 py-2"
             on:click={() => (mode === 'edit' ? resetState() : onClose())}
-            disabled={isSaving}
+            disabled={isSaving || isDeleting}
           >
             {mode === 'edit' ? t('competitor_modal.actions.reset') : t('competitor_modal.actions.cancel')}
           </button>
-          <button type="button" class="btn-secondary px-4 py-2" on:click={onClose} disabled={isSaving}>
+          <button type="button" class="btn-secondary px-4 py-2" on:click={onClose} disabled={isSaving || isDeleting}>
             {t('competitor_modal.actions.close')}
           </button>
         </div>
-        <button type="submit" class="btn-primary px-6 py-2" disabled={isSaving}>
+        <button type="submit" class="btn-primary px-6 py-2" disabled={isSaving || isDeleting}>
           {isSaving
             ? t('competitor_modal.actions.saving')
             : mode === 'create'

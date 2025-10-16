@@ -18,7 +18,7 @@ export let zIndex: number = 80;
   $: config = {
     size: 'md' as const,
     closable: true,
-    backdropClosable: true,
+    backdropClosable: false,
     showCloseButton: true,
     confirmText: 'OK',
     cancelText: 'Cancel',
@@ -145,7 +145,8 @@ export let zIndex: number = 80;
 
 <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
 <div
-  class="fixed inset-0 z-{zIndex} flex items-center justify-center"
+  class="fixed inset-0 flex items-center justify-center"
+  style={`z-index: ${zIndex}`}
   role="dialog"
   aria-modal="true"
   aria-labelledby="modal-title-{modal.id}"

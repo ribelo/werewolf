@@ -29,10 +29,11 @@ export type PlatePlan = {
   barWeight: number;
   weightToLoad: number;
   clampWeight: number;
+  clampWeightPerClamp: number;
 };
 
 const DEFAULT_MENS_BAR_WEIGHT = 20;
-const DEFAULT_WOMENS_BAR_WEIGHT = 15;
+const DEFAULT_WOMENS_BAR_WEIGHT = 20;
 const EPSILON = 1e-6;
 
 function getDefaultPlateColor(weight: number): string {
@@ -97,8 +98,9 @@ export async function buildPlatePlan(
   );
 
   const barWeight = deriveBarWeight(barWeightsRow, options?.gender ?? undefined, options?.barWeightOverride ?? undefined);
-  const clampWeight = barWeightsRow?.clamp_weight ?? 2.5;
-  const baseAssemblyWeight = barWeight + clampWeight;
+  const clampWeightPerClamp = barWeightsRow?.clamp_weight ?? 2.5;
+  const clampWeightTotal = clampWeightPerClamp * 2;
+  const baseAssemblyWeight = barWeight + clampWeightTotal;
   const weightToLoad = Math.max(0, targetWeight - baseAssemblyWeight);
 
   const availablePlates = await executeQuery<PlateDbRow>(
@@ -127,7 +129,8 @@ export async function buildPlatePlan(
       increment,
       targetWeight,
       barWeight,
-      clampWeight,
+      clampWeight: clampWeightTotal,
+      clampWeightPerClamp,
       weightToLoad,
     };
   }
@@ -172,7 +175,8 @@ export async function buildPlatePlan(
     increment,
     targetWeight,
     barWeight,
-    clampWeight,
+    clampWeight: clampWeightTotal,
+    clampWeightPerClamp,
     weightToLoad,
   };
 }

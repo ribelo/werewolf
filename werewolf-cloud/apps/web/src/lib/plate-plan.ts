@@ -16,7 +16,7 @@ const DEFAULT_PLATE_SET = [
 
 const DEFAULT_BAR_WEIGHTS: Record<GenderValue, number> = {
   Male: 20,
-  Female: 15,
+  Female: 20,
 };
 
 type PlatePlanSummary = {

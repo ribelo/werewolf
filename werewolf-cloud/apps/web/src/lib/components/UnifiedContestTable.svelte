@@ -1,9 +1,12 @@
 <script lang="ts">
+  import { get } from 'svelte/store';
   import { formatAgeClass, formatWeightClass, formatCoefficient, formatWeight } from '$lib/utils';
   import { ATTEMPT_NUMBERS, LIFTS, type AttemptCell, type LiftKind, type UnifiedRow } from '$lib/contest-table';
-  import type { Attempt, Registration, AgeCategory, WeightClass } from '$lib/types';
-  import { getAttemptStatusClass, getAttemptStatusLabel } from '$lib/ui/status';
+  import type { Attempt, Registration, AgeCategory, WeightClass, AttemptStatus } from '$lib/types';
+  import { getAttemptStatusClass } from '$lib/ui/status';
   import { _ } from 'svelte-i18n';
+  import { CheckCircle2, Clock, Loader2, Radio, XCircle, ArrowUpDown, ChevronUp, ChevronDown } from 'lucide-svelte';
+  import { locale } from 'svelte-i18n';
 
   export let rows: UnifiedRow[] = [];
   export let sortColumn = 'order';
@@ -25,7 +28,8 @@
     attemptId?: string;
     weight: number;
   }) => void = () => {};
-
+  export let currentAttemptId: string | null = null;
+  export let currentAttemptLoading: Record<string, boolean> = {};
   const NAME_COLUMN_WIDTH = 220;
   const attemptLabels: Record<number, string> = { 1: 'I', 2: 'II', 3: 'III' };
   const liftHeaderKey: Record<LiftKind, string> = {
@@ -39,6 +43,42 @@
     Deadlift: 'contest_table.lifts_short.deadlift',
   };
 
+  const LIVE_BUTTON_BASE = 'inline-flex h-7 w-7 items-center justify-center rounded-sm border transition-colors duration-200';
+  const STATUS_BUTTON_BASE = 'inline-flex h-7 w-7 items-center justify-center rounded-sm border transition-colors duration-200';
+  const statusIconMap: Record<AttemptStatus, typeof Clock> = {
+    Pending: Clock,
+    Successful: CheckCircle2,
+    Failed: XCircle,
+  };
+
+  $: translate = get(_);
+  $: statusLabels = {
+    Pending: translate('attempt.status.pending'),
+    Successful: translate('attempt.status.successful'),
+    Failed: translate('attempt.status.failed'),
+  };
+
+  function resolveStatus(input: string | null | undefined): AttemptStatus {
+    switch (input) {
+      case 'Successful':
+        return 'Successful';
+      case 'Failed':
+        return 'Failed';
+      default:
+        return 'Pending';
+    }
+  }
+
+  function liveButtonClass(isCurrent: boolean, isDisabled: boolean): string {
+    if (isCurrent) {
+      return `${LIVE_BUTTON_BASE} border-primary-red bg-primary-red/20 text-primary-red shadow-glow`;
+    }
+    if (isDisabled) {
+      return `${LIVE_BUTTON_BASE} border-border-color/60 text-text-tertiary cursor-not-allowed`;
+    }
+    return `${LIVE_BUTTON_BASE} border-border-color text-text-secondary hover:border-primary-red hover:text-primary-red`;
+  }
+
   let activeLifts: LiftKind[] = [...LIFTS];
   $: activeLifts = (lifts?.length ?? 0) > 0 ? [...lifts] : [...LIFTS];
   $: hasSquat = activeLifts.includes('Squat');
@@ -48,9 +88,9 @@
     return sortColumn === column;
   }
 
-  function sortIndicator(column: string): string {
-    if (!isSorted(column)) return '';
-    return sortDirection === 'asc' ? '▲' : '▼';
+  function sortIndicatorIcon(column: string): typeof ArrowUpDown | typeof ChevronUp | typeof ChevronDown | null {
+    if (!isSorted(column)) return ArrowUpDown;
+    return sortDirection === 'asc' ? ChevronUp : ChevronDown;
   }
 
   function ariaSort(column: string): 'none' | 'ascending' | 'descending' {
@@ -83,7 +123,10 @@
       return { symbol: 'M', label: value || 'Male' };
     }
     if (lowered.startsWith('f')) {
-      return { symbol: 'F', label: value || 'Female' };
+      // In Polish locale, use 'K' (Kobieta) instead of 'F'
+      const currentLocale = get(locale);
+      const symbol = (currentLocale === 'pl') ? 'K' : 'F';
+      return { symbol, label: value || 'Female' };
     }
     if (lowered.startsWith('n')) {
       return { symbol: 'N', label: value || 'Non-binary' };
@@ -99,10 +142,20 @@
     return genderDisplay(registration).label;
   }
 
+  function parseWeightInput(raw: string): number | null {
+    if (!raw) return null;
+    const normalized = raw
+      .replace(/,/g, '.')
+      .replace(/[^0-9.\-]/g, '')
+      .replace(/(\..*?)\./g, '$1');
+    const value = parseFloat(normalized);
+    return Number.isFinite(value) ? value : null;
+  }
+
   function handleAttemptInput(row: UnifiedRow, cell: AttemptCell, event: Event) {
     const input = event.currentTarget as HTMLInputElement;
-    const value = parseFloat(input.value);
-    if (!Number.isFinite(value)) {
+    const parsed = parseWeightInput(input.value);
+    if (!Number.isFinite(parsed as number)) {
       return;
     }
 
@@ -111,7 +164,7 @@
       liftType: cell.liftType,
       attemptNumber: cell.attemptNumber,
       attemptId: cell.attempt?.id,
-      weight: value,
+      weight: parsed as number,
     });
   }
 
@@ -143,7 +196,7 @@
       >
         <div class="flex items-center gap-1">
           <span>{$_('contest_table.columns.lifter')}</span>
-          <span aria-hidden="true">{sortIndicator('name')}</span>
+          <span aria-hidden="true">{#if sortIndicatorIcon('name')}<svelte:component this={sortIndicatorIcon('name')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
         </div>
       </th>
       <th
@@ -155,49 +208,49 @@
       >
         <div class="flex items-center gap-1">
           <span>{$_('contest_table.columns.sex')}</span>
-          <span aria-hidden="true">{sortIndicator('gender')}</span>
+          <span aria-hidden="true">{#if sortIndicatorIcon('gender')}<svelte:component this={sortIndicatorIcon('gender')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
         </div>
       </th>
       <th class="sticky top-0 z-10 bg-element-bg px-3 py-2 cursor-pointer" rowspan="2" role="columnheader" aria-sort={ariaSort('flight')} on:click={() => onSortChange('flight')}>
         <div class="flex items-center gap-1">
           <span>{$_('contest_table.columns.flight')}</span>
-          <span aria-hidden="true">{sortIndicator('flight')}</span>
+          <span aria-hidden="true">{#if sortIndicatorIcon('flight')}<svelte:component this={sortIndicatorIcon('flight')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
         </div>
       </th>
       <th class="sticky top-0 z-10 bg-element-bg px-3 py-2 cursor-pointer" rowspan="2" role="columnheader" aria-sort={ariaSort('age')} on:click={() => onSortChange('age')}>
         <div class="flex items-center gap-1">
           <span>{$_('contest_table.columns.age')}</span>
-          <span aria-hidden="true">{sortIndicator('age')}</span>
+          <span aria-hidden="true">{#if sortIndicatorIcon('age')}<svelte:component this={sortIndicatorIcon('age')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
         </div>
       </th>
       <th class="sticky top-0 z-10 bg-element-bg px-3 py-2 cursor-pointer" rowspan="2" role="columnheader" aria-sort={ariaSort('bodyweight')} on:click={() => onSortChange('bodyweight')}>
         <div class="flex items-center gap-1">
           <span>{$_('contest_table.columns.bodyweight')}</span>
-          <span aria-hidden="true">{sortIndicator('bodyweight')}</span>
+          <span aria-hidden="true">{#if sortIndicatorIcon('bodyweight')}<svelte:component this={sortIndicatorIcon('bodyweight')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
         </div>
       </th>
       <th class="sticky top-0 z-10 bg-element-bg px-3 py-2 cursor-pointer" rowspan="2" role="columnheader" aria-sort={ariaSort('weightClass')} on:click={() => onSortChange('weightClass')}>
         <div class="flex items-center gap-1">
           <span>{$_('contest_table.columns.weight_class')}</span>
-          <span aria-hidden="true">{sortIndicator('weightClass')}</span>
+          <span aria-hidden="true">{#if sortIndicatorIcon('weightClass')}<svelte:component this={sortIndicatorIcon('weightClass')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
         </div>
       </th>
       <th class="sticky top-0 z-10 bg-element-bg px-3 py-2 cursor-pointer" rowspan="2" role="columnheader" aria-sort={ariaSort('ageClass')} on:click={() => onSortChange('ageClass')}>
         <div class="flex items-center gap-1">
           <span>{$_('contest_table.columns.age_class')}</span>
-          <span aria-hidden="true">{sortIndicator('ageClass')}</span>
+          <span aria-hidden="true">{#if sortIndicatorIcon('ageClass')}<svelte:component this={sortIndicatorIcon('ageClass')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
         </div>
       </th>
       <th class="sticky top-0 z-10 bg-element-bg px-3 py-2 cursor-pointer" rowspan="2" role="columnheader" aria-sort={ariaSort('reshel')} on:click={() => onSortChange('reshel')}>
         <div class="flex items-center gap-1">
           <span>{$_('contest_table.columns.reshel')}</span>
-          <span aria-hidden="true">{sortIndicator('reshel')}</span>
+          <span aria-hidden="true">{#if sortIndicatorIcon('reshel')}<svelte:component this={sortIndicatorIcon('reshel')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
         </div>
       </th>
       <th class="sticky top-0 z-10 bg-element-bg px-3 py-2 cursor-pointer" rowspan="2" role="columnheader" aria-sort={ariaSort('mccullough')} on:click={() => onSortChange('mccullough')}>
         <div class="flex items-center gap-1">
           <span>{$_('contest_table.columns.mccullough')}</span>
-          <span aria-hidden="true">{sortIndicator('mccullough')}</span>
+          <span aria-hidden="true">{#if sortIndicatorIcon('mccullough')}<svelte:component this={sortIndicatorIcon('mccullough')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
         </div>
       </th>
       <th class="sticky top-0 z-10 bg-element-bg px-3 py-2" rowspan="2">{$_('contest_table.columns.rack')}</th>
@@ -209,13 +262,13 @@
       <th class="sticky top-0 z-10 bg-element-bg px-3 py-2 cursor-pointer" rowspan="2" role="columnheader" aria-sort={ariaSort('points')} on:click={() => onSortChange('points')}>
         <div class="flex items-center gap-1">
           <span>{$_('contest_table.columns.points')}</span>
-          <span aria-hidden="true">{sortIndicator('points')}</span>
+          <span aria-hidden="true"><svelte:component this={sortIndicatorIcon('points')} class="h-3.5 w-3.5 opacity-70" /></span>
         </div>
       </th>
       <th class="sticky top-0 z-10 bg-element-bg px-3 py-2 cursor-pointer" rowspan="2" role="columnheader" aria-sort={ariaSort('max')} on:click={() => onSortChange('max')}>
         <div class="flex items-center gap-1">
           <span>{$_('contest_table.columns.max')}</span>
-          <span aria-hidden="true">{sortIndicator('max')}</span>
+          <span aria-hidden="true"><svelte:component this={sortIndicatorIcon('max')} class="h-3.5 w-3.5 opacity-70" /></span>
         </div>
       </th>
       <th class="sticky top-0 z-10 bg-element-bg px-3 py-2" rowspan="2">{$_('contest_table.columns.labels')}</th>
@@ -226,8 +279,17 @@
     <tr>
       {#each activeLifts as lift}
         {#each ATTEMPT_NUMBERS as attemptNumber}
-          <th class="px-2 py-1 text-center text-xxs uppercase tracking-[0.3em]">
-            {$_(liftAbbrevKey[lift])}&nbsp;{attemptLabels[attemptNumber]}
+          <th
+            class="px-2 py-1 text-center text-xxs uppercase tracking-[0.3em] cursor-pointer select-none"
+            role="columnheader"
+            aria-sort={ariaSort(`attempt:${lift}:${attemptNumber}`)}
+            on:click={() => onSortChange(`attempt:${lift}:${attemptNumber}`)}
+            title={`${$_(liftAbbrevKey[lift])} ${attemptLabels[attemptNumber]}`}
+          >
+            <div class="inline-flex items-center gap-1">
+              <span>{$_(liftAbbrevKey[lift])}&nbsp;{attemptLabels[attemptNumber]}</span>
+              <span aria-hidden="true"><svelte:component this={sortIndicatorIcon(`attempt:${lift}:${attemptNumber}`)} class="h-3 w-3 opacity-70" /></span>
+            </div>
           </th>
         {/each}
       {/each}
@@ -288,31 +350,61 @@
           {#each row.attempts[lift] as cell}
             <td class="px-2 py-2 text-center">
               <div class="flex flex-col items-center gap-1">
-                {#if cell.attempt}
-                  {#if readOnly}
-                    <span
-                      class={`inline-flex w-20 justify-center rounded-sm px-1 py-0.5 text-xs ${getAttemptStatusClass(cell.attempt.status)}`}
-                    >
-                      {getAttemptStatusLabel(cell.attempt.status)}
-                    </span>
+                <div class="flex items-center gap-1">
+                  {#if cell.attempt}
+                    {@const attemptId = cell.attempt.id}
+                    {@const status = resolveStatus(cell.attempt.status)}
+                    {#if !readOnly}
+                      {@const isCurrent = currentAttemptId === attemptId}
+                      {@const isLoading = Boolean(currentAttemptLoading[attemptId])}
+                      <button
+                        class={liveButtonClass(isCurrent, isLoading)}
+                        type="button"
+                        aria-label={isCurrent ? $_('contest_table.actions.live_now') : $_('contest_table.actions.set_live')}
+                        title={isCurrent ? $_('contest_table.actions.live_now') : $_('contest_table.actions.set_live')}
+                        aria-pressed={isCurrent}
+                        disabled={isCurrent || isLoading}
+                        on:click={() => onSetCurrentAttempt(cell.attempt)}
+                      >
+                        {#if isLoading}
+                          <Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
+                        {:else}
+                          <Radio class="h-4 w-4" aria-hidden="true" />
+                        {/if}
+                      </button>
+                    {/if}
+                    {#if readOnly}
+                      <span
+                        class={`${STATUS_BUTTON_BASE} ${getAttemptStatusClass(status)} opacity-70`}
+                        aria-label={statusLabels[status]}
+                      >
+                        <svelte:component this={statusIconMap[status] || Clock} class="h-4 w-4" aria-hidden="true" />
+                      </span>
+                    {:else}
+                      <button
+                        class={`${STATUS_BUTTON_BASE} ${getAttemptStatusClass(status)} hover:brightness-110`}
+                        type="button"
+                        aria-label={statusLabels[status]}
+                        title={statusLabels[status]}
+                        on:click={() => onAttemptStatusCycle(cell.attempt)}
+                      >
+                        <svelte:component this={statusIconMap[status] || Clock} class="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    {/if}
                   {:else}
-                    <button
-                      class={`inline-flex w-20 justify-center rounded-sm px-1 py-0.5 text-xs ${getAttemptStatusClass(cell.attempt.status)}`}
-                      type="button"
-                      on:click={() => onAttemptStatusCycle(cell.attempt)}
-                    >
-                      {getAttemptStatusLabel(cell.attempt.status)}
-                    </button>
+                    <span class="inline-flex h-7 w-[3.75rem] items-center justify-center rounded border border-border-color/40 bg-element-bg/60 text-xs text-text-tertiary">
+                      —
+                    </span>
                   {/if}
-                {:else}
-                  <span class="text-xxs uppercase tracking-[0.2em] text-text-tertiary">—</span>
-                {/if}
+                </div>
 
                 {#if readOnly}
-                  <span>{attemptWeightDisplay(cell)}</span>
+                  <span class="inline-flex h-7 w-[3.75rem] items-center justify-center rounded border border-border-color/60 bg-element-bg px-2 text-xs text-text-secondary">
+                    {attemptWeightDisplay(cell)}
+                  </span>
                 {:else}
                   <input
-                    class="w-20 rounded border border-border-color bg-main-bg px-1 py-0.5 text-center text-xs"
+                    class="h-7 w-[3.75rem] rounded border border-border-color bg-main-bg px-2 text-center text-xs"
                     type="text"
                     inputmode="decimal"
                     autocomplete="off"
@@ -344,23 +436,6 @@
           <td class="px-3 py-2">
             <div class="flex flex-wrap gap-2">
               <button class="btn-secondary px-3 py-1 text-xxs" on:click={() => onOpenCompetitorModal(row.registration)}>{$_('contest_table.actions.edit_competitor')}</button>
-              {#if row.attempts.Squat.concat(row.attempts.Bench).concat(row.attempts.Deadlift).some((cell) => cell.attempt)}
-                <button
-                  class="btn-secondary px-3 py-1 text-xxs"
-                  on:click={() => {
-                    const nextAttempt = row.attempts.Squat
-                      .concat(row.attempts.Bench)
-                      .concat(row.attempts.Deadlift)
-                      .map((cell) => cell.attempt)
-                      .find((attempt) => attempt && attempt.status === 'Pending');
-                    if (nextAttempt) {
-                      onSetCurrentAttempt(nextAttempt);
-                    }
-                  }}
-                >
-                  {$_('contest_table.actions.set_live')}
-                </button>
-              {/if}
             </div>
           </td>
         {/if}

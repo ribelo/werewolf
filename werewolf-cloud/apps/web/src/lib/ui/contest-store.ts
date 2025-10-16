@@ -18,6 +18,7 @@ interface ContestStore extends Readable<ContestState> {
   ) => void;
   addRegistration: (registration: Registration) => void;
   updateRegistration: (registration: Registration) => void;
+  removeRegistration: (registrationId: string) => void;
   updateAttempt: (attempt: Attempt) => void;
   setAttempts: (attempts: Attempt[]) => void;
   setCategories: (categories: ContestCategories) => void;
@@ -60,6 +61,14 @@ function createContestStore(): ContestStore {
         registrations: state.registrations.map(reg =>
           reg.id === registration.id ? registration : reg
         ),
+        lastUpdated: new Date().toISOString(),
+      }));
+    },
+    removeRegistration: (registrationId: string) => {
+      update(state => ({
+        ...state,
+        registrations: state.registrations.filter(reg => reg.id !== registrationId),
+        attempts: state.attempts.filter(attempt => attempt.registrationId !== registrationId),
         lastUpdated: new Date().toISOString(),
       }));
     },

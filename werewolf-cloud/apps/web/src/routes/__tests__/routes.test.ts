@@ -67,13 +67,8 @@ vi.mock('../contests/[id]/+page.ts', () => ({
           ageCategoryId: 'ac1',
           ageCategoryName: 'Open',
           bodyweight: 85.5,
-          lotNumber: 1,
-          equipmentM: true,
-          equipmentSm: false,
-          equipmentT: false,
           rackHeightSquat: 45,
           rackHeightBench: 40,
-          personalRecordAtEntry: 100,
           reshelCoefficient: 1.0,
           mcculloughCoefficient: 1.0,
           competitionOrder: 1
@@ -95,13 +90,8 @@ vi.mock('../contests/[id]/+page.ts', () => ({
         ageCategoryId: 'ac1',
         ageCategoryName: 'Open',
         bodyweight: 85.5,
-        lotNumber: 1,
-        equipmentM: true,
-        equipmentSm: false,
-        equipmentT: false,
         rackHeightSquat: 45,
         rackHeightBench: 40,
-        personalRecordAtEntry: 100,
         reshelCoefficient: 1.0,
         mcculloughCoefficient: 1.0,
         competitionOrder: 1
@@ -123,7 +113,6 @@ vi.mock('../contests/[id]/+page.ts', () => ({
         lastName: 'Doe',
         competitorName: 'John Doe',
         competitionOrder: 1,
-        lotNumber: 1,
         timestamp: '2024-01-01T10:00:00Z',
         createdAt: '2024-01-01T10:00:00Z',
         updatedAt: '2024-01-01T10:00:00Z'
@@ -142,7 +131,6 @@ vi.mock('../contests/[id]/+page.ts', () => ({
         lastName: 'Doe',
         competitorName: 'John Doe',
         competitionOrder: 1,
-        lotNumber: 1,
         timestamp: '2024-01-01T10:05:00Z',
         createdAt: '2024-01-01T10:05:00Z',
         updatedAt: '2024-01-01T10:05:00Z'
@@ -168,7 +156,6 @@ vi.mock('../contests/[id]/+page.ts', () => ({
         weight: 150.0,
         status: 'Pending',
         competitionOrder: 1,
-        lotNumber: 1,
         updatedAt: '2024-01-01T10:05:00Z'
       },
       registration: {
@@ -179,9 +166,6 @@ vi.mock('../contests/[id]/+page.ts', () => ({
         weightClassName: 'Do 82.5 kg',
         ageCategoryId: 'ac1',
         ageCategoryName: 'Open',
-        equipmentM: true,
-        equipmentSm: false,
-        equipmentT: false,
         rackHeightSquat: 45,
         rackHeightBench: 40,
         competitionOrder: 1
@@ -263,7 +247,6 @@ describe('Routes smoke test', () => {
     const registration = data.registrations[0];
     expect(registration).toBeDefined();
     if (registration) {
-      expect(registration.lotNumber).toBe(1);
       expect(registration.rackHeightSquat).toBe(45);
       expect(registration.rackHeightBench).toBe(40);
       expect(registration.reshelCoefficient).toBe(1.0);

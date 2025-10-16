@@ -24,19 +24,14 @@ describe('RegistrationDetailModal', () => {
     city: 'Gotham',
     weightClassId: 'wc1',
     weightClassName: 'Do 100 kg',
-    ageCategoryId: 'ac-open',
-    ageCategoryName: 'Open',
-    bodyweight: 93.5,
-    lotNumber: null,
-    equipmentM: false,
-    equipmentSm: false,
-    equipmentT: true,
-    rackHeightSquat: 44,
-    rackHeightBench: 39,
-    personalRecordAtEntry: null,
-    reshelCoefficient: 0.945,
-    mcculloughCoefficient: 1.0,
-    competitionOrder: 7,
+  ageCategoryId: 'ac-open',
+  ageCategoryName: 'Open',
+  bodyweight: 93.5,
+  rackHeightSquat: 44,
+  rackHeightBench: 39,
+  reshelCoefficient: 0.945,
+  mcculloughCoefficient: 1.0,
+  competitionOrder: 7,
   };
 
   const weightClasses: WeightClass[] = [
@@ -63,8 +58,7 @@ describe('RegistrationDetailModal', () => {
     expect(screen.getByText('Profile')).toBeInTheDocument();
     expect(screen.getByText('Alex Strong')).toBeInTheDocument();
     expect(screen.getByText('Do 100 kg')).toBeInTheDocument();
-    expect(screen.getByText('Senior')).toBeInTheDocument();
-    expect(screen.getByText('Wraps')).toBeInTheDocument();
+    expect(screen.getByText('Senior (24-39)')).toBeInTheDocument();
     expect(screen.getByText('0.945')).toBeInTheDocument();
     expect(screen.getByText('1.000')).toBeInTheDocument();
   });

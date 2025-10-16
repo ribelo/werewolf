@@ -400,11 +400,8 @@ Register a competitor for a contest.
 {
   "competitorId": "uuid",
   "bodyweight": 82.5,
-  "equipmentM": false,
-  "equipmentSm": false,
-  "equipmentT": false,
-  "lotNumber": "001",
-  "personalRecordAtEntry": 200.0
+  "rackHeightSquat": 45,
+  "rackHeightBench": 40
 }
 ```
 
@@ -420,11 +417,8 @@ curl -X POST https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89
   -d '{
     "competitorId": "456e7890-e89b-12d3-a456-426614174001",
     "bodyweight": 82.5,
-    "equipmentM": false,
-    "equipmentSm": false,
-    "equipmentT": false,
-    "lotNumber": "001",
-    "personalRecordAtEntry": 200.0
+    "rackHeightSquat": 45,
+    "rackHeightBench": 40
   }'
 ```
 
@@ -451,7 +445,7 @@ curl -X PATCH https://werewolf.r-krzywaznia-2c4.workers.dev/registrations/789e01
   -H "Content-Type: application/json" \
   -d '{
     "bodyweight": 83.0,
-    "lotNumber": "002"
+    "rackHeightSquat": 46
   }'
 ```
 
@@ -547,7 +541,7 @@ Get the currently active attempt. The response now includes a display-ready bund
 
 - `contest`: id, name, location, date, discipline, status, default/mens/womens bar weights
 - `attempt`: full attempt row (lift type, weight, status, judges, timestamps)
-- `registration`: bodyweight, weight/age class labels, equipment flags, rack heights, competition order
+- `registration`: bodyweight, weight/age class labels, rack heights, competition order
 - `competitor`: identity info (name, gender, club/city)
 - `attemptsByLift`: the competitor's attempts grouped by lift (including status + updatedAt)
 - `platePlan`: computed loading plan for the declared weight (plates per side, bar weight, total, accuracy flag)

@@ -25,11 +25,10 @@ competitors.get('/', async (c) => {
       notes,
       photo_format,
       photo_metadata,
-      competition_order,
       created_at,
       updated_at
     FROM competitors
-    ORDER BY competition_order ASC, last_name ASC, first_name ASC
+    ORDER BY last_name ASC, first_name ASC
     `
   );
 
@@ -48,21 +47,14 @@ competitors.post('/', zValidator('json', competitorCreateSchema), async (c) => {
   const id = generateId();
   const now = getCurrentTimestamp();
 
-  // Get next competition order
-  const maxOrder = await executeQueryOne(
-    db,
-    'SELECT MAX(competition_order) as max_order FROM competitors'
-  );
-  const nextOrder = (maxOrder?.max_order || 0) + 1;
-
   await executeMutation(
     db,
     `
     INSERT INTO competitors (
       id, first_name, last_name, birth_date, gender,
-      club, city, notes, competition_order,
+      club, city, notes,
       created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
       id,
@@ -73,7 +65,6 @@ competitors.post('/', zValidator('json', competitorCreateSchema), async (c) => {
       input.club || null,
       input.city || null,
       input.notes || null,
-      nextOrder,
       now,
       now,
     ]
@@ -85,7 +76,7 @@ competitors.post('/', zValidator('json', competitorCreateSchema), async (c) => {
     SELECT
       id, first_name, last_name, birth_date, gender,
       club, city, notes, photo_format, photo_metadata,
-      competition_order, created_at, updated_at
+      created_at, updated_at
     FROM competitors
     WHERE id = ?
     `,
@@ -110,7 +101,7 @@ competitors.get('/:competitorId', async (c) => {
     SELECT
       id, first_name, last_name, birth_date, gender,
       club, city, notes, photo_format, photo_metadata,
-      competition_order, created_at, updated_at
+      created_at, updated_at
     FROM competitors
     WHERE id = ?
     `,
@@ -165,10 +156,7 @@ competitors.patch('/:competitorId', zValidator('json', competitorUpdateSchema), 
     updates.push('notes = ?');
     params.push(input.notes);
   }
-  if (input.competitionOrder !== undefined) {
-    updates.push('competition_order = ?');
-    params.push(input.competitionOrder);
-  }
+  
 
   if (updates.length === 0) {
     return c.json({ data: null, error: 'No fields to update', requestId: c.get('requestId') }, 400);
@@ -190,7 +178,7 @@ competitors.patch('/:competitorId', zValidator('json', competitorUpdateSchema), 
     SELECT
       id, first_name, last_name, birth_date, gender,
       club, city, notes, photo_format, photo_metadata,
-      competition_order, created_at, updated_at
+      created_at, updated_at
     FROM competitors
     WHERE id = ?
     `,
@@ -324,87 +312,7 @@ competitors.get('/:competitorId/photo', async (c) => {
   });
 });
 
-// POST /competitors/:competitorId/reorder - Move competition order
-competitors.post('/:competitorId/reorder', zValidator('json', z.object({
-  newOrder: z.number().int().min(1),
-})), async (c) => {
-  const db = c.env.DB;
-  const competitorId = c.req.param('competitorId');
-  const { newOrder } = c.req.valid('json');
-
-  // Get total competitors count
-  const count = await executeQueryOne(
-    db,
-    'SELECT COUNT(*) as total FROM competitors'
-  );
-
-  if (newOrder > count.total) {
-    return c.json({ data: null, error: `Order ${newOrder} exceeds total competitors (${count.total})`, requestId: c.get('requestId') }, 400);
-  }
-
-  // Get current order of the competitor
-  const current = await executeQueryOne(
-    db,
-    'SELECT competition_order FROM competitors WHERE id = ?',
-    [competitorId]
-  );
-
-  if (!current) {
-    return c.json({ data: null, error: 'Competitor not found', requestId: c.get('requestId') }, 404);
-  }
-
-  const currentOrder = current.competition_order;
-
-  if (currentOrder === newOrder) {
-    return c.json({
-      data: { success: true },
-      error: null,
-      requestId: c.get('requestId'),
-    }); // No change needed
-  }
-
-  // Shift other competitors
-  if (newOrder < currentOrder) {
-    // Moving up - shift others down
-    await executeMutation(
-      db,
-      `
-      UPDATE competitors
-      SET competition_order = competition_order + 1, updated_at = ?
-      WHERE competition_order >= ? AND competition_order < ? AND id != ?
-      `,
-      [getCurrentTimestamp(), newOrder, currentOrder, competitorId]
-    );
-  } else {
-    // Moving down - shift others up
-    await executeMutation(
-      db,
-      `
-      UPDATE competitors
-      SET competition_order = competition_order - 1, updated_at = ?
-      WHERE competition_order > ? AND competition_order <= ? AND id != ?
-      `,
-      [getCurrentTimestamp(), currentOrder, newOrder, competitorId]
-    );
-  }
-
-  // Update the target competitor
-  await executeMutation(
-    db,
-    `
-    UPDATE competitors
-    SET competition_order = ?, updated_at = ?
-    WHERE id = ?
-    `,
-    [newOrder, getCurrentTimestamp(), competitorId]
-  );
-
-  return c.json({
-    data: { success: true },
-    error: null,
-    requestId: c.get('requestId'),
-  });
-});
+// competition order removed
 
 export default competitors;
 

@@ -77,7 +77,7 @@ contestResults.get('/rankings', zValidator('query', z.object({
           r.place_open, r.place_in_age_class, r.place_in_weight_class,
           r.is_disqualified, r.disqualification_reason,
           r.broke_record, r.record_type, r.calculated_at,
-          c.first_name, c.last_name, reg.lot_number,
+          c.first_name, c.last_name,
           COALESCE(reg.labels, '[]') AS labels
         FROM results r
         JOIN registrations reg ON r.registration_id = reg.id
@@ -101,7 +101,7 @@ contestResults.get('/rankings', zValidator('query', z.object({
           r.place_open, r.place_in_age_class, r.place_in_weight_class,
           r.is_disqualified, r.disqualification_reason,
           r.broke_record, r.record_type, r.calculated_at,
-          c.first_name, c.last_name, reg.lot_number, ac.name as age_category,
+          c.first_name, c.last_name, ac.name as age_category,
           COALESCE(reg.labels, '[]') AS labels
         FROM results r
         JOIN registrations reg ON r.registration_id = reg.id
@@ -126,7 +126,7 @@ contestResults.get('/rankings', zValidator('query', z.object({
           r.place_open, r.place_in_age_class, r.place_in_weight_class,
           r.is_disqualified, r.disqualification_reason,
           r.broke_record, r.record_type, r.calculated_at,
-          c.first_name, c.last_name, reg.lot_number, wc.name as weight_class,
+          c.first_name, c.last_name, wc.name as weight_class,
           COALESCE(reg.labels, '[]') AS labels
         FROM results r
         JOIN registrations reg ON r.registration_id = reg.id
@@ -169,7 +169,7 @@ contestResults.post('/export', zValidator('json', z.object({
       r.place_open, r.registration_id,
       r.best_squat, r.best_bench, r.best_deadlift,
       r.total_weight, r.coefficient_points,
-      c.first_name, c.last_name, reg.lot_number
+      c.first_name, c.last_name
     FROM results r
     JOIN registrations reg ON r.registration_id = reg.id
     JOIN competitors c ON reg.competitor_id = c.id
@@ -206,7 +206,7 @@ contestResults.get('/scoreboard', async (c) => {
       r.place_open, r.place_in_age_class, r.place_in_weight_class,
       r.is_disqualified, r.disqualification_reason,
       r.broke_record, r.record_type, r.calculated_at,
-      c.first_name, c.last_name, reg.lot_number
+      c.first_name, c.last_name
     FROM results r
     JOIN registrations reg ON r.registration_id = reg.id
     JOIN competitors c ON reg.competitor_id = c.id
@@ -300,10 +300,14 @@ async function calculateRegistrationResults(db: D1Database, registrationId: stri
   const registration = await executeQueryOne(
     db,
     `
-    SELECT r.contest_id, r.reshel_coefficient, r.mccullough_coefficient,
-           c.first_name, c.last_name
+    SELECT
+      r.contest_id,
+      r.reshel_coefficient,
+      r.mccullough_coefficient,
+      contest.discipline
     FROM registrations r
     JOIN competitors c ON r.competitor_id = c.id
+    JOIN contests contest ON r.contest_id = contest.id
     WHERE r.id = ?
     `,
     [registrationId]
@@ -323,12 +327,34 @@ async function calculateRegistrationResults(db: D1Database, registrationId: stri
     [registrationId]
   );
 
-  const bestSquat = bestAttempts.find(a => a.lift_type === 'Squat')?.best_weight || 0;
-  const bestBench = bestAttempts.find(a => a.lift_type === 'Bench')?.best_weight || 0;
-  const bestDeadlift = bestAttempts.find(a => a.lift_type === 'Deadlift')?.best_weight || 0;
-  const totalWeight = bestSquat + bestBench + bestDeadlift;
+  const bestSquat = Number(bestAttempts.find((attempt) => attempt.lift_type === 'Squat')?.best_weight ?? 0) || 0;
+  const bestBench = Number(bestAttempts.find((attempt) => attempt.lift_type === 'Bench')?.best_weight ?? 0) || 0;
+  const bestDeadlift = Number(bestAttempts.find((attempt) => attempt.lift_type === 'Deadlift')?.best_weight ?? 0) || 0;
 
-  const coefficientPoints = totalWeight * (registration.reshel_coefficient || 1) * (registration.mccullough_coefficient || 1);
+  const discipline = typeof registration.discipline === 'string' ? registration.discipline : 'Powerlifting';
+  const liftsForTotals = getLiftsForDiscipline(discipline);
+
+  const totalsByLift: Record<'Squat' | 'Bench' | 'Deadlift', number> = {
+    Squat: bestSquat,
+    Bench: bestBench,
+    Deadlift: bestDeadlift,
+  };
+
+  const totalWeight = liftsForTotals.reduce((sum, lift) => sum + totalsByLift[lift], 0);
+
+  const reshelCoefficient =
+    registration.reshel_coefficient === null || registration.reshel_coefficient === undefined
+      ? 1
+      : Number(registration.reshel_coefficient);
+  const mcCoefficient =
+    registration.mccullough_coefficient === null || registration.mccullough_coefficient === undefined
+      ? 1
+      : Number(registration.mccullough_coefficient);
+
+  const normalizedReshel = Number.isFinite(reshelCoefficient) ? reshelCoefficient : 1;
+  const normalizedMc = Number.isFinite(mcCoefficient) ? mcCoefficient : 1;
+
+  const coefficientPoints = totalWeight * normalizedReshel * normalizedMc;
 
   const id = generateId();
   const now = getCurrentTimestamp();
@@ -433,11 +459,26 @@ async function updateAllRankings(db: D1Database, contestId: string) {
 }
 
 function exportToCsv(rankings: any[]): string {
-  let csv = 'Place,Name,Lot Number,Best Squat,Best Bench,Best Deadlift,Total,Coefficient Points\n';
+  let csv = 'Place,Name,Best Squat,Best Bench,Best Deadlift,Total,Coefficient Points\n';
 
   for (const result of rankings) {
-    csv += `${result.place_open || ''},${result.first_name} ${result.last_name},${result.lot_number || ''},${result.best_squat || 0},${result.best_bench || 0},${result.best_deadlift || 0},${result.total_weight || 0},${result.coefficient_points || 0}\n`;
+    csv += `${result.place_open || ''},${result.first_name} ${result.last_name},${result.best_squat || 0},${result.best_bench || 0},${result.best_deadlift || 0},${result.total_weight || 0},${result.coefficient_points || 0}\n`;
   }
 
   return csv;
+}
+
+function getLiftsForDiscipline(discipline: string): Array<'Squat' | 'Bench' | 'Deadlift'> {
+  switch (discipline) {
+    case 'Bench':
+      return ['Bench'];
+    case 'Squat':
+      return ['Squat'];
+    case 'Deadlift':
+      return ['Deadlift'];
+    case 'Powerlifting':
+      return ['Squat', 'Bench', 'Deadlift'];
+    default:
+      return ['Squat', 'Bench', 'Deadlift'];
+  }
 }

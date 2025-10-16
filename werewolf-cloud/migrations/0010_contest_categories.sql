@@ -130,7 +130,7 @@ SELECT contest.id || ':T19', contest.id, 'T19', 'T19 (16-19)', 16, 19, 20 FROM c
 INSERT INTO contest_age_categories (id, contest_id, code, name, min_age, max_age, sort_order)
 SELECT contest.id || ':JUNIOR', contest.id, 'JUNIOR', 'Junior (20-23)', 20, 23, 30 FROM contests contest;
 INSERT INTO contest_age_categories (id, contest_id, code, name, min_age, max_age, sort_order)
-SELECT contest.id || ':OPEN', contest.id, 'OPEN', 'Open', 24, NULL, 40 FROM contests contest;
+SELECT contest.id || ':OPEN', contest.id, 'OPEN', 'Senior (24-39)', 24, 39, 40 FROM contests contest;
 INSERT INTO contest_age_categories (id, contest_id, code, name, min_age, max_age, sort_order)
 SELECT contest.id || ':SAMORZAD', contest.id, 'SAMORZAD', 'Kat. Samorządowiec', NULL, NULL, 45 FROM contests contest;
 INSERT INTO contest_age_categories (id, contest_id, code, name, min_age, max_age, sort_order)

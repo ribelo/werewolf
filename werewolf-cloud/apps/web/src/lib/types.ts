@@ -67,13 +67,8 @@ export interface Registration {
   ageCategoryId: string;
   ageCategoryName?: string | null;
   bodyweight: number;
-  lotNumber: string | null;
-  equipmentM: boolean;
-  equipmentSm: boolean;
-  equipmentT: boolean;
   rackHeightSquat?: number | null;
   rackHeightBench?: number | null;
-  personalRecordAtEntry?: number | null;
   reshelCoefficient?: number | null;
   mcculloughCoefficient?: number | null;
   competitionOrder?: number;
@@ -90,9 +85,6 @@ export interface RegistrationSummary {
   weightClassName?: string | null;
   ageCategoryId?: string | null;
   ageCategoryName?: string | null;
-  equipmentM: boolean;
-  equipmentSm: boolean;
-  equipmentT: boolean;
   rackHeightSquat?: number | null;
   rackHeightBench?: number | null;
   competitionOrder?: number | null;
@@ -168,6 +160,7 @@ export interface PlatePlan {
   barWeight: number;
   weightToLoad: number;
   clampWeight: number;
+  clampWeightPerClamp?: number | null;
 }
 
 export interface Competition {
@@ -255,7 +248,6 @@ export interface ContestRankingEntry {
   calculatedAt?: string | null;
   firstName: string;
   lastName: string;
-  lotNumber?: string | null;
   ageCategory?: string | null;
   weightClass?: string | null;
 }
@@ -305,7 +297,6 @@ export interface Attempt {
   lastName?: string;
   competitorName?: string;
   competitionOrder?: number | null;
-  lotNumber?: string | null;
 }
 
 export interface LiftAttemptSnapshot {
@@ -332,7 +323,6 @@ export interface CurrentAttempt {
   weight: number;
   status: AttemptStatus;
   competitionOrder?: number | null;
-  lotNumber?: string | null;
   updatedAt?: string | null;
 }
 

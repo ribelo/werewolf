@@ -21,13 +21,13 @@ This plan breaks the rewrite into actionable work packages that preserve existin
 ### Recent Frontend Enhancements (2025-09-18)
 
 - [x] **Reference Data Integration**: Contest detail pages now fetch `/reference/weight-classes` and `/reference/age-categories` for real data lookups
-- [x] **Type Safety Improvements**: Registration interface updated with `bodyweight` and `lotNumber` fields, `formatEquipment` function now properly typed
+- [x] **Type Safety Improvements**: Registration interface streamlined; removed legacy lot/personal record fields and dropped the unused `formatEquipment` helper
 - [x] **Default Plate Set Editor**: Settings page exposes a sortable plate inventory editor with validation, add/remove rows, restore defaults, and persistence via `/settings/competition`
 - [x] **KV Diagnostics Panel**: Live Cloudflare KV summary with backup counts, last update timestamp, and one-click backup/refresh actions powered by `/system/backups`
 - [x] **Enhanced Contest Detail UX**:
   - Added tabbed layout with "Registrations" and "Attempts/Results" tabs
   - Summary chips showing lifters count, attempts queued, and last update
-  - Bodyweight and lot number columns in registrations table
+  - Bodyweight column in registrations table
   - Accessible modal for full registration details with raw JSON view
 - [x] **Interactive Settings Page**: Added PATCH request support for `ui.showWeights` and `competition.defaultBarWeight` with optimistic UI updates
 - [x] **Status Classes**: Extended status mappings to include 'ok' and 'error' states from API responses
@@ -83,7 +83,7 @@ This plan breaks the rewrite into actionable work packages that preserve existin
   - **Live Updates**: Automatic refresh of current lift information
 - [x] **Registration Actions**: Inline editing capabilities
   - **Rack Heights**: Edit squat and bench rack heights with PATCH to `/registrations/{id}`
-  - **Equipment Flags**: Toggle M/SM/T equipment flags with optimistic updates
+  - **Equipment Flags**: Removed from the registration workflow (no longer surfaced)
   - **Optimistic UI**: Immediate visual feedback before server confirmation
   - **Error Recovery**: Automatic rollback on API failures
   - **Type Safety**: Full TypeScript support with proper event handling
@@ -104,13 +104,13 @@ This plan breaks the rewrite into actionable work packages that preserve existin
 
 - [x] **Display Routes for Public Viewing**: Two new public-facing display screens
   - **Announcer Table** (`/display/table?contestId={id}`): 
-    - Big rows with lot, name, lift, attempt, weight, status columns
+    - Big rows with rotation order, name, lift, attempt, weight, status columns
     - Recent results and next lifts tables with real-time updates
     - Current attempt card now includes the server-computed plate plan and declared weight context
     - Optimized for announcer/organizer secondary displays
   - **Big Screen Current** (`/display/current?contestId={id}`):
     - Full-screen projection layout with massive, readable text
-    - Current lifter info, lift details, weight class, rack heights, equipment flags
+    - Current lifter info, lift details, weight class, rack heights
     - Attempt matrix with animated status transitions and highlighted lift
     - Plate visualization card using backend plate plan; previous attempts history in footer
 
@@ -329,7 +329,7 @@ The following commands were used to set up and apply migrations to the local D1 
 - [x] **Enhanced Contest Detail Features**:
   - Tabbed interface (Registrations/Attempts tabs)
   - Summary statistics chips
-  - Bodyweight and lot number display
+  - Bodyweight display
   - Registration detail modal with full payload
   - Real reference data lookups (weight classes, age categories)
 - [x] **Interactive Settings**: PATCH request support with optimistic updates

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
-  import { formatCompetitorName, formatEquipment, formatWeightClass, formatAgeClass, formatCoefficient } from '$lib/utils';
+  import { formatCompetitorName, formatWeightClass, formatAgeClass, formatCoefficient } from '$lib/utils';
   import type { Registration, WeightClass, AgeCategory } from '$lib/types';
 
   export let registration: Registration;
@@ -64,10 +64,6 @@
       <div class="rounded-lg border border-border-color bg-element-bg/60 p-4">
         <p class="text-caption text-text-secondary uppercase tracking-[0.3em] mb-1">{t('contest_detail.registration_detail.fields.age_class')}</p>
         <p class="text-body text-text-primary">{registration.ageCategoryName ?? formatAgeClass(registration.ageCategoryId, ageCategories)}</p>
-      </div>
-      <div class="rounded-lg border border-border-color bg-element-bg/60 p-4 md:col-span-2">
-        <p class="text-caption text-text-secondary uppercase tracking-[0.3em] mb-1">{t('contest_detail.registration_detail.fields.equipment')}</p>
-        <p class="text-body text-text-primary">{formatEquipment(registration)}</p>
       </div>
     </div>
   </section>

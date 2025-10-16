@@ -263,13 +263,13 @@ contestAttempts.get('/', async (c) => {
       a.id, a.registration_id, a.lift_type, a.attempt_number, a.weight,
       a.status, a.timestamp, a.judge1_decision, a.judge2_decision, a.judge3_decision,
       a.notes, a.created_at, a.updated_at,
-      comp.first_name, comp.last_name, comp.competition_order, r.lot_number,
+      comp.first_name, comp.last_name,
       comp.first_name || ' ' || comp.last_name AS competitor_name
     FROM attempts a
     JOIN registrations r ON a.registration_id = r.id
     JOIN competitors comp ON r.competitor_id = comp.id
     WHERE r.contest_id = ?
-    ORDER BY comp.competition_order ASC, comp.last_name ASC, comp.first_name ASC,
+    ORDER BY comp.last_name ASC, comp.first_name ASC,
       a.lift_type ASC, a.attempt_number ASC
     `,
     [contestId]
@@ -294,7 +294,7 @@ contestAttempts.get('/current', async (c) => {
       a.id, a.registration_id, a.lift_type, a.attempt_number, a.weight,
       a.status, a.timestamp, a.judge1_decision, a.judge2_decision, a.judge3_decision,
       a.notes, a.created_at, a.updated_at,
-      comp.first_name, comp.last_name, comp.competition_order, r.lot_number, cl.rack_height,
+      comp.first_name, comp.last_name, cl.rack_height,
       comp.first_name || ' ' || comp.last_name AS competitor_name
     FROM current_lifts cl
     JOIN attempts a ON cl.registration_id = a.registration_id
@@ -337,7 +337,7 @@ contestAttempts.put('/current', zValidator('json', z.object({
     db,
     `
     SELECT a.registration_id, a.lift_type, a.attempt_number, a.weight,
-      comp.first_name, comp.last_name, comp.competition_order
+      comp.first_name, comp.last_name
     FROM attempts a
     JOIN registrations r ON a.registration_id = r.id
     JOIN competitors comp ON r.competitor_id = comp.id
@@ -537,7 +537,7 @@ contestAttempts.get('/queue', async (c) => {
       a.id, a.registration_id, a.lift_type, a.attempt_number, a.weight,
       a.status, a.timestamp, a.judge1_decision, a.judge2_decision, a.judge3_decision,
       a.notes, a.created_at, a.updated_at,
-      comp.first_name, comp.last_name, comp.competition_order, r.lot_number,
+      comp.first_name, comp.last_name,
       comp.first_name || ' ' || comp.last_name AS competitor_name,
       r.flight_code, r.flight_order,
       COALESCE(r.labels, '[]') AS labels
@@ -551,9 +551,7 @@ contestAttempts.get('/queue', async (c) => {
       AND a.weight IS NOT NULL
       ${activeFlight ? 'AND r.flight_code = ?' : ''}
     ORDER BY a.weight ASC,
-      COALESCE(r.flight_order, comp.competition_order, 9999) ASC,
-      COALESCE(r.lot_number, 9999) ASC,
-      comp.competition_order ASC,
+      COALESCE(r.flight_order, 9999) ASC,
       comp.last_name ASC,
       comp.first_name ASC
     `,

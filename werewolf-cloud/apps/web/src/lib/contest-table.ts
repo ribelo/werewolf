@@ -122,11 +122,27 @@ function bestSuccessfulWeight(cells: AttemptCell[]): number {
   return best;
 }
 
-function computePoints(total: number, coefficient?: number | null): number | null {
-  if (!coefficient && coefficient !== 0) {
+function computePoints(
+  total: number,
+  reshelCoefficient?: number | null,
+  mcculloughCoefficient?: number | null
+): number | null {
+  if (!Number.isFinite(total) || total <= 0) {
+    return total === 0 ? 0 : null;
+  }
+
+  if (!Number.isFinite(reshelCoefficient as number) || reshelCoefficient == null) {
     return null;
   }
-  return total * coefficient;
+
+  const reshel = Number(reshelCoefficient);
+  const mcc = mcculloughCoefficient == null ? 1 : Number(mcculloughCoefficient);
+
+  if (!Number.isFinite(reshel) || !Number.isFinite(mcc)) {
+    return null;
+  }
+
+  return total * reshel * mcc;
 }
 
 export function buildUnifiedRows(params: {
@@ -155,7 +171,7 @@ export function buildUnifiedRows(params: {
     const bestBench = bestSuccessfulWeight(attemptGrid.Bench);
     const bestDeadlift = bestSuccessfulWeight(attemptGrid.Deadlift);
     const total = bestSquat + bestBench + bestDeadlift;
-    const points = computePoints(total, registration.reshelCoefficient ?? null);
+    const points = computePoints(total, registration.reshelCoefficient ?? null, registration.mcculloughCoefficient ?? null);
     const maxLift = Math.max(bestSquat, bestBench, bestDeadlift);
 
     const openResult = openMap.get(registration.id) ?? null;
@@ -306,7 +322,7 @@ function compareMaxTieBreakers(
 ): number {
   const bodyweightComparison = compareBodyweightAscending(rowA, rowB);
   if (bodyweightComparison !== 0) {
-    return direction === 'asc' ? -bodyweightComparison : bodyweightComparison;
+    return bodyweightComparison;
   }
 
   const attemptComparison = compareAttemptProgressionDescending(rowA, rowB);
@@ -328,6 +344,24 @@ export function sortUnifiedRows(
   const sorted = [...rows].sort((a, b) => {
     const regA = a.registration;
     const regB = b.registration;
+
+    // Sort by specific attempt weight (e.g., 'attempt:Bench:1')
+    if (column.startsWith('attempt:')) {
+      const parts = column.split(':');
+      const lift = (parts[1] ?? '') as LiftKind;
+      const attemptNum = parseInt(parts[2] ?? '0', 10) as AttemptNumber;
+      const index = (attemptNum as number) - 1;
+
+      const cellA = a.attempts?.[lift]?.[index] ?? null;
+      const cellB = b.attempts?.[lift]?.[index] ?? null;
+      const weightA = cellA?.attempt?.weight ?? Number.NEGATIVE_INFINITY;
+      const weightB = cellB?.attempt?.weight ?? Number.NEGATIVE_INFINITY;
+      if (weightA !== weightB) {
+        return (weightA - weightB) * modifier;
+      }
+      // Tiebreaker: name
+      return `${regA.lastName} ${regA.firstName}`.localeCompare(`${regB.lastName} ${regB.firstName}`) * modifier;
+    }
 
     switch (column) {
       case 'name': {

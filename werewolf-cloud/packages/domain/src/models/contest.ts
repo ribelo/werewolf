@@ -21,7 +21,7 @@ export const contestSchema = z.object({
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
   mensBarWeight: z.number().nonnegative().default(20),
-  womensBarWeight: z.number().nonnegative().default(15),
+  womensBarWeight: z.number().nonnegative().default(20),
   barWeight: z.number().nonnegative().default(20),
   clampWeight: z.number().nonnegative().default(2.5),
   activeFlight: z.string().min(1).nullable().optional(),

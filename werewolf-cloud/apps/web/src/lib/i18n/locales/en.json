@@ -60,13 +60,32 @@
         "details": "Competition details",
         "details_hint": "Provide organizer info and optional notes.",
         "competitors": "Initial competitor drafts",
-        "competitors_hint": "Optionally pre-register lifters to speed up meet day."
+        "competitors_hint": "Optionally pre-register lifters to speed up meet day.",
+        "attempts": "Attempts",
+        "attempts_hint": "Configure opening attempts for each competitor."
       },
       "actions": {
         "previous": "Previous",
         "next": "Next",
         "submit": "Create Contest",
-        "submitting": "Creating…"
+        "submitting": "Creating…",
+        "generate_sample": "Generate sample data",
+        "generating_sample": "Generating sample data…"
+      },
+      "attempts": {
+        "auto_fill": "Auto-fill attempts",
+        "auto_fill_success": "Contest attempts auto-filled.",
+        "auto_fill_error": "Failed to auto-fill attempts.",
+        "submit_error": "Unable to save attempts.",
+        "unnamed": "Competitor {index}",
+        "empty": "Add at least one competitor to set opening attempts.",
+        "issues_title": "Issues detected",
+        "issue_missing": "{name}: no attempt set for {event}.",
+        "issue_below_bar": "{name}: {event} attempt is below the bar weight.",
+        "issue_unloadable": "{name}: {event} attempt cannot be loaded{suggested}.",
+        "competitor_meta": "{gender} • {bodyweight} kg",
+        "issue_badge": "{count, plural, one '{count} issue' other '{count} issues'}",
+        "suggested_suffix": " (try {weight})"
       },
       "fields": {
         "name": {
@@ -133,12 +152,6 @@
         "bodyweight": "Bodyweight (kg)",
         "rack_squat": "Rack height (Squat)",
         "rack_bench": "Rack height (Bench)",
-        "equipment": {
-          "legend": "Equipment category",
-          "multi": "Multi-ply",
-          "single": "Single-ply",
-          "wraps": "Knee wraps"
-        },
         "add_button": "Add competitor",
         "reset_button": "Reset form"
       },
@@ -232,7 +245,8 @@
       "edit_attempts": "Edit attempts",
       "edit_competitor": "Edit competitor",
       "view_details": "Details",
-      "set_live": "Set live"
+      "set_live": "Set live",
+      "live_now": "Live now"
     }
   },
   "ui": {
@@ -639,6 +653,9 @@
       "club": "Club",
       "city": "City",
       "order": "Order"
+    },
+    "toast": {
+      "deleted": "Competitor removed."
     }
   },
   "competitor_modal": {
@@ -660,7 +677,9 @@
         "birth_required": "Birth date is required.",
         "gender_invalid": "Select a valid gender.",
         "bodyweight_positive": "Enter a valid bodyweight above 0 kg."
-      }
+      },
+      "error_delete": "Could not delete competitor.",
+      "error_opening_attempt": "Could not save the opening attempt."
     },
     "fields": {
       "first_name": "First name",
@@ -677,24 +696,20 @@
     },
     "registration_fields": {
       "bodyweight": "Bodyweight (kg)",
-      "lot_number": "Lot number",
-      "lot_number_placeholder": "e.g. 12",
-      "personal_record": "Personal record at entry (kg)",
-      "personal_record_placeholder": "e.g. 250",
       "weight_class": "Weight class",
       "select_weight_class": "Select weight class",
       "age_category": "Age category",
       "select_age_category": "Select age category",
       "rack_squat": "Rack height — squat",
       "rack_bench": "Rack height — bench",
-      "equipment": "Equipment",
       "weight_class_hint": "Assigned automatically based on bodyweight and gender.",
       "age_category_hint": "Assigned automatically based on birth date.",
       "weight_class_auto_assigned": "Assigned automatically",
       "weight_class_pending": "Will be assigned after saving",
       "age_category_auto_assigned": "Assigned automatically",
       "age_category_pending": "Will be assigned after saving",
-      "auto_chip": "AUTO"
+      "auto_chip": "AUTO",
+      "opening_attempt": "Opening attempt ({lift})"
     },
     "placeholders": {
       "club": "Club name",
@@ -720,7 +735,14 @@
       "close": "Close",
       "save": "Save changes",
       "create": "Create competitor",
-      "saving": "Saving..."
+      "saving": "Saving...",
+      "delete": "Delete competitor",
+      "deleting": "Deleting...",
+      "confirm_delete": "Are you sure you want to delete this competitor? This action cannot be undone."
+    },
+    "danger_zone": {
+      "title": "Danger zone",
+      "description": "Deleting removes this competitor and any attempts."
     }
   },
   "settings_page": {
@@ -832,7 +854,9 @@
       "empty_hint": "Select the next lifter from the queue to start the platform.",
       "queue_header": "{lift} — attempt {round}",
       "queue_badge_next": "Up next",
-      "queue_empty": "Queue is empty."
+      "queue_empty": "Queue is empty.",
+      "queue_order": "Order #{order}",
+      "queue_order_unknown": "Order pending"
     },
     "recent": {
       "title": "Recent attempts",
@@ -905,7 +929,7 @@
         "age_unassigned": "Unassigned",
         "labels_all": "All",
         "labels_unlabeled": "Without labels",
-        "age_senior": "Senior"
+        "age_senior": "Senior (24-39)"
       },
       "active_flight_label": "Active flight",
       "active_flight_none": "None",
@@ -922,8 +946,7 @@
         "lifter": "Lifter",
         "bodyweight": "Bodyweight",
         "weight_class": "Weight class",
-        "age_class": "Age class",
-        "equipment": "Equipment"
+        "age_class": "Age class"
       },
       "coefficients": {
         "auto_notice": "Coefficient values refresh automatically when bodyweight or categories change.",
@@ -986,7 +1009,6 @@
         "points": "Points",
         "status": "Status"
       },
-      "lot_number": "Lot #{lot}",
       "disqualified": "Disqualified",
       "record": "Record",
       "status_ok": "Validated",
@@ -1003,6 +1025,8 @@
       "bar_weight_men": "Men's bar: {weight}",
       "bar_weight_women": "Women's bar: {weight}",
       "bar_weight_default": "Default bar: {weight}",
+      "clamp_weight_label": "Collars per clamp (kg)",
+      "clamp_weight_hint": "Total collar weight equals 2 × this value.",
       "columns": {
         "weight": "Weight",
         "quantity": "Quantity",
@@ -1064,7 +1088,9 @@
       "active_flight_cleared": "Active flight cleared.",
       "active_flight_failed": "Could not update active flight.",
       "competitor_created": "Competitor added",
-      "competitor_create_failed": "Failed to add competitor"
+      "competitor_create_failed": "Failed to add competitor",
+      "competitor_deleted": "Competitor removed.",
+      "competitor_delete_failed": "Could not delete competitor."
     },
     "modal": {
       "edit_attempts_title": "Edit attempts • {name}",
@@ -1102,8 +1128,8 @@
       "empty": "No attempts are queued.",
       "label": "{name} • {order}",
       "meta": "{lift} • Attempt {number}",
-      "lot": "Lot #{lot}",
-      "lot_unknown": "Lot pending"
+      "order": "Order #{order}",
+      "order_unknown": "Order pending"
     },
     "recent": {
       "title": "Recent results",
@@ -1120,7 +1146,8 @@
       "attempt": "Attempt",
       "weight": "Weight",
       "plate_title": "Plate plan",
-      "plate_meta": "Total {total} kg • Bar {bar} kg"
+      "plate_meta": "Total {total} kg • Bar {bar} kg",
+      "plate_clamps": "Collars: {total} kg (2 × {perClamp} kg)"
     },
     "common": {
       "weight_kg": "{weight} kg"
@@ -1157,10 +1184,13 @@
       "club_placeholder": "Independent lifter"
     },
     "info": {
-      "weight_class": "Weight class"
+      "weight_class": "Weight class",
+      "age_category": "Age category",
+      "city": "City"
     },
     "meta": {
       "bodyweight": "Bodyweight",
+      "age": "Age",
       "order_label": "Queue #{order}"
     },
     "tiles": {
@@ -1171,7 +1201,11 @@
     },
     "sidebar": {
       "share_title": "Share screen",
-      "no_plates": "Plate plan unavailable"
+      "no_plates": "Plate plan unavailable",
+      "bar_weight": "Bar: {weight} kg",
+      "collar_weight": "Collars: {total} kg (2 × {perClamp} kg)",
+      "target_weight": "Target: {target} kg",
+      "plates_per_side": "×{count}"
     },
     "lifts": {
       "squat": "Squat",

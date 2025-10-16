@@ -20,18 +20,18 @@ describe('toast system', () => {
   });
 
   it('adds toast with correct level and message', () => {
-    const id = toast.success('Created successfully');
+    const id = toast.warning('Heads up');
     let items = [] as unknown[];
     const unsubscribe = toast.subscribe((value) => (items = value));
 
     expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject({ id, message: 'Created successfully', level: 'success' });
+    expect(items[0]).toMatchObject({ id, message: 'Heads up', level: 'warning' });
 
     unsubscribe();
   });
 
   it('removes toast by id', () => {
-    const id1 = toast.success('First');
+    const id1 = toast.warning('First');
     const id2 = toast.error('Second');
 
     toast.remove(id1);
@@ -46,7 +46,7 @@ describe('toast system', () => {
   });
 
   it('auto-dismisses toast after duration', () => {
-    toast.info('Auto dismiss', { duration: 2000 });
+    toast.warning('Auto dismiss', { duration: 2000 });
 
     let items = [] as unknown[];
     const unsubscribe = toast.subscribe((value) => (items = value));
@@ -55,6 +55,18 @@ describe('toast system', () => {
     vi.advanceTimersByTime(2000);
 
     expect(items).toHaveLength(0);
+    unsubscribe();
+  });
+
+  it('suppresses info and success notifications', () => {
+    toast.success('All good');
+    toast.info('FYI');
+
+    let items = [] as unknown[];
+    const unsubscribe = toast.subscribe((value) => (items = value));
+
+    expect(items).toHaveLength(0);
+
     unsubscribe();
   });
 

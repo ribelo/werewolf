@@ -273,9 +273,9 @@ system.post('/backups/:backupId/restore', async (c) => {
         await executeMutation(
           db,
           `INSERT OR REPLACE INTO competitors
-           (id, first_name, last_name, birth_date, gender, club, city, notes, photo_data, photo_format, photo_metadata, competition_order, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [item.id, item.first_name, item.last_name, item.birth_date, item.gender, item.club, item.city, item.notes, item.photo_data, item.photo_format, item.photo_metadata, item.competition_order, item.created_at, item.updated_at]
+           (id, first_name, last_name, birth_date, gender, club, city, notes, photo_data, photo_format, photo_metadata, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [item.id, item.first_name, item.last_name, item.birth_date, item.gender, item.club, item.city, item.notes, item.photo_data, item.photo_format, item.photo_metadata, item.created_at, item.updated_at]
         );
         restoreStats.competitors++;
       }
@@ -284,12 +284,41 @@ system.post('/backups/:backupId/restore', async (c) => {
     // Restore registrations
     if (backup.data.registrations) {
       for (const item of backup.data.registrations) {
+        const flightCode =
+          typeof item.flight_code === 'string' && item.flight_code.trim().length > 0
+            ? item.flight_code.trim().toUpperCase()
+            : 'A';
+        const flightOrder =
+          typeof item.flight_order === 'number' && Number.isFinite(item.flight_order)
+            ? item.flight_order
+            : null;
+        const labels =
+          Array.isArray(item.labels)
+            ? JSON.stringify(item.labels.map((label: unknown) => String(label)))
+            : typeof item.labels === 'string'
+              ? item.labels
+              : '[]';
         await executeMutation(
           db,
           `INSERT OR REPLACE INTO registrations
-           (id, contest_id, competitor_id, age_category_id, weight_class_id, equipment_m, equipment_sm, equipment_t, bodyweight, lot_number, personal_record_at_entry, reshel_coefficient, mccullough_coefficient, rack_height_squat, rack_height_bench, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [item.id, item.contest_id, item.competitor_id, item.age_category_id, item.weight_class_id, item.equipment_m, item.equipment_sm, item.equipment_t, item.bodyweight, item.lot_number, item.personal_record_at_entry, item.reshel_coefficient, item.mccullough_coefficient, item.rack_height_squat, item.rack_height_bench, item.created_at]
+           (id, contest_id, competitor_id, age_category_id, weight_class_id, bodyweight, reshel_coefficient, mccullough_coefficient, rack_height_squat, rack_height_bench, created_at, flight_code, flight_order, labels)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            item.id,
+            item.contest_id,
+            item.competitor_id,
+            item.age_category_id,
+            item.weight_class_id,
+            item.bodyweight,
+            item.reshel_coefficient,
+            item.mccullough_coefficient,
+            item.rack_height_squat,
+            item.rack_height_bench,
+            item.created_at,
+            flightCode,
+            flightOrder,
+            labels,
+          ]
         );
         restoreStats.registrations++;
       }

@@ -130,6 +130,7 @@ plateSets.post('/calculate', zValidator('json', z.object({
       weightToLoad: plan.weightToLoad,
       targetWeight: plan.targetWeight,
       clampWeight: plan.clampWeight,
+      clampWeightPerClamp: plan.clampWeightPerClamp,
     },
     error: null,
     requestId: c.get('requestId'),
@@ -168,10 +169,11 @@ plateSets.put('/barweights', zValidator('json', z.object({
   mensBarWeight: z.number().positive().optional(),
   womensBarWeight: z.number().positive().optional(),
   defaultBarWeight: z.number().positive().optional(),
+  clampWeight: z.number().positive().optional(),
 })), async (c) => {
   const db = c.env.DB;
   const contestId = c.req.param('contestId');
-  const { mensBarWeight, womensBarWeight, defaultBarWeight } = c.req.valid('json');
+  const { mensBarWeight, womensBarWeight, defaultBarWeight, clampWeight } = c.req.valid('json');
 
   const updates: string[] = [];
   const params: any[] = [];
@@ -187,6 +189,10 @@ plateSets.put('/barweights', zValidator('json', z.object({
   if (defaultBarWeight !== undefined) {
     updates.push('bar_weight = ?');
     params.push(defaultBarWeight);
+  }
+  if (clampWeight !== undefined) {
+    updates.push('clamp_weight = ?');
+    params.push(clampWeight);
   }
 
   if (updates.length === 0) {

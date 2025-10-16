@@ -31,7 +31,7 @@ INSERT INTO age_categories (id, name, min_age, max_age) VALUES
 ('JUNIOR16', 'Junior 16', 16, 18),
 ('JUNIOR19', 'Junior 19', 19, 19),
 ('JUNIOR23', 'Junior 23', 20, 23),
-('SENIOR', 'Senior', 24, 39),
+('SENIOR', 'Senior (24-39)', 24, 39),
 ('VETERAN40', 'Veteran 40', 40, 49),
 ('VETERAN50', 'Veteran 50', 50, 59),
 ('VETERAN60', 'Veteran 60', 60, 69),

@@ -15,7 +15,6 @@ export const competitorSchema = z.object({
   photoData: z.instanceof(ArrayBuffer).nullable().optional(),
   photoFormat: z.string().nullable().optional(),
   photoMetadata: z.string().nullable().optional(),
-  competitionOrder: z.number().int().nonnegative().default(0),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -34,8 +33,6 @@ export const competitorCreateSchema = competitorSchema.pick({
 
 export type CompetitorCreateInput = z.infer<typeof competitorCreateSchema>;
 
-export const competitorUpdateSchema = competitorCreateSchema.partial().extend({
-  competitionOrder: z.number().int().nonnegative().optional(),
-});
+export const competitorUpdateSchema = competitorCreateSchema.partial();
 
 export type CompetitorUpdateInput = z.infer<typeof competitorUpdateSchema>;

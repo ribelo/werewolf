@@ -1,12 +1,6 @@
 import { z } from 'zod';
 import { genderSchema } from './competitor';
 
-export const equipmentFlagsSchema = z.object({
-  equipmentM: z.boolean().default(false),
-  equipmentSm: z.boolean().default(false),
-  equipmentT: z.boolean().default(false),
-});
-
 const flightCodeSchema = z
   .string()
   .trim()
@@ -21,8 +15,6 @@ export const registrationSchema = z.object({
   weightClassId: z.string().min(1).optional(),
   gender: genderSchema.optional(),
   bodyweight: z.number().positive(),
-  lotNumber: z.string().nullable().optional(),
-  personalRecordAtEntry: z.number().nullable().optional(),
   reshelCoefficient: z.number().nullable().optional(),
   mcculloughCoefficient: z.number().nullable().optional(),
   rackHeightSquat: z.number().int().nullable().optional(),
@@ -31,7 +23,6 @@ export const registrationSchema = z.object({
   flightOrder: z.number().int().optional().nullable(),
   labels: z.array(z.string()).default([]),
   createdAt: z.string().datetime(),
-  ...equipmentFlagsSchema.shape,
 });
 
 export type Registration = z.infer<typeof registrationSchema>;
@@ -39,15 +30,10 @@ export type Registration = z.infer<typeof registrationSchema>;
 export const registrationCreateSchema = registrationSchema.pick({
   competitorId: true,
   bodyweight: true,
-  lotNumber: true,
-  personalRecordAtEntry: true,
   reshelCoefficient: true,
   mcculloughCoefficient: true,
   rackHeightSquat: true,
   rackHeightBench: true,
-  equipmentM: true,
-  equipmentSm: true,
-  equipmentT: true,
   ageCategoryId: true,
   weightClassId: true,
   flightCode: true,

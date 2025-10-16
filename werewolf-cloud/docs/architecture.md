@@ -43,7 +43,6 @@ Attempt summary payload (typical):
   "lastName": "Doe",
   "competitorName": "Jane Doe",
   "competitionOrder": 7,
-  "lotNumber": null,
   "updatedAt": "2025-09-18T12:34:56.000Z"
 }
 ```
@@ -59,7 +58,7 @@ Client policy:
   - Attempt rows provide status selector (Pending/Successful/Failed) backed by `PATCH /attempts/:id/result` with optimistic label updates.
   - “Set current” button issues `PUT /contests/:contestId/attempts/current`; current panel offers “Clear current” (DELETE) to release displays.
   - Toasts summarise outcomes; realtime bridge keeps contest store and displays in sync (events: `attempt.upserted`, `attempt.resultUpdated`, `attempt.currentSet`, `attempt.currentCleared`).
-- Announcer Table (public): `/display/table` – readonly, large rows; columns include lot, name, lift, attempt #, weight, status. Uses WS/polling.
+- Announcer Table (public): `/display/table` – readonly, large rows; columns include rotation order, name, lift, attempt #, weight, status. Uses WS/polling.
 - Big‑Screen Current (public): `/display/current` – shows current lifter, attempt #, weight, rack heights, lights (judge decisions), basic timer; full‑screen layout.
 
 ## 4) Competition Modeling & Wizard
@@ -236,7 +235,7 @@ Remaining polish ideas (tracked in `docs/OPEN-ISSUES.md`): coalescing writes to 
      {
        "contest": { "id": "…", "name": "…", "status": "Live", "mensBarWeight": 20, "womensBarWeight": 15 },
        "attempt": { "id": "…", "liftType": "Bench", "attemptNumber": 1, "weight": 140, "status": "Pending", "updatedAt": "…" },
-       "registration": { "id": "…", "contestId": "…", "weightClassId": "…", "rackHeightSquat": 10, "equipmentM": false, … },
+      "registration": { "id": "…", "contestId": "…", "weightClassId": "…", "rackHeightSquat": 10, … },
        "competitor": { "firstName": "Piotr", "lastName": "Lis", "club": null, … },
        "attemptsByLift": { "Squat": [], "Bench": [ { "attemptNumber": 1, "weight": 140 } ], "Deadlift": [] },
        "platePlan": { "plates": [ { "plateWeight": 20, "count": 1 } ], "targetWeight": 140, "barWeight": 20, "exact": true },

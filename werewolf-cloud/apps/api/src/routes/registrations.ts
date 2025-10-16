@@ -32,30 +32,12 @@ function parseLabels(input: unknown): string[] {
   return [];
 }
 
-function normaliseFlag(value: unknown): boolean {
-  if (typeof value === 'boolean') return value;
-  if (typeof value === 'number') return value !== 0;
-  if (typeof value === 'string') {
-    const normalised = value.trim().toLowerCase();
-    return normalised === 'true' || normalised === '1';
-  }
-  return false;
-}
-
 function mapRegistrationRow(row: Record<string, any>): Record<string, any> {
   const normalised: Record<string, any> = { ...row };
 
-  if ('equipmentM' in normalised) {
-    normalised.equipmentM = normaliseFlag(normalised.equipmentM);
-  }
-  if ('equipmentSm' in normalised) {
-    normalised.equipmentSm = normaliseFlag(normalised.equipmentSm);
-  }
-  if ('equipmentT' in normalised) {
-    normalised.equipmentT = normaliseFlag(normalised.equipmentT);
-  }
   if ('labels' in normalised) {
-    normalised.labels = parseLabels(normalised.labels);
+    const labelsValue = normalised['labels'];
+    normalised['labels'] = parseLabels(labelsValue);
   }
 
   return normalised;
@@ -160,11 +142,10 @@ contestRegistrations.post('/', zValidator('json', registrationCreateSchema), asy
     `
     INSERT INTO registrations (
       id, contest_id, competitor_id, age_category_id, weight_class_id,
-      equipment_m, equipment_sm, equipment_t, bodyweight, lot_number,
-      personal_record_at_entry, reshel_coefficient, mccullough_coefficient,
+      bodyweight, reshel_coefficient, mccullough_coefficient,
       rack_height_squat, rack_height_bench, created_at,
       flight_code, flight_order, labels
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
       id,
@@ -172,12 +153,7 @@ contestRegistrations.post('/', zValidator('json', registrationCreateSchema), asy
       competitorId,
       ageCategory.id,
       weightClass.id,
-      input.equipmentM || false,
-      input.equipmentSm || false,
-      input.equipmentT || false,
       input.bodyweight,
-      input.lotNumber || null,
-      input.personalRecordAtEntry || null,
       reshelCoefficient,
       mcculloughCoefficient,
       input.rackHeightSquat || null,
@@ -194,16 +170,14 @@ contestRegistrations.post('/', zValidator('json', registrationCreateSchema), asy
     `
     SELECT
       r.id, r.contest_id, r.competitor_id, r.age_category_id, r.weight_class_id,
-      r.equipment_m, r.equipment_sm, r.equipment_t, r.bodyweight, r.lot_number,
-      r.personal_record_at_entry, r.reshel_coefficient, r.mccullough_coefficient,
+      r.bodyweight, r.reshel_coefficient, r.mccullough_coefficient,
       r.rack_height_squat, r.rack_height_bench, r.created_at,
       r.flight_code, r.flight_order, COALESCE(r.labels, '[]') AS labels,
       cac.name AS age_category_name,
       cwc.name AS weight_class_name,
       c.club,
       c.city,
-      c.birth_date,
-      c.competition_order
+      c.birth_date
     FROM registrations r
     JOIN competitors c ON r.competitor_id = c.id
     LEFT JOIN contest_age_categories cac ON r.age_category_id = cac.id
@@ -285,11 +259,10 @@ contestRegistrations.get('/', async (c) => {
     `
     SELECT
       r.id, r.contest_id, r.competitor_id, r.age_category_id, r.weight_class_id,
-      r.equipment_m, r.equipment_sm, r.equipment_t, r.bodyweight, r.lot_number,
-      r.personal_record_at_entry, r.reshel_coefficient, r.mccullough_coefficient,
+      r.bodyweight, r.reshel_coefficient, r.mccullough_coefficient,
       r.rack_height_squat, r.rack_height_bench, r.created_at,
       r.flight_code, r.flight_order, COALESCE(r.labels, '[]') AS labels,
-      c.first_name, c.last_name, c.gender, c.club, c.city, c.birth_date, c.competition_order,
+      c.first_name, c.last_name, c.gender, c.club, c.city, c.birth_date,
       cac.name AS age_category_name,
       cwc.name AS weight_class_name
     FROM registrations r
@@ -300,8 +273,7 @@ contestRegistrations.get('/', async (c) => {
     ORDER BY
       CASE WHEN r.flight_code IS NULL THEN 1 ELSE 0 END,
       r.flight_code ASC,
-      COALESCE(r.flight_order, c.competition_order, 0) ASC,
-      r.lot_number ASC,
+      COALESCE(r.flight_order, 0) ASC,
       cac.sort_order ASC,
       cwc.sort_order ASC,
       c.last_name ASC,
@@ -332,11 +304,10 @@ registrations.get('/:registrationId', async (c) => {
     `
     SELECT
       r.id, r.contest_id, r.competitor_id, r.age_category_id, r.weight_class_id,
-      r.equipment_m, r.equipment_sm, r.equipment_t, r.bodyweight, r.lot_number,
-      r.personal_record_at_entry, r.reshel_coefficient, r.mccullough_coefficient,
+      r.bodyweight, r.reshel_coefficient, r.mccullough_coefficient,
       r.rack_height_squat, r.rack_height_bench, r.created_at,
       r.flight_code, r.flight_order, COALESCE(r.labels, '[]') AS labels,
-      c.first_name, c.last_name, c.gender, c.birth_date, c.club, c.city, c.competition_order,
+      c.first_name, c.last_name, c.gender, c.birth_date, c.club, c.city,
       cac.name AS age_category_name,
       cwc.name AS weight_class_name
     FROM registrations r
@@ -463,29 +434,9 @@ registrations.patch('/:registrationId', zValidator('json', registrationUpdateSch
     updates.push('competitor_id = ?');
     params.push(nextCompetitorId);
   }
-  if (input.equipmentM !== undefined) {
-    updates.push('equipment_m = ?');
-    params.push(input.equipmentM);
-  }
-  if (input.equipmentSm !== undefined) {
-    updates.push('equipment_sm = ?');
-    params.push(input.equipmentSm);
-  }
-  if (input.equipmentT !== undefined) {
-    updates.push('equipment_t = ?');
-    params.push(input.equipmentT);
-  }
   if (input.bodyweight !== undefined) {
     updates.push('bodyweight = ?');
     params.push(nextBodyweight);
-  }
-  if (input.lotNumber !== undefined) {
-    updates.push('lot_number = ?');
-    params.push(input.lotNumber);
-  }
-  if (input.personalRecordAtEntry !== undefined) {
-    updates.push('personal_record_at_entry = ?');
-    params.push(input.personalRecordAtEntry);
   }
   if (input.rackHeightSquat !== undefined) {
     updates.push('rack_height_squat = ?');
@@ -540,11 +491,10 @@ registrations.patch('/:registrationId', zValidator('json', registrationUpdateSch
     `
     SELECT
       r.id, r.contest_id, r.competitor_id, r.age_category_id, r.weight_class_id,
-      r.equipment_m, r.equipment_sm, r.equipment_t, r.bodyweight, r.lot_number,
-      r.personal_record_at_entry, r.reshel_coefficient, r.mccullough_coefficient,
+      r.bodyweight, r.reshel_coefficient, r.mccullough_coefficient,
       r.rack_height_squat, r.rack_height_bench, r.created_at,
       r.flight_code, r.flight_order, COALESCE(r.labels, '[]') AS labels,
-      c.first_name, c.last_name, c.gender, c.birth_date, c.club, c.city, c.competition_order,
+      c.first_name, c.last_name, c.gender, c.birth_date, c.club, c.city,
       cac.name AS age_category_name,
       cwc.name AS weight_class_name
     FROM registrations r

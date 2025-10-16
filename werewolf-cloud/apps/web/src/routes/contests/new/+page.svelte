@@ -264,9 +264,6 @@ import { formatWeight } from '$lib/utils';
       bodyweight,
       rackHeightSquat,
       rackHeightBench,
-      equipmentM: Math.random() < 0.05,
-      equipmentSm: Math.random() < 0.15,
-      equipmentT: Math.random() < 0.6,
       attempts: normalizeAttemptPlanForGender(createAttemptPlan(events, bodyweight, true), gender),
     };
   }
@@ -393,9 +390,6 @@ import { formatWeight } from '$lib/utils';
     bodyweight: number;
     rackHeightSquat: number | null;
     rackHeightBench: number | null;
-    equipmentM: boolean;
-    equipmentSm: boolean;
-    equipmentT: boolean;
     attempts: AttemptPlan;
   }
 
@@ -436,9 +430,6 @@ import { formatWeight } from '$lib/utils';
     bodyweight: 70,
     rackHeightSquat: DEFAULT_RACK_SQUAT,
     rackHeightBench: DEFAULT_RACK_BENCH,
-    equipmentM: false,
-    equipmentSm: false,
-    equipmentT: false,
     attempts: createAttemptPlan(form.events, 70, false),
   };
 
@@ -518,16 +509,13 @@ import { formatWeight } from '$lib/utils';
       birthDate: '',
       gender: 'Male',
       club: '',
-      city: '',
-      bodyweight: 70,
-      rackHeightSquat: DEFAULT_RACK_SQUAT,
-      rackHeightBench: DEFAULT_RACK_BENCH,
-      equipmentM: false,
-      equipmentSm: false,
-      equipmentT: false,
-      attempts: createAttemptPlan(form.events, 70, false),
-    };
-  }
+    city: '',
+    bodyweight: 70,
+    rackHeightSquat: DEFAULT_RACK_SQUAT,
+    rackHeightBench: DEFAULT_RACK_BENCH,
+    attempts: createAttemptPlan(form.events, 70, false),
+  };
+}
 
   function syncAttemptPlansWithEvents() {
     const events = form.events;
@@ -830,9 +818,6 @@ import { formatWeight } from '$lib/utils';
             bodyweight: draft.bodyweight,
             rackHeightSquat: includeSquat ? draft.rackHeightSquat : null,
             rackHeightBench: includeBench ? draft.rackHeightBench : null,
-            equipmentM: draft.equipmentM,
-            equipmentSm: draft.equipmentSm,
-            equipmentT: draft.equipmentT,
           });
           if (registrationResponse.error) {
             throw new Error(registrationResponse.error);
@@ -1369,24 +1354,6 @@ import { formatWeight } from '$lib/utils';
             </div>
           </div>
 
-          <fieldset class="space-y-2">
-            <legend class="input-label">{$_('contest.wizard.competitor.equipment.legend')}</legend>
-            <div class="flex flex-wrap gap-3 text-body">
-              <label class="flex items-center gap-2">
-                <input type="checkbox" bind:checked={competitorDraft.equipmentM} />
-                {$_('contest.wizard.competitor.equipment.multi')}
-              </label>
-              <label class="flex items-center gap-2">
-                <input type="checkbox" bind:checked={competitorDraft.equipmentSm} />
-                {$_('contest.wizard.competitor.equipment.single')}
-              </label>
-              <label class="flex items-center gap-2">
-                <input type="checkbox" bind:checked={competitorDraft.equipmentT} />
-                {$_('contest.wizard.competitor.equipment.wraps')}
-              </label>
-            </div>
-          </fieldset>
-
           <div class="flex gap-3">
             <button class="btn-primary" type="button" on:click={addCompetitorDraft}>
               {$_('contest.wizard.competitor.add_button')}
@@ -1471,7 +1438,9 @@ import { formatWeight } from '$lib/utils';
                             name: issue.name,
                             event: $_(EVENT_LABEL_KEYS[issue.event]),
                             suggested: issue.suggestedWeight !== undefined
-                              ? formatWeight(issue.suggestedWeight)
+                              ? $_('contest.wizard.attempts.suggested_suffix', {
+                                values: { weight: formatWeight(issue.suggestedWeight) }
+                              })
                               : '',
                           },
                         }

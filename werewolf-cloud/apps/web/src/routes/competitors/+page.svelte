@@ -2,6 +2,7 @@
   import Layout from '$lib/components/Layout.svelte';
   import CompetitorModal from '$lib/components/CompetitorModal.svelte';
   import { modalStore } from '$lib/ui/modal';
+  import { toast } from '$lib/ui/toast';
   import { apiClient } from '$lib/api';
   import type { CompetitorSummary } from '$lib/types';
   import type { PageData } from './$types';
@@ -71,7 +72,10 @@
       },
     });
 
-    if (result) {
+    if (result?.deletedCompetitorId) {
+      await refreshCompetitors();
+      toast.success(translate('competitors_page.toast.deleted'));
+    } else if (result) {
       await refreshCompetitors();
     }
   }

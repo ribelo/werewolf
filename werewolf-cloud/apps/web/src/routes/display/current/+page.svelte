@@ -14,6 +14,7 @@
     Registration,
     AttemptStatus,
   } from '$lib/types';
+  import { formatAge } from '$lib/utils';
 
   export let data: PageData;
 
@@ -79,8 +80,14 @@
       }));
 
   $: platePlan = liveCurrentBundle?.platePlan ?? null;
+  $: clampWeightPerClamp = platePlan
+    ? platePlan.clampWeightPerClamp ?? (platePlan.clampWeight && platePlan.clampWeight > 0 ? platePlan.clampWeight / 2 : null)
+    : null;
 
   $: weightClassLabel = currentRegistration?.weightClassName ?? currentRegistration?.weightClassId ?? '—';
+  $: ageCategoryLabel = currentRegistration?.ageCategoryName ?? null;
+  $: currentAge = currentCompetitor?.birthDate ? formatAge(currentCompetitor.birthDate) : null;
+  $: currentCity = currentCompetitor?.city && currentCompetitor.city.trim().length > 0 ? currentCompetitor.city.trim() : null;
 
   $: shareableUrl = typeof window !== 'undefined' && contestId
     ? `${window.location.origin}${window.location.pathname}?contestId=${contestId}`
@@ -93,13 +100,8 @@
     ? `${liftLabel()} • ${t('display_current.tiles.attempt', { number: liveCurrentAttempt.attemptNumber })}`
     : t('display_current.waiting.next_title');
 
-  $: lotBadgeLabel = currentRegistration?.lotNumber
-    ? t('display_table.queue.lot', { lot: currentRegistration.lotNumber })
-    : null;
-
-  $: competitionOrderLabel = liveCurrentAttempt?.competitionOrder
-    ? t('display_current.meta.order_label', { order: liveCurrentAttempt.competitionOrder })
-    : null;
+  // competition order removed
+  $: competitionOrderLabel = null;
 
   $: bodyweightLabel = currentRegistration?.bodyweight
     ? formatWeight(currentRegistration.bodyweight)
@@ -263,7 +265,7 @@
 
   function formatWeight(value?: number | null): string {
     if (value == null || Number.isNaN(value) || value <= 0) return '—';
-    return Number.isInteger(value) ? `${Math.trunc(value)}` : value.toFixed(1);
+    return (Math.round(value * 100) / 100).toFixed(2);
   }
 
   function attemptBackgroundClass(status: string): string {
@@ -335,7 +337,6 @@
               <div class="flex flex-col gap-2 w-full">
                 <div class="flex flex-wrap items-baseline gap-4 justify-between w-full">
                   <h2 class="text-display text-text-primary uppercase tracking-[0.3em]">{sanitizedName}</h2>
-                  <p class="text-h2 font-mono text-text-primary uppercase tracking-[0.2em] text-right ml-auto">{liftLabel()}{#if currentAttemptWeight !== '—'} <span class="text-text-secondary">{currentAttemptWeight} kg</span>{/if}</p>
                 </div>
               </div>
             </div>
@@ -346,12 +347,16 @@
               {#if bodyweightLabel}
                 <span>• {t('display_current.meta.bodyweight')}: <span class="text-text-primary">{bodyweightLabel}{bodyweightLabel !== '—' ? ' kg' : ''}</span></span>
               {/if}
-              {#if competitionOrderLabel}
-                <span class="uppercase tracking-[0.3em] text-caption text-text-secondary">{competitionOrderLabel}</span>
+              {#if ageCategoryLabel}
+                <span>• {t('display_current.info.age_category')}: <span class="text-text-primary">{ageCategoryLabel}</span></span>
               {/if}
-              {#if lotBadgeLabel}
-                <span class="uppercase tracking-[0.3em] text-caption text-text-secondary">{lotBadgeLabel}</span>
+              {#if currentAge !== null}
+                <span>• {t('display_current.meta.age')}: <span class="text-text-primary">{currentAge}</span></span>
               {/if}
+              {#if currentCity}
+                <span>• {t('display_current.info.city')}: <span class="text-text-primary">{currentCity}</span></span>
+              {/if}
+            
             </div>
           </div>
         </header>
@@ -360,7 +365,7 @@
 
           <div class="flex flex-col gap-4 lg:flex-row lg:items-stretch flex-1">
             {#each attemptTiles as tile}
-              <div class={`flex-1 min-w-[160px] px-6 py-6 flex flex-col tracking-[0.3em] uppercase text-center shadow-inner transition-all duration-300 ${attemptBackgroundClass(tile.status)} ${tile.isHighlighted ? 'border-primary-red shadow-[0_0_25px_rgba(220,20,60,0.35)] bg-primary-red/20 text-text-primary' : ''}`}>
+              <div class={`flex-1 min-w-[160px] px-6 py-6 flex flex-col tracking-[0.3em] uppercase text-center shadow-inner transition-all duration-300 ${attemptBackgroundClass(tile.status)} ${tile.isHighlighted ? 'border-2 border-primary-red shadow-[0_0_35px_rgba(220,20,60,0.55)]' : ''}`}>
                 <p class="text-h3 text-text-secondary">
                   {t('display_current.tiles.attempt', { number: tile.number })}
                 </p>
@@ -386,13 +391,27 @@
           <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div class="space-y-3">
               {#if platePlan && platePlan.plates.length > 0}
-                <div class="flex flex-wrap items-center gap-8 justify-center lg:justify-start">
-                  {#each platePlan.plates as plate, index (plate.plateWeight + '-' + index)}
-                    <div class="flex items-center gap-4 text-text-secondary uppercase tracking-[0.2em]">
-                      <span class="text-text-primary font-mono text-4xl">{plate.plateWeight} kg</span>
-                      <span class="text-text-secondary font-mono text-4xl opacity-70">×{plate.count}</span>
-                    </div>
-                  {/each}
+                <div class="flex flex-col gap-4">
+                  <div class="flex flex-wrap items-center gap-8 justify-center lg:justify-start">
+                    {#each platePlan.plates as plate, index (plate.plateWeight + '-' + index)}
+                      <div class="flex items-center gap-4 text-text-secondary uppercase tracking-[0.2em]">
+                        <span class="text-text-primary font-mono text-4xl">{plate.plateWeight} kg</span>
+                        <span class="text-text-secondary font-mono text-2xl opacity-70">{t('display_current.sidebar.plates_per_side', { count: plate.count })}</span>
+                      </div>
+                    {/each}
+                  </div>
+                  <div class="flex flex-wrap items-center justify-center gap-6 text-text-secondary uppercase tracking-[0.2em] text-2xl">
+                    <span>{t('display_current.sidebar.bar_weight', { weight: formatWeight(platePlan.barWeight) })}</span>
+                    {#if platePlan.clampWeight > 0}
+                      <span>{t('display_current.sidebar.collar_weight', {
+                        total: formatWeight(platePlan.clampWeight),
+                        perClamp: clampWeightPerClamp ? formatWeight(clampWeightPerClamp) : formatWeight(platePlan.clampWeight / 2)
+                      })}</span>
+                    {/if}
+                    {#if !platePlan.exact}
+                      <span class="text-status-warning">{t('display_current.sidebar.target_weight', { target: formatWeight(platePlan.targetWeight) })}</span>
+                    {/if}
+                  </div>
                 </div>
               {:else}
                 <p class="text-body text-text-secondary">{t('display_current.sidebar.no_plates')}</p>

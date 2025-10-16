@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
@@ -13,5 +14,10 @@ export default defineConfig({
       'apps/api/**/*.test.ts',
       'apps/web/src/lib/__tests__/**/*.test.ts',
     ],
+  },
+  resolve: {
+    alias: {
+      $lib: path.resolve(__dirname, '../apps/web/src/lib'),
+    },
   },
 });

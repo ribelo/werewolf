@@ -27,6 +27,11 @@
     return translate(key, values ? { values } : undefined);
   }
 
+  function formatWeight(value?: number | null): string {
+    if (value == null || Number.isNaN(value) || value <= 0) return '—';
+    return Number.isInteger(value) ? `${Math.trunc(value)}` : value.toFixed(1);
+  }
+
   type FlightFilter = 'ALL' | 'UNASSIGNED' | string;
 
   export let data: PageData;
@@ -192,7 +197,6 @@ $: clampWeightSetting = contest?.clampWeight ?? 2.5;
       weight: attempt.weight,
       status: attempt.status as AttemptStatus,
       competitionOrder: registration?.competitionOrder ?? null,
-      lotNumber: attempt.lotNumber ?? null,
       updatedAt: attempt.updatedAt ?? null,
     };
   }
@@ -240,10 +244,11 @@ $: clampWeightSetting = contest?.clampWeight ?? 2.5;
 
   function queueLabel(attempt: Attempt): string {
     const competitor = getCompetitor(attempt.registrationId);
-    const lotRaw = (attempt.lotNumber ?? competitor?.lotNumber ?? '').trim();
-    const orderLabel = lotRaw
-      ? t('display_table.queue.lot', { lot: lotRaw })
-      : t('display_table.queue.lot_unknown');
+  const orderSource = null;
+    const orderLabel =
+      orderSource != null && Number.isFinite(orderSource)
+        ? t('display_table.queue.order', { order: orderSource })
+        : t('display_table.queue.order_unknown');
     return t('display_table.queue.label', {
       order: orderLabel,
       name: competitorName(attempt.registrationId)
@@ -436,15 +441,24 @@ $: clampWeightSetting = contest?.clampWeight ?? 2.5;
             {#if livePlatePlan && livePlatePlan.plates.length > 0}
               <div class="md:col-span-4 space-y-4">
                 <p class="text-label text-text-secondary uppercase tracking-[0.4em]">{t('display_table.current.plate_title')}</p>
-                <p class="text-caption text-text-secondary uppercase tracking-[0.3em]">{t('display_table.current.plate_meta', { total: livePlatePlan.total, bar: livePlatePlan.barWeight })}</p>
                 <div class="flex flex-wrap items-center gap-6">
                   {#each livePlatePlan.plates as plate, index (plate.plateWeight + '-' + index)}
                     <div class="flex items-end gap-3 text-text-secondary uppercase tracking-[0.2em]">
                       <span class="text-text-primary font-mono text-4xl">{plate.plateWeight} kg</span>
-                      <span class="text-text-secondary font-mono text-2xl opacity-70">×{plate.count}</span>
+                      <span class="text-text-secondary font-mono text-xl opacity-70">{t('display_current.sidebar.plates_per_side', { count: plate.count })}</span>
                     </div>
                   {/each}
                 </div>
+                {#if livePlatePlan.clampWeight}
+                  <div class="flex flex-wrap items-center gap-4 text-text-secondary uppercase tracking-[0.2em]">
+                    <span class="text-2xl">
+                      {t('display_table.current.plate_clamps', {
+                        total: formatWeight(livePlatePlan.clampWeight),
+                        perClamp: formatWeight(livePlatePlan.clampWeightPerClamp ?? livePlatePlan.clampWeight / 2)
+                      })}
+                    </span>
+                  </div>
+                {/if}
               </div>
             {/if}
           </div>

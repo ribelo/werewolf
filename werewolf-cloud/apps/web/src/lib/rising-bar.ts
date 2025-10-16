@@ -105,12 +105,6 @@ function compareAttempts(
     return weightDiff;
   }
 
-  const lotA = parseLotNumber(resolveLotNumber(a, registrationsMap));
-  const lotB = parseLotNumber(resolveLotNumber(b, registrationsMap));
-  if (lotA !== lotB) {
-    return lotA - lotB;
-  }
-
   const orderA = resolveCompetitionOrder(a, registrationsMap);
   const orderB = resolveCompetitionOrder(b, registrationsMap);
   if (orderA !== orderB) {
@@ -121,17 +115,6 @@ function compareAttempts(
   const nameB = resolveName(b, registrationsMap).toLowerCase();
 
   return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
-}
-
-function resolveLotNumber(
-  attempt: Attempt,
-  registrationsMap?: Map<string, Registration>
-): string | null | undefined {
-  if (attempt.lotNumber && attempt.lotNumber.trim().length > 0) {
-    return attempt.lotNumber;
-  }
-  const registration = registrationsMap?.get(attempt.registrationId);
-  return registration?.lotNumber ?? null;
 }
 
 function resolveCompetitionOrder(
@@ -157,16 +140,4 @@ function resolveName(attempt: Attempt, registrationsMap?: Map<string, Registrati
     return `${registration.firstName} ${registration.lastName}`.trim();
   }
   return 'Unknown competitor';
-}
-
-function parseLotNumber(input?: string | null): number {
-  if (!input) {
-    return Number.POSITIVE_INFINITY;
-  }
-  const trimmed = input.trim();
-  if (!trimmed) {
-    return Number.POSITIVE_INFINITY;
-  }
-  const parsed = Number(trimmed);
-  return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
 }

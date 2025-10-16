@@ -162,7 +162,7 @@ describe('Werewolf API – integration (Miniflare + D1)', () => {
     mcculloughCoefficient: expect.any(Number),
   });
 
-  expect(registrationBody.data.ageCategoryName).toBe('Open');
+  expect(registrationBody.data.ageCategoryName).toBe('Senior (24-39)');
   expect(registrationBody.data.weightClassName).toBe('Do 95 kg');
   expect(registrationBody.data.reshelCoefficient).toBeCloseTo(0.945, 3);
   expect(registrationBody.data.mcculloughCoefficient).toBeCloseTo(1.0, 3);
@@ -221,7 +221,7 @@ describe('Werewolf API – integration (Miniflare + D1)', () => {
     expect(registrationBody.data.reshelCoefficient).toBeCloseTo(0.945, 3);
     expect(registrationBody.data.mcculloughCoefficient).toBeCloseTo(1.0, 3);
     expect(registrationBody.data.weightClassName).toBe('Do 95 kg');
-    expect(registrationBody.data.ageCategoryName).toBe('Open');
+    expect(registrationBody.data.ageCategoryName).toBe('Senior (24-39)');
   });
 
   it('assigns flights and gates the attempt queue by active flight', async () => {
@@ -444,7 +444,8 @@ describe('Werewolf API – integration (Miniflare + D1)', () => {
 
     expect(planRes.status).toBe(200);
     const planBody = await planRes.json();
-    expect(planBody.data.clampWeight).toBeCloseTo(4, 5);
+    expect(planBody.data.clampWeight).toBeCloseTo(8, 5);
+    expect(planBody.data.clampWeightPerClamp).toBeCloseTo(4, 5);
     expect(planBody.data.barWeight).toBeCloseTo(20, 5);
 
     const barWeightsRes = await app.request(`http://localhost/contests/${contestId}/platesets/barweights`, {}, env);
@@ -466,60 +467,60 @@ describe('Werewolf API – integration (Miniflare + D1)', () => {
     await db.prepare('INSERT INTO plate_sets (contest_id, plate_weight, quantity, color) VALUES (?, ?, ?, ?)')
       .bind(contestId, 0.5, 2, '#6B7280').run();
 
-    // 22.5 (bar+clamps): exact
+    // Base assembly (bar + collars): 25 kg
     let planRes = await app.request(`http://localhost/contests/${contestId}/platesets/calculate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ targetWeight: 22.5 }),
+      body: JSON.stringify({ targetWeight: 25 }),
     }, env);
     expect(planRes.status).toBe(200);
     let plan = await planRes.json();
-    expect(plan.data.totalLoaded).toBeCloseTo(22.5, 2);
+    expect(plan.data.totalLoaded).toBeCloseTo(25, 2);
     expect(plan.data.exact).toBe(true);
     expect(plan.data.increment).toBeCloseTo(1, 5); // min plate 0.5 -> step 1
 
-    // 23.5: exact with one pair of 0.5
+    // 26: exact with one pair of 0.5 kg per side
     planRes = await app.request(`http://localhost/contests/${contestId}/platesets/calculate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ targetWeight: 23.5 }),
+      body: JSON.stringify({ targetWeight: 26 }),
     }, env);
     plan = await planRes.json();
-    expect(plan.data.totalLoaded).toBeCloseTo(23.5, 2);
+    expect(plan.data.totalLoaded).toBeCloseTo(26, 2);
     expect(plan.data.exact).toBe(true);
 
-    // 24.5: exact with two pairs of 0.5
+    // 27: exact with two pairs of 0.5 kg per side
     planRes = await app.request(`http://localhost/contests/${contestId}/platesets/calculate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ targetWeight: 24.5 }),
+      body: JSON.stringify({ targetWeight: 27 }),
     }, env);
     plan = await planRes.json();
-    expect(plan.data.totalLoaded).toBeCloseTo(24.5, 2);
+    expect(plan.data.totalLoaded).toBeCloseTo(27, 2);
     expect(plan.data.exact).toBe(true);
 
-    // 25.5: not enough 0.5 plates to go higher; returns best achievable 24.5
+    // 28: not enough 0.5 plates to go higher; returns best achievable 27
     planRes = await app.request(`http://localhost/contests/${contestId}/platesets/calculate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ targetWeight: 25.5 }),
+      body: JSON.stringify({ targetWeight: 28 }),
     }, env);
     plan = await planRes.json();
     expect(plan.data.exact).toBe(false);
-    expect(plan.data.totalLoaded).toBeCloseTo(24.5, 2);
+    expect(plan.data.totalLoaded).toBeCloseTo(27, 2);
 
-    // Add one pair of 1.25 kg plates so that 25.0 becomes achievable
+    // Add one pair of 1.25 kg plates so that 28.5 becomes achievable
     await db.prepare('INSERT INTO plate_sets (contest_id, plate_weight, quantity, color) VALUES (?, ?, ?, ?)')
       .bind(contestId, 1.25, 1, '#16A34A').run();
 
     planRes = await app.request(`http://localhost/contests/${contestId}/platesets/calculate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ targetWeight: 25.0 }),
+      body: JSON.stringify({ targetWeight: 28.5 }),
     }, env);
     plan = await planRes.json();
     expect(plan.data.exact).toBe(true);
-    expect(plan.data.totalLoaded).toBeCloseTo(25.0, 2);
+    expect(plan.data.totalLoaded).toBeCloseTo(28.5, 2);
   });
 
   it('manages contest-scoped categories via GET/PUT endpoints', async () => {
@@ -740,6 +741,85 @@ describe('Werewolf API – integration (Miniflare + D1)', () => {
     expect(settingsBody.data.ui.showWeights).toBe(true);
   });
 
+  it('calculates results using contest discipline for totals and coefficients', async () => {
+    const contestRes = await createContest(app, env, {
+      name: 'Bench Showdown',
+      date: '2025-09-12',
+      location: 'Lodz',
+      discipline: 'Bench',
+    });
+    const contestId = (await contestRes.json()).data.id as string;
+
+    const competitorRes = await app.request('http://localhost/competitors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        firstName: 'Patryk',
+        lastName: 'Sila',
+        birthDate: '1993-07-04',
+        gender: 'Male',
+      }),
+    }, env);
+    expect(competitorRes.status).toBe(201);
+    const competitorId = (await competitorRes.json()).data.id as string;
+
+    const registrationRes = await app.request(`http://localhost/contests/${contestId}/registrations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contestId,
+        competitorId,
+        bodyweight: 94.0,
+      }),
+    }, env);
+    expect(registrationRes.status).toBe(201);
+    const registrationId = (await registrationRes.json()).data.id as string;
+
+    const benchAttemptId = randomUUID();
+    await db.prepare(
+      `INSERT INTO attempts (id, registration_id, lift_type, attempt_number, weight, status, created_at, updated_at)
+       VALUES (?, ?, 'Bench', 1, ?, 'Successful', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+    ).bind(benchAttemptId, registrationId, 150).run();
+
+    const deadliftAttemptId = randomUUID();
+    await db.prepare(
+      `INSERT INTO attempts (id, registration_id, lift_type, attempt_number, weight, status, created_at, updated_at)
+       VALUES (?, ?, 'Deadlift', 1, ?, 'Successful', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+    ).bind(deadliftAttemptId, registrationId, 200).run();
+
+    const recalcRes = await app.request(`http://localhost/contests/${contestId}/results/recalculate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    }, env);
+    expect(recalcRes.status).toBe(200);
+
+    const resultRes = await app.request(`http://localhost/results/${registrationId}`, {}, env);
+    expect(resultRes.status).toBe(200);
+    const resultBody = await resultRes.json();
+    expect(resultBody.error).toBeNull();
+    const resultData = resultBody.data;
+
+    expect(resultData.bestBench).toBeCloseTo(150, 6);
+    expect(resultData.bestDeadlift).toBeCloseTo(200, 6);
+    expect(resultData.bestSquat).toBe(0);
+
+    const registrationRecord = await db.prepare(
+      'SELECT reshel_coefficient AS reshel, mccullough_coefficient AS mc FROM registrations WHERE id = ?'
+    ).bind(registrationId).first();
+
+    const expectedTotal = 150;
+    expect(resultData.totalWeight).toBeCloseTo(expectedTotal, 6);
+
+    const reshel = Number(registrationRecord?.reshel ?? 1);
+    const mc = Number(registrationRecord?.mc ?? 1);
+    const normalizedReshel = Number.isFinite(reshel) ? reshel : 1;
+    const normalizedMc = Number.isFinite(mc) ? mc : 1;
+    const expectedPoints = expectedTotal * normalizedReshel * normalizedMc;
+
+    expect(resultData.coefficientPoints).toBeCloseTo(expectedPoints, 6);
+  });
+
   it('PATCH /attempts/:id/result updates status and judges', async () => {
     const contestRes = await createContest(app, env, {
       name: 'Result Patch Test',
@@ -921,7 +1001,7 @@ CREATE TABLE contests (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     mens_bar_weight REAL NOT NULL DEFAULT 20,
-    womens_bar_weight REAL NOT NULL DEFAULT 15,
+    womens_bar_weight REAL NOT NULL DEFAULT 20,
     bar_weight REAL NOT NULL DEFAULT 20,
     clamp_weight REAL NOT NULL DEFAULT 2.5,
     active_flight TEXT
@@ -939,7 +1019,6 @@ CREATE TABLE competitors (
     photo_data BLOB,
     photo_format TEXT,
     photo_metadata TEXT,
-    competition_order INTEGER DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -950,12 +1029,7 @@ CREATE TABLE registrations (
     competitor_id TEXT NOT NULL,
     age_category_id TEXT NOT NULL,
     weight_class_id TEXT NOT NULL,
-    equipment_m BOOLEAN NOT NULL DEFAULT FALSE,
-    equipment_sm BOOLEAN NOT NULL DEFAULT FALSE,
-    equipment_t BOOLEAN NOT NULL DEFAULT FALSE,
     bodyweight REAL NOT NULL,
-    lot_number TEXT,
-    personal_record_at_entry REAL,
     reshel_coefficient REAL,
     mccullough_coefficient REAL,
     rack_height_squat INTEGER,

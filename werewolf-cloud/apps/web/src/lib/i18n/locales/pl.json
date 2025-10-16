@@ -54,20 +54,39 @@
       "title": "Konfiguracja zawodów",
       "step_label": "Krok",
       "step_connector": "z",
-      "steps": {
-        "basic": "Informacje podstawowe",
-        "basic_hint": "Podaj datę i miejsce rozgrywania zawodów.",
-        "details": "Szczegóły zawodów",
-        "details_hint": "Uzupełnij dane organizatora oraz ewentualne dodatkowe informacje.",
-        "competitors": "Wstępna lista zawodników",
-        "competitors_hint": "Możesz dodać zawodników z wyprzedzeniem, aby przyspieszyć pracę w dniu zawodów."
-      },
-      "actions": {
-        "previous": "Wstecz",
-        "next": "Dalej",
-        "submit": "Utwórz zawody",
-        "submitting": "Tworzenie…"
-      },
+  "steps": {
+    "basic": "Informacje podstawowe",
+    "basic_hint": "Podaj datę i miejsce rozgrywania zawodów.",
+    "details": "Szczegóły zawodów",
+    "details_hint": "Uzupełnij dane organizatora oraz ewentualne dodatkowe informacje.",
+    "competitors": "Wstępna lista zawodników",
+    "competitors_hint": "Możesz dodać zawodników z wyprzedzeniem, aby przyspieszyć pracę w dniu zawodów.",
+    "attempts": "Podejścia",
+    "attempts_hint": "Skonfiguruj pierwsze podejścia dla każdego zawodnika."
+  },
+  "actions": {
+    "previous": "Wstecz",
+    "next": "Dalej",
+    "submit": "Utwórz zawody",
+    "submitting": "Tworzenie…",
+    "generate_sample": "Wygeneruj przykładowe dane",
+    "generating_sample": "Generowanie przykładowych danych…"
+  },
+  "attempts": {
+    "auto_fill": "Uzupełnij podejścia",
+    "auto_fill_success": "Podejścia zostały uzupełnione.",
+    "auto_fill_error": "Nie udało się uzupełnić podejść.",
+    "submit_error": "Nie udało się zapisać podejść.",
+    "unnamed": "Zawodnik {index}",
+    "empty": "Dodaj co najmniej jednego zawodnika, aby skonfigurować podejścia.",
+    "issues_title": "Wykryte problemy",
+    "issue_missing": "{name}: brak podejścia {event}.",
+    "issue_below_bar": "{name}: podejście {event} jest poniżej wagi gryfu.",
+    "issue_unloadable": "{name}: podejście {event} nie może być załadowane{suggested}.",
+    "competitor_meta": "{gender} • {bodyweight} kg",
+    "issue_badge": "{count, plural, one '{count} problem' few '{count} problemy' many '{count} problemów' other '{count} problemów'}",
+    "suggested_suffix": " (spróbuj {weight})"
+  },
       "fields": {
         "name": {
           "label": "Nazwa zawodów",
@@ -133,12 +152,6 @@
         "bodyweight": "Waga ciała (kg)",
         "rack_squat": "Wysokość stojaków (przysiad)",
         "rack_bench": "Wysokość stojaków (wyciskanie)",
-        "equipment": {
-          "legend": "Sprzęt",
-          "multi": "Wielo-warstwowy",
-          "single": "Jedno-warstwowy",
-          "wraps": "Owinięcia kolan"
-        },
         "add_button": "Dodaj zawodnika",
         "reset_button": "Wyczyść formularz"
       },
@@ -232,7 +245,8 @@
       "edit_attempts": "Edytuj próby",
       "edit_competitor": "Edytuj zawodnika",
       "view_details": "Szczegóły",
-      "set_live": "Ustaw na żywo"
+      "set_live": "Ustaw na żywo",
+      "live_now": "Na żywo"
     }
   },
   "ui": {
@@ -639,6 +653,9 @@
       "club": "Klub",
       "city": "Miasto",
       "order": "Kolejność"
+    },
+    "toast": {
+      "deleted": "Zawodnik został usunięty."
     }
   },
   "competitor_modal": {
@@ -660,7 +677,9 @@
         "birth_required": "Data urodzenia jest wymagana.",
         "gender_invalid": "Wybierz prawidłową płeć.",
         "bodyweight_positive": "Podaj poprawną masę ciała większą od 0 kg."
-      }
+      },
+      "error_delete": "Nie udało się usunąć zawodnika.",
+      "error_opening_attempt": "Nie udało się zapisać pierwszego podejścia."
     },
     "fields": {
       "first_name": "Imię",
@@ -677,24 +696,20 @@
     },
     "registration_fields": {
       "bodyweight": "Masa ciała (kg)",
-      "lot_number": "Numer losowania",
-      "lot_number_placeholder": "np. 12",
-      "personal_record": "Rekord zgłoszeniowy (kg)",
-      "personal_record_placeholder": "np. 250",
       "weight_class": "Kategoria wagowa",
       "select_weight_class": "Wybierz kategorię wagową",
       "age_category": "Kategoria wiekowa",
       "select_age_category": "Wybierz kategorię wiekową",
       "rack_squat": "Wysokość stojaka — przysiad",
       "rack_bench": "Wysokość stojaka — wyciskanie",
-      "equipment": "Sprzęt",
       "weight_class_hint": "Przypisywana automatycznie na podstawie masy ciała i płci.",
       "age_category_hint": "Przypisywana automatycznie na podstawie daty urodzenia.",
       "weight_class_auto_assigned": "Przydzielone automatycznie",
       "weight_class_pending": "Zostanie przydzielona po zapisaniu",
       "age_category_auto_assigned": "Przydzielona automatycznie",
       "age_category_pending": "Zostanie przydzielona po zapisaniu",
-      "auto_chip": "AUTO"
+      "auto_chip": "AUTO",
+      "opening_attempt": "Pierwsze podejście ({lift})"
     },
     "placeholders": {
       "club": "Nazwa klubu",
@@ -720,7 +735,14 @@
       "close": "Zamknij",
       "save": "Zapisz zmiany",
       "create": "Utwórz zawodnika",
-      "saving": "Zapisywanie..."
+      "saving": "Zapisywanie...",
+      "delete": "Usuń zawodnika",
+      "deleting": "Usuwanie...",
+      "confirm_delete": "Czy na pewno chcesz usunąć tego zawodnika? Tej operacji nie można cofnąć."
+    },
+    "danger_zone": {
+      "title": "Strefa usuwania",
+      "description": "Usunięcie zawodnika usuwa także jego próby."
     }
   },
   "settings_page": {
@@ -832,7 +854,9 @@
       "empty_hint": "Wybierz kolejnego zawodnika z kolejki, aby rozpocząć.",
       "queue_header": "{lift} — podejście {round}",
       "queue_badge_next": "Następny",
-      "queue_empty": "Kolejka jest pusta."
+      "queue_empty": "Kolejka jest pusta.",
+      "queue_order": "Numer startowy #{order}",
+      "queue_order_unknown": "Numer w przygotowaniu"
     },
     "recent": {
       "title": "Ostatnie próby",
@@ -905,7 +929,7 @@
         "age_unassigned": "Bez kategorii",
         "labels_all": "Wszystkie",
         "labels_unlabeled": "Bez etykiety",
-        "age_senior": "Senior"
+        "age_senior": "Senior (24-39)"
       },
       "active_flight_label": "Aktywny flight",
       "active_flight_none": "Brak",
@@ -922,8 +946,7 @@
         "lifter": "Zawodnik",
         "bodyweight": "Masa ciała",
         "weight_class": "Kategoria wagowa",
-        "age_class": "Kategoria wiekowa",
-        "equipment": "Sprzęt"
+        "age_class": "Kategoria wiekowa"
       },
       "coefficients": {
         "auto_notice": "Wartości odświeżają się automatycznie po zmianie danych.",
@@ -986,7 +1009,6 @@
         "points": "Punkty",
         "status": "Status"
       },
-      "lot_number": "Losowanie #{lot}",
       "disqualified": "Dyskwalifikacja",
       "record": "Rekord",
       "status_ok": "Zatwierdzone",
@@ -1003,6 +1025,8 @@
       "bar_weight_men": "Gryf męski: {weight}",
       "bar_weight_women": "Gryf żeński: {weight}",
       "bar_weight_default": "Gryf domyślny: {weight}",
+      "clamp_weight_label": "Zaciski na sztukę (kg)",
+      "clamp_weight_hint": "Łączna masa zacisków to 2 × ta wartość.",
       "columns": {
         "weight": "Waga",
         "quantity": "Ilość",
@@ -1064,7 +1088,9 @@
       "active_flight_cleared": "Aktywny flight usunięty.",
       "active_flight_failed": "Nie udało się ustawić aktywnego flightu.",
       "competitor_created": "Zawodnik dodany",
-      "competitor_create_failed": "Nie udało się dodać zawodnika"
+      "competitor_create_failed": "Nie udało się dodać zawodnika",
+      "competitor_deleted": "Zawodnik został usunięty.",
+      "competitor_delete_failed": "Nie udało się usunąć zawodnika."
     },
     "modal": {
       "edit_attempts_title": "Edytuj próby • {name}",
@@ -1102,8 +1128,8 @@
       "empty": "Brak prób w kolejce.",
       "label": "{name} • {order}",
       "meta": "{lift} • Podejście {number}",
-      "lot": "Losowanie #{lot}",
-      "lot_unknown": "Losowanie w toku"
+      "order": "Numer startowy #{order}",
+      "order_unknown": "Numer w przygotowaniu"
     },
     "recent": {
       "title": "Ostatnie wyniki",
@@ -1120,7 +1146,8 @@
       "attempt": "Podejście",
       "weight": "Ciężar",
       "plate_title": "Plan talerzy",
-      "plate_meta": "Łącznie {total} kg • Gryf {bar} kg"
+      "plate_meta": "Łącznie {total} kg • Gryf {bar} kg",
+      "plate_clamps": "Zaciski: {total} kg (2 × {perClamp} kg)"
     },
     "common": {
       "weight_kg": "{weight} kg"
@@ -1157,10 +1184,13 @@
       "club_placeholder": "Zawodnik niezależny"
     },
     "info": {
-      "weight_class": "Kategoria wagowa"
+      "weight_class": "Kategoria wagowa",
+      "age_category": "Kategoria wiekowa",
+      "city": "Miasto"
     },
     "meta": {
       "bodyweight": "Masa ciała",
+      "age": "Wiek",
       "order_label": "Kolejność #{order}"
     },
     "tiles": {
@@ -1171,7 +1201,11 @@
     },
     "sidebar": {
       "share_title": "Udostępnij ekran",
-      "no_plates": "Brak planu talerzy"
+      "no_plates": "Brak planu talerzy",
+      "bar_weight": "Gryf: {weight} kg",
+      "collar_weight": "Zaciski: {total} kg (2 × {perClamp} kg)",
+      "target_weight": "Cel: {target} kg",
+      "plates_per_side": "×{count}"
     },
     "lifts": {
       "squat": "Przysiad",

@@ -6,9 +6,10 @@ import {
   type AttemptNumber,
   type LiftKind,
   type UnifiedRow,
+  buildUnifiedRows,
   sortUnifiedRows,
 } from '../contest-table';
-import type { AttemptStatus, Registration } from '../types';
+import type { Attempt, AttemptStatus, Registration } from '../types';
 
 type AttemptSetup = {
   attemptNumber: AttemptNumber;
@@ -55,17 +56,13 @@ function createRegistration(id: string, overrides: Partial<Registration> = {}): 
     birthDate: '1990-01-01',
     gender: 'Male',
     weightClassId: 'wc',
-    ageCategoryId: 'ac',
-    bodyweight: 90,
-    lotNumber: null,
-    equipmentM: false,
-    equipmentSm: false,
-    equipmentT: false,
-    flightCode: null,
-    flightOrder: null,
-    labels: [],
-    ...overrides,
-  };
+  ageCategoryId: 'ac',
+  bodyweight: 90,
+  flightCode: null,
+  flightOrder: null,
+  labels: [],
+  ...overrides,
+};
 }
 
 function bestSuccessfulWeight(attempts: AttemptCell[]): number {
@@ -125,8 +122,63 @@ function createRow(params: {
   };
 }
 
+describe('buildUnifiedRows - points calculation', () => {
+  it('multiplies total by both reshel and mccullough coefficients', () => {
+    const registration = createRegistration('jan', {
+      bodyweight: 92,
+      reshelCoefficient: 0.831,
+      mcculloughCoefficient: 1.795,
+    });
+
+    const attempts: Attempt[] = [
+      {
+        id: 'jan-bench-1',
+        registrationId: registration.id,
+        liftType: 'Bench',
+        attemptNumber: 1,
+        weight: 190,
+        status: 'Successful',
+        createdAt: TIMESTAMP,
+        updatedAt: TIMESTAMP,
+      },
+      {
+        id: 'jan-bench-2',
+        registrationId: registration.id,
+        liftType: 'Bench',
+        attemptNumber: 2,
+        weight: 195,
+        status: 'Successful',
+        createdAt: TIMESTAMP,
+        updatedAt: TIMESTAMP,
+      },
+      {
+        id: 'jan-bench-3',
+        registrationId: registration.id,
+        liftType: 'Bench',
+        attemptNumber: 3,
+        weight: 202.5,
+        status: 'Successful',
+        createdAt: TIMESTAMP,
+        updatedAt: TIMESTAMP,
+      },
+    ];
+
+    const rows = buildUnifiedRows({
+      registrations: [registration],
+      attempts,
+      contest: null,
+    });
+
+    expect(rows).toHaveLength(1);
+    const row = rows[0]!;
+
+    expect(row.total).toBeCloseTo(202.5, 5);
+    expect(row.points).toBeCloseTo(202.5 * 0.831 * 1.795, 5);
+  });
+});
+
 describe('sortUnifiedRows - max column tie breakers', () => {
-  it('prioritises heavier successful attempts before bodyweight differences', () => {
+  it('prioritises lighter bodyweight before attempt history', () => {
     const lighterBodyweight = createRow({
       id: 'lighter-bodyweight',
       bodyweight: 85,
@@ -153,8 +205,8 @@ describe('sortUnifiedRows - max column tie breakers', () => {
       'desc'
     );
 
-    expect(sorted[0]?.registration.id).toBe('stronger-second');
-    expect(sorted[1]?.registration.id).toBe('lighter-bodyweight');
+    expect(sorted[0]?.registration.id).toBe('lighter-bodyweight');
+    expect(sorted[1]?.registration.id).toBe('stronger-second');
   });
 
   it('prefers lighter bodyweight when max lifts are equal', () => {
@@ -297,4 +349,4 @@ describe('sortUnifiedRows - points column tie breakers', () => {
     expect(sorted[0]?.registration.id).toBe('opener-advantage');
     expect(sorted[1]?.registration.id).toBe('opener-equal');
   });
-}
+});

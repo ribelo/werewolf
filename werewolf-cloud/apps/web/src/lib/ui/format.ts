@@ -145,7 +145,3 @@ export function formatDuration(seconds: number): string {
 /**
  * Format competition order/lot number
  */
-export function formatLotNumber(lotNumber: string | number | null): string {
-  if (!lotNumber) return '-';
-  return typeof lotNumber === 'number' ? lotNumber.toString() : lotNumber;
-}

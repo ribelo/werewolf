@@ -71,7 +71,7 @@ Notes
 - [x] Backend: emit display-ready payloads (registration, competitor, attempts by lift, plate plan) with `attempt.currentSet`
 - [x] Update `/contests/:id/attempts/current` to return display payload for polling fallback
 - [x] Frontend: adapt realtime client/types to new payload structure
-- [x] Rebuild current display screen with attempt matrix, rack heights, plate plan, equipment info (no photo)
+- [x] Rebuild current display screen with attempt matrix, rack heights, plate plan (no photo)
 - [x] Enhance announcer table to show plate plan + metadata when available
 - [x] Tests: cover payload builder + display rendering smoke
 - [x] Docs: describe display event contract + plate plan source (`docs/architecture.md` §10)

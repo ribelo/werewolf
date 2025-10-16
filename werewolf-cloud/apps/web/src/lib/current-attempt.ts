@@ -9,10 +9,9 @@ export function bundleToCurrentAttempt(bundle: CurrentAttemptBundle): CurrentAtt
     competitorName: `${competitor.firstName} ${competitor.lastName}`.trim(),
     liftType: attempt.liftType,
     attemptNumber: attempt.attemptNumber as AttemptNumber,
-    weight: attempt.weight,
-    status: attempt.status as AttemptStatus,
-    competitionOrder,
-    lotNumber: attempt.lotNumber ?? null,
-    updatedAt: attempt.updatedAt ?? null,
-  };
+   weight: attempt.weight,
+   status: attempt.status as AttemptStatus,
+   competitionOrder,
+   updatedAt: attempt.updatedAt ?? null,
+ };
 }

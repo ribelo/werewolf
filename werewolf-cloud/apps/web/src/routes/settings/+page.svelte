@@ -309,7 +309,9 @@ $: if (settings && !platesDirty) {
 
     busy = true;
     try {
-      const response = await apiClient.post<{ success: boolean; message?: string }>('/system/database/reset');
+      const response = await apiClient.post<{ success: boolean; message?: string }>('/system/database/reset', {
+        confirm: 'YES_I_WANT_TO_RESET_THE_DATABASE',
+      });
       if (response.error) {
         throw new Error(response.error);
       }

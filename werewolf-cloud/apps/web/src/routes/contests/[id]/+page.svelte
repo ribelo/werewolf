@@ -227,6 +227,148 @@ import type {
   let clampWeightSetting: number | null = contestBarWeights?.clampWeight ?? contest?.clampWeight ?? 2.5;
   let globalBackups: BackupSummary | null = backupsSummary ?? null;
 
+  // Plates & bar weights editing helpers
+  let newPlateWeight: number | null = null;
+  let newPlateQuantity: number | null = null;
+  let newPlateColor: string | null = null;
+  let platesBusy = false;
+  let barWeightsBusy = false;
+
+  function displayWeightValue(value: number | null | undefined): string {
+    if (value == null || Number.isNaN(value)) return '—';
+    return Number.isInteger(value) ? `${Math.trunc(value)}` : value.toFixed(1);
+  }
+
+  async function saveBarWeights() {
+    if (!contestId) return;
+    try {
+      barWeightsBusy = true;
+      await apiClient.put(`/contests/${contestId}/platesets/barweights`, {
+        ...(mensBarWeightSetting != null ? { mensBarWeight: mensBarWeightSetting } : {}),
+        ...(womensBarWeightSetting != null ? { womensBarWeight: womensBarWeightSetting } : {}),
+        ...(defaultBarWeightSetting != null ? { defaultBarWeight: defaultBarWeightSetting } : {}),
+        ...(clampWeightSetting != null ? { clampWeight: clampWeightSetting } : {}),
+      });
+      toast.success(t('settings_page.plates_saved'));
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : t('settings_page.plates_error');
+      toast.error(message);
+    } finally {
+      barWeightsBusy = false;
+    }
+  }
+
+  async function updatePlateQuantity(plateWeight: number, quantity: number) {
+    if (!contestId) return;
+    try {
+      platesBusy = true;
+      await apiClient.patch(`/contests/${contestId}/platesets/${plateWeight}`, { quantity });
+      contestPlateSets = contestPlateSets.map((p) =>
+        (p.plateWeight === plateWeight ? { ...p, quantity } : p)
+      );
+      toast.success(t('settings_page.plates_saved'));
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : t('settings_page.plates_error');
+      toast.error(message);
+    } finally {
+      platesBusy = false;
+    }
+  }
+
+  async function updatePlateWeight(oldWeight: number, newWeight: number, quantity: number, color: string | undefined | null) {
+    if (!contestId) return;
+    if (Math.abs(newWeight - oldWeight) < 1e-6) return;
+    if (!Number.isFinite(newWeight) || newWeight <= 0) {
+      toast.error(t('settings_page.plates_validation_error'));
+      return;
+    }
+
+    try {
+      platesBusy = true;
+      await apiClient.delete(`/contests/${contestId}/platesets/${oldWeight}`);
+      await apiClient.post(`/contests/${contestId}/platesets`, {
+        plateWeight: newWeight,
+        quantity,
+        ...(color ? { color } : {}),
+      });
+      contestPlateSets = [
+        ...contestPlateSets.filter((p) => p.plateWeight !== oldWeight),
+        { plateWeight: newWeight, quantity, color: color ?? '#374151' },
+      ].sort((a, b) => (b.plateWeight - a.plateWeight));
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : t('settings_page.plates_error');
+      toast.error(message);
+    } finally {
+      platesBusy = false;
+    }
+  }
+
+  function handlePlateWeightChange(plateWeight: number, quantity: number, color: string | undefined | null, event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const parsed = parseFloat(input.value);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      input.value = plateWeight.toString();
+      toast.error(t('settings_page.plates_validation_error'));
+      return;
+    }
+    updatePlateWeight(plateWeight, Number(parsed.toFixed(2)), quantity, color);
+  }
+
+  function handlePlateQuantityChange(plateWeight: number, event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const parsed = parseInt(input.value, 10);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      input.value = '0';
+      updatePlateQuantity(plateWeight, 0);
+      return;
+    }
+    updatePlateQuantity(plateWeight, parsed);
+  }
+
+  async function deletePlate(plateWeight: number) {
+    if (!contestId) return;
+    try {
+      platesBusy = true;
+      await apiClient.delete(`/contests/${contestId}/platesets/${plateWeight}`);
+      contestPlateSets = contestPlateSets.filter((p) => p.plateWeight !== plateWeight);
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : t('settings_page.plates_error');
+      toast.error(message);
+    } finally {
+      platesBusy = false;
+    }
+  }
+
+  async function addPlate() {
+    if (!contestId) return;
+    const weight = Number(newPlateWeight);
+    const qty = Number(newPlateQuantity);
+    if (!Number.isFinite(weight) || weight <= 0 || !Number.isFinite(qty) || qty < 0) {
+      toast.error(t('settings_page.plates_validation_error'));
+      return;
+    }
+    try {
+      platesBusy = true;
+      await apiClient.post(`/contests/${contestId}/platesets`, {
+        plateWeight: weight,
+        quantity: qty,
+        ...(newPlateColor ? { color: newPlateColor } : {}),
+      });
+      contestPlateSets = [
+        ...contestPlateSets.filter((p) => p.plateWeight !== weight),
+        { plateWeight: weight, quantity: qty, color: newPlateColor ?? '#374151' },
+      ].sort((a, b) => (b.plateWeight - a.plateWeight));
+      newPlateWeight = null;
+      newPlateQuantity = null;
+      newPlateColor = null;
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : t('settings_page.plates_error');
+      toast.error(message);
+    } finally {
+      platesBusy = false;
+    }
+  }
+
   type TablePrefs = {
     sortColumn: string;
     sortDirection: 'asc' | 'desc';
@@ -359,11 +501,6 @@ import type {
   }
 
   function formatLift(value?: number | null): string {
-    if (value === undefined || value === null) return '–';
-    return formatWeight(Number(value));
-  }
-
-  function displayWeightValue(value?: number | null): string {
     if (value === undefined || value === null) return '–';
     return formatWeight(Number(value));
   }
@@ -761,13 +898,15 @@ import type {
     return getAttemptCompetitor(attempt);
   }
 
-  function queueLotLabel(attempt: Attempt): string {
+  function queueOrderLabel(attempt: Attempt): string {
     const registration = registrationMap.get(attempt.registrationId);
-    const rawLot = (attempt.lotNumber ?? registration?.lotNumber ?? '').trim();
-    if (rawLot) {
-      return t('contest_detail.current.queue_lot', { lot: rawLot });
+    const orderSource = Number.isFinite(attempt.competitionOrder)
+      ? attempt.competitionOrder
+      : registration?.competitionOrder;
+    if (orderSource != null && Number.isFinite(orderSource)) {
+      return t('contest_detail.current.queue_order', { order: orderSource });
     }
-    return t('contest_detail.current.queue_lot_unknown');
+    return t('contest_detail.current.queue_order_unknown');
   }
 
   function cloneAttempts(source: Attempt[]): Attempt[] {
@@ -833,7 +972,6 @@ import type {
         weight: current.weight,
         status: current.status,
         competitionOrder: current.competitionOrder ?? null,
-        lotNumber: current.lotNumber ?? null,
         updatedAt: current.updatedAt ?? null,
       };
     }
@@ -848,7 +986,6 @@ import type {
       weight: attempt.weight,
       status: attempt.status as AttemptStatus,
       competitionOrder: attempt.competitionOrder ?? null,
-      lotNumber: attempt.lotNumber ?? null,
       updatedAt: attempt.updatedAt ?? null,
     };
   }
@@ -972,7 +1109,7 @@ import type {
 
       if (!planResp.error && planResp.data) {
         const plan = planResp.data;
-        const bar = plan.barWeight ?? (isFemale ? 15 : 20);
+        const bar = plan.barWeight ?? (isFemale ? 20 : 20);
         if (weight <= bar + 1e-6) {
           // keep bare bar as-is
         } else if (!plan.exact || Math.abs(plan.totalLoaded - weight) > 0.01) {
@@ -1018,7 +1155,6 @@ import type {
             registrationRecord?.lastName ?? ''
           ),
           competitionOrder: registrationRecord?.competitionOrder ?? null,
-          lotNumber: registrationRecord?.lotNumber ?? null,
         };
 
     applyOptimisticAttempts([optimistic]);
@@ -1381,6 +1517,8 @@ import type {
 
       const result = await modalStore.open<{
         registration?: Registration;
+        deletedCompetitorId?: string;
+        deletedRegistrationId?: string;
       }>({
         title: t('contest_detail.modal.edit_competitor_title', {
           name: formatCompetitorName(registration.firstName, registration.lastName)
@@ -1394,8 +1532,29 @@ import type {
           contestId,
           weightClasses,
           ageCategories,
+          lifts: contestLifts,
         },
       });
+
+      if (result?.deletedCompetitorId) {
+        const removedRegistrations = registrations.filter(
+          (reg) => reg.competitorId === result.deletedCompetitorId
+        );
+        const removedIds = removedRegistrations.map((reg) => reg.id);
+        registrations = registrations.filter((reg) => reg.competitorId !== result.deletedCompetitorId);
+        const idsToRemove = removedIds.length > 0 && removedIds[0]
+          ? removedIds
+          : result.deletedRegistrationId
+            ? [result.deletedRegistrationId]
+            : [];
+        idsToRemove.forEach((id) => contestStore.removeRegistration(id));
+        if (idsToRemove.length > 0) {
+          liveAttempts = liveAttempts.filter((attempt) => !idsToRemove.includes(attempt.registrationId));
+          contestStore.setAttempts(liveAttempts);
+        }
+        toast.success(t('contest_detail.toast.competitor_deleted'));
+        return;
+      }
 
       if (result?.registration) {
         const updated = result.registration;
@@ -1409,8 +1568,6 @@ import type {
         );
         contestStore.updateRegistration(updated);
         toast.success(t('contest_detail.toast.competitor_updated'));
-      } else if (result) {
-        toast.success(t('contest_detail.toast.competitor_updated'));
       }
     } catch (error) {
       console.error('Modal error:', error);
@@ -1423,6 +1580,8 @@ import type {
     try {
       const result = await modalStore.open<{
         registration?: Registration;
+        deletedCompetitorId?: string;
+        deletedRegistrationId?: string;
       }>({
         title: t('contest_detail.modal.create_competitor_title'),
         size: 'xl',
@@ -1434,6 +1593,7 @@ import type {
           contestId,
           weightClasses,
           ageCategories,
+          lifts: contestLifts,
         },
       });
 
@@ -1443,8 +1603,6 @@ import type {
         contestStore.addRegistration(created);
         selectedWeightFilter = isFemaleGender(created.gender) ? 'FEMALE_OPEN' : 'MALE_OPEN';
         toast.success(t('contest_detail.toast.competitor_created'));
-      } else if (result) {
-        toast.error(t('contest_detail.toast.competitor_create_failed'));
       }
     } catch (error) {
       console.error('Create competitor modal error:', error);
@@ -1672,7 +1830,7 @@ import type {
                   <li class="flex flex-col gap-3 rounded border border-border-color px-3 py-2 md:flex-row md:items-center md:justify-between">
                     <div>
                       <p class="text-body text-text-primary font-semibold">{queueCompetitorName(attempt)}</p>
-                      <p class="text-caption text-text-secondary">{queueLotLabel(attempt)}</p>
+                      <p class="text-caption text-text-secondary">{queueOrderLabel(attempt)}</p>
                     </div>
                     <div class="flex flex-col items-end gap-2 md:flex-row md:items-center md:gap-4">
                       <div class="text-right">
@@ -1847,6 +2005,8 @@ import type {
                   lifts={contestLifts}
                   weightClasses={weightClasses}
                   ageCategories={ageCategories}
+                  currentAttemptId={liveCurrentAttempt?.id ?? null}
+                  currentAttemptLoading={setCurrentLoading}
                   onSortChange={handleSortChange}
                   onOpenCompetitorModal={openCompetitorModal}
                   onSetCurrentAttempt={setCurrentAttemptHandler}
@@ -1955,9 +2115,6 @@ import type {
                         </td>
                         <td class="px-4 py-3 text-text-secondary">
                           {formatCompetitorName(result.firstName, result.lastName)}
-                          {#if result.lotNumber}
-                            <span class="block text-xxs text-text-tertiary">{$_('contest_detail.results.lot_number', { values: { lot: result.lotNumber } })}</span>
-                          {/if}
                         </td>
                         {#if selectedResultView !== 'open'}
                           <td class="px-4 py-3 text-text-secondary">{getResultCategory(result, selectedResultView)}</td>
@@ -2005,40 +2162,99 @@ import type {
               {/if}
             </header>
 
-            {#if hasPlateSets}
-              <div class="overflow-x-auto">
-                <table class="min-w-full text-left text-sm text-text-secondary">
-                  <thead class="bg-element-bg text-label">
-                    <tr>
-                      <th class="px-4 py-3">{$_('contest_detail.plates.columns.weight')}</th>
-                      <th class="px-4 py-3">{$_('contest_detail.plates.columns.quantity')}</th>
-                      <th class="px-4 py-3">{$_('contest_detail.plates.columns.color')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {#each contestPlateSets as plate, idx (plate.plateWeight ?? plate.weight ?? idx)}
-                      <tr class="border-b border-border-color last:border-b-0">
-                        <td class="px-4 py-3 text-text-primary font-semibold">{displayWeightValue(plate.plateWeight ?? plate.weight ?? null)}</td>
-                        <td class="px-4 py-3 text-text-secondary">{plate.quantity}</td>
-                        <td class="px-4 py-3 text-text-secondary">
-                          <div class="flex items-center gap-2">
-                            <span class="inline-block h-4 w-4 rounded border border-border-color" style={`background:${plate.color}`}></span>
-                            <span>{plate.color}</span>
-                          </div>
+              <div class="space-y-4">
+                <div class="grid gap-4 md:grid-cols-4">
+                  <div>
+                    <label class="input-label">{$_('contest_detail.plates.bar_weight_men', { values: { weight: '' } })}</label>
+                    <input class="input-field" type="number" step="0.25" bind:value={mensBarWeightSetting} />
+                  </div>
+                  <div>
+                    <label class="input-label">{$_('contest_detail.plates.bar_weight_women', { values: { weight: '' } })}</label>
+                    <input class="input-field" type="number" step="0.25" bind:value={womensBarWeightSetting} />
+                  </div>
+                  <div>
+                    <label class="input-label">{$_('contest_detail.plates.bar_weight_default', { values: { weight: '' } })}</label>
+                    <input class="input-field" type="number" step="0.25" bind:value={defaultBarWeightSetting} />
+                  </div>
+                  <div>
+                    <label class="input-label">{$_('contest_detail.plates.clamp_weight_label')}</label>
+                    <input class="input-field" type="number" step="0.25" bind:value={clampWeightSetting} />
+                    <p class="text-caption text-text-secondary mt-1">{$_('contest_detail.plates.clamp_weight_hint')}</p>
+                  </div>
+                  <div class="md:col-span-4">
+                    <button class="btn-primary px-3 py-1 text-xxs" disabled={barWeightsBusy} on:click|preventDefault={saveBarWeights}>
+                      {barWeightsBusy ? $_('buttons.saving') : $_('buttons.save')}
+                    </button>
+                  </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                  <table class="min-w-full text-left text-sm text-text-secondary">
+                    <thead class="bg-element-bg text-label">
+                      <tr>
+                        <th class="px-4 py-3">{$_('contest_detail.plates.columns.weight')}</th>
+                        <th class="px-4 py-3">{$_('contest_detail.plates.columns.quantity')}</th>
+                        <th class="px-4 py-3">{$_('contest_detail.plates.columns.color')}</th>
+                        <th class="px-4 py-3 text-right">{$_('contest_table.columns.actions')}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {#if contestPlateSets.length === 0}
+                        <tr>
+                          <td class="px-4 py-3 text-text-secondary" colspan="4">{$_('contest_detail.plates.empty')}</td>
+                        </tr>
+                      {/if}
+                      {#each contestPlateSets as plate, idx (plate.plateWeight ?? plate.weight ?? idx)}
+                        <tr class="border-b border-border-color last:border-b-0">
+                        <td class="px-4 py-3">
+                          <input
+                            class="input-field w-28"
+                            type="number"
+                            min="0.25"
+                            step="0.25"
+                            value={displayWeightValue(plate.plateWeight ?? plate.weight ?? null)}
+                            on:change={(event) => handlePlateWeightChange(plate.plateWeight, plate.quantity, plate.color ?? null, event)}
+                          />
+                        </td>
+                          <td class="px-4 py-3">
+                            <input
+                              class="input-field w-24"
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={plate.quantity}
+                              on:change={(event) => handlePlateQuantityChange(plate.plateWeight, event)}
+                            />
+                          </td>
+                          <td class="px-4 py-3">
+                            <div class="flex items-center gap-2">
+                              <span class="inline-block h-4 w-4 rounded border border-border-color" style={`background:${plate.color}`}></span>
+                              <span class="text-text-secondary">{plate.color}</span>
+                            </div>
+                          </td>
+                          <td class="px-4 py-3 text-right">
+                            <button class="btn-secondary px-3 py-1 text-xxs" on:click={() => deletePlate(plate.plateWeight)} disabled={platesBusy}>{$_('buttons.delete')}</button>
+                          </td>
+                        </tr>
+                      {/each}
+                      <tr>
+                        <td class="px-4 py-3">
+                          <input class="input-field w-28" type="number" step="0.25" placeholder="np. 25" bind:value={newPlateWeight} />
+                        </td>
+                        <td class="px-4 py-3">
+                          <input class="input-field w-24" type="number" min="0" step="1" placeholder="0" bind:value={newPlateQuantity} />
+                        </td>
+                        <td class="px-4 py-3">
+                          <input class="input-field w-36" type="text" placeholder="#374151" bind:value={newPlateColor} />
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                          <button class="btn-primary px-3 py-1 text-xxs" on:click|preventDefault={addPlate} disabled={platesBusy}>{$_('buttons.add')}</button>
                         </td>
                       </tr>
-                    {/each}
-                  </tbody>
-                </table>
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            {:else}
-              <div class="space-y-2 text-body text-text-secondary">
-                <p>{$_('contest_detail.plates.empty')}</p>
-                <a class="btn-secondary inline-flex items-center px-3 py-1 text-xxs" href="/settings">
-                  {$_('contest_detail.plates.manage_link')}
-                </a>
-              </div>
-            {/if}
           </div>
         </section>
       {:else}

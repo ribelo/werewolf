@@ -44,9 +44,6 @@ export async function getAttemptWithRelations(
         r.bodyweight,
         r.weight_class_id,
         r.age_category_id,
-        r.equipment_m,
-        r.equipment_sm,
-        r.equipment_t,
         r.rack_height_squat,
         r.rack_height_bench,
         r.flight_code,
@@ -59,7 +56,6 @@ export async function getAttemptWithRelations(
         comp.city,
         comp.gender,
         comp.birth_date,
-        comp.competition_order AS competitor_competition_order,
         wc.name AS weight_class_name,
         ac.name AS age_category_name
       FROM attempts a
@@ -152,29 +148,31 @@ export async function buildCurrentAttemptPayload(
     });
   }
 
-  const platePlan = await buildPlatePlan(db, contestId, Number(attempt.weight ?? 0), {
-    gender: attempt.gender,
-  });
+  let platePlan = null;
+  try {
+    platePlan = await buildPlatePlan(db, contestId, Number(attempt.weight ?? 0), {
+      gender: attempt.gender,
+    });
+  } catch (error) {
+    console.error('Failed to build plate plan', { contestId, attemptId, error });
+    platePlan = null;
+  }
 
   const payload = {
     contest,
     attempt,
-    registration: {
-      id: attempt.registration_id,
-      contest_id: attempt.contest_id,
-      bodyweight: attempt.bodyweight,
-      weight_class_id: attempt.weight_class_id,
-      weight_class_name: attempt.weight_class_name,
-      age_category_id: attempt.age_category_id,
-      age_category_name: attempt.age_category_name,
-      equipment_m: attempt.equipment_m,
-      equipment_sm: attempt.equipment_sm,
-      equipment_t: attempt.equipment_t,
-      rack_height_squat: attempt.rack_height_squat,
-      rack_height_bench: attempt.rack_height_bench,
-      competition_order: attempt.competitor_competition_order ?? null,
-      flight_code: attempt.flight_code,
-      flight_order: attempt.flight_order,
+      registration: {
+        id: attempt.registration_id,
+        contest_id: attempt.contest_id,
+        bodyweight: attempt.bodyweight,
+        weight_class_id: attempt.weight_class_id,
+        weight_class_name: attempt.weight_class_name,
+        age_category_id: attempt.age_category_id,
+        age_category_name: attempt.age_category_name,
+        rack_height_squat: attempt.rack_height_squat,
+        rack_height_bench: attempt.rack_height_bench,
+        flight_code: attempt.flight_code,
+        flight_order: attempt.flight_order,
       labels: parseLabelText(attempt.labels),
     },
     competitor: {
@@ -185,7 +183,6 @@ export async function buildCurrentAttemptPayload(
       city: attempt.city,
       gender: attempt.gender,
       birth_date: attempt.birth_date,
-      competition_order: attempt.competitor_competition_order ?? null,
     },
     attempts_by_lift: attemptsByLift,
     plate_plan: platePlan,

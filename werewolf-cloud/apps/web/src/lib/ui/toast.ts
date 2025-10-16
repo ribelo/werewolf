@@ -43,6 +43,12 @@ function createToastStore(): ToastStore {
 
   function addToast(config: ToastConfig): string {
     const id = config.id || crypto.randomUUID();
+
+    if (config.level === 'success' || config.level === 'info') {
+      console.debug?.('[toast] Suppressed', config.level, config.message);
+      return id;
+    }
+
     const toast: Toast = {
       ...config,
       id,

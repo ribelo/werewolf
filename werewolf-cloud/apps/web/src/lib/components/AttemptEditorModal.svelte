@@ -160,7 +160,6 @@
         lastName: registration.lastName ?? '',
         competitorName: formatCompetitorName(registration.firstName ?? '', registration.lastName ?? ''),
         competitionOrder: registration.competitionOrder ?? null,
-        lotNumber: registration.lotNumber ?? existing?.lotNumber ?? null,
       };
 
       optimisticAttempts.push(optimistic);
