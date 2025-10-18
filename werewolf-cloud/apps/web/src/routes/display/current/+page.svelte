@@ -61,9 +61,9 @@
   let competitorInfoChanged = false;
   let decipherCompetitorInfo: string = '';
   
-  let previousAttemptWeights: string[] = ['', '', ''];
-  let attemptWeightsChanged = [false, false, false];
-  let decipherAttemptWeights: string[] = ['', '', ''];
+  let previousAttemptWeights: string = '';
+  let attemptWeightsChanged = false;
+  let decipherAttemptWeights: string = '';
   
   let previousBarWeight: string = '';
   let previousCollarWeight: string = '';
@@ -74,7 +74,7 @@
   
   let previousPlates: string = '';
   let platesChanged = false;
-  let decipherPlates: string[] = [];
+  let decipherPlates: string = '';
   
   $: sanitizedName = currentCompetitor
     ? truncate(`${currentCompetitor.firstName} ${currentCompetitor.lastName}`, 28)
@@ -83,6 +83,12 @@
   $: currentLiftLabelStr = liftLabel();
   
   $: competitorInfoStr = `${currentCompetitor?.club || ''}•${weightClassLabel}•${bodyweightLabel || ''}•${ageCategoryLabel || ''}•${currentAge || ''}•${currentCity || ''}`;
+  
+  $: attemptWeightsStr = attemptTiles.map(tile => tile.displayWeight).join('•');
+  
+  $: platesStr = platePlan && platePlan.plates.length > 0 
+    ? platePlan.plates.map(p => `${p.plateWeight} kg`).join('•')
+    : '';
   
   $: barWeightStr = platePlan ? formatWeight(platePlan.barWeight) : '';
   $: collarWeightStr = platePlan && platePlan.clampWeight > 0 ? formatWeight(platePlan.clampWeight) : '';
@@ -165,18 +171,16 @@
     );
   }
   
-  // Attempt weights decipher
-  $: attemptTiles.forEach((tile, index) => {
-    if (tile.displayWeight !== previousAttemptWeights[index]) {
-      decipherAttemptWeights[index] = createDecipherAnimation(
-        tile.displayWeight,
-        previousAttemptWeights[index],
-        (changed) => attemptWeightsChanged[index] = changed,
-        (text) => decipherAttemptWeights[index] = text,
-        () => previousAttemptWeights[index] = tile.displayWeight
-      );
-    }
-  });
+  // Attempt weights decipher (unified string)
+  $: if (attemptWeightsStr && attemptWeightsStr !== previousAttemptWeights) {
+    decipherAttemptWeights = createDecipherAnimation(
+      attemptWeightsStr,
+      previousAttemptWeights,
+      (changed) => attemptWeightsChanged = changed,
+      (text) => decipherAttemptWeights = text,
+      () => previousAttemptWeights = attemptWeightsStr
+    );
+  }
   
   // Bar weight decipher
   $: if (barWeightStr && barWeightStr !== previousBarWeight) {
@@ -200,27 +204,15 @@
     );
   }
   
-  // Plates decipher
-  $: if (platePlan && platePlan.plates.length > 0) {
-    const currentPlatesStr = platePlan.plates.map(p => `${p.plateWeight}-${p.count}`).join(',');
-    if (currentPlatesStr !== previousPlates) {
-      platesChanged = true;
-      const prevPlatesArray = previousPlates ? previousPlates.split(',') : [];
-      
-      platePlan.plates.forEach((plate, index) => {
-        const prevPlate = prevPlatesArray[index]?.split('-') || ['', ''];
-        const prevWeight = prevPlate[0] || '';
-        const targetText = `${plate.plateWeight} kg`;
-        
-        decipherPlates[index] = createDecipherAnimation(
-          targetText,
-          prevWeight ? `${prevWeight} kg` : '',
-          (changed) => platesChanged = changed,
-          (text) => decipherPlates[index] = text,
-          () => previousPlates = currentPlatesStr
-        );
-      });
-    }
+  // Plates decipher (unified string)
+  $: if (platesStr && platesStr !== previousPlates) {
+    decipherPlates = createDecipherAnimation(
+      platesStr,
+      previousPlates,
+      (changed) => platesChanged = changed,
+      (text) => decipherPlates = text,
+      () => previousPlates = platesStr
+    );
   }
 
   $: attemptsByLift = liveCurrentBundle?.attemptsByLift ?? { Squat: [], Bench: [], Deadlift: [] };
@@ -661,7 +653,7 @@
                 </p>
                 <div class="flex-1 flex items-center justify-center">
                   <div class="flex items-baseline justify-center gap-4">
-                     <span class="text-[6rem] leading-none font-mono text-text-primary">{attemptWeightsChanged[tile.number - 1] ? decipherAttemptWeights[tile.number - 1] : tile.displayWeight}</span>
+                     <span class="text-[6rem] leading-none font-mono text-text-primary">{attemptWeightsChanged ? decipherAttemptWeights.split('•')[tile.number - 1] || tile.displayWeight : tile.displayWeight}</span>
                     {#if tile.displayWeight !== '—'}
                       <span class="text-3xl font-mono text-text-secondary uppercase tracking-[0.3em]">kg</span>
                     {/if}
@@ -685,7 +677,7 @@
                   <div class="flex flex-wrap items-center gap-8 justify-center lg:justify-start">
                     {#each platePlan.plates as plate, index (plate.plateWeight + '-' + index)}
                       <div class="flex items-center gap-4 text-text-secondary uppercase tracking-[0.2em]">
-                         <span class="text-text-primary font-mono text-4xl">{platesChanged && decipherPlates[index] ? decipherPlates[index] : `${plate.plateWeight} kg`}</span>
+                         <span class="text-text-primary font-mono text-4xl">{platesChanged ? decipherPlates.split('•')[index] || `${plate.plateWeight} kg` : `${plate.plateWeight} kg`}</span>
                         <span class="text-text-secondary font-mono text-2xl opacity-70">{t('display_current.sidebar.plates_per_side', { count: plate.count })}</span>
                       </div>
                     {/each}
