@@ -65,7 +65,7 @@ vi.mock('../contests/[id]/+page.ts', () => ({
           weightClassId: 'wc1',
           weightClassName: 'Do 82.5 kg',
           ageCategoryId: 'ac1',
-          ageCategoryName: 'Open',
+          ageCategoryName: 'Senior (24-39)',
           bodyweight: 85.5,
           rackHeightSquat: 45,
           rackHeightBench: 40,
@@ -88,7 +88,7 @@ vi.mock('../contests/[id]/+page.ts', () => ({
         weightClassId: 'wc1',
         weightClassName: 'Do 82.5 kg',
         ageCategoryId: 'ac1',
-        ageCategoryName: 'Open',
+        ageCategoryName: 'Senior (24-39)',
         bodyweight: 85.5,
         rackHeightSquat: 45,
         rackHeightBench: 40,
@@ -144,7 +144,6 @@ vi.mock('../contests/[id]/+page.ts', () => ({
         location: 'Test Location',
         discipline: 'Powerlifting',
         status: 'InProgress',
-        barWeight: 20,
         mensBarWeight: 20,
         womensBarWeight: 15
       },
@@ -165,7 +164,7 @@ vi.mock('../contests/[id]/+page.ts', () => ({
         weightClassId: 'wc1',
         weightClassName: 'Do 82.5 kg',
         ageCategoryId: 'ac1',
-        ageCategoryName: 'Open',
+        ageCategoryName: 'Senior (24-39)',
         rackHeightSquat: 45,
         rackHeightBench: 40,
         competitionOrder: 1
@@ -207,11 +206,11 @@ vi.mock('../contests/[id]/+page.ts', () => ({
     resultsAge: [],
     resultsWeight: [],
     plateSets: [],
-    barWeights: { mensBarWeight: 20, womensBarWeight: 15, barWeight: 20 },
+    barWeights: { mensBarWeight: 20, womensBarWeight: 15, clampWeight: 2.5 },
     backupsSummary: { backups: [], total: 0, timestamp: '2024-01-01T00:00:00Z' },
     referenceData: {
       weightClasses: [{ id: 'wc1', name: '85kg', gender: 'M', minWeight: 82.5, maxWeight: 87.5 }],
-      ageCategories: [{ id: 'ac1', name: 'Open', minAge: 0, maxAge: 99 }]
+      ageCategories: [{ id: 'ac1', name: 'Senior (24-39)', minAge: 24, maxAge: 39 }]
     },
     error: null,
     apiBase: 'http://localhost:8787',
@@ -360,7 +359,7 @@ describe('Routes smoke test', () => {
       resultsAge: [],
       resultsWeight: [],
       plateSets: [],
-      barWeights: { mensBarWeight: 20, womensBarWeight: 15, barWeight: 20 },
+    barWeights: { mensBarWeight: 20, womensBarWeight: 15, clampWeight: 2.5 },
       backupsSummary: { backups: [], total: 0, timestamp: '2024-01-01T00:00:00Z' },
       referenceData: {
         weightClasses: [],

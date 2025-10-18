@@ -123,7 +123,7 @@ describe('Display current screen', () => {
       weightClassId: 'wc1',
       weightClassName: 'Do 67.5 kg',
       ageCategoryId: 'ac1',
-      ageCategoryName: 'Open',
+      ageCategoryName: 'Senior (24-39)',
       bodyweight: 70,
       rackHeightSquat: 10,
       rackHeightBench: 5,

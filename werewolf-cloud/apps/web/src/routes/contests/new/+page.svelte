@@ -1108,7 +1108,7 @@ import { formatWeight } from '$lib/utils';
                       <td class="px-3 py-2">
                         <input
                           class="table-input-field w-full"
-                          placeholder="OPEN"
+                          placeholder="SENIOR"
                           value={category.code}
                           on:input={handleAgeCategoryInput(index, 'code')}
                         />

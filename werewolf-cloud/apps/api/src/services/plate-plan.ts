@@ -10,7 +10,6 @@ type PlateDbRow = {
 type ContestBarWeightsRow = {
   mens_bar_weight?: number | null;
   womens_bar_weight?: number | null;
-  bar_weight?: number | null;
   clamp_weight?: number | null;
 };
 
@@ -33,7 +32,7 @@ export type PlatePlan = {
 };
 
 const DEFAULT_MENS_BAR_WEIGHT = 20;
-const DEFAULT_WOMENS_BAR_WEIGHT = 20;
+const DEFAULT_WOMENS_BAR_WEIGHT = 15;
 const EPSILON = 1e-6;
 
 function getDefaultPlateColor(weight: number): string {
@@ -72,11 +71,8 @@ function deriveBarWeight(row: ContestBarWeightsRow | null, gender?: string, over
     return override;
   }
 
-  const fallbackMens = row?.bar_weight ?? DEFAULT_MENS_BAR_WEIGHT;
-  const fallbackWomens = row?.bar_weight ?? DEFAULT_WOMENS_BAR_WEIGHT;
-
-  const mens = row?.mens_bar_weight ?? fallbackMens;
-  const womens = row?.womens_bar_weight ?? fallbackWomens;
+  const mens = row?.mens_bar_weight ?? DEFAULT_MENS_BAR_WEIGHT;
+  const womens = row?.womens_bar_weight ?? DEFAULT_WOMENS_BAR_WEIGHT;
 
   if (gender && gender.toLowerCase() === 'female') {
     return womens ?? DEFAULT_WOMENS_BAR_WEIGHT;
@@ -93,7 +89,7 @@ export async function buildPlatePlan(
 ): Promise<PlatePlan> {
   const barWeightsRow = await executeQueryOne<ContestBarWeightsRow>(
     db,
-    'SELECT mens_bar_weight, womens_bar_weight, bar_weight, clamp_weight FROM contests WHERE id = ?',
+    'SELECT mens_bar_weight, womens_bar_weight, clamp_weight FROM contests WHERE id = ?',
     [contestId]
   );
 

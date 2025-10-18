@@ -144,7 +144,7 @@ plateSets.get('/barweights', async (c) => {
 
   const contest = await executeQueryOne(
     db,
-    'SELECT mens_bar_weight, womens_bar_weight, bar_weight, clamp_weight FROM contests WHERE id = ?',
+    'SELECT mens_bar_weight, womens_bar_weight, clamp_weight FROM contests WHERE id = ?',
     [contestId]
   );
 
@@ -156,7 +156,6 @@ plateSets.get('/barweights', async (c) => {
     data: {
       mensBarWeight: contest.mens_bar_weight,
       womensBarWeight: contest.womens_bar_weight,
-      barWeight: contest.bar_weight,
       clampWeight: contest.clamp_weight,
     },
     error: null,
@@ -168,12 +167,11 @@ plateSets.get('/barweights', async (c) => {
 plateSets.put('/barweights', zValidator('json', z.object({
   mensBarWeight: z.number().positive().optional(),
   womensBarWeight: z.number().positive().optional(),
-  defaultBarWeight: z.number().positive().optional(),
   clampWeight: z.number().positive().optional(),
 })), async (c) => {
   const db = c.env.DB;
   const contestId = c.req.param('contestId');
-  const { mensBarWeight, womensBarWeight, defaultBarWeight, clampWeight } = c.req.valid('json');
+  const { mensBarWeight, womensBarWeight, clampWeight } = c.req.valid('json');
 
   const updates: string[] = [];
   const params: any[] = [];
@@ -185,10 +183,6 @@ plateSets.put('/barweights', zValidator('json', z.object({
   if (womensBarWeight !== undefined) {
     updates.push('womens_bar_weight = ?');
     params.push(womensBarWeight);
-  }
-  if (defaultBarWeight !== undefined) {
-    updates.push('bar_weight = ?');
-    params.push(defaultBarWeight);
   }
   if (clampWeight !== undefined) {
     updates.push('clamp_weight = ?');

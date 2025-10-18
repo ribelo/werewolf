@@ -104,8 +104,8 @@ describe('Contest registrations table', () => {
         city: 'Warsaw',
         weightClassId: 'wc1',
         weightClassName: 'Up to 63 kg',
-        ageCategoryId: 'ac-open',
-        ageCategoryName: 'Open',
+        ageCategoryId: 'ac-senior',
+        ageCategoryName: 'Senior (24-39)',
         bodyweight: 61.2,
         rackHeightSquat: 42,
         rackHeightBench: 37,
@@ -120,7 +120,7 @@ describe('Contest registrations table', () => {
     const barWeights: ContestBarWeights = {
       mensBarWeight: 20,
       womensBarWeight: 15,
-      barWeight: 20,
+      clampWeight: 2.5,
     };
 
     const data = {
@@ -133,7 +133,7 @@ describe('Contest registrations table', () => {
           { id: 'wc1', code: 'F_67_5', name: 'Up to 63 kg', gender: 'Female', minWeight: 57, maxWeight: 63 },
         ],
         ageCategories: [
-          { id: 'ac-open', code: 'OPEN', name: 'Open', minAge: 24, maxAge: null },
+          { id: 'ac-senior', code: 'SENIOR', name: 'Senior (24-39)', minAge: 24, maxAge: 39 },
         ],
       },
       resultsOpen: [] as ContestRankingEntry[],

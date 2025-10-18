@@ -256,12 +256,15 @@ system.post('/backups/:backupId/restore', async (c) => {
     // Restore contests
     if (backup.data.contests) {
       for (const item of backup.data.contests) {
+        const mensBar = item.mens_bar_weight ?? item.bar_weight ?? 20;
+        const womensBar = item.womens_bar_weight ?? item.bar_weight ?? 15;
+
         await executeMutation(
           db,
           `INSERT OR REPLACE INTO contests
-           (id, name, date, location, discipline, status, federation_rules, competition_type, organizer, notes, is_archived, created_at, updated_at, mens_bar_weight, womens_bar_weight, bar_weight)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [item.id, item.name, item.date, item.location, item.discipline, item.status, item.federation_rules, item.competition_type, item.organizer, item.notes, item.is_archived, item.created_at, item.updated_at, item.mens_bar_weight, item.womens_bar_weight, item.bar_weight]
+           (id, name, date, location, discipline, status, federation_rules, competition_type, organizer, notes, is_archived, created_at, updated_at, mens_bar_weight, womens_bar_weight)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [item.id, item.name, item.date, item.location, item.discipline, item.status, item.federation_rules, item.competition_type, item.organizer, item.notes, item.is_archived, item.created_at, item.updated_at, mensBar, womensBar]
         );
         restoreStats.contests++;
       }

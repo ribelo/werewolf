@@ -24,8 +24,8 @@ describe('RegistrationDetailModal', () => {
     city: 'Gotham',
     weightClassId: 'wc1',
     weightClassName: 'Do 100 kg',
-  ageCategoryId: 'ac-open',
-  ageCategoryName: 'Open',
+  ageCategoryId: 'ac-senior',
+  ageCategoryName: 'Senior (24-39)',
   bodyweight: 93.5,
   rackHeightSquat: 44,
   rackHeightBench: 39,
@@ -39,7 +39,7 @@ describe('RegistrationDetailModal', () => {
   ];
 
   const ageCategories: AgeCategory[] = [
-    { id: 'ac-open', code: 'OPEN', name: 'Open', minAge: 24, maxAge: null },
+    { id: 'ac-senior', code: 'SENIOR', name: 'Senior (24-39)', minAge: 24, maxAge: 39 },
   ];
 
   it('renders registration profile and coefficients', () => {

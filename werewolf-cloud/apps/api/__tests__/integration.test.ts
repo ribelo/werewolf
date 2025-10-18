@@ -1001,8 +1001,7 @@ CREATE TABLE contests (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     mens_bar_weight REAL NOT NULL DEFAULT 20,
-    womens_bar_weight REAL NOT NULL DEFAULT 20,
-    bar_weight REAL NOT NULL DEFAULT 20,
+    womens_bar_weight REAL NOT NULL DEFAULT 15,
     clamp_weight REAL NOT NULL DEFAULT 2.5,
     active_flight TEXT
 );

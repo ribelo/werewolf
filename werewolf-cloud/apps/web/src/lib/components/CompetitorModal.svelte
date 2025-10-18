@@ -677,7 +677,7 @@ export let lifts: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
                 on:input={handleBodyweightInput}
               />
             </label>
-            <label class="flex flex-col gap-2">
+            <div class="flex flex-col gap-2">
               <span class="input-label flex items-center gap-2">
                 {t('competitor_modal.registration_fields.weight_class')}
                 <span class="text-caption text-text-secondary uppercase tracking-[0.3em]">
@@ -687,9 +687,8 @@ export let lifts: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
               <div class="input-field bg-element-bg/60 text-text-secondary">
                 {weightClassDisplay}
               </div>
-              
-            </label>
-            <label class="flex flex-col gap-2">
+            </div>
+            <div class="flex flex-col gap-2">
               <span class="input-label flex items-center gap-2">
                 {t('competitor_modal.registration_fields.age_category')}
                 <span class="text-caption text-text-secondary uppercase tracking-[0.3em]">
@@ -699,7 +698,7 @@ export let lifts: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
               <div class="input-field bg-element-bg/60 text-text-secondary">
                 {ageCategoryDisplay}
               </div>
-            </label>
+            </div>
             <label class="flex flex-col gap-2">
               <span class="input-label">{t('competitor_modal.registration_fields.rack_squat')}</span>
               <input

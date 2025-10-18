@@ -20,8 +20,8 @@ describe('contest category helpers', () => {
 
   it('detects duplicate codes and invalid ranges', () => {
     const ages: AgeCategory[] = [
-      { code: 'OPEN', name: 'Open', minAge: 24, maxAge: null, sortOrder: 10 },
-      { code: 'OPEN', name: 'Duplicate', minAge: 26, maxAge: 25, sortOrder: 20 },
+      { code: 'SENIOR', name: 'Senior (24-39)', minAge: 24, maxAge: 39, sortOrder: 10 },
+      { code: 'SENIOR', name: 'Duplicate', minAge: 26, maxAge: 25, sortOrder: 20 },
     ];
 
     const weights: WeightClass[] = [

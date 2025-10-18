@@ -3,7 +3,7 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import type { WerewolfEnvironment } from '../env';
 import { executeQuery, executeQueryOne, executeMutation, generateId, getCurrentTimestamp, convertKeysToCamelCase } from '../utils/database';
-import { sanitizePlateSet, DEFAULT_PLATE_SET, getPlateColor, sanitizeSettings } from '../utils/settings-helpers';
+import { DEFAULT_PLATE_SET, getPlateColor } from '../utils/settings-helpers';
 import { seedContestCategories } from '../utils/category-templates';
 import { contestSchema, contestCreateSchema, contestUpdateSchema, contestStatusSchema } from '@werewolf/domain/models/contest';
 
@@ -36,7 +36,6 @@ contests.get('/', async (c) => {
       updated_at,
       mens_bar_weight,
       womens_bar_weight,
-      bar_weight,
       clamp_weight,
       active_flight
     FROM contests
@@ -66,8 +65,8 @@ contests.post('/', zValidator('json', contestCreateSchema), async (c) => {
       id, name, date, location, discipline, status,
       federation_rules, competition_type, organizer, notes,
       is_archived, created_at, updated_at,
-      mens_bar_weight, womens_bar_weight, bar_weight, clamp_weight, active_flight
-    ) VALUES (?, ?, ?, ?, ?, 'Setup', ?, ?, ?, ?, false, ?, ?, 20, 15, 20, 2.5, NULL)
+      mens_bar_weight, womens_bar_weight, clamp_weight, active_flight
+    ) VALUES (?, ?, ?, ?, ?, 'Setup', ?, ?, ?, ?, false, ?, ?, 20, 15, 2.5, NULL)
     `,
     [
       id,
@@ -95,7 +94,7 @@ contests.post('/', zValidator('json', contestCreateSchema), async (c) => {
       id, name, date, location, discipline, status,
       federation_rules, competition_type, organizer, notes,
       is_archived, created_at, updated_at,
-      mens_bar_weight, womens_bar_weight, bar_weight, clamp_weight, active_flight
+      mens_bar_weight, womens_bar_weight, clamp_weight, active_flight
     FROM contests
     WHERE id = ?
     `,
@@ -121,7 +120,7 @@ contests.get('/:contestId', async (c) => {
       id, name, date, location, discipline, status,
       federation_rules, competition_type, organizer, notes,
       is_archived, created_at, updated_at,
-      mens_bar_weight, womens_bar_weight, bar_weight, clamp_weight, active_flight
+      mens_bar_weight, womens_bar_weight, clamp_weight, active_flight
     FROM contests
     WHERE id = ?
     `,
@@ -227,7 +226,7 @@ contests.patch('/:contestId', zValidator('json', contestUpdateSchema), async (c)
       id, name, date, location, discipline, status,
       federation_rules, competition_type, organizer, notes,
       is_archived, created_at, updated_at,
-      mens_bar_weight, womens_bar_weight, bar_weight, clamp_weight, active_flight
+      mens_bar_weight, womens_bar_weight, clamp_weight, active_flight
     FROM contests
     WHERE id = ?
     `,
@@ -427,7 +426,7 @@ export default contests;
 
 // Helper function to create default plate sets
 async function createDefaultPlateSets(db: D1Database, contestId: string) {
-  const defaultPlates = await loadPlateSetFromSettings(db);
+  const defaultPlates = loadPlateSetFromSettings();
 
   for (const plate of defaultPlates) {
     try {
@@ -445,19 +444,6 @@ async function createDefaultPlateSets(db: D1Database, contestId: string) {
   }
 }
 
-async function loadPlateSetFromSettings(db: D1Database) {
-  const row = await executeQueryOne(db, 'SELECT data FROM settings WHERE id = 1');
-
-  if (!row) {
-    return DEFAULT_PLATE_SET.map((plate) => ({ ...plate }));
-  }
-
-  try {
-    const settingsData = sanitizeSettings(JSON.parse(row.data));
-    const plateSet = sanitizePlateSet(settingsData.competition.defaultPlateSet);
-    return plateSet.map((plate) => ({ ...plate }));
-  } catch (error) {
-    console.warn('Failed to parse default plate set from settings:', error);
-    return DEFAULT_PLATE_SET.map((plate) => ({ ...plate }));
-  }
+function loadPlateSetFromSettings() {
+  return DEFAULT_PLATE_SET.map((plate) => ({ ...plate }));
 }

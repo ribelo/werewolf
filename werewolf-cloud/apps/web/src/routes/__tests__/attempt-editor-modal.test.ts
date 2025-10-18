@@ -25,7 +25,7 @@ const registration = {
   weightClassId: 'wc1',
   weightClassName: 'Do 67.5 kg',
   ageCategoryId: 'ac1',
-  ageCategoryName: 'Open',
+  ageCategoryName: 'Senior (24-39)',
   bodyweight: 63.5,
   rackHeightSquat: 42,
   rackHeightBench: 36,

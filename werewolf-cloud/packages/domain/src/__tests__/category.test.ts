@@ -13,8 +13,8 @@ import {
 describe('contest category helpers', () => {
   it('maps defaults into age descriptors', () => {
     expect(DEFAULT_AGE_CATEGORY_DESCRIPTORS).toHaveLength(DEFAULT_CONTEST_AGE_CATEGORY_TEMPLATES.length);
-    const openDescriptor = DEFAULT_AGE_CATEGORY_DESCRIPTORS.find((item) => item.code === 'OPEN');
-    expect(openDescriptor).toMatchObject({ minAge: 24, maxAge: 39, sortOrder: 40 });
+    const seniorDescriptor = DEFAULT_AGE_CATEGORY_DESCRIPTORS.find((item) => item.code === 'SENIOR');
+    expect(seniorDescriptor).toMatchObject({ minAge: 24, maxAge: 39, sortOrder: 40 });
   });
 
   it('maps defaults into weight descriptors', () => {

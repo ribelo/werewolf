@@ -119,7 +119,6 @@ export interface ContestLiveSummary {
   location: string;
   discipline: string;
   status: string;
-  barWeight?: number | null;
   mensBarWeight?: number | null;
   womensBarWeight?: number | null;
   clampWeight?: number | null;
@@ -169,9 +168,9 @@ export interface Competition {
 }
 
 export interface ContestBarWeights {
-  mensBarWeight: number;
-  womensBarWeight: number;
-  barWeight?: number | null;
+  mensBarWeight: number | null;
+  womensBarWeight: number | null;
+  clampWeight: number | null;
 }
 
 export interface Database {

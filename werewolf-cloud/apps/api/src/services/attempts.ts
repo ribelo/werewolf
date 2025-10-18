@@ -92,7 +92,6 @@ export async function buildCurrentAttemptPayload(
         location,
         discipline,
         status,
-        bar_weight,
         mens_bar_weight,
         womens_bar_weight
       FROM contests

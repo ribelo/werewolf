@@ -251,10 +251,11 @@ function transformRecord(tableName: string, record: any): any {
   // Apply transformations based on table
   switch (tableName) {
     case 'contests':
-      // Split bar_weight into mens/womens/default
+      // Map legacy bar_weight column into gender-specific values
       if (record.bar_weight !== undefined) {
         record.mens_bar_weight = record.bar_weight || 20.0;
         record.womens_bar_weight = record.bar_weight || 15.0;
+        delete record.bar_weight;
       }
       break;
     case 'competitors':

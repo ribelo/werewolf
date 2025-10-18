@@ -9,17 +9,12 @@ import {
   serializeSettings,
   mergeSettings,
   coercePartialSettings,
-  sanitizePlateSet,
 } from '../utils/settings-helpers';
 import type { SettingsData } from '../utils/settings-helpers';
 
 const settings = new Hono<WerewolfEnvironment>();
 
-const plateDefinitionSchema = z.object({
-  weight: z.number().positive(),
-  quantity: z.number().int().min(0),
-  color: z.string(),
-});
+
 
 // GET /settings - Get all settings
 settings.get('/', async (c) => {
@@ -49,13 +44,11 @@ settings.put('/', zValidator('json', z.object({
   language: z.string().optional(),
   ui: z.object({
     theme: z.string().optional(),
-    showWeights: z.boolean().optional(),
     showAttempts: z.boolean().optional(),
+    showWeights: z.boolean().optional(),
   }).optional(),
   competition: z.object({
     federationRules: z.string().optional(),
-    defaultBarWeight: z.number().optional(),
-    defaultPlateSet: z.array(plateDefinitionSchema).optional(),
   }).optional(),
   database: z.object({
     backupEnabled: z.boolean().optional(),
@@ -88,8 +81,8 @@ settings.put('/', zValidator('json', z.object({
 // PATCH /settings/ui - Update UI settings
 settings.patch('/ui', zValidator('json', z.object({
   theme: z.string().optional(),
-  showWeights: z.boolean().optional(),
   showAttempts: z.boolean().optional(),
+  showWeights: z.boolean().optional(),
 })), async (c) => {
   const db = c.env.DB;
   const input = c.req.valid('json');
@@ -133,8 +126,6 @@ settings.get('/ui', async (c) => {
 // PATCH /settings/competition - Update competition settings
 settings.patch('/competition', zValidator('json', z.object({
   federationRules: z.string().optional(),
-  defaultBarWeight: z.number().optional(),
-  defaultPlateSet: z.array(plateDefinitionSchema).optional(),
 })), async (c) => {
   const db = c.env.DB;
   const input = c.req.valid('json');
@@ -146,12 +137,7 @@ settings.patch('/competition', zValidator('json', z.object({
   if (input.federationRules !== undefined) {
     competitionUpdate.federationRules = input.federationRules;
   }
-  if (input.defaultBarWeight !== undefined) {
-    competitionUpdate.defaultBarWeight = input.defaultBarWeight;
-  }
-  if (input.defaultPlateSet !== undefined) {
-    competitionUpdate.defaultPlateSet = sanitizePlateSet(input.defaultPlateSet);
-  }
+
 
   const updates: Partial<SettingsData> = Object.keys(competitionUpdate).length > 0
     ? { competition: competitionUpdate as SettingsData['competition'] }

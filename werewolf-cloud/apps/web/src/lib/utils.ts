@@ -102,7 +102,10 @@ export function normaliseAgeCategoryLabel(
   const trimmedLabel = (label ?? '').trim();
   const upperCode = (code ?? '').trim().toUpperCase();
 
-  if (upperCode === 'OPEN' || trimmedLabel.toLowerCase() === 'open') {
+  const seniorCodes = new Set(['SENIOR', 'OPEN']);
+  const normalisedLabel = trimmedLabel.toLowerCase();
+
+  if (seniorCodes.has(upperCode) || normalisedLabel === 'open') {
     return 'Senior (24-39)';
   }
 

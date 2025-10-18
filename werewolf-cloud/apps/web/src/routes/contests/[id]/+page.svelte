@@ -223,7 +223,6 @@ import type {
   let contestBarWeights: ContestBarWeights | null = barWeights ?? null;
   let mensBarWeightSetting: number | null = contestBarWeights?.mensBarWeight ?? contest?.mensBarWeight ?? null;
   let womensBarWeightSetting: number | null = contestBarWeights?.womensBarWeight ?? contest?.womensBarWeight ?? null;
-  let defaultBarWeightSetting: number | null = contestBarWeights?.barWeight ?? contest?.mensBarWeight ?? null;
   let clampWeightSetting: number | null = contestBarWeights?.clampWeight ?? contest?.clampWeight ?? 2.5;
   let globalBackups: BackupSummary | null = backupsSummary ?? null;
 
@@ -246,7 +245,6 @@ import type {
       await apiClient.put(`/contests/${contestId}/platesets/barweights`, {
         ...(mensBarWeightSetting != null ? { mensBarWeight: mensBarWeightSetting } : {}),
         ...(womensBarWeightSetting != null ? { womensBarWeight: womensBarWeightSetting } : {}),
-        ...(defaultBarWeightSetting != null ? { defaultBarWeight: defaultBarWeightSetting } : {}),
         ...(clampWeightSetting != null ? { clampWeight: clampWeightSetting } : {}),
       });
       toast.success(t('settings_page.plates_saved'));
@@ -449,8 +447,7 @@ import type {
     { id: 'desk', labelKey: 'contest_detail.tabs.desk' },
     { id: 'registrations', labelKey: 'contest_detail.tabs.main_table' },
     { id: 'results', labelKey: 'contest_detail.tabs.results' },
-    { id: 'plates', labelKey: 'contest_detail.tabs.plates' },
-    { id: 'backups', labelKey: 'contest_detail.tabs.backups' }
+    { id: 'plates', labelKey: 'contest_detail.tabs.plates' }
   ] as const;
 
   type TabId = typeof TABS[number]['id'];
@@ -794,7 +791,6 @@ import type {
       })();
   $: mensBarWeightSetting = contestBarWeights?.mensBarWeight ?? contest?.mensBarWeight ?? null;
   $: womensBarWeightSetting = contestBarWeights?.womensBarWeight ?? contest?.womensBarWeight ?? null;
-  $: defaultBarWeightSetting = contestBarWeights?.barWeight ?? contest?.mensBarWeight ?? null;
   $: clampWeightSetting = contestBarWeights?.clampWeight ?? contest?.clampWeight ?? 2.5;
   $: unifiedRows = buildUnifiedRows({
         registrations,
@@ -1089,9 +1085,9 @@ import type {
     try {
       const reg = registrations.find((r) => r.id === payload.registrationId);
       const isFemale = (reg?.gender ?? '').toLowerCase().startsWith('f');
-      const barOverride = isFemale
-        ? (womensBarWeightSetting ?? defaultBarWeightSetting ?? null)
-        : (mensBarWeightSetting ?? defaultBarWeightSetting ?? null);
+      const fallbackMens = mensBarWeightSetting ?? contest?.mensBarWeight ?? 20;
+      const fallbackWomens = womensBarWeightSetting ?? contest?.womensBarWeight ?? 15;
+      const barOverride = isFemale ? fallbackWomens : fallbackMens;
 
       const planResp = await apiClient.post<{
         plates: Array<{ plateWeight: number; count: number; color: string }>;
@@ -1104,12 +1100,14 @@ import type {
         clampWeight: number;
       }>(`/contests/${contestId}/platesets/calculate`, {
         targetWeight: weight,
-        ...(barOverride ? { barWeight: barOverride } : {}),
+        ...(Number.isFinite(barOverride) ? { barWeight: barOverride } : {}),
       });
 
       if (!planResp.error && planResp.data) {
         const plan = planResp.data;
-        const bar = plan.barWeight ?? (isFemale ? 20 : 20);
+        const defaultMens = mensBarWeightSetting ?? contest?.mensBarWeight ?? 20;
+        const defaultWomens = womensBarWeightSetting ?? contest?.womensBarWeight ?? 15;
+        const bar = plan.barWeight ?? (isFemale ? defaultWomens : defaultMens);
         if (weight <= bar + 1e-6) {
           // keep bare bar as-is
         } else if (!plan.exact || Math.abs(plan.totalLoaded - weight) > 0.01) {
@@ -1677,6 +1675,12 @@ import type {
             {$_(tab.labelKey)}
           </button>
         {/each}
+        <button type="button" class="btn-secondary px-3 py-1" on:click={openCategoryManager}>
+          {$_('contest_detail.registrations.manage_categories')}
+        </button>
+        <button type="button" class="btn-secondary px-3 py-1" on:click={openFlightManager}>
+          {$_('contest_detail.registrations.manage_flights')}
+        </button>
       </nav>
 
       {#if activeTab === 'desk'}
@@ -1920,20 +1924,14 @@ import type {
             <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <h3 class="text-h3 text-text-primary">{$_('contest_detail.registrations.title')}</h3>
-                <p class="text-body text-text-secondary">{$_('contest_detail.registrations.subtitle')}</p>
-                <p class="text-caption text-text-secondary mt-1">{$_('contest_detail.registrations.coefficient_notice')}</p>
+
               </div>
               <div class="flex flex-wrap items-center gap-3">
                 <button type="button" class="btn-primary px-3 py-1" on:click={() => void openCreateCompetitorModal()}>
                   {t('contest_detail.registrations.add_competitor')}
                 </button>
-                <button type="button" class="btn-secondary px-3 py-1" on:click={openCategoryManager}>
-                  {$_('contest_detail.registrations.manage_categories')}
-                </button>
-                <button type="button" class="btn-secondary px-3 py-1" on:click={openFlightManager}>
-                  {$_('contest_detail.registrations.manage_flights')}
-                </button>
-                <span class="text-caption text-text-secondary uppercase tracking-[0.4em]">{registrationsSummary}</span>
+
+
               </div>
             </header>
             <div class="space-y-2">
@@ -2154,34 +2152,35 @@ import type {
                 <p class="text-body text-text-secondary">{$_('contest_detail.plates.subtitle')}</p>
               </div>
               {#if contestBarWeights || contest}
-                <div class="grid gap-2 md:grid-cols-3 text-caption text-text-secondary uppercase tracking-[0.35em]">
+                <div class="grid gap-2 md:grid-cols-2 text-caption text-text-secondary uppercase tracking-[0.35em]">
                   <span>{$_('contest_detail.plates.bar_weight_men', { values: { weight: displayWeightValue(contestBarWeights?.mensBarWeight ?? contest?.mensBarWeight ?? null) } })}</span>
                   <span>{$_('contest_detail.plates.bar_weight_women', { values: { weight: displayWeightValue(contestBarWeights?.womensBarWeight ?? contest?.womensBarWeight ?? null) } })}</span>
-                  <span>{$_('contest_detail.plates.bar_weight_default', { values: { weight: displayWeightValue(contestBarWeights?.barWeight ?? contest?.mensBarWeight ?? null) } })}</span>
                 </div>
               {/if}
             </header>
 
               <div class="space-y-4">
-                <div class="grid gap-4 md:grid-cols-4">
+                <div class="grid gap-4 md:grid-cols-3">
                   <div>
-                    <label class="input-label">{$_('contest_detail.plates.bar_weight_men', { values: { weight: '' } })}</label>
-                    <input class="input-field" type="number" step="0.25" bind:value={mensBarWeightSetting} />
+                    <label class="input-label" for="mens-bar-weight-setting">
+                      {$_('contest_detail.plates.bar_weight_men', { values: { weight: '' } })}
+                    </label>
+                    <input id="mens-bar-weight-setting" class="input-field" type="number" step="0.25" bind:value={mensBarWeightSetting} />
                   </div>
                   <div>
-                    <label class="input-label">{$_('contest_detail.plates.bar_weight_women', { values: { weight: '' } })}</label>
-                    <input class="input-field" type="number" step="0.25" bind:value={womensBarWeightSetting} />
+                    <label class="input-label" for="womens-bar-weight-setting">
+                      {$_('contest_detail.plates.bar_weight_women', { values: { weight: '' } })}
+                    </label>
+                    <input id="womens-bar-weight-setting" class="input-field" type="number" step="0.25" bind:value={womensBarWeightSetting} />
                   </div>
                   <div>
-                    <label class="input-label">{$_('contest_detail.plates.bar_weight_default', { values: { weight: '' } })}</label>
-                    <input class="input-field" type="number" step="0.25" bind:value={defaultBarWeightSetting} />
-                  </div>
-                  <div>
-                    <label class="input-label">{$_('contest_detail.plates.clamp_weight_label')}</label>
-                    <input class="input-field" type="number" step="0.25" bind:value={clampWeightSetting} />
+                    <label class="input-label" for="clamp-weight-setting">
+                      {$_('contest_detail.plates.clamp_weight_label')}
+                    </label>
+                    <input id="clamp-weight-setting" class="input-field" type="number" step="0.25" bind:value={clampWeightSetting} />
                     <p class="text-caption text-text-secondary mt-1">{$_('contest_detail.plates.clamp_weight_hint')}</p>
                   </div>
-                  <div class="md:col-span-4">
+                  <div class="md:col-span-3">
                     <button class="btn-primary px-3 py-1 text-xxs" disabled={barWeightsBusy} on:click|preventDefault={saveBarWeights}>
                       {barWeightsBusy ? $_('buttons.saving') : $_('buttons.save')}
                     </button>

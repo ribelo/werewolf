@@ -58,6 +58,8 @@ export interface WeightClassDescriptor {
   sortOrder?: number | null;
 }
 
+const SENIOR_CODE_PREFERENCES = ['SENIOR', 'OPEN'] as const;
+
 export const DEFAULT_AGE_CATEGORY_DESCRIPTORS: AgeCategoryDescriptor[] =
   DEFAULT_CONTEST_AGE_CATEGORY_TEMPLATES.map((template) => ({
     id: template.code,
@@ -223,7 +225,12 @@ export function determineAgeCategory(
   contestDate: string,
   categories: AgeCategoryDescriptor[] = DEFAULT_AGE_CATEGORY_DESCRIPTORS,
 ): string {
-  const fallback = categories[0]?.code ?? 'OPEN';
+  const fallback =
+    categories.find((category) =>
+      SENIOR_CODE_PREFERENCES.some((legacy) => category.code.toUpperCase() === legacy)
+    )?.code
+    ?? categories[0]?.code
+    ?? 'SENIOR';
 
   try {
     const age = calculateAge(birthDate, contestDate);
@@ -246,9 +253,11 @@ export function determineAgeCategory(
       return rangeMatch.code;
     }
 
-    const openMatch = ordered.find((category) => category.code.toUpperCase() === 'OPEN');
-    if (openMatch) {
-      return openMatch.code;
+    const seniorMatch = ordered.find((category) =>
+      SENIOR_CODE_PREFERENCES.some((legacy) => category.code.toUpperCase() === legacy)
+    );
+    if (seniorMatch) {
+      return seniorMatch.code;
     }
 
     return fallback;
@@ -277,7 +286,7 @@ export function determineWeightClass(
     }
   }
 
-  return ordered[ordered.length - 1]?.code ?? classes[0]?.code ?? 'OPEN';
+  return ordered[ordered.length - 1]?.code ?? classes[0]?.code ?? 'SENIOR';
 }
 
 /**

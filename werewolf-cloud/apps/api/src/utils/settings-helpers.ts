@@ -111,18 +111,17 @@ export function sanitizeSettings(raw: unknown): SettingsData {
   const competitionSource = (source['competition'] as Record<string, unknown>) ?? {};
   const databaseSource = (source['database'] as Record<string, unknown>) ?? {};
 
+  const showAttempts =
+    typeof uiSource['showAttempts'] === 'boolean'
+      ? uiSource['showAttempts']
+      : defaults.ui.showAttempts;
+
   const result: SettingsData = {
     language: typeof source['language'] === 'string' ? source['language'] : defaults.language,
     ui: {
       theme: typeof uiSource['theme'] === 'string' ? uiSource['theme'] : defaults.ui.theme,
-      showWeights:
-        typeof uiSource['showWeights'] === 'boolean'
-          ? uiSource['showWeights']
-          : defaults.ui.showWeights,
-      showAttempts:
-        typeof uiSource['showAttempts'] === 'boolean'
-          ? uiSource['showAttempts']
-          : defaults.ui.showAttempts,
+      showAttempts,
+      showWeights: showAttempts,
     },
     competition: {
       federationRules:
@@ -146,6 +145,8 @@ export function sanitizeSettings(raw: unknown): SettingsData {
           : defaults.database.autoBackupInterval,
     },
   };
+
+  result.ui.showWeights = result.ui.showAttempts;
 
   return result;
 }
@@ -178,6 +179,7 @@ export function mergeSettings(
   merged.competition.defaultPlateSet = sanitizePlateSet(
     merged.competition.defaultPlateSet
   );
+  merged.ui.showWeights = merged.ui.showAttempts;
 
   return merged;
 }
@@ -200,11 +202,14 @@ export function coercePartialSettings(partial: unknown): Partial<SettingsData> {
     if ('theme' in uiSource && typeof uiSource['theme'] === 'string') {
       uiUpdate.theme = uiSource['theme'];
     }
-    if ('showWeights' in uiSource && typeof uiSource['showWeights'] === 'boolean') {
-      uiUpdate.showWeights = uiSource['showWeights'];
-    }
+
     if ('showAttempts' in uiSource && typeof uiSource['showAttempts'] === 'boolean') {
       uiUpdate.showAttempts = uiSource['showAttempts'];
+      uiUpdate.showWeights = uiSource['showAttempts'];
+    }
+    if ('showWeights' in uiSource && typeof uiSource['showWeights'] === 'boolean') {
+      uiUpdate.showAttempts = uiSource['showWeights'];
+      uiUpdate.showWeights = uiSource['showWeights'];
     }
     if (Object.keys(uiUpdate).length > 0) {
       updates.ui = uiUpdate as SettingsData['ui'];

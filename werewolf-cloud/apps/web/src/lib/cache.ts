@@ -12,6 +12,17 @@ interface CacheData {
 const CACHE_KEY_PREFIX = 'werewolf_cache_';
 const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
+function getStorage(): Storage | null {
+  try {
+    if (typeof localStorage === 'undefined') {
+      return null;
+    }
+    return localStorage;
+  } catch {
+    return null;
+  }
+}
+
 export class OfflineCache {
   private contestId: string;
 
@@ -31,13 +42,16 @@ export class OfflineCache {
     currentAttempt: CurrentAttemptBundle | null;
     referenceData: ReferenceData;
   }): void {
+    const storage = getStorage();
+    if (!storage) return;
+
     try {
       const cacheData: CacheData = {
         ...data,
         timestamp: Date.now(),
       };
 
-      localStorage.setItem(this.getCacheKey(), JSON.stringify(cacheData));
+      storage.setItem(this.getCacheKey(), JSON.stringify(cacheData));
       console.log('Data cached for contest:', this.contestId);
     } catch (error) {
       console.error('Failed to cache data:', error);
@@ -46,8 +60,11 @@ export class OfflineCache {
 
   // Retrieve data from localStorage
   get(): CacheData | null {
+    const storage = getStorage();
+    if (!storage) return null;
+
     try {
-      const cached = localStorage.getItem(this.getCacheKey());
+      const cached = storage.getItem(this.getCacheKey());
       if (!cached) return null;
 
       const cacheData: CacheData = JSON.parse(cached);
@@ -75,8 +92,11 @@ export class OfflineCache {
 
   // Clear cache for this contest
   clear(): void {
+    const storage = getStorage();
+    if (!storage) return;
+
     try {
-      localStorage.removeItem(this.getCacheKey());
+      storage.removeItem(this.getCacheKey());
       console.log('Cache cleared for contest:', this.contestId);
     } catch (error) {
       console.error('Failed to clear cache:', error);
@@ -85,8 +105,11 @@ export class OfflineCache {
 
   // Get cache age in minutes
   getCacheAge(): number | null {
+    const storage = getStorage();
+    if (!storage) return null;
+
     try {
-      const cached = localStorage.getItem(this.getCacheKey());
+      const cached = storage.getItem(this.getCacheKey());
       if (!cached) return null;
 
       const cacheData: CacheData = JSON.parse(cached);
@@ -103,7 +126,9 @@ export class OfflineCache {
       cached.attempts = attempts;
       cached.timestamp = Date.now();
       try {
-        localStorage.setItem(this.getCacheKey(), JSON.stringify(cached));
+        const storage = getStorage();
+        if (!storage) return;
+        storage.setItem(this.getCacheKey(), JSON.stringify(cached));
       } catch (error) {
         console.error('Failed to update attempts in cache:', error);
       }
@@ -116,7 +141,9 @@ export class OfflineCache {
       cached.currentAttempt = currentAttempt;
       cached.timestamp = Date.now();
       try {
-        localStorage.setItem(this.getCacheKey(), JSON.stringify(cached));
+        const storage = getStorage();
+        if (!storage) return;
+        storage.setItem(this.getCacheKey(), JSON.stringify(cached));
       } catch (error) {
         console.error('Failed to update current attempt in cache:', error);
       }
@@ -126,11 +153,14 @@ export class OfflineCache {
 
 // Utility functions for cache management
 export function clearAllCache(): void {
+  const storage = getStorage();
+  if (!storage) return;
+
   try {
-    const keys = Object.keys(localStorage);
+    const keys = Object.keys(storage);
     keys.forEach(key => {
       if (key.startsWith(CACHE_KEY_PREFIX)) {
-        localStorage.removeItem(key);
+        storage.removeItem(key);
       }
     });
     console.log('All contest caches cleared');
@@ -140,12 +170,15 @@ export function clearAllCache(): void {
 }
 
 export function getCacheSize(): number {
+  const storage = getStorage();
+  if (!storage) return 0;
+
   try {
     let size = 0;
-    const keys = Object.keys(localStorage);
+    const keys = Object.keys(storage);
     keys.forEach(key => {
       if (key.startsWith(CACHE_KEY_PREFIX)) {
-        const item = localStorage.getItem(key);
+        const item = storage.getItem(key);
         if (item) {
           size += item.length;
         }
@@ -158,14 +191,17 @@ export function getCacheSize(): number {
 }
 
 export function getCacheInfo(): { contests: number; totalSize: number } {
+  const storage = getStorage();
+  if (!storage) return { contests: 0, totalSize: 0 };
+
   try {
     let contests = 0;
     let totalSize = 0;
-    const keys = Object.keys(localStorage);
+    const keys = Object.keys(storage);
     keys.forEach(key => {
       if (key.startsWith(CACHE_KEY_PREFIX)) {
         contests++;
-        const item = localStorage.getItem(key);
+        const item = storage.getItem(key);
         if (item) {
           totalSize += item.length;
         }

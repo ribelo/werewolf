@@ -1,3 +1,4 @@
+import { browser } from '$app/environment';
 import { apiClient } from '$lib/api';
 import { OfflineCache } from '$lib/cache';
 import type { ContestDetail, Registration, Attempt, CurrentAttemptBundle, ReferenceData, ContestCategories } from '$lib/types';
@@ -19,9 +20,9 @@ export const load = async ({ url }) => {
     };
   }
 
-  const cache = new OfflineCache(contestId);
+  const cache = browser ? new OfflineCache(contestId) : null;
   let isOffline = false;
-  let cacheAge = cache.getCacheAge();
+  let cacheAge = cache?.getCacheAge() ?? null;
 
   try {
     // Try to load from API first
@@ -49,7 +50,7 @@ export const load = async ({ url }) => {
     };
 
     // Cache the fresh data
-    if (contestResponse.data && !data.error) {
+    if (contestResponse.data && !data.error && cache) {
       cache.set({
         contest: contestResponse.data,
         registrations: regResponse.data ?? [],
@@ -64,10 +65,10 @@ export const load = async ({ url }) => {
     console.log('API request failed, trying cache:', error);
 
     // Try to load from cache
-    const cachedData = cache.get();
+    const cachedData = cache?.get();
     if (cachedData) {
       isOffline = true;
-      cacheAge = cache.getCacheAge();
+      cacheAge = cache?.getCacheAge() ?? null;
 
       return {
         contest: cachedData.contest,

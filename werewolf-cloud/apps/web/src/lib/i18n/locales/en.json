@@ -1035,7 +1035,6 @@
       "subtitle": "Reference bar weights and available plates.",
       "bar_weight_men": "Men's bar: {weight}",
       "bar_weight_women": "Women's bar: {weight}",
-      "bar_weight_default": "Default bar: {weight}",
       "clamp_weight_label": "Collars per clamp (kg)",
       "clamp_weight_hint": "Total collar weight equals 2 × this value.",
       "columns": {

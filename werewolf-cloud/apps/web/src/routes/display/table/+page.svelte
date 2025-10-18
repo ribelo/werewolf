@@ -65,7 +65,6 @@ let sortedRows: UnifiedRow[] = [];
 let filteredRows: UnifiedRow[] = [];
 let mensBarWeightSetting: number | null = contest?.mensBarWeight ?? null;
 let womensBarWeightSetting: number | null = contest?.womensBarWeight ?? null;
-let defaultBarWeightSetting: number | null = contest?.mensBarWeight ?? null;
 let clampWeightSetting: number | null = contest?.clampWeight ?? 2.5;
 
   // Derived metrics
@@ -163,7 +162,6 @@ $: unifiedRows = buildUnifiedRows({
 $: contestLifts = deriveContestLifts(contest, liveAttempts);
 $: mensBarWeightSetting = contest?.mensBarWeight ?? null;
 $: womensBarWeightSetting = contest?.womensBarWeight ?? null;
-$: defaultBarWeightSetting = contest?.mensBarWeight ?? null;
 $: clampWeightSetting = contest?.clampWeight ?? 2.5;
   $: sortedRows = sortUnifiedRows(unifiedRows, sortColumn, sortDirection);
   $: filteredRows = selectedFlightFilter === 'UNASSIGNED'

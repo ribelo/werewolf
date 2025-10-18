@@ -1035,7 +1035,6 @@
       "subtitle": "Podgląd ciężarów gryfów i talerzy.",
       "bar_weight_men": "Gryf męski: {weight}",
       "bar_weight_women": "Gryf żeński: {weight}",
-      "bar_weight_default": "Gryf domyślny: {weight}",
       "clamp_weight_label": "Zaciski na sztukę (kg)",
       "clamp_weight_hint": "Łączna masa zacisków to 2 × ta wartość.",
       "columns": {
