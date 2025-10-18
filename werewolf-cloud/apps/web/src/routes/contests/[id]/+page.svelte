@@ -1641,7 +1641,7 @@ import type {
 </script>
 
 <svelte:head>
-  <title>{contest?.name ?? t('contest_detail.fallback_title')} • Werewolf Powerlifting</title>
+  <title>{contest?.name ?? t('contest_detail.fallback_title')} • {t('app_name')}</title>
 </svelte:head>
 
 

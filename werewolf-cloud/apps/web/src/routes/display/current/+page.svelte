@@ -337,6 +337,7 @@
               <div class="flex flex-col gap-2 w-full">
                 <div class="flex flex-wrap items-baseline gap-4 justify-between w-full">
                   <h2 class="text-display text-text-primary uppercase tracking-[0.3em]">{sanitizedName}</h2>
+                  <h3 class="text-display text-text-secondary uppercase tracking-[0.3em]">{liftLabel()}</h3>
                 </div>
               </div>
             </div>

@@ -283,7 +283,7 @@
     </div>
 
     <button type="button" class="btn-secondary px-3 py-1" on:click={addAgeCategory}>
-      {t('contest_detail.categories.age.add')}
+      {t('contest_detail.categories.add_age_category')}
     </button>
   </section>
 
@@ -374,7 +374,7 @@
     </div>
 
     <button type="button" class="btn-secondary px-3 py-1" on:click={addWeightClass}>
-      {t('contest_detail.categories.weight.add')}
+      {t('contest_detail.categories.add_weight_class')}
     </button>
   </section>
 

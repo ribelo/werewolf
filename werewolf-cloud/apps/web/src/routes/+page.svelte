@@ -151,7 +151,7 @@
               </div>
               <div class="flex flex-col items-end gap-2">
                 <span class={`status-badge ${contest.status === 'Active' ? 'status-active' : contest.status === 'Paused' ? 'status-warning' : 'status-neutral'}`}>
-                  {contest.status}
+                  {$_(`dashboard.contest.status.${contest.status.toLowerCase()}`)}
                 </span>
                 <button
                   type="button"

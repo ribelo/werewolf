@@ -1,7 +1,8 @@
 {
   "app": {
     "title": "WEREWOLF",
-    "subtitle": "Zarządzanie Zawodami Powerlifting"
+    "subtitle": "Zarządzanie zawodami trójboju",
+    "name": "Werewolf Powerlifting"
   },
   "menu": {
     "settings": "Ustawienia",
@@ -202,6 +203,7 @@
     "resetting": "Resetowanie...",
     "crop_save": "Przytnij i Zapisz",
     "delete": "Usuń",
+    "remove": "Usuń",
     "saving": "Zapisywanie...",
     "deleting": "Usuwanie...",
     "close": "Zamknij"
@@ -633,7 +635,16 @@
     "contest": {
       "discipline": "Dyscyplina",
       "bar_weights": "Ciężar sztang",
-      "start": "Start"
+      "start": "Start",
+      "delete_button": "Usuń",
+      "deleting": "Usuwanie...",
+      "status": {
+        "active": "Aktywne",
+        "paused": "Wstrzymane",
+        "completed": "Zakończone",
+        "draft": "Szkic",
+        "setup": "Setup"
+      }
     }
   },
   "competitors_page": {
@@ -1096,6 +1107,50 @@
       "edit_attempts_title": "Edytuj próby • {name}",
       "edit_competitor_title": "Edytuj zawodnika • {name}",
       "create_competitor_title": "Dodaj zawodnika"
+    },
+    "categories": {
+      "modal_title": "Kategorie",
+      "age": {
+        "title": "Kategorie wiekowe",
+        "description": "Zdefiniuj podziały wiekowe dla zawodów."
+      },
+      "weight": {
+        "title": "Kategorie wagowe",
+        "description": "Skonfiguruj kategorie wagowe według płci."
+      },
+      "columns": {
+        "code": "Kod",
+        "name": "Nazwa",
+        "min_age": "Min wiek",
+        "max_age": "Max wiek",
+        "min_weight": "Min waga",
+        "max_weight": "Max waga",
+        "sort_order": "Kolejność",
+        "gender": "Płeć",
+        "actions": "Akcje"
+      },
+      "gender": {
+        "female": "Kobiety",
+        "male": "Mężczyźni"
+      },
+      "placeholders": {
+        "age_name": "np. Junior 16-17",
+        "weight_name": "np. Lekka"
+      },
+      "add_age_category": "Dodaj kategorię wiekową",
+      "add_weight_class": "Dodaj kategorię wagową",
+      "actions": {
+        "revert_changes": "Cofnij zmiany",
+        "reset_defaults": "Resetuj do domyślnych",
+        "resetting": "Resetowanie...",
+        "saving": "Zapisywanie...",
+        "save": "Zapisz zmiany"
+      },
+      "toast_saved": "Kategorie zapisane pomyślnie.",
+      "toast_save_failed": "Nie udało się zapisać kategorii.",
+      "toast_reset": "Kategorie zresetowane do domyślnych.",
+      "toast_reset_failed": "Nie udało się zresetować kategorii.",
+      "reset_blocked": "Nie można zresetować, gdy są niezapisane zmiany."
     }
   },
   "display_table": {

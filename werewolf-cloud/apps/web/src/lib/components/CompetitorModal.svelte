@@ -655,7 +655,7 @@ export let lifts: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
 
       <label class="flex flex-col gap-2">
         <span class="input-label">{t('competitor_modal.fields.notes')}</span>
-        <textarea class="input-field" rows={3} bind:value={form.notes} placeholder={t('competitor_modal.placeholders.notes')}></textarea>
+        <textarea class="input-field" rows={3} bind:value={form.notes}></textarea>
       </label>
 
       {#if showRegistrationSection}
@@ -721,7 +721,7 @@ export let lifts: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
               />
             </label>
             {#if contestId}
-              <div class="grid gap-4 md:grid-cols-2">
+              <div class="grid gap-4">
                 {#each lifts as lift}
                   <label class="flex flex-col gap-2">
                     <span class="input-label">{t('competitor_modal.registration_fields.opening_attempt', { lift: liftLabel(lift) })}</span>

@@ -1,7 +1,8 @@
 {
   "app": {
     "title": "WEREWOLF",
-    "subtitle": "Powerlifting Contest Management"
+    "subtitle": "Powerlifting Contest Management",
+    "name": "Werewolf Powerlifting"
   },
   "menu": {
     "settings": "Settings",
@@ -202,6 +203,7 @@
     "resetting": "Resetting...",
     "crop_save": "Crop & Save",
     "delete": "Delete",
+    "remove": "Remove",
     "saving": "Saving...",
     "deleting": "Deleting...",
     "close": "Close"
@@ -633,7 +635,16 @@
     "contest": {
       "discipline": "Discipline",
       "bar_weights": "Bar Weights",
-      "start": "Start"
+      "start": "Start",
+      "delete_button": "Delete",
+      "deleting": "Deleting...",
+      "status": {
+        "active": "Active",
+        "paused": "Paused",
+        "completed": "Completed",
+        "draft": "Draft",
+        "setup": "Setup"
+      }
     }
   },
   "competitors_page": {
@@ -1096,6 +1107,50 @@
       "edit_attempts_title": "Edit attempts • {name}",
       "edit_competitor_title": "Edit competitor • {name}",
       "create_competitor_title": "Add competitor"
+    },
+    "categories": {
+      "modal_title": "Categories",
+      "age": {
+        "title": "Age Categories",
+        "description": "Define age divisions for the competition."
+      },
+      "weight": {
+        "title": "Weight Classes", 
+        "description": "Configure weight classes by gender."
+      },
+      "columns": {
+        "code": "Code",
+        "name": "Name",
+        "min_age": "Min Age",
+        "max_age": "Max Age",
+        "min_weight": "Min Weight",
+        "max_weight": "Max Weight",
+        "sort_order": "Order",
+        "gender": "Gender",
+        "actions": "Actions"
+      },
+      "gender": {
+        "female": "Female",
+        "male": "Male"
+      },
+      "placeholders": {
+        "age_name": "e.g. Teen 16-17",
+        "weight_name": "e.g. Lightweight"
+      },
+      "add_age_category": "Add Age Category",
+      "add_weight_class": "Add Weight Class",
+      "actions": {
+        "revert_changes": "Revert Changes",
+        "reset_defaults": "Reset to Defaults",
+        "resetting": "Resetting...",
+        "saving": "Saving...",
+        "save": "Save Changes"
+      },
+      "toast_saved": "Categories saved successfully.",
+      "toast_save_failed": "Failed to save categories.",
+      "toast_reset": "Categories reset to defaults.",
+      "toast_reset_failed": "Failed to reset categories.",
+      "reset_blocked": "Cannot reset while there are unsaved changes."
     }
   },
   "display_table": {
