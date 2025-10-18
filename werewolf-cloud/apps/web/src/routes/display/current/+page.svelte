@@ -49,9 +49,179 @@
 
   $: currentCompetitor = liveCurrentBundle?.competitor ?? null;
 
+  let previousCompetitorName: string = '';
+  let competitorNameChanged = false;
+  let decipherText: string = '';
+  
+  let previousLiftLabel: string = '';
+  let liftLabelChanged = false;
+  let decipherLiftLabel: string = '';
+  
+  let previousCompetitorInfo: string = '';
+  let competitorInfoChanged = false;
+  let decipherCompetitorInfo: string = '';
+  
+  let previousAttemptWeights: string[] = ['', '', ''];
+  let attemptWeightsChanged = [false, false, false];
+  let decipherAttemptWeights: string[] = ['', '', ''];
+  
+  let previousBarWeight: string = '';
+  let previousCollarWeight: string = '';
+  let barWeightChanged = false;
+  let collarWeightChanged = false;
+  let decipherBarWeight: string = '';
+  let decipherCollarWeight: string = '';
+  
+  let previousPlates: string = '';
+  let platesChanged = false;
+  let decipherPlates: string[] = [];
+  
   $: sanitizedName = currentCompetitor
     ? truncate(`${currentCompetitor.firstName} ${currentCompetitor.lastName}`, 28)
     : '';
+  
+  $: currentLiftLabelStr = liftLabel();
+  
+  $: competitorInfoStr = `${currentCompetitor?.club || ''}•${weightClassLabel}•${bodyweightLabel || ''}•${ageCategoryLabel || ''}•${currentAge || ''}•${currentCity || ''}`;
+  
+  $: barWeightStr = platePlan ? formatWeight(platePlan.barWeight) : '';
+  $: collarWeightStr = platePlan && platePlan.clampWeight > 0 ? formatWeight(platePlan.clampWeight) : '';
+  
+  // Generic decipher animation function
+  function createDecipherAnimation(
+    targetText: string,
+    previousText: string,
+    onChanged: (changed: boolean) => void,
+    onDecipherChange: (text: string) => void,
+    onComplete: () => void
+  ) {
+    if (targetText !== previousText) {
+      onChanged(true);
+      let decipherText = previousText || '';
+      const targetLength = targetText.length;
+      let currentStep = 0;
+      
+      const decipherInterval = setInterval(() => {
+        if (currentStep >= targetLength + 3) {
+          onDecipherChange(targetText);
+          clearInterval(decipherInterval);
+          setTimeout(() => {
+            onChanged(false);
+            onComplete();
+          }, 500);
+          return;
+        }
+        
+        decipherText = targetText.split('').map((char, index) => {
+          if (index < currentStep) {
+            return char;
+          } else if (char === ' ' || char === '•' || char === ':' || char === '.' || char === ',') {
+            return char;
+          } else {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()';
+            return chars[Math.floor(Math.random() * chars.length)];
+          }
+        }).join('');
+        
+        onDecipherChange(decipherText);
+        currentStep++;
+      }, 30);
+      
+      return decipherText;
+    }
+    return targetText;
+  }
+  
+  // Competitor name decipher
+  $: if (sanitizedName && sanitizedName !== previousCompetitorName) {
+    decipherText = createDecipherAnimation(
+      sanitizedName,
+      previousCompetitorName,
+      (changed) => competitorNameChanged = changed,
+      (text) => decipherText = text,
+      () => previousCompetitorName = sanitizedName
+    );
+  }
+  
+  // Lift label decipher
+  $: if (currentLiftLabelStr && currentLiftLabelStr !== previousLiftLabel) {
+    decipherLiftLabel = createDecipherAnimation(
+      currentLiftLabelStr,
+      previousLiftLabel,
+      (changed) => liftLabelChanged = changed,
+      (text) => decipherLiftLabel = text,
+      () => previousLiftLabel = currentLiftLabelStr
+    );
+  }
+  
+  // Competitor info decipher
+  $: if (competitorInfoStr && competitorInfoStr !== previousCompetitorInfo) {
+    decipherCompetitorInfo = createDecipherAnimation(
+      competitorInfoStr,
+      previousCompetitorInfo,
+      (changed) => competitorInfoChanged = changed,
+      (text) => decipherCompetitorInfo = text,
+      () => previousCompetitorInfo = competitorInfoStr
+    );
+  }
+  
+  // Attempt weights decipher
+  $: attemptTiles.forEach((tile, index) => {
+    if (tile.displayWeight !== previousAttemptWeights[index]) {
+      decipherAttemptWeights[index] = createDecipherAnimation(
+        tile.displayWeight,
+        previousAttemptWeights[index],
+        (changed) => attemptWeightsChanged[index] = changed,
+        (text) => decipherAttemptWeights[index] = text,
+        () => previousAttemptWeights[index] = tile.displayWeight
+      );
+    }
+  });
+  
+  // Bar weight decipher
+  $: if (barWeightStr && barWeightStr !== previousBarWeight) {
+    decipherBarWeight = createDecipherAnimation(
+      barWeightStr,
+      previousBarWeight,
+      (changed) => barWeightChanged = changed,
+      (text) => decipherBarWeight = text,
+      () => previousBarWeight = barWeightStr
+    );
+  }
+  
+  // Collar weight decipher
+  $: if (collarWeightStr && collarWeightStr !== previousCollarWeight) {
+    decipherCollarWeight = createDecipherAnimation(
+      collarWeightStr,
+      previousCollarWeight,
+      (changed) => collarWeightChanged = changed,
+      (text) => decipherCollarWeight = text,
+      () => previousCollarWeight = collarWeightStr
+    );
+  }
+  
+  // Plates decipher
+  $: if (platePlan && platePlan.plates.length > 0) {
+    const currentPlatesStr = platePlan.plates.map(p => `${p.plateWeight}-${p.count}`).join(',');
+    if (currentPlatesStr !== previousPlates) {
+      platesChanged = true;
+      const prevPlatesArray = previousPlates ? previousPlates.split(',') : [];
+      
+      platePlan.plates.forEach((plate, index) => {
+        const prevPlate = prevPlatesArray[index]?.split('-') || ['', ''];
+        const prevWeight = prevPlate[0] || '';
+        const targetText = `${plate.plateWeight} kg`;
+        
+        decipherPlates[index] = createDecipherAnimation(
+          targetText,
+          prevWeight ? `${prevWeight} kg` : '',
+          (changed) => platesChanged = changed,
+          (text) => decipherPlates[index] = text,
+          () => previousPlates = currentPlatesStr
+        );
+      });
+    }
+  }
 
   $: attemptsByLift = liveCurrentBundle?.attemptsByLift ?? { Squat: [], Bench: [], Deadlift: [] };
 
@@ -59,25 +229,45 @@
 
   $: currentLiftAttempts = highlightedLift ? attemptsByLift[highlightedLift] ?? [] : [];
 
+  let previousAttemptStatuses: Record<number, string> = {};
+  
   $: attemptTiles = currentLiftAttempts.length > 0
     ? [1, 2, 3].map((num) => {
         const match = currentLiftAttempts.find((item) => item.attemptNumber === num);
         const weight = match?.weight ?? null;
+        const status = (match?.status ?? 'Pending') as AttemptStatus;
+        const previousStatus = previousAttemptStatuses[num];
+        const statusChanged = previousStatus && previousStatus !== status;
+        
+        // Update previous status
+        previousAttemptStatuses[num] = status;
+        
         return {
           number: num,
           weight,
           displayWeight: formatWeight(weight),
-          status: (match?.status ?? 'Pending') as AttemptStatus,
+          status,
           isHighlighted: liveCurrentBundle?.highlight?.attemptNumber === num,
+          statusChanged,
         };
       })
-    : [1, 2, 3].map((num) => ({
-        number: num,
-        weight: null,
-        displayWeight: '—',
-        status: 'Pending' as AttemptStatus,
-        isHighlighted: false,
-      }));
+    : [1, 2, 3].map((num) => {
+        const status = 'Pending' as AttemptStatus;
+        const previousStatus = previousAttemptStatuses[num];
+        const statusChanged = previousStatus && previousStatus !== status;
+        
+        // Update previous status
+        previousAttemptStatuses[num] = status;
+        
+        return {
+          number: num,
+          weight: null,
+          displayWeight: '—',
+          status,
+          isHighlighted: false,
+          statusChanged,
+        };
+      });
 
   $: platePlan = liveCurrentBundle?.platePlan ?? null;
   $: clampWeightPerClamp = platePlan
@@ -286,8 +476,107 @@
     return 'bg-gray-500';
   }
 
+  function glowClass(status: string): string {
+    const normalized = status?.toLowerCase() ?? '';
+    if (normalized === 'successful') {
+      return 'shadow-[0_0_90px_rgba(255,255,255,0.55),0_0_65px_rgba(34,197,94,0.65)] animate-pulse-glow-success';
+    }
+    if (normalized === 'failed') {
+      return 'shadow-[0_0_90px_rgba(255,255,255,0.55),0_0_65px_rgba(220,20,60,0.65)] animate-pulse-glow-failed';
+    }
+    return 'shadow-[0_0_90px_rgba(255,255,255,0.55)] animate-pulse-glow-pending';
+  }
+
   $: currentRackHeight = rackHeight();
 </script>
+
+<style>
+  @keyframes pulse-glow-pending {
+    0%, 100% {
+      box-shadow: 0 0 90px rgba(255,255,255,0.55);
+    }
+    50% {
+      box-shadow: 0 0 120px rgba(255,255,255,0.75);
+    }
+  }
+  
+  @keyframes pulse-glow-success {
+    0%, 100% {
+      box-shadow: 0 0 90px rgba(255,255,255,0.55), 0 0 65px rgba(34,197,94,0.65);
+    }
+    50% {
+      box-shadow: 0 0 120px rgba(255,255,255,0.75), 0 0 85px rgba(34,197,94,0.85);
+    }
+  }
+  
+  @keyframes pulse-glow-failed {
+    0%, 100% {
+      box-shadow: 0 0 90px rgba(255,255,255,0.55), 0 0 65px rgba(220,20,60,0.65);
+    }
+    50% {
+      box-shadow: 0 0 120px rgba(255,255,255,0.75), 0 0 85px rgba(220,20,60,0.85);
+    }
+  }
+
+  @keyframes status-change-success {
+    0% {
+      background-color: rgba(34, 197, 94, 0);
+      border-color: rgba(34, 197, 94, 0);
+    }
+    50% {
+      background-color: rgba(34, 197, 94, 0.3);
+      border-color: rgba(34, 197, 94, 0.8);
+    }
+    100% {
+      background-color: rgba(34, 197, 94, 0);
+      border-color: rgba(34, 197, 94, 0);
+    }
+  }
+
+  @keyframes status-change-failed {
+    0% {
+      background-color: rgba(220, 20, 60, 0);
+      border-color: rgba(220, 20, 60, 0);
+    }
+    50% {
+      background-color: rgba(220, 20, 60, 0.3);
+      border-color: rgba(220, 20, 60, 0.8);
+    }
+    100% {
+      background-color: rgba(220, 20, 60, 0);
+      border-color: rgba(220, 20, 60, 0);
+    }
+  }
+  
+  .animate-pulse-glow-pending {
+    animation: pulse-glow-pending 2s ease-in-out infinite;
+  }
+  
+  .animate-pulse-glow-success {
+    animation: pulse-glow-success 2s ease-in-out infinite;
+  }
+  
+  .animate-pulse-glow-failed {
+    animation: pulse-glow-failed 2s ease-in-out infinite;
+  }
+
+  .animate-status-success {
+    animation: status-change-success 0.8s ease-out;
+  }
+
+  .animate-status-failed {
+    animation: status-change-failed 0.8s ease-out;
+  }
+
+  /* Smooth transitions for all interactive states */
+  .attempt-tile {
+    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+
+
+
+</style>
 
 <svelte:head>
   <title>{(contest?.name ?? t('display_current.head.default_contest')) + ' • ' + t('display_current.head.subtitle')}</title>
@@ -336,26 +625,26 @@
             <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
               <div class="flex flex-col gap-2 w-full">
                 <div class="flex flex-wrap items-baseline gap-4 justify-between w-full">
-                  <h2 class="text-display text-text-primary uppercase tracking-[0.3em]">{sanitizedName}</h2>
-                  <h3 class="text-display text-text-secondary uppercase tracking-[0.3em]">{liftLabel()}</h3>
+                  <h2 class="text-display text-text-primary uppercase tracking-[0.3em] font-mono">{competitorNameChanged ? decipherText : sanitizedName}</h2>
+                  <h3 class="text-display text-text-secondary uppercase tracking-[0.3em] font-mono">{liftLabelChanged ? decipherLiftLabel : currentLiftLabelStr}</h3>
                 </div>
               </div>
             </div>
 
             <div class="flex flex-wrap items-center gap-4 text-caption uppercase tracking-[0.3em] text-text-secondary">
-              <span>{currentCompetitor?.club || t('display_current.hero.club_placeholder')}</span>
-              <span>• {t('display_current.info.weight_class')}: <span class="text-text-primary">{weightClassLabel}</span></span>
+              <span class="font-mono">{competitorInfoChanged ? decipherCompetitorInfo.split('•')[0] || t('display_current.hero.club_placeholder') : (currentCompetitor?.club || t('display_current.hero.club_placeholder'))}</span>
+              <span class="font-mono">• {t('display_current.info.weight_class')}: <span class="text-text-primary">{competitorInfoChanged ? decipherCompetitorInfo.split('•')[1] || weightClassLabel : weightClassLabel}</span></span>
               {#if bodyweightLabel}
-                <span>• {t('display_current.meta.bodyweight')}: <span class="text-text-primary">{bodyweightLabel}{bodyweightLabel !== '—' ? ' kg' : ''}</span></span>
+                <span class="font-mono">• {t('display_current.meta.bodyweight')}: <span class="text-text-primary">{competitorInfoChanged ? decipherCompetitorInfo.split('•')[2] || (bodyweightLabel + (bodyweightLabel !== '—' ? ' kg' : '')) : (bodyweightLabel + (bodyweightLabel !== '—' ? ' kg' : ''))}</span></span>
               {/if}
               {#if ageCategoryLabel}
-                <span>• {t('display_current.info.age_category')}: <span class="text-text-primary">{ageCategoryLabel}</span></span>
+                <span class="font-mono">• {t('display_current.info.age_category')}: <span class="text-text-primary">{competitorInfoChanged ? decipherCompetitorInfo.split('•')[3] || ageCategoryLabel : ageCategoryLabel}</span></span>
               {/if}
               {#if currentAge !== null}
-                <span>• {t('display_current.meta.age')}: <span class="text-text-primary">{currentAge}</span></span>
+                <span class="font-mono">• {t('display_current.meta.age')}: <span class="text-text-primary">{competitorInfoChanged ? decipherCompetitorInfo.split('•')[4] || currentAge : currentAge}</span></span>
               {/if}
               {#if currentCity}
-                <span>• {t('display_current.info.city')}: <span class="text-text-primary">{currentCity}</span></span>
+                <span class="font-mono">• {t('display_current.info.city')}: <span class="text-text-primary">{competitorInfoChanged ? decipherCompetitorInfo.split('•')[5] || currentCity : currentCity}</span></span>
               {/if}
             
             </div>
@@ -366,13 +655,13 @@
 
           <div class="flex flex-col gap-4 lg:flex-row lg:items-stretch flex-1">
             {#each attemptTiles as tile}
-              <div class={`flex-1 min-w-[160px] px-6 py-6 flex flex-col tracking-[0.3em] uppercase text-center shadow-inner transition-all duration-300 ${attemptBackgroundClass(tile.status)} ${tile.isHighlighted ? 'border-2 border-white shadow-[0_0_90px_rgba(255,255,255,0.55),0_0_65px_rgba(220,20,60,0.65)]' : ''}`}>
+              <div class={`attempt-tile flex-1 min-w-[160px] px-6 py-6 flex flex-col tracking-[0.3em] uppercase text-center shadow-inner transform ${attemptBackgroundClass(tile.status)} ${tile.isHighlighted ? `border-2 border-white ${glowClass(tile.status)} scale-105` : 'hover:scale-102'}`} class:animate-status-success={tile.statusChanged && tile.status === 'successful'} class:animate-status-failed={tile.statusChanged && tile.status === 'failed'}>
                 <p class="text-h3 text-text-secondary">
                   {t('display_current.tiles.attempt', { number: tile.number })}
                 </p>
                 <div class="flex-1 flex items-center justify-center">
                   <div class="flex items-baseline justify-center gap-4">
-                    <span class="text-[6rem] leading-none font-mono text-text-primary">{tile.displayWeight}</span>
+                     <span class="text-[6rem] leading-none font-mono text-text-primary">{attemptWeightsChanged[tile.number - 1] ? decipherAttemptWeights[tile.number - 1] : tile.displayWeight}</span>
                     {#if tile.displayWeight !== '—'}
                       <span class="text-3xl font-mono text-text-secondary uppercase tracking-[0.3em]">kg</span>
                     {/if}
@@ -396,18 +685,18 @@
                   <div class="flex flex-wrap items-center gap-8 justify-center lg:justify-start">
                     {#each platePlan.plates as plate, index (plate.plateWeight + '-' + index)}
                       <div class="flex items-center gap-4 text-text-secondary uppercase tracking-[0.2em]">
-                        <span class="text-text-primary font-mono text-4xl">{plate.plateWeight} kg</span>
+                         <span class="text-text-primary font-mono text-4xl">{platesChanged && decipherPlates[index] ? decipherPlates[index] : `${plate.plateWeight} kg`}</span>
                         <span class="text-text-secondary font-mono text-2xl opacity-70">{t('display_current.sidebar.plates_per_side', { count: plate.count })}</span>
                       </div>
                     {/each}
                   </div>
                   <div class="flex flex-wrap items-center justify-center gap-6 text-text-secondary uppercase tracking-[0.2em] text-2xl">
-                    <span>{t('display_current.sidebar.bar_weight', { weight: formatWeight(platePlan.barWeight) })}</span>
+                     <span class="font-mono">{t('display_current.sidebar.bar_weight', { weight: formatWeight(platePlan.barWeight) })}</span>
                     {#if platePlan.clampWeight > 0}
-                      <span>{t('display_current.sidebar.collar_weight', {
-                        total: formatWeight(platePlan.clampWeight),
-                        perClamp: clampWeightPerClamp ? formatWeight(clampWeightPerClamp) : formatWeight(platePlan.clampWeight / 2)
-                      })}</span>
+                       <span class="font-mono">{t('display_current.sidebar.collar_weight', {
+                         total: formatWeight(platePlan.clampWeight),
+                         perClamp: clampWeightPerClamp ? formatWeight(clampWeightPerClamp) : formatWeight(platePlan.clampWeight / 2)
+                       })}</span>
                     {/if}
                     {#if !platePlan.exact}
                       <span class="text-status-warning">{t('display_current.sidebar.target_weight', { target: formatWeight(platePlan.targetWeight) })}</span>
