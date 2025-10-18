@@ -9,10 +9,11 @@
     WeightClass,
     AgeCategory,
     LiftType,
+    Attempt,
   } from '$lib/types';
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
-  import { determineAgeCategory, determineWeightClass } from '@werewolf/domain/services/coefficients';
+  import { determineAgeCategory, determineWeightClass } from '@werewolf/domain';
   import { currentContest } from '$lib/ui/contest-store';
 
   export let competitor: CompetitorSummary | null = null;
@@ -215,10 +216,16 @@ export let lifts: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
   $: if (showRegistrationSection && ageCategories.length > 0) {
     autoAssignAgeCategory();
   }
+  $: if (registration && contestId) {
+    loadOpeningAttempts();
+  }
 
   onMount(async () => {
     if (mode === 'edit' && competitor) {
       await loadCompetitor(competitor.id);
+    }
+    if (registration) {
+      await loadOpeningAttempts();
     }
   });
 
@@ -231,10 +238,10 @@ export let lifts: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
       if (detailResp.data) {
         detail = detailResp.data;
         form = {
-          firstName: detailResp.data.firstName,
-          lastName: detailResp.data.lastName,
-          birthDate: detailResp.data.birthDate,
-          gender: detailResp.data.gender,
+          firstName: detailResp.data.firstName ?? '',
+          lastName: detailResp.data.lastName ?? '',
+          birthDate: detailResp.data.birthDate ?? '',
+          gender: detailResp.data.gender ?? 'Male',
           club: detailResp.data.club ?? '',
           city: detailResp.data.city ?? '',
           notes: detailResp.data.notes ?? '',
@@ -247,6 +254,29 @@ export let lifts: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
       error = err instanceof Error ? err.message : t('competitor_modal.status.error_load');
     } finally {
       isLoading = false;
+    }
+  }
+
+  async function loadOpeningAttempts() {
+    if (!registration || !contestId) return;
+    
+    try {
+      const attemptsResp = await apiClient.get<Attempt[]>(`/contests/${contestId}/registrations/${registration.id}/attempts`);
+      if (attemptsResp.data) {
+        const attempts = attemptsResp.data;
+        const updatedOpeningAttempts: Record<LiftType, string> = { Squat: '', Bench: '', Deadlift: '' };
+        
+        for (const attempt of attempts) {
+          if (attempt.attemptNumber === 1 && lifts.includes(attempt.liftType as LiftType)) {
+            updatedOpeningAttempts[attempt.liftType as LiftType] = String(attempt.weight);
+          }
+        }
+        
+        openingAttemptByLift = updatedOpeningAttempts;
+      }
+    } catch (err) {
+      // Silently fail - opening attempts will remain empty
+      console.warn('Failed to load opening attempts:', err);
     }
   }
 
@@ -332,7 +362,8 @@ export let lifts: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
     }
 
     try {
-      const resolvedCode = determineWeightClass(weight, gender, descriptors);
+      const fixedDescriptors = descriptors.map(d => ({ ...d, sortOrder: d.sortOrder ?? null }));
+      const resolvedCode = determineWeightClass(weight, gender, fixedDescriptors);
       const normalisedGender = gender.toLowerCase().startsWith('f') ? 'female' : 'male';
 
       const match =
@@ -396,7 +427,8 @@ export let lifts: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
     if (descriptors.length === 0) return;
 
     try {
-      const resolvedCode = determineAgeCategory(birth, cDate, descriptors);
+      const fixedDescriptors = descriptors.map(d => ({ ...d, sortOrder: d.sortOrder ?? null }));
+      const resolvedCode = determineAgeCategory(birth, cDate, fixedDescriptors);
       const match = ageCategories.find((cat) => cat.code === resolvedCode || cat.id === resolvedCode);
       if (!match) return;
       const nextId = match.id ?? match.code;
@@ -529,11 +561,11 @@ export let lifts: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
 
         if (response.data) {
           const next = { ...response.data } as Registration;
-          next.firstName = form.firstName;
-          next.lastName = form.lastName;
+          next.firstName = form.firstName || '';
+          next.lastName = form.lastName || '';
           next.gender = form.gender;
-          next.club = form.club.trim() || null;
-          next.city = form.city.trim() || null;
+          next.club = form.club?.trim() || null;
+          next.city = form.city?.trim() || null;
 
           updatedRegistration = next;
       }
