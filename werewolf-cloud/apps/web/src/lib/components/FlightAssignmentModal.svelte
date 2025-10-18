@@ -102,7 +102,7 @@
         {t('contest_detail.registrations.auto_assign_size_label')}
       </label>
       <input
-        class="input w-24 text-sm"
+        class="input-field w-24"
         type="number"
         min="1"
         id="auto-flight-size"
@@ -149,7 +149,7 @@
             </td>
             <td class="px-3 py-2">
               <select
-                class="input w-full text-sm"
+                class="input-field w-full"
                 value={draft.flightCode}
                 on:change={(event) => {
                   const target = event.currentTarget;
@@ -166,7 +166,7 @@
             </td>
             <td class="px-3 py-2">
               <input
-                class="input w-24 text-sm"
+                class="input-field w-24"
                 type="text"
                 inputmode="numeric"
                 pattern="[0-9]*"
