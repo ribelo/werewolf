@@ -8,7 +8,8 @@
 import { getStatusClasses, formatCompetitorName, formatWeight, normaliseAgeCategoryLabel } from '$lib/utils';
 import { apiClient, ApiError } from '$lib/api';
 import { realtimeClient } from '$lib/realtime';
-import { modalStore } from '$lib/ui/modal';
+  import { modalStore } from '$lib/ui/modal';
+  import FlightAssignmentModal from '$lib/components/FlightAssignmentModal.svelte';
 import { toast } from '$lib/ui/toast';
   import { contestStore, currentAgeCategories, currentWeightClasses } from '$lib/ui/contest-store';
   import { setContestContext } from '$lib/ui/context-helpers';
@@ -177,12 +178,8 @@ import type {
   let availableAgeFilters: Array<{ id: AgeFilter; label: string }> = [];
   let selectedLabelFilter: LabelFilter = 'ALL';
   let availableLabelFilters: Array<{ id: LabelFilter; label: string }> = [];
-  let showFlightModal = false;
-  const FLIGHT_CODES = Array.from({ length: 26 }, (_, index) => String.fromCharCode(65 + index));
-  const FLIGHT_CODE_REGEX = /^[A-Z]$/;
-  const DEFAULT_FLIGHT_CODE = 'A';
-  let autoFlightSize = 10;
-  let flightDrafts: Record<string, { flightCode: string; flightOrder: number | null }> = {};
+
+
   let unifiedRows: UnifiedRow[] = [];
   let sortedRows: UnifiedRow[] = [];
   let filteredRows: UnifiedRow[] = [];
@@ -1194,158 +1191,34 @@ import type {
     selectedLabelFilter = filter;
   }
 
-  function sanitizeFlightCode(value: string | null | undefined): string {
-    if (!value) return DEFAULT_FLIGHT_CODE;
-    const trimmed = value.trim().toUpperCase();
-    return FLIGHT_CODE_REGEX.test(trimmed) ? trimmed : DEFAULT_FLIGHT_CODE;
-  }
-
-  function normalizeFlightOrder(value: number | null | undefined): number | null {
-    if (value === null || value === undefined) {
-      return null;
-    }
-    const integer = Math.trunc(value);
-    return Number.isNaN(integer) ? null : integer;
-  }
-
   function openFlightManager() {
-    const drafts: Record<string, { flightCode: string; flightOrder: number | null }> = {};
-    registrations.forEach((reg) => {
-      drafts[reg.id] = {
-        flightCode: sanitizeFlightCode(reg.flightCode),
-        flightOrder: normalizeFlightOrder(reg.flightOrder),
-      };
+    modalStore.open({
+      title: t('contest_detail.registrations.manage_flights_title'),
+      size: 'xl',
+      component: FlightAssignmentModal,
+      data: {
+        registrations,
+        onSaved: async (updates: any[]) => {
+          await handleFlightUpdates(updates);
+        }
+      }
     });
-    flightDrafts = drafts;
-    showFlightModal = true;
   }
 
-  function closeFlightManager() {
-    showFlightModal = false;
-  }
 
-  function updateFlightDraft(
-    registrationId: string,
-    partial: { flightCode?: string | null; flightOrder?: number | null }
-  ) {
-    const current = flightDrafts[registrationId] ?? {
-      flightCode: DEFAULT_FLIGHT_CODE,
-      flightOrder: null,
-    };
 
-    const nextFlightCode =
-      partial.flightCode !== undefined
-        ? sanitizeFlightCode(partial.flightCode)
-        : current.flightCode;
-    const nextFlightOrder =
-      partial.flightOrder !== undefined
-        ? normalizeFlightOrder(partial.flightOrder)
-        : current.flightOrder;
-
-    flightDrafts = {
-      ...flightDrafts,
-      [registrationId]: {
-        flightCode: nextFlightCode,
-        flightOrder: nextFlightOrder,
-      },
-    };
-  }
-
-  function flightSortWeight(registration: Registration): number {
-    const row = unifiedRows.find((entry) => entry.registration.id === registration.id);
-    if (row) {
-      return row.maxLift > 0 ? row.maxLift : row.total;
-    }
-    return registration.bodyweight ?? 0;
-  }
-
-  function autoAssignFlights(): void {
-    const size = Math.max(1, Math.floor(Number(autoFlightSize) || 0));
-    const sorted = [...registrations].sort((a, b) => {
-      const weightDiff = flightSortWeight(a) - flightSortWeight(b);
-      if (weightDiff !== 0) return weightDiff;
-      const bodyDiff = (a.bodyweight ?? 0) - (b.bodyweight ?? 0);
-      if (bodyDiff !== 0) return bodyDiff;
-      return `${a.lastName} ${a.firstName}`.localeCompare(
-        `${b.lastName} ${b.firstName}`,
-        undefined,
-        { sensitivity: 'base' }
-      );
-    });
-
-    const nextDrafts: Record<string, { flightCode: string; flightOrder: number | null }> = {};
-    const flightCounts: Record<string, number> = {};
-
-    sorted.forEach((reg, index) => {
-      const flightIndex = Math.min(Math.floor(index / size), FLIGHT_CODES.length - 1);
-      const flightCode = FLIGHT_CODES[flightIndex] ?? FLIGHT_CODES[FLIGHT_CODES.length - 1];
-      const order = (flightCounts[flightCode] ?? 0) + 1;
-      flightCounts[flightCode] = order;
-      nextDrafts[reg.id] = {
-        flightCode,
-        flightOrder: order,
-      };
-    });
-
-    flightDrafts = nextDrafts;
-  }
-
-  function resetAllFlights(): void {
-    const drafts: Record<string, { flightCode: string; flightOrder: number | null }> = {};
-    registrations.forEach((reg) => {
-      drafts[reg.id] = {
-        flightCode: DEFAULT_FLIGHT_CODE,
-        flightOrder: null,
-      };
-    });
-    flightDrafts = drafts;
-  }
-
-  async function saveFlightAssignments() {
+  async function handleFlightUpdates(updates: any[]) {
     if (!contestId) {
-      showFlightModal = false;
       return;
     }
 
-    const assignments = registrations
-      .map((reg) => {
-        const draft = flightDrafts[reg.id] ?? {
-          flightCode: DEFAULT_FLIGHT_CODE,
-          flightOrder: null,
-        };
-
-        const normalizedCode = sanitizeFlightCode(draft.flightCode);
-        const normalizedOrder = normalizeFlightOrder(draft.flightOrder);
-
-        const currentCodeRaw = reg.flightCode ? reg.flightCode.trim().toUpperCase() : null;
-        const currentOrder = reg.flightOrder ?? null;
-
-        const codeChanged =
-          currentCodeRaw === null ? true : currentCodeRaw !== normalizedCode;
-        const orderChanged = normalizedOrder !== currentOrder;
-
-        if (!codeChanged && !orderChanged) {
-          return null;
-        }
-
-        return {
-          registrationId: reg.id,
-          flightCode: normalizedCode,
-          flightOrder: normalizedOrder,
-        };
-      })
-      .filter(
-        (
-          assignment
-        ): assignment is {
-          registrationId: string;
-          flightCode: string;
-          flightOrder: number | null;
-        } => Boolean(assignment)
-      );
+    const assignments = updates.map((update) => ({
+      registrationId: update.id,
+      flightCode: update.flightCode,
+      flightOrder: update.flightOrder,
+    }));
 
     if (assignments.length === 0) {
-      showFlightModal = false;
       return;
     }
 
@@ -1368,7 +1241,6 @@ import type {
       });
 
       toast.success(t('contest_detail.toast.flights_updated'));
-      showFlightModal = false;
     } catch (error) {
       const message = error instanceof ApiError
         ? error.message
@@ -1476,6 +1348,33 @@ import type {
       case 'attempt.currentCleared':
         liveCurrentAttempt = null;
         break;
+      case 'registration.upserted': {
+        const registration = event.data as Registration | undefined;
+        if (!registration) break;
+        const index = registrations.findIndex((entry) => entry.id === registration.id);
+        if (index >= 0) {
+          registrations = registrations.map((entry) =>
+            entry.id === registration.id ? { ...entry, ...registration } : entry
+          );
+          contestStore.updateRegistration(registration);
+        } else {
+          registrations = [...registrations, registration];
+          contestStore.addRegistration(registration);
+        }
+        break;
+      }
+      case 'registration.deleted': {
+        const payload = event.data as { registrationId?: string } | undefined;
+        const registrationId = payload?.registrationId;
+        if (!registrationId) break;
+        const exists = registrations.some((entry) => entry.id === registrationId);
+        if (!exists) break;
+        registrations = registrations.filter((entry) => entry.id !== registrationId);
+        contestStore.removeRegistration(registrationId);
+        liveAttempts = liveAttempts.filter((attempt) => attempt.registrationId !== registrationId);
+        contestStore.setAttempts(liveAttempts);
+        break;
+      }
       case 'heartbeat':
         break;
     }
@@ -2314,113 +2213,6 @@ import type {
   {/if}
 
 
-  {#if showFlightModal}
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-      <div class="w-full max-w-3xl rounded-lg border border-border-color bg-main-bg shadow-lg">
-        <header class="flex items-center justify-between border-b border-border-color px-4 py-3">
-          <h3 class="text-h3 text-text-primary">{$_('contest_detail.registrations.manage_flights_title')}</h3>
-          <button class="btn-ghost px-2 py-1 text-xxs" on:click={closeFlightManager}>{$_('buttons.close')}</button>
-        </header>
-        <div class="px-4 py-3 space-y-3">
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="flex items-center gap-2">
-              <label class="text-xxs uppercase tracking-[0.2em] text-text-secondary" for="auto-flight-size">
-                {$_('contest_detail.registrations.auto_assign_size_label')}
-              </label>
-              <input
-                class="input w-24 text-sm"
-                type="number"
-                min="1"
-                id="auto-flight-size"
-                bind:value={autoFlightSize}
-              />
-            </div>
-            <div class="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                class="btn-secondary px-3 py-2 text-xxs"
-                on:click={autoAssignFlights}
-              >
-                {$_('contest_detail.registrations.auto_assign_action')}
-              </button>
-              <button
-                type="button"
-                class="btn-ghost px-3 py-2 text-xxs"
-                on:click={resetAllFlights}
-              >
-                {$_('contest_detail.registrations.reset_flights')}
-              </button>
-            </div>
-          </div>
-          <div class="max-h-[60vh] overflow-auto">
-            <table class="w-full border-collapse text-sm">
-              <thead class="bg-element-bg text-label">
-                <tr>
-                  <th class="px-3 py-2 text-left">{$_('contest_detail.registrations.columns.lifter')}</th>
-                  <th class="px-3 py-2 text-left">{$_('contest_detail.registrations.columns.flight')}</th>
-                  <th class="px-3 py-2 text-left">{$_('contest_detail.registrations.columns.flight_order')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {#each registrations as reg (reg.id)}
-                  {@const draft = flightDrafts[reg.id] ?? { flightCode: DEFAULT_FLIGHT_CODE, flightOrder: null }}
-                  <tr class="border-b border-border-color">
-                    <td class="px-3 py-2">
-                      <div class="flex flex-col">
-                        <span class="font-semibold text-text-primary">{reg.firstName} {reg.lastName}</span>
-                        <span class="text-caption text-text-secondary">{reg.club ?? '—'}</span>
-                      </div>
-                    </td>
-                    <td class="px-3 py-2">
-                      <select
-                        class="input w-full text-sm"
-                        value={draft.flightCode}
-                        on:change={(event) => {
-                          const target = event.currentTarget;
-                          if (!(target instanceof HTMLSelectElement)) {
-                            return;
-                          }
-                          updateFlightDraft(reg.id, { flightCode: target.value });
-                        }}
-                      >
-                        {#each FLIGHT_CODES as code}
-                          <option value={code}>{code}</option>
-                        {/each}
-                      </select>
-                    </td>
-                    <td class="px-3 py-2">
-                      <input
-                        class="input w-24 text-sm"
-                        type="text"
-                        inputmode="numeric"
-                        pattern="[0-9]*"
-                        value={draft.flightOrder ?? ''}
-                        on:input={(event) => {
-                          const target = event.currentTarget;
-                          if (!(target instanceof HTMLInputElement)) {
-                            return;
-                          }
-                          const raw = target.value.trim();
-                          const numeric = raw === '' ? null : Number(raw);
-                          updateFlightDraft(reg.id, {
-                            flightOrder: Number.isFinite(numeric) ? numeric : null
-                          });
-                        }}
-                        placeholder="—"
-                      />
-                    </td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div class="flex items-center justify-end gap-2 border-t border-border-color px-4 py-3">
-          <button class="btn-secondary px-3 py-2 text-xxs" on:click={closeFlightManager}>{$_('buttons.cancel')}</button>
-          <button class="btn-primary px-3 py-2 text-xxs" on:click={saveFlightAssignments}>{$_('buttons.save')}</button>
-        </div>
-      </div>
-    </div>
-  {/if}
+
 
 </Layout>
