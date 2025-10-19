@@ -11,7 +11,7 @@ Keep copies (CSV/JSON) in `packages/domain/src/data/` with citation comments and
 ## Phase 0 — Analysis & Table Extraction
 - [x] Verify table coverage for both sexes from 40 kg (women) / 50 kg (men) upward, noting highest mass provided and any gaps. *(men: 50.00–179.75 kg, women: 40.00–119.75 kg)*
 - [x] Decide rounding policy for weights outside the table (round to nearest 0.25 kg and clamp to table min/max) and record rules in docs.
-- [x] Transcribe McCulloch table for 40–90+; confirm whether juniors (<23) require Foster coefficients or default to 1.00. *(juniors remain at legacy factors; masters use table values)*
+- [x] Transcribe McCulloch table for 40–90+; confirm whether juniors (<23) require Foster coefficients or default to 1.00. *(juniors now stay at 1.00; masters use table values)*
 - [x] Produce machine-readable JSON assets with repeatable extraction notes committed under `packages/domain/src/data/`.
 
 ## Phase 1 — Domain Data Assets & Storage

@@ -22,15 +22,15 @@ Centralised reference for the provisioned Cloudflare resources that power the We
 
 ```bash
 # Local development (default config points at dev bindings)
-wrangler dev --config wrangler.toml --local
+wrangler dev --config wrangler.worker.toml --local
 
 # List and apply migrations in production
 a bun run typecheck
 b wrangler d1 migrations list werewolf --env production
-c wrangler d1 migrations apply werewolf --env production
+c wrangler d1 migrations apply werewolf --env production --config wrangler.worker.toml
 
 # Publish the worker
-wrangler deploy --config wrangler.prod.toml
+wrangler deploy --config wrangler.worker.toml --env production
 ```
 
 ## Data Migration

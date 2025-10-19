@@ -808,6 +808,9 @@
     "tabs": {
       "desk": "Stanowisko",
       "main_table": "Rejestracja",
+      "squat_table": "Przysiad",
+      "bench_table": "Wyciskanie",
+      "deadlift_table": "Martwy ciąg",
       "results": "Wyniki",
       "plates": "Obciążenia",
       "backups": "Kopie zapasowe"

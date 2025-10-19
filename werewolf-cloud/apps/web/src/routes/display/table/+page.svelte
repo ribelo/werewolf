@@ -101,8 +101,8 @@ let clampWeightSetting: number | null = contest?.clampWeight ?? 2.5;
     lastUpdateTime = new Date();
   }
 
-function handleLiveEvent(event: LiveEvent) {
-  switch (event.type) {
+  function handleLiveEvent(event: LiveEvent) {
+    switch (event.type) {
       case 'attempt.upserted': {
         const payload = event.data as Attempt | undefined;
         if (!payload) break;
@@ -138,10 +138,34 @@ function handleLiveEvent(event: LiveEvent) {
         liveCurrentBundle = null;
         break;
       }
+      case 'registration.upserted': {
+        const payload = event.data as Registration | undefined;
+        if (!payload) break;
+        const index = registrations.findIndex((item) => item.id === payload.id);
+        if (index >= 0) {
+          const next = [...registrations];
+          next[index] = { ...next[index], ...payload };
+          registrations = next;
+        } else {
+          registrations = [...registrations, payload];
+        }
+        break;
+      }
+      case 'registration.deleted': {
+        const payload = event.data as { registrationId?: string } | undefined;
+        const registrationId = payload?.registrationId;
+        if (!registrationId) break;
+        const before = registrations.length;
+        registrations = registrations.filter((entry) => entry.id !== registrationId);
+        if (registrations.length !== before) {
+          liveAttempts = liveAttempts.filter((attempt) => attempt.registrationId !== registrationId);
+        }
+        break;
+      }
       default:
         break;
     }
-}
+  }
 
   function computePendingAttempts(): Attempt[] {
     return buildRisingBarQueue(liveAttempts, {

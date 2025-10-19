@@ -808,6 +808,9 @@
     "tabs": {
       "desk": "Desk",
       "main_table": "Main table",
+      "squat_table": "Squat",
+      "bench_table": "Bench",
+      "deadlift_table": "Deadlift",
       "results": "Results",
       "plates": "Plate sets",
       "backups": "Backups"

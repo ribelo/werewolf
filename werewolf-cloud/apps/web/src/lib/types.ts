@@ -358,6 +358,8 @@ export type LiveEventType =
   | 'attempt.resultUpdated'
   | 'attempt.currentSet'
   | 'attempt.currentCleared'
+  | 'registration.upserted'
+  | 'registration.deleted'
   | 'heartbeat';
 
 export interface LiveEvent<T = unknown> {

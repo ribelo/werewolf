@@ -15,7 +15,7 @@
     "test": "vitest --run --watch=false --config config/vitest.config.ts",
     "check": "bun run typecheck && bun run lint && bun run test",
     "deploy": "./scripts/deploy.sh",
-    "deploy:api": "bunx wrangler deploy --config wrangler.toml --env production",
+    "deploy:api": "bunx wrangler deploy --config wrangler.worker.toml --env production",
     "deploy:web": "cd apps/web && SVELTE_ADAPTER=cloudflare bun run build && bunx wrangler pages deploy .svelte-kit/cloudflare --project-name werewolf --branch master --commit-dirty=true"
   },
   "devDependencies": {

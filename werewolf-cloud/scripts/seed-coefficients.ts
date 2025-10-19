@@ -85,7 +85,7 @@ async function main() {
   }
 
   if (!options.config) {
-    options.config = options.local ? 'wrangler.dev.toml' : 'wrangler.toml';
+    options.config = options.local ? 'wrangler.dev.toml' : 'wrangler.worker.toml';
   }
 
   const reshelMen = await loadJson<ReshelDataset>('packages/domain/src/data/reshel-men.json');

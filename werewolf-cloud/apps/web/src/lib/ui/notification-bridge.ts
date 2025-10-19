@@ -95,6 +95,11 @@ function handleAttemptEvents() {
         // Heartbeat events don't need notifications
         break;
 
+      case 'registration.upserted':
+      case 'registration.deleted':
+        // Registration events currently do not trigger notifications
+        break;
+
       default:
         console.warn('Unknown event type:', event.type);
     }

@@ -11,7 +11,8 @@ werewolf-cloud/
 ├── config/          # Shared configuration (lint/typecheck)
 ├── migrations/      # D1 SQL migrations
 ├── docs/            # Project documentation (parity matrix, env reference)
-└── wrangler.toml    # Cloudflare worker configuration
+├── wrangler.toml    # Cloudflare Pages configuration (SSR bundle)
+└── wrangler.worker.toml    # Cloudflare Worker configuration (API, migrations)
 ```
 
 ## Getting Started

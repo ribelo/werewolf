@@ -138,7 +138,7 @@ This plan breaks the rewrite into actionable work packages that preserve existin
 1. Start backend with WebSocket support:
    ```bash
    cd werewolf-cloud
-   nix develop -c wrangler dev --local --config wrangler.toml --port 8787
+   nix develop -c wrangler dev --local --config wrangler.worker.toml --port 8787
    ```
 
 2. Start frontend:
@@ -215,7 +215,7 @@ websocat ws://127.0.0.1:8787/ws/contests/{contestId}
 - [x] Add missing migrations if future tweaks exist (migration `0007_fix_settings_schema.sql`, `0008_add_attempt_updated_at.sql`).
 
 ### 2.2 Local D1 Sandbox
-- [ ] Apply migrations locally (`wrangler d1 migrations apply werewolf --local --config wrangler.toml`).
+- [ ] Apply migrations locally (`wrangler d1 migrations apply werewolf --local --config wrangler.worker.toml`).
 - [x] Seed and verify reference data via `wrangler d1 execute` queries (age categories, weight classes confirmed).
 - [ ] Record any gaps in `docs/cloudflare-environments.md`.
 
@@ -235,7 +235,7 @@ The following commands were used to set up and apply migrations to the local D1 
 1. **Apply migrations to local D1 database:**
    ```bash
    cd werewolf-cloud
-   npx wrangler d1 migrations apply werewolf-dev --local --config wrangler.toml
+   npx wrangler d1 migrations apply werewolf-dev --local --config wrangler.worker.toml
    ```
 
   This command applies all pending migrations (0001 through 0008) to the local D1 instance named `werewolf-dev`. The process runs automatically without requiring user confirmation due to the `--local` flag and non-interactive environment.
@@ -251,8 +251,8 @@ The following commands were used to set up and apply migrations to the local D1 
   - ✅ 0008_add_attempt_updated_at.sql - Added `updated_at` column to attempts for live updates
 
 3. **Troubleshooting:**
-   - If migrations fail, check that `wrangler.toml` has the correct `database_name` (`werewolf-dev`)
-   - For production deployment, use: `npx wrangler d1 migrations apply werewolf --remote --config wrangler.toml`
+   - If migrations fail, check that `wrangler.worker.toml` has the correct `database_name` (`werewolf-d1-dev`)
+   - For production deployment, use: `npx wrangler d1 migrations apply werewolf --remote --config wrangler.worker.toml`
    - To list available databases: `npx wrangler d1 list`
    - To check migration status: `npx wrangler d1 migrations list werewolf-dev --local`
 
@@ -465,7 +465,7 @@ contest_weight_classes: seeded per contest
 - [ ] **Data migration**: Run `bun run scripts/import-sqlite.ts --reset` with production env vars
 - [ ] **Verification**: Compare record counts and sample contest results against legacy DB
 - [ ] **DNS update**: Point werewolf.r-krzywaznia-2c4.workers.dev to new worker via Cloudflare dashboard
-- [ ] **Frontend deploy**: Publish SvelteKit app via `wrangler pages deploy apps/web/build`
+- [ ] **Frontend deploy**: Publish SvelteKit app via `cd apps/web && wrangler pages deploy .svelte-kit/cloudflare`
 - [ ] **Post-cutover**: Monitor error logs for 24 hours via Cloudflare dashboard
 - [ ] **Rollback plan**: Keep legacy desktop app available for 30 days as backup
 

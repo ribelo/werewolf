@@ -1,5 +1,6 @@
 name = "werewolf"
-pages_build_output_dir = ".svelte-kit/cloudflare"
+account_id = "2c42f4960f9c28a9235cac01483bd626"
+main = "apps/api/src/index.ts"
 compatibility_date = "2025-09-17"
 compatibility_flags = ["nodejs_compat"]
 
@@ -9,12 +10,20 @@ ENV = "development"
 [[durable_objects.bindings]]
 name = "werewolf-contest-room"
 class_name = "ContestRoom"
-script_name = "werewolf"
+
+[[migrations]]
+tag = "v1"
+new_classes = [ "ContestRoom" ]
+
+
+[[migrations]]
+tag = "v2"
 
 [[d1_databases]]
 binding = "DB"
 database_name = "werewolf-d1-dev"
 database_id = "952d9b14-6236-4e59-8fc8-66b2df9128b7"
+migrations_dir = "./migrations"
 
 [[kv_namespaces]]
 binding = "KV"
@@ -22,6 +31,7 @@ id = "8cf514e5365c468eb782d0a96f6ad309"
 
 [env.production]
 name = "werewolf"
+workers_dev = true
 
 [env.production.vars]
 ENV = "production"
@@ -29,12 +39,12 @@ ENV = "production"
 [[env.production.durable_objects.bindings]]
 name = "werewolf-contest-room"
 class_name = "ContestRoom"
-script_name = "werewolf"
 
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "werewolf-d1"
 database_id = "4e260168-4bc5-455a-a1e8-b9aa43844004"
+migrations_dir = "./migrations"
 
 [[env.production.kv_namespaces]]
 binding = "KV"

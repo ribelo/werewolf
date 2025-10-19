@@ -12,10 +12,10 @@ API_BASE="${PUBLIC_API_BASE:-$DEFAULT_API_BASE}"
 cd "$ROOT_DIR"
 
 echo "[deploy] Applying D1 migrations for env=$API_ENV"
-bunx wrangler@latest d1 migrations apply "werewolf-d1" --config wrangler.toml --env "$API_ENV" --remote
+bunx wrangler@latest d1 migrations apply "werewolf-d1" --config wrangler.worker.toml --env "$API_ENV" --remote
 
 echo "[deploy] Publishing API worker"
-bunx wrangler@latest deploy --config wrangler.toml --env "$API_ENV"
+bunx wrangler@latest deploy --config wrangler.worker.toml --env "$API_ENV"
 
 cd apps/web
 

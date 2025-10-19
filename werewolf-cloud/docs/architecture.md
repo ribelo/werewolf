@@ -117,11 +117,11 @@ Frontend wizard:
 
 ## 7) Operations & Environments
 
-- Wrangler config binds D1/KV/ROOM (DO) for dev and prod. See `wrangler.toml`.
+- Wrangler config binds D1/KV/ROOM (DO) for dev and prod. See `wrangler.worker.toml` for the API Worker and `wrangler.toml` for Pages.
 - Dev:
-  - Backend: `nix develop -c wrangler dev --local --config wrangler.toml --port 8787`
+  - Backend: `nix develop -c wrangler dev --local --config wrangler.worker.toml --port 8787`
   - Frontend: `PUBLIC_API_BASE=http://127.0.0.1:8787 bun run dev`
-- Deploy: `wrangler deploy --env production`
+- Deploy: `wrangler deploy --env production --config wrangler.worker.toml`
 
 ## 8) Coefficient Data Maintenance
 
@@ -271,6 +271,6 @@ Remaining polish ideas (tracked in `docs/OPEN-ISSUES.md`): coalescing writes to 
 ---
 
 References
-- WS & DO foundation: apps/api/src/live/*, wrangler.toml DO binding.
+- WS & DO foundation: apps/api/src/live/*, wrangler.worker.toml DO binding.
 - Event producers: apps/api/src/routes/attempts.ts (upsert, result update, current set).
 - Domain logic: packages/domain/src/services/score-engine.ts.

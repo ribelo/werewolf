@@ -118,6 +118,31 @@ import type {
     ? normaliseCurrentAttempt(currentAttempt as Attempt | CurrentAttempt | CurrentAttemptBundle)
     : null;
   let contestLifts: LiftKind[] = deriveContestLifts(contest, liveAttempts);
+  const FALLBACK_PRIMARY_LIFT: LiftKind = 'Squat';
+  const FALLBACK_CONTEST_LIFTS: LiftKind[] = [FALLBACK_PRIMARY_LIFT];
+  const FIRST_ATTEMPT_NUMBERS: AttemptNumber[] = [1];
+  const LIFT_SINGLETONS: Record<LiftKind, LiftKind[]> = {
+    Squat: ['Squat'],
+    Bench: ['Bench'],
+    Deadlift: ['Deadlift'],
+  };
+
+  $: activeContestLifts = contestLifts.length > 0 ? [...contestLifts] : [...FALLBACK_CONTEST_LIFTS];
+  $: registrationLifts = [...activeContestLifts];
+  $: competitionTabs = activeContestLifts
+    .map((lift) => LIFT_TAB_MAP[lift])
+    .filter((entry): entry is { id: LiftTabId; labelKey: string } => Boolean(entry));
+  $: tabs = [
+    BASE_TABS[0],
+    BASE_TABS[1],
+    ...competitionTabs,
+    BASE_TABS[2],
+    BASE_TABS[3],
+  ];
+  $: if (!tabs.some((tab) => tab.id === activeTab) && tabs.length > 0) {
+    const fallback = tabs.find((tab) => tab.id === 'registrations') ?? tabs[0];
+    activeTab = fallback.id;
+  }
 
   let statusLoading: Record<string, boolean> = {};
   let setCurrentLoading: Record<string, boolean> = {};
@@ -440,14 +465,26 @@ import type {
     return label.trim().toLowerCase();
   }
 
-  const TABS = [
+  type LiftTabId = 'squat' | 'bench' | 'deadlift';
+  type StaticTabId = 'desk' | 'registrations' | 'results' | 'plates';
+  type TabId = StaticTabId | LiftTabId;
+
+  const BASE_TABS: ReadonlyArray<{ id: StaticTabId; labelKey: string }> = [
     { id: 'desk', labelKey: 'contest_detail.tabs.desk' },
     { id: 'registrations', labelKey: 'contest_detail.tabs.main_table' },
     { id: 'results', labelKey: 'contest_detail.tabs.results' },
     { id: 'plates', labelKey: 'contest_detail.tabs.plates' }
   ] as const;
 
-  type TabId = typeof TABS[number]['id'];
+  const LIFT_TAB_MAP: Record<LiftKind, { id: LiftTabId; labelKey: string }> = {
+    Squat: { id: 'squat', labelKey: 'contest_detail.tabs.squat_table' },
+    Bench: { id: 'bench', labelKey: 'contest_detail.tabs.bench_table' },
+    Deadlift: { id: 'deadlift', labelKey: 'contest_detail.tabs.deadlift_table' }
+  };
+
+  let tabs: Array<{ id: TabId; labelKey: string }> = [];
+  let competitionTabs: Array<{ id: LiftTabId; labelKey: string }> = [];
+
   let activeTab: TabId = 'desk';
 
   function setStatusLoadingFlag(id: string, value: boolean) {
@@ -1561,7 +1598,7 @@ import type {
   {:else}
     <div class="space-y-8">
       <nav class="flex flex-wrap gap-3 border-b-2 border-border-color pb-3">
-        {#each TABS as tab}
+        {#each tabs as tab}
           <button
             type="button"
             class={`px-4 py-2 font-display text-xs uppercase tracking-[0.4em] border-2 transition ${
@@ -1574,10 +1611,10 @@ import type {
             {$_(tab.labelKey)}
           </button>
         {/each}
-        <button type="button" class="btn-secondary px-3 py-1" on:click={openCategoryManager}>
+        <button type="button" class="px-4 py-2 font-display text-xs uppercase tracking-[0.4em] border-2 transition border-border-color text-text-secondary hover:text-text-primary hover:border-primary-red" on:click={openCategoryManager}>
           {$_('contest_detail.registrations.manage_categories')}
         </button>
-        <button type="button" class="btn-secondary px-3 py-1" on:click={openFlightManager}>
+        <button type="button" class="px-4 py-2 font-display text-xs uppercase tracking-[0.4em] border-2 transition border-border-color text-text-secondary hover:text-text-primary hover:border-primary-red" on:click={openFlightManager}>
           {$_('contest_detail.registrations.manage_flights')}
         </button>
       </nav>
@@ -1833,60 +1870,6 @@ import type {
 
               </div>
             </header>
-            <div class="space-y-2">
-              {#if femaleWeightFilters.length > 0}
-                <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.weights_female')}>
-                  <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_female')}</span>
-                  {#each femaleWeightFilters as filter}
-                    <button
-                      type="button"
-                      class={`px-3 py-1 text-xxs ${selectedWeightFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
-                      on:click={() => selectWeightFilter(filter.id)}
-                    >
-                      {filter.label}
-                    </button>
-                  {/each}
-                </div>
-              {/if}
-              {#if maleWeightFilters.length > 0}
-                <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.weights_male')}>
-                  <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_male')}</span>
-                  {#each maleWeightFilters as filter}
-                    <button
-                      type="button"
-                      class={`px-3 py-1 text-xxs ${selectedWeightFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
-                      on:click={() => selectWeightFilter(filter.id)}
-                    >
-                      {filter.label}
-                    </button>
-                  {/each}
-                </div>
-              {/if}
-              <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.age')}>
-                <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.age')}</span>
-                {#each availableAgeFilters as filter}
-                  <button
-                    type="button"
-                    class={`px-3 py-1 text-xxs ${selectedAgeFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
-                    on:click={() => selectAgeFilter(filter.id)}
-                  >
-                    {filter.label}
-                  </button>
-                {/each}
-              </div>
-              <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.labels')}>
-                <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.labels')}</span>
-                {#each availableLabelFilters as filter}
-                  <button
-                    type="button"
-                    class={`px-3 py-1 text-xxs ${selectedLabelFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
-                    on:click={() => selectLabelFilter(filter.id)}
-                  >
-                    {filter.label}
-                  </button>
-                {/each}
-              </div>
-            </div>
             {#if registrations.length === 0}
               <div class="text-center py-8 text-text-secondary">{$_('contest_detail.registrations.empty')}</div>
             {:else if filteredRows.length === 0}
@@ -1899,7 +1882,8 @@ import type {
                   sortDirection={sortDirection}
                   readOnly={false}
                   activeFlight={activeFlight}
-                  lifts={contestLifts}
+                  lifts={registrationLifts}
+                  attemptNumbers={FIRST_ATTEMPT_NUMBERS}
                   weightClasses={weightClasses}
                   ageCategories={ageCategories}
                   currentAttemptId={liveCurrentAttempt?.id ?? null}
@@ -1909,6 +1893,8 @@ import type {
                   onSetCurrentAttempt={setCurrentAttemptHandler}
                   onAttemptStatusCycle={handleStatusClick}
                   onAttemptWeightChange={handleAttemptWeightChangeInline}
+                  showPointsColumn={false}
+                  showMaxColumn={false}
                 />
               </div>
             {/if}
@@ -2152,7 +2138,298 @@ import type {
                     </tbody>
                   </table>
                 </div>
+      </div>
+          </div>
+        </section>
+      {:else if activeTab === 'squat' && activeContestLifts.includes('Squat')}
+        <section class="space-y-4">
+          <div class="card space-y-6">
+            <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h3 class="text-h3 text-text-primary">{$_('contest_detail.registrations.title')}</h3>
+
               </div>
+              <div class="flex flex-wrap items-center gap-3">
+                <button type="button" class="btn-primary px-3 py-1" on:click={() => void openCreateCompetitorModal()}>
+                  {t('contest_detail.registrations.add_competitor')}
+                </button>
+
+
+              </div>
+            </header>
+            <div class="space-y-2">
+              {#if femaleWeightFilters.length > 0}
+                <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.weights_female')}>
+                  <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_female')}</span>
+                  {#each femaleWeightFilters as filter}
+                    <button
+                      type="button"
+                      class={`px-3 py-1 text-xxs ${selectedWeightFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
+                      on:click={() => selectWeightFilter(filter.id)}
+                    >
+                      {filter.label}
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+              {#if maleWeightFilters.length > 0}
+                <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.weights_male')}>
+                  <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_male')}</span>
+                  {#each maleWeightFilters as filter}
+                    <button
+                      type="button"
+                      class={`px-3 py-1 text-xxs ${selectedWeightFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
+                      on:click={() => selectWeightFilter(filter.id)}
+                    >
+                      {filter.label}
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+              <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.age')}>
+                <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.age')}</span>
+                {#each availableAgeFilters as filter}
+                  <button
+                    type="button"
+                    class={`px-3 py-1 text-xxs ${selectedAgeFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
+                    on:click={() => selectAgeFilter(filter.id)}
+                  >
+                    {filter.label}
+                  </button>
+                {/each}
+              </div>
+              <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.labels')}>
+                <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.labels')}</span>
+                {#each availableLabelFilters as filter}
+                  <button
+                    type="button"
+                    class={`px-3 py-1 text-xxs ${selectedLabelFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
+                    on:click={() => selectLabelFilter(filter.id)}
+                  >
+                    {filter.label}
+                  </button>
+                {/each}
+              </div>
+            </div>
+            {#if registrations.length === 0}
+              <div class="text-center py-8 text-text-secondary">{$_('contest_detail.registrations.empty')}</div>
+            {:else if filteredRows.length === 0}
+              <div class="text-center py-8 text-text-secondary">{$_('contest_detail.registrations.empty_filter')}</div>
+            {:else}
+              <div class="max-h-[70vh] overflow-x-auto overflow-y-auto">
+                <UnifiedContestTable
+                  rows={filteredRows}
+                  sortColumn={sortColumn}
+                  sortDirection={sortDirection}
+                  readOnly={false}
+                  activeFlight={activeFlight}
+                  lifts={LIFT_SINGLETONS.Squat}
+                  weightClasses={weightClasses}
+                  ageCategories={ageCategories}
+                  currentAttemptId={liveCurrentAttempt?.id ?? null}
+                  currentAttemptLoading={setCurrentLoading}
+                  onSortChange={handleSortChange}
+                  onOpenCompetitorModal={openCompetitorModal}
+                  onSetCurrentAttempt={setCurrentAttemptHandler}
+                  onAttemptStatusCycle={handleStatusClick}
+                  onAttemptWeightChange={handleAttemptWeightChangeInline}
+                />
+              </div>
+            {/if}
+          </div>
+        </section>
+      {:else if activeTab === 'bench' && activeContestLifts.includes('Bench')}
+        <section class="space-y-4">
+          <div class="card space-y-6">
+            <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h3 class="text-h3 text-text-primary">{$_('contest_detail.registrations.title')}</h3>
+
+              </div>
+              <div class="flex flex-wrap items-center gap-3">
+                <button type="button" class="btn-primary px-3 py-1" on:click={() => void openCreateCompetitorModal()}>
+                  {t('contest_detail.registrations.add_competitor')}
+                </button>
+
+
+              </div>
+            </header>
+            <div class="space-y-2">
+              {#if femaleWeightFilters.length > 0}
+                <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.weights_female')}>
+                  <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_female')}</span>
+                  {#each femaleWeightFilters as filter}
+                    <button
+                      type="button"
+                      class={`px-3 py-1 text-xxs ${selectedWeightFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
+                      on:click={() => selectWeightFilter(filter.id)}
+                    >
+                      {filter.label}
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+              {#if maleWeightFilters.length > 0}
+                <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.weights_male')}>
+                  <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_male')}</span>
+                  {#each maleWeightFilters as filter}
+                    <button
+                      type="button"
+                      class={`px-3 py-1 text-xxs ${selectedWeightFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
+                      on:click={() => selectWeightFilter(filter.id)}
+                    >
+                      {filter.label}
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+              <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.age')}>
+                <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.age')}</span>
+                {#each availableAgeFilters as filter}
+                  <button
+                    type="button"
+                    class={`px-3 py-1 text-xxs ${selectedAgeFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
+                    on:click={() => selectAgeFilter(filter.id)}
+                  >
+                    {filter.label}
+                  </button>
+                {/each}
+              </div>
+              <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.labels')}>
+                <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.labels')}</span>
+                {#each availableLabelFilters as filter}
+                  <button
+                    type="button"
+                    class={`px-3 py-1 text-xxs ${selectedLabelFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
+                    on:click={() => selectLabelFilter(filter.id)}
+                  >
+                    {filter.label}
+                  </button>
+                {/each}
+              </div>
+            </div>
+            {#if registrations.length === 0}
+              <div class="text-center py-8 text-text-secondary">{$_('contest_detail.registrations.empty')}</div>
+            {:else if filteredRows.length === 0}
+              <div class="text-center py-8 text-text-secondary">{$_('contest_detail.registrations.empty_filter')}</div>
+            {:else}
+              <div class="max-h-[70vh] overflow-x-auto overflow-y-auto">
+                <UnifiedContestTable
+                  rows={filteredRows}
+                  sortColumn={sortColumn}
+                  sortDirection={sortDirection}
+                  readOnly={false}
+                  activeFlight={activeFlight}
+                  lifts={LIFT_SINGLETONS.Bench}
+                  weightClasses={weightClasses}
+                  ageCategories={ageCategories}
+                  currentAttemptId={liveCurrentAttempt?.id ?? null}
+                  currentAttemptLoading={setCurrentLoading}
+                  onSortChange={handleSortChange}
+                  onOpenCompetitorModal={openCompetitorModal}
+                  onSetCurrentAttempt={setCurrentAttemptHandler}
+                  onAttemptStatusCycle={handleStatusClick}
+                  onAttemptWeightChange={handleAttemptWeightChangeInline}
+                />
+              </div>
+            {/if}
+          </div>
+        </section>
+      {:else if activeTab === 'deadlift' && activeContestLifts.includes('Deadlift')}
+        <section class="space-y-4">
+          <div class="card space-y-6">
+            <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h3 class="text-h3 text-text-primary">{$_('contest_detail.registrations.title')}</h3>
+
+              </div>
+              <div class="flex flex-wrap items-center gap-3">
+                <button type="button" class="btn-primary px-3 py-1" on:click={() => void openCreateCompetitorModal()}>
+                  {t('contest_detail.registrations.add_competitor')}
+                </button>
+
+
+              </div>
+            </header>
+            <div class="space-y-2">
+              {#if femaleWeightFilters.length > 0}
+                <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.weights_female')}>
+                  <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_female')}</span>
+                  {#each femaleWeightFilters as filter}
+                    <button
+                      type="button"
+                      class={`px-3 py-1 text-xxs ${selectedWeightFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
+                      on:click={() => selectWeightFilter(filter.id)}
+                    >
+                      {filter.label}
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+              {#if maleWeightFilters.length > 0}
+                <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.weights_male')}>
+                  <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_male')}</span>
+                  {#each maleWeightFilters as filter}
+                    <button
+                      type="button"
+                      class={`px-3 py-1 text-xxs ${selectedWeightFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
+                      on:click={() => selectWeightFilter(filter.id)}
+                    >
+                      {filter.label}
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+              <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.age')}>
+                <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.age')}</span>
+                {#each availableAgeFilters as filter}
+                  <button
+                    type="button"
+                    class={`px-3 py-1 text-xxs ${selectedAgeFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
+                    on:click={() => selectAgeFilter(filter.id)}
+                  >
+                    {filter.label}
+                  </button>
+                {/each}
+              </div>
+              <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.labels')}>
+                <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.labels')}</span>
+                {#each availableLabelFilters as filter}
+                  <button
+                    type="button"
+                    class={`px-3 py-1 text-xxs ${selectedLabelFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
+                    on:click={() => selectLabelFilter(filter.id)}
+                  >
+                    {filter.label}
+                  </button>
+                {/each}
+              </div>
+            </div>
+            {#if registrations.length === 0}
+              <div class="text-center py-8 text-text-secondary">{$_('contest_detail.registrations.empty')}</div>
+            {:else if filteredRows.length === 0}
+              <div class="text-center py-8 text-text-secondary">{$_('contest_detail.registrations.empty_filter')}</div>
+            {:else}
+              <div class="max-h-[70vh] overflow-x-auto overflow-y-auto">
+                <UnifiedContestTable
+                  rows={filteredRows}
+                  sortColumn={sortColumn}
+                  sortDirection={sortDirection}
+                  readOnly={false}
+                  activeFlight={activeFlight}
+                  lifts={LIFT_SINGLETONS.Deadlift}
+                  weightClasses={weightClasses}
+                  ageCategories={ageCategories}
+                  currentAttemptId={liveCurrentAttempt?.id ?? null}
+                  currentAttemptLoading={setCurrentLoading}
+                  onSortChange={handleSortChange}
+                  onOpenCompetitorModal={openCompetitorModal}
+                  onSetCurrentAttempt={setCurrentAttemptHandler}
+                  onAttemptStatusCycle={handleStatusClick}
+                  onAttemptWeightChange={handleAttemptWeightChangeInline}
+                />
+              </div>
+            {/if}
           </div>
         </section>
       {:else}

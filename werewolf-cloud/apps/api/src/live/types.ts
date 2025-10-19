@@ -3,6 +3,8 @@ export type LiveEventType =
   | 'attempt.resultUpdated'
   | 'attempt.currentSet'
   | 'attempt.currentCleared'
+  | 'registration.upserted'
+  | 'registration.deleted'
   | 'queue.updated'
   | 'scoreboard.updated'
   | 'contest.stateChanged'

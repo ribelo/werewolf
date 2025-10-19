@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev --config ../../wrangler.toml --local",
+    "dev": "wrangler dev --config ../../wrangler.worker.toml --local",
     "typecheck": "tsc --project tsconfig.json"
   },
   "dependencies": {

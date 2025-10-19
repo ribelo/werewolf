@@ -2,7 +2,7 @@
 
 ## Prerequisites
 - Wrangler configured with either an API token (`CLOUDFLARE_API_TOKEN`) or an OAuth session (`wrangler login`).
-- Cloudflare D1, KV, and Durable Object bindings already present in `wrangler.toml`.
+- Cloudflare D1, KV, and Durable Object bindings already present in `wrangler.worker.toml` (API Worker) and mirrored in `wrangler.toml` (Pages).
 - Pages project provisioned (`werewolf`). The first deploy auto-creates the project if needed.
 - Know the public Worker URL; production currently lives at `https://werewolf.r-krzywaznia-2c4.workers.dev`.
 
@@ -39,10 +39,10 @@ The Pages secret update is idempotent; the script pipes the `PUBLIC_API_BASE` va
 ## Manual commands (if you prefer)
 ```bash
 # Apply migrations
-bunx wrangler@latest d1 migrations apply werewolf-d1 --config wrangler.toml --env production --remote
+bunx wrangler@latest d1 migrations apply werewolf-d1 --config wrangler.worker.toml --env production --remote
 
 # Deploy the Worker
-bunx wrangler@latest deploy --config wrangler.toml --env production
+bunx wrangler@latest deploy --config wrangler.worker.toml --env production
 
 # Build and deploy the frontend
 cd apps/web

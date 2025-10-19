@@ -168,6 +168,57 @@ describe('Werewolf API – integration (Miniflare + D1)', () => {
   expect(registrationBody.data.mcculloughCoefficient).toBeCloseTo(1.0, 3);
   });
 
+  it('updates stored coefficients when competitor birth date changes', async () => {
+    const contestRes = await createContest(app, env, {
+      name: 'Masters Update',
+      date: '2025-10-10',
+      location: 'Poznań',
+      discipline: 'Powerlifting',
+    });
+    const contestId = (await contestRes.json()).data.id as string;
+
+    const competitorRes = await app.request('http://localhost/competitors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        firstName: 'Piotr',
+        lastName: 'Bryk',
+        birthDate: '2005-02-01',
+        gender: 'Male',
+      }),
+    }, env);
+    expect(competitorRes.status).toBe(201);
+    const competitorId = (await competitorRes.json()).data.id as string;
+
+    const registrationRes = await app.request(`http://localhost/contests/${contestId}/registrations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contestId,
+        competitorId,
+        bodyweight: 93.0,
+      }),
+    }, env);
+    expect(registrationRes.status).toBe(201);
+    const registrationBody = await registrationRes.json();
+    const registrationId = registrationBody.data.id as string;
+    expect(registrationBody.data.mcculloughCoefficient).toBeCloseTo(1.0, 3);
+
+    const updateRes = await app.request(`http://localhost/competitors/${competitorId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        birthDate: '1960-02-01',
+      }),
+    }, env);
+    expect(updateRes.status).toBe(200);
+
+    const updatedRegistrationRes = await app.request(`http://localhost/registrations/${registrationId}`, {}, env);
+    expect(updatedRegistrationRes.status).toBe(200);
+    const updatedRegistrationBody = await updatedRegistrationRes.json();
+    expect(updatedRegistrationBody.data.mcculloughCoefficient).toBeCloseTo(1.48, 2);
+  });
+
   it('recalculates coefficients via maintenance endpoint', async () => {
     const contestRes = await createContest(app, env, {
       name: 'Recalc Meet',

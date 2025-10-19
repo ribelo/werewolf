@@ -1,11 +1,40 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import type { WerewolfEnvironment } from '../env';
+import type { WerewolfEnvironment, WerewolfBindings } from '../env';
 import { executeQuery, executeQueryOne, executeMutation, generateId, getCurrentTimestamp, convertKeysToCamelCase } from '../utils/database';
 import { competitorSchema, competitorCreateSchema, competitorUpdateSchema } from '@werewolf/domain/models/competitor';
+import { publishEvent } from '../live/publish';
+import { determineAgeCategory, determineWeightClass } from '@werewolf/domain/services/coefficients';
+import { getReshelCoefficient, getMcCulloughCoefficient } from '../services/coefficients';
+import { getContestAgeDescriptors, getContestWeightDescriptors } from '../utils/category-templates';
 
 const competitors = new Hono<WerewolfEnvironment>();
+
+function parseLabels(input: unknown): string[] {
+  if (Array.isArray(input)) {
+    return input.map(String);
+  }
+  if (typeof input === 'string') {
+    try {
+      const parsed = JSON.parse(input);
+      return Array.isArray(parsed) ? parsed.map(String) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function mapRegistrationRow(row: Record<string, any>): Record<string, any> {
+  const normalised: Record<string, any> = { ...row };
+
+  if ('labels' in normalised) {
+    normalised.labels = parseLabels(normalised.labels);
+  }
+
+  return normalised;
+}
 
 // GET /competitors - List all competitors
 competitors.get('/', async (c) => {
@@ -125,6 +154,23 @@ competitors.patch('/:competitorId', zValidator('json', competitorUpdateSchema), 
   const competitorId = c.req.param('competitorId');
   const input = c.req.valid('json');
 
+  const existing = await executeQueryOne(
+    db,
+    `
+    SELECT
+      id, first_name, last_name, birth_date, gender,
+      club, city, notes, photo_format, photo_metadata,
+      created_at, updated_at
+    FROM competitors
+    WHERE id = ?
+    `,
+    [competitorId]
+  );
+
+  if (!existing) {
+    return c.json({ data: null, error: 'Competitor not found', requestId: c.get('requestId') }, 404);
+  }
+
   const updates: string[] = [];
   const params: any[] = [];
 
@@ -162,6 +208,8 @@ competitors.patch('/:competitorId', zValidator('json', competitorUpdateSchema), 
     return c.json({ data: null, error: 'No fields to update', requestId: c.get('requestId') }, 400);
   }
 
+  const shouldRecalculate = input.birthDate !== undefined || input.gender !== undefined;
+
   updates.push('updated_at = ?');
   params.push(getCurrentTimestamp());
   params.push(competitorId);
@@ -189,6 +237,10 @@ competitors.patch('/:competitorId', zValidator('json', competitorUpdateSchema), 
     return c.json({ data: null, error: 'Competitor not found', requestId: c.get('requestId') }, 404);
   }
 
+  if (shouldRecalculate) {
+    await recalculateCompetitorRegistrations(c.env, db, competitorId, competitor);
+  }
+
   return c.json({
     data: convertKeysToCamelCase(competitor),
     error: null,
@@ -196,10 +248,168 @@ competitors.patch('/:competitorId', zValidator('json', competitorUpdateSchema), 
   });
 });
 
+async function recalculateCompetitorRegistrations(
+  env: WerewolfEnvironment['Bindings'],
+  db: WerewolfBindings['DB'],
+  competitorId: string,
+  competitor: { birth_date: string; gender: string }
+): Promise<void> {
+  const registrations = await executeQuery<{
+    id: string;
+    contest_id: string;
+    bodyweight: number;
+    age_category_id: string | null;
+    weight_class_id: string | null;
+    reshel_coefficient: number | null;
+    mccullough_coefficient: number | null;
+    contest_date: string;
+  }>(
+    db,
+    `
+    SELECT
+      r.id,
+      r.contest_id,
+      r.bodyweight,
+      r.age_category_id,
+      r.weight_class_id,
+      r.reshel_coefficient,
+      r.mccullough_coefficient,
+      ct.date AS contest_date
+    FROM registrations r
+    JOIN contests ct ON r.contest_id = ct.id
+    WHERE r.competitor_id = ?
+    `,
+    [competitorId]
+  );
+
+  if (registrations.length === 0) {
+    return;
+  }
+
+  const contestCache = new Map<
+    string,
+    {
+      date: string;
+      ageDescriptors: Awaited<ReturnType<typeof getContestAgeDescriptors>>;
+      weightDescriptors: Awaited<ReturnType<typeof getContestWeightDescriptors>>;
+    }
+  >();
+
+  for (const registration of registrations) {
+    const bodyweight = Number(registration.bodyweight);
+    if (!Number.isFinite(bodyweight) || bodyweight <= 0) {
+      continue;
+    }
+
+    let descriptors = contestCache.get(registration.contest_id);
+    if (!descriptors) {
+      const [ageDescriptors, weightDescriptors] = await Promise.all([
+        getContestAgeDescriptors(db, registration.contest_id),
+        getContestWeightDescriptors(db, registration.contest_id),
+      ]);
+
+      descriptors = {
+        date: registration.contest_date,
+        ageDescriptors,
+        weightDescriptors,
+      };
+      contestCache.set(registration.contest_id, descriptors);
+    }
+
+    const { date: contestDate, ageDescriptors, weightDescriptors } = descriptors;
+    if (ageDescriptors.length === 0 || weightDescriptors.length === 0) {
+      continue;
+    }
+
+    const reshel = await getReshelCoefficient(db, competitor.gender, bodyweight);
+    const mcc = await getMcCulloughCoefficient(db, competitor.birth_date, contestDate);
+
+    const ageCode = determineAgeCategory(competitor.birth_date, contestDate, ageDescriptors);
+    const ageDescriptor =
+      ageDescriptors.find((descriptor) => descriptor.code === ageCode) ?? ageDescriptors[0];
+
+    const weightCode = determineWeightClass(bodyweight, competitor.gender, weightDescriptors);
+    const weightDescriptor =
+      weightDescriptors.find((descriptor) => descriptor.code === weightCode) ?? weightDescriptors[0];
+
+    const updates: string[] = [];
+    const params: any[] = [];
+
+    if (ageDescriptor && registration.age_category_id !== ageDescriptor.id) {
+      updates.push('age_category_id = ?');
+      params.push(ageDescriptor.id);
+    }
+
+    if (weightDescriptor && registration.weight_class_id !== weightDescriptor.id) {
+      updates.push('weight_class_id = ?');
+      params.push(weightDescriptor.id);
+    }
+
+    if (Math.abs((registration.reshel_coefficient ?? 0) - reshel) > 0.0001) {
+      updates.push('reshel_coefficient = ?');
+      params.push(reshel);
+    }
+
+    if (Math.abs((registration.mccullough_coefficient ?? 0) - mcc) > 0.0001) {
+      updates.push('mccullough_coefficient = ?');
+      params.push(mcc);
+    }
+
+    if (updates.length === 0) {
+      continue;
+    }
+
+    params.push(registration.id);
+
+    await executeMutation(
+      db,
+      `UPDATE registrations SET ${updates.join(', ')} WHERE id = ?`,
+      params
+    );
+
+    const refreshed = await executeQueryOne(
+      db,
+      `
+      SELECT
+        r.id, r.contest_id, r.competitor_id, r.age_category_id, r.weight_class_id,
+        r.bodyweight, r.reshel_coefficient, r.mccullough_coefficient,
+        r.rack_height_squat, r.rack_height_bench, r.created_at,
+        r.flight_code, r.flight_order, COALESCE(r.labels, '[]') AS labels,
+        c.first_name, c.last_name, c.gender, c.birth_date, c.club, c.city,
+        cac.name AS age_category_name,
+        cwc.name AS weight_class_name
+      FROM registrations r
+      JOIN competitors c ON r.competitor_id = c.id
+      LEFT JOIN contest_age_categories cac ON r.age_category_id = cac.id
+      LEFT JOIN contest_weight_classes cwc ON r.weight_class_id = cwc.id
+      WHERE r.id = ?
+      `,
+      [registration.id]
+    );
+
+    if (!refreshed) {
+      continue;
+    }
+
+    const payload = mapRegistrationRow(convertKeysToCamelCase(refreshed));
+
+    await publishEvent(env, registration.contest_id, {
+      type: 'registration.upserted',
+      payload,
+    });
+  }
+}
+
 // DELETE /competitors/:competitorId - Delete competitor
 competitors.delete('/:competitorId', async (c) => {
   const db = c.env.DB;
   const competitorId = c.req.param('competitorId');
+
+  const relatedRegistrations = await executeQuery<{ id: string; contest_id: string }>(
+    db,
+    'SELECT id, contest_id FROM registrations WHERE competitor_id = ?',
+    [competitorId]
+  );
 
   const result = await executeMutation(
     db,
@@ -210,6 +420,15 @@ competitors.delete('/:competitorId', async (c) => {
   if (result.changes === 0) {
     return c.json({ data: null, error: 'Competitor not found', requestId: c.get('requestId') }, 404);
   }
+
+  await Promise.all(
+    relatedRegistrations.map((registration) =>
+      publishEvent(c.env, registration.contest_id, {
+        type: 'registration.deleted',
+        payload: { registrationId: registration.id },
+      })
+    )
+  );
 
   return c.json({
     data: { success: true },

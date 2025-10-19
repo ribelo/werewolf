@@ -7,6 +7,7 @@ import { registrationSchema, registrationCreateSchema, registrationUpdateSchema 
 import { determineAgeCategory, determineWeightClass } from '@werewolf/domain/services/coefficients';
 import { getReshelCoefficient, getMcCulloughCoefficient } from '../services/coefficients';
 import { getContestAgeDescriptors, getContestWeightDescriptors, seedContestCategories } from '../utils/category-templates';
+import { publishEvent } from '../live/publish';
 
 export const contestRegistrations = new Hono<WerewolfEnvironment>();
 
@@ -190,6 +191,13 @@ contestRegistrations.post('/', zValidator('json', registrationCreateSchema), asy
   const registrationData = registration
     ? mapRegistrationRow(convertKeysToCamelCase(registration))
     : null;
+
+  if (registrationData) {
+    await publishEvent(c.env, contestId, {
+      type: 'registration.upserted',
+      payload: registrationData,
+    });
+  }
 
   return c.json({
     data: registrationData,
@@ -512,6 +520,11 @@ registrations.patch('/:registrationId', zValidator('json', registrationUpdateSch
 
   const registrationData = mapRegistrationRow(convertKeysToCamelCase(registration));
 
+  await publishEvent(c.env, nextContestId, {
+    type: 'registration.upserted',
+    payload: registrationData,
+  });
+
   return c.json({
     data: registrationData,
     error: null,
@@ -524,15 +537,30 @@ registrations.delete('/:registrationId', async (c) => {
   const db = c.env.DB;
   const registrationId = c.req.param('registrationId');
 
+  const existing = await executeQueryOne<{ contest_id: string }>(
+    db,
+    'SELECT contest_id FROM registrations WHERE id = ?',
+    [registrationId]
+  );
+
+  if (!existing) {
+    return c.json({ data: null, error: 'Registration not found', requestId: c.get('requestId') }, 404);
+  }
+
   const result = await executeMutation(
     db,
     'DELETE FROM registrations WHERE id = ?',
     [registrationId]
   );
 
-  if (result.changes === 0) {
+  if ((result.changes ?? 0) === 0) {
     return c.json({ data: null, error: 'Registration not found', requestId: c.get('requestId') }, 404);
   }
+
+  await publishEvent(c.env, existing.contest_id, {
+    type: 'registration.deleted',
+    payload: { registrationId },
+  });
 
   return c.json({
     data: { success: true },

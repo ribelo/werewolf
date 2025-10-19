@@ -34,13 +34,6 @@ const DEFAULT_RESHEL_TABLES: ReshelTables = {
 
 const DEFAULT_MCCULLOUGH_ENTRIES: McCulloughEntry[] = mcculloughDataset.entries;
 
-const JUNIOR_COEFFICIENTS: Array<{ min: number; max: number; value: number }> = [
-  { min: 13, max: 15, value: 1.13 },
-  { min: 16, max: 18, value: 1.08 },
-  { min: 19, max: 19, value: 1.06 },
-  { min: 20, max: 23, value: 1.03 },
-];
-
 export interface AgeCategoryDescriptor {
   id: string;
   code: string;
@@ -169,29 +162,12 @@ function calculateAge(birthDate: string, contestDate: string): number | null {
   }
 }
 
-function resolveJuniorMcCullough(age: number): number | null {
-  for (const range of JUNIOR_COEFFICIENTS) {
-    if (age >= range.min && age <= range.max) {
-      return range.value;
-    }
-  }
-  if (age >= 24 && age <= 39) {
-    return 1.0;
-  }
-  return null;
-}
-
 export function resolveMcCulloughCoefficient(
   age: number,
   entries: McCulloughEntry[] = DEFAULT_MCCULLOUGH_ENTRIES,
 ): number {
   if (!Number.isFinite(age) || age < 0) {
     return 1.0;
-  }
-
-  const junior = resolveJuniorMcCullough(age);
-  if (junior !== null) {
-    return junior;
   }
 
   if (entries.length === 0) {
@@ -297,7 +273,7 @@ export function calculateReshelCoefficient(bodyweight: number, gender: string): 
 }
 
 /**
- * Calculate McCullough coefficient based on age (uses junior defaults + table lookups).
+ * Calculate McCullough coefficient based on age (WUAP masters table for 40+, 1.0 below 40).
  */
 export function calculateMcCulloughCoefficient(birthDate: string, contestDate: string): number {
   const age = calculateAge(birthDate, contestDate);

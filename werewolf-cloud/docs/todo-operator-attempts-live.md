@@ -58,7 +58,7 @@ Acceptance
 ## Phase 8 — Docs & Runbook
 - [x] Operator guide (where to edit attempts, set/clear current; local WS vs polling note)
 - [x] API docs updated; curl examples for new routes
-- [x] DB: run `0008_add_attempt_updated_at.sql` on remote (`bunx wrangler@latest d1 migrations apply werewolf-d1 --remote --env production --config wrangler.toml`)
+- [x] DB: run `0008_add_attempt_updated_at.sql` on remote (`bunx wrangler@latest d1 migrations apply werewolf-d1 --remote --env production --config wrangler.worker.toml`)
 
 Completed already
 - [x] Add `attempts.updated_at` column (migration `0008_add_attempt_updated_at.sql`) and apply locally

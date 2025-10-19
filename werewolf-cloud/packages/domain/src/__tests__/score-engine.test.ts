@@ -201,9 +201,9 @@ describe('Coefficient Calculations', () => {
   });
 
   describe('calculateMcCulloughCoefficient', () => {
-    it('calculates junior coefficient', () => {
+    it('returns base coefficient for lifters under 40', () => {
       const coeff = calculateMcCulloughCoefficient('2008-01-01', '2025-01-01');
-      expect(coeff).toBe(1.08); // Junior 16 (age 17)
+      expect(coeff).toBe(1.0); // WUAP table covers 40+, younger lifters stay at 1.0
     });
 
     it('calculates senior coefficient', () => {

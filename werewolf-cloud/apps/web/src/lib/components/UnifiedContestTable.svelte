@@ -1,7 +1,7 @@
 <script lang="ts">
   import { get } from 'svelte/store';
   import { formatAgeClass, formatWeightClass, formatCoefficient, formatWeight } from '$lib/utils';
-  import { ATTEMPT_NUMBERS, LIFTS, type AttemptCell, type LiftKind, type UnifiedRow } from '$lib/contest-table';
+  import { ATTEMPT_NUMBERS, LIFTS, type AttemptCell, type LiftKind, type UnifiedRow, type AttemptNumber } from '$lib/contest-table';
   import type { Attempt, Registration, AgeCategory, WeightClass, AttemptStatus } from '$lib/types';
   import { getAttemptStatusClass } from '$lib/ui/status';
   import { _ } from 'svelte-i18n';
@@ -16,6 +16,9 @@
   export let weightClasses: WeightClass[] = [];
   export let ageCategories: AgeCategory[] = [];
   export let lifts: LiftKind[] = [...LIFTS];
+  export let showPointsColumn = true;
+  export let showMaxColumn = true;
+  export let attemptNumbers: AttemptNumber[] = [...ATTEMPT_NUMBERS];
 
   export let onSortChange: (column: string) => void = () => {};
   export let onOpenCompetitorModal: (registration: Registration) => void = () => {};
@@ -80,7 +83,9 @@
   }
 
   let activeLifts: LiftKind[] = [...LIFTS];
+  let activeAttemptNumbers: AttemptNumber[] = [...ATTEMPT_NUMBERS];
   $: activeLifts = (lifts?.length ?? 0) > 0 ? [...lifts] : [...LIFTS];
+  $: activeAttemptNumbers = (attemptNumbers?.length ?? 0) > 0 ? [...attemptNumbers] : [...ATTEMPT_NUMBERS];
   $: hasSquat = activeLifts.includes('Squat');
   $: hasBench = activeLifts.includes('Bench');
 
@@ -253,24 +258,30 @@
           <span aria-hidden="true">{#if sortIndicatorIcon('mccullough')}<svelte:component this={sortIndicatorIcon('mccullough')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
         </div>
       </th>
-      <th class="sticky top-0 z-10 bg-element-bg px-3 py-2" rowspan="2">{$_('contest_table.columns.rack')}</th>
+      {#if hasSquat || hasBench}
+        <th class="sticky top-0 z-10 bg-element-bg px-3 py-2" rowspan="2">{$_('contest_table.columns.rack')}</th>
+      {/if}
       {#each activeLifts as lift}
-        <th class="px-3 py-2 text-center uppercase tracking-[0.3em]" colspan={ATTEMPT_NUMBERS.length}>
+        <th class="px-3 py-2 text-center uppercase tracking-[0.3em]" colspan={activeAttemptNumbers.length}>
           {$_(liftHeaderKey[lift])}
         </th>
       {/each}
-      <th class="sticky top-0 z-10 bg-element-bg px-3 py-2 cursor-pointer" rowspan="2" role="columnheader" aria-sort={ariaSort('points')} on:click={() => onSortChange('points')}>
-        <div class="flex items-center gap-1">
-          <span>{$_('contest_table.columns.points')}</span>
-          <span aria-hidden="true"><svelte:component this={sortIndicatorIcon('points')} class="h-3.5 w-3.5 opacity-70" /></span>
-        </div>
-      </th>
-      <th class="sticky top-0 z-10 bg-element-bg px-3 py-2 cursor-pointer" rowspan="2" role="columnheader" aria-sort={ariaSort('max')} on:click={() => onSortChange('max')}>
-        <div class="flex items-center gap-1">
-          <span>{$_('contest_table.columns.max')}</span>
-          <span aria-hidden="true"><svelte:component this={sortIndicatorIcon('max')} class="h-3.5 w-3.5 opacity-70" /></span>
-        </div>
-      </th>
+      {#if showPointsColumn}
+        <th class="sticky top-0 z-10 bg-element-bg px-3 py-2 cursor-pointer" rowspan="2" role="columnheader" aria-sort={ariaSort('points')} on:click={() => onSortChange('points')}>
+          <div class="flex items-center gap-1">
+            <span>{$_('contest_table.columns.points')}</span>
+            <span aria-hidden="true"><svelte:component this={sortIndicatorIcon('points')} class="h-3.5 w-3.5 opacity-70" /></span>
+          </div>
+        </th>
+      {/if}
+      {#if showMaxColumn}
+        <th class="sticky top-0 z-10 bg-element-bg px-3 py-2 cursor-pointer" rowspan="2" role="columnheader" aria-sort={ariaSort('max')} on:click={() => onSortChange('max')}>
+          <div class="flex items-center gap-1">
+            <span>{$_('contest_table.columns.max')}</span>
+            <span aria-hidden="true"><svelte:component this={sortIndicatorIcon('max')} class="h-3.5 w-3.5 opacity-70" /></span>
+          </div>
+        </th>
+      {/if}
       <th class="sticky top-0 z-10 bg-element-bg px-3 py-2" rowspan="2">{$_('contest_table.columns.labels')}</th>
       {#if !readOnly}
         <th class="sticky top-0 z-10 bg-element-bg px-3 py-2" rowspan="2">{$_('contest_table.columns.actions')}</th>
@@ -278,7 +289,7 @@
     </tr>
     <tr>
       {#each activeLifts as lift}
-        {#each ATTEMPT_NUMBERS as attemptNumber}
+        {#each activeAttemptNumbers as attemptNumber}
           <th
             class="px-2 py-1 text-center text-xxs uppercase tracking-[0.3em] cursor-pointer select-none"
             role="columnheader"
@@ -336,18 +347,20 @@
         <td class="px-3 py-2 text-center">{formatAgeClass(row.registration.ageCategoryId, ageCategories) ?? row.registration.ageCategoryName ?? '—'}</td>
         <td class="px-3 py-2 text-center">{formatCoefficient(row.registration.reshelCoefficient)}</td>
         <td class="px-3 py-2 text-center">{formatCoefficient(row.registration.mcculloughCoefficient)}</td>
-        <td class="px-3 py-2 text-center">
-          <div class="flex flex-col gap-1 text-xxs uppercase tracking-[0.2em]">
-            {#if hasSquat}
-              <span>SQ: {row.registration.rackHeightSquat ?? '—'}</span>
-            {/if}
-            {#if hasBench}
-              <span>BP: {row.registration.rackHeightBench ?? '—'}</span>
-            {/if}
-          </div>
-        </td>
+        {#if hasSquat || hasBench}
+          <td class="px-3 py-2 text-center">
+            <div class="flex flex-col gap-1 text-xxs uppercase tracking-[0.2em]">
+              {#if hasSquat}
+                <span>SQ: {row.registration.rackHeightSquat ?? '—'}</span>
+              {/if}
+              {#if hasBench}
+                <span>BP: {row.registration.rackHeightBench ?? '—'}</span>
+              {/if}
+            </div>
+          </td>
+        {/if}
         {#each activeLifts as lift}
-          {#each row.attempts[lift] as cell}
+          {#each row.attempts[lift].filter((cell) => activeAttemptNumbers.includes(cell.attemptNumber)) as cell}
             <td class="px-2 py-2 text-center">
               <div class="flex flex-col items-center gap-1">
                 <div class="flex items-center gap-1">
@@ -417,8 +430,12 @@
             </td>
           {/each}
         {/each}
-        <td class="px-3 py-2 text-center">{row.points !== null ? formatCoefficient(row.points) : '—'}</td>
-        <td class="px-3 py-2 text-center">{row.maxLift > 0 ? formatWeight(row.maxLift) : '—'}</td>
+        {#if showPointsColumn}
+          <td class="px-3 py-2 text-center">{row.points !== null ? formatCoefficient(row.points) : '—'}</td>
+        {/if}
+        {#if showMaxColumn}
+          <td class="px-3 py-2 text-center">{row.maxLift > 0 ? formatWeight(row.maxLift) : '—'}</td>
+        {/if}
         <td class="px-3 py-2">
           <div class="flex flex-wrap items-center gap-2">
             {#if row.registration.labels && row.registration.labels.length > 0}

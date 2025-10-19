@@ -46,11 +46,11 @@ GET http://localhost/contests/8016c8ed-c514-46b5-b7f0-983b8fcf08e9 -> 200 (5ms) 
 
 ---
 
-**Command:** `nix develop -c bash -lc "npx wrangler dev --config wrangler.toml --local --port 8787 > tmp/wrangler-dev.log 2>&1 & pid=$!; sleep 8; ./scripts/curl-api-test.sh http://127.0.0.1:8787 > tmp/curl-api.log 2>&1; status=$?; kill $pid; wait $pid 2>/dev/null; exit $status"`
+**Command:** `nix develop -c bash -lc "npx wrangler dev --config wrangler.worker.toml --local --port 8787 > tmp/wrangler-dev.log 2>&1 & pid=$!; sleep 8; ./scripts/curl-api-test.sh http://127.0.0.1:8787 > tmp/curl-api.log 2>&1; status=$?; kill $pid; wait $pid 2>/dev/null; exit $status"`
 
 **Date:** 2025-09-18
 
-**Environment:** Local Wrangler dev server (`wrangler.toml` bindings: D1 werewolf-dev, KV werewolf-kv-dev)
+**Environment:** Local Wrangler dev server (`wrangler.worker.toml` bindings: D1 werewolf-dev, KV werewolf-kv-dev)
 
 **Output (summary):**
 ```
