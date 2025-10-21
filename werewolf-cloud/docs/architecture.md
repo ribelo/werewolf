@@ -70,34 +70,35 @@ New requirement:
 - Constraint: Do not include any “club” input in the Contest Wizard. “Club” belongs to competitor profiles only.
 
 Recommended data model change (non‑breaking):
-- Add table `contest_disciplines` with rows `(contest_id, lift_type)` to support any subset/ordering of lifts per contest.
+- Contest lift availability comes from `contests.discipline`/`competition_type`. Each registration stores explicit selections in `registration_lifts (registration_id, lift_type)` to support single- or dual-lift entries.
 - Keep `contests.discipline` for backward compatibility and default presets:
   - Powerlifting → [Squat, Bench, Deadlift]
   - Bench → [Bench]
   - Deadlift → [Deadlift]
   - PushPull (new preset) → [Bench, Deadlift]
-- UI: Contest Wizard presets plus “Custom” (multi‑select lifts). Persist to `contest_disciplines`. If table empty, fall back to `contests.discipline` preset.
+- UI: Contest Wizard presets plus “Custom” (multi‑select lifts). Persist per-registration selections to `registration_lifts`. If a registration does not override, fall back to contest defaults derived from `competition_type` or `discipline`.
 
-Migration sketch (0008):
+Migration sketch (0021):
 ```
-CREATE TABLE IF NOT EXISTS contest_disciplines (
-  contest_id TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS registration_lifts (
+  registration_id TEXT NOT NULL,
   lift_type TEXT NOT NULL CHECK(lift_type IN ('Bench','Squat','Deadlift')),
-  position INTEGER NOT NULL DEFAULT 1,
-  PRIMARY KEY (contest_id, lift_type),
-  FOREIGN KEY (contest_id) REFERENCES contests(id) ON DELETE CASCADE
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (registration_id, lift_type),
+  FOREIGN KEY (registration_id) REFERENCES registrations(id) ON DELETE CASCADE
 );
--- optional backfill based on existing contests.discipline
+
+-- backfill by inspecting attempts; if none recorded, derive from contest.competition_type/discipline
 ```
 
-API additions:
-- `GET /contests/:id/disciplines` → ordered list of lifts.
-- `PUT /contests/:id/disciplines` → replace full list (admin only).
-- Contest state machine should respect this order for `current_lift` rotation and queue.
+API updates:
+- `POST/PATCH /contests/:id/registrations` accept an optional `lifts` array (subset of contest lifts, minimum one).
+- Attempt upserts validate `liftType` against the registration's active lifts (`400 LIFT_NOT_REGISTERED`).
+- Contest patch cascades removed lifts to registrations and deletes orphaned attempts.
 
 Frontend wizard:
-- Step “Disciplines”: choose preset (Powerlifting, Bench‑Only, Deadlift‑Only, Push‑Pull) or Custom (multi‑select). No “club” field here.
-- “Club” remains part of Competitor profiles/Registrations, not a contest‑level field.
+- Step “Disciplines”: contest-wide presets remain, but each competitor draft exposes toggles per lift backed by `registration_lifts`.
+- Competitor modal mirrors the same toggles when editing registrations.
 
 ## 5) Offline Strategy
 

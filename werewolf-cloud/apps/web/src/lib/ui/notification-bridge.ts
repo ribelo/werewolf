@@ -174,7 +174,7 @@ function handleCurrentAttemptSet(event: LiveEvent<CurrentAttemptBundle | Current
   } else {
     const attempt = payload as Attempt;
     const competitorName = attempt.competitorName
-      || `${attempt.firstName ?? ''} ${attempt.lastName ?? ''}`.trim()
+      || `${attempt.lastName ?? ''} ${attempt.firstName ?? ''}`.trim()
       || 'Unknown Competitor';
     currentAttempt = {
       id: attempt.id,

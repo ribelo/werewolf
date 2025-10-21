@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { genderSchema } from './competitor';
+import { liftTypeSchema } from './attempt';
 
 const flightCodeSchema = z
   .string()
@@ -23,6 +24,7 @@ export const registrationSchema = z.object({
   flightOrder: z.number().int().optional().nullable(),
   labels: z.array(z.string()).default([]),
   createdAt: z.string().datetime(),
+  lifts: z.array(liftTypeSchema).min(1),
 });
 
 export type Registration = z.infer<typeof registrationSchema>;
@@ -41,6 +43,7 @@ export const registrationCreateSchema = registrationSchema.pick({
   labels: true,
 }).extend({
   contestId: z.string().uuid().optional(),
+  lifts: registrationSchema.shape.lifts.optional(),
 });
 
 export type RegistrationCreateInput = z.infer<typeof registrationCreateSchema>;

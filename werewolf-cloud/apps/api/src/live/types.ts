@@ -1,5 +1,6 @@
 export type LiveEventType =
   | 'attempt.upserted'
+  | 'attempt.deleted'
   | 'attempt.resultUpdated'
   | 'attempt.currentSet'
   | 'attempt.currentCleared'

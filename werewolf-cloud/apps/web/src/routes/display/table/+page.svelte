@@ -207,7 +207,7 @@ $: clampWeightSetting = contest?.clampWeight ?? 2.5;
     const attempt = input as Attempt;
     const registration = registrations.find((entry) => entry.id === attempt.registrationId);
     const competitorName = registration
-      ? `${registration.firstName} ${registration.lastName}`
+      ? `${registration.lastName} ${registration.firstName}`
       : attempt.competitorName ?? 'Unknown Competitor';
 
     return {
@@ -261,7 +261,7 @@ $: clampWeightSetting = contest?.clampWeight ?? 2.5;
 
   function competitorName(registrationId: string): string {
     const competitor = getCompetitor(registrationId);
-    return competitor ? `${competitor.firstName} ${competitor.lastName}` : 'Unknown';
+    return competitor ? `${competitor.lastName} ${competitor.firstName}` : 'Unknown';
   }
 
   function queueLabel(attempt: Attempt): string {
@@ -308,10 +308,10 @@ $: clampWeightSetting = contest?.clampWeight ?? 2.5;
 </svelte:head>
 
 <div class="min-h-screen bg-black text-white flex flex-col">
-  <header class="w-full bg-black px-10 py-10">
-    <div class="flex flex-col items-center gap-4 text-center">
-      <h1 class="font-display text-5xl uppercase tracking-[0.2rem] text-white" style="text-shadow: 0 0 20px rgba(220, 20, 60, 0.5), 0 0 40px rgba(220, 20, 60, 0.3);">{contest?.name ?? t('display_table.head.default_contest')}</h1>
-      <p class="text-caption text-text-secondary uppercase tracking-[0.4em]">{t('display_table.header.tagline')}</p>
+  <header class="w-full bg-black px-4 sm:px-6 md:px-8 lg:px-10 py-6 sm:py-8 md:py-10">
+    <div class="flex flex-col items-center gap-3 sm:gap-4 text-center">
+      <h1 class="font-display text-2xl sm:text-3xl md:text-4xl lg:text-5xl uppercase tracking-[0.1rem] sm:tracking-[0.15rem] md:tracking-[0.2rem] text-white" style="text-shadow: 0 0 16px rgba(220, 20, 60, 0.5), 0 0 32px rgba(220, 20, 60, 0.3);">{contest?.name ?? t('display_table.head.default_contest')}</h1>
+      <p class="text-caption text-text-secondary uppercase tracking-[0.3em] sm:tracking-[0.4em]">{t('display_table.header.tagline')}</p>
       <div class="flex items-center gap-4">
         <span class={connectionBadge()}>{connectionLabel()}</span>
         {#if connectionStatus !== 'connected'}
@@ -323,7 +323,7 @@ $: clampWeightSetting = contest?.clampWeight ?? 2.5;
     </div>
   </header>
 
-  <main class="flex-1 container-full py-12 space-y-10">
+  <main class="flex-1 container-full py-6 sm:py-8 md:py-10 lg:py-12 space-y-6 sm:space-y-8 md:space-y-10">
     {#if error}
       <div class="card border-primary-red text-center space-y-4">
         <h2 class="text-h2 text-status-error">{t('display_table.errors.load_failed_title')}</h2>
@@ -455,9 +455,9 @@ $: clampWeightSetting = contest?.clampWeight ?? 2.5;
             </div>
             <div class="md:col-span-4 space-y-4">
               <p class="text-label text-text-secondary uppercase tracking-[0.4em]">{t('display_table.current.weight')}</p>
-              <div class="flex items-baseline gap-4">
-                <span class="text-[6rem] leading-none font-mono text-primary-red">{liveCurrentAttempt.weight}</span>
-                <span class="text-3xl font-mono text-text-secondary uppercase tracking-[0.3em]">kg</span>
+              <div class="flex items-baseline gap-2 md:gap-4">
+                <span class="text-4xl sm:text-5xl md:text-6xl lg:text-[6rem] leading-none font-mono text-primary-red">{liveCurrentAttempt.weight}</span>
+                <span class="text-lg sm:text-xl md:text-2xl lg:text-3xl font-mono text-text-secondary uppercase tracking-[0.3em]">kg</span>
               </div>
             </div>
             {#if livePlatePlan && livePlatePlan.plates.length > 0}

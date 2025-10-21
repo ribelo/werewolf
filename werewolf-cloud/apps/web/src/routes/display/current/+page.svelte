@@ -77,7 +77,7 @@
   let decipherPlates: string = '';
   
   $: sanitizedName = currentCompetitor
-    ? truncate(`${currentCompetitor.firstName} ${currentCompetitor.lastName}`, 28)
+    ? truncate(`${currentCompetitor.lastName} ${currentCompetitor.firstName}`, 28)
     : '';
   
   $: currentLiftLabelStr = liftLabel();
@@ -576,9 +576,9 @@
 </svelte:head>
 
 <div class="min-h-screen bg-black text-white flex flex-col">
-  <header class="w-full bg-black px-10 py-10 text-center">
+  <header class="w-full bg-black px-4 sm:px-6 md:px-8 lg:px-10 py-6 sm:py-8 md:py-10 text-center">
     <div>
-      <h1 class="font-display text-5xl uppercase tracking-[0.2rem] text-white" style="text-shadow: 0 0 24px rgba(220, 20, 60, 0.55), 0 0 48px rgba(220, 20, 60, 0.35);">{contest?.name ?? t('display_current.head.default_contest')}</h1>
+      <h1 class="font-display text-2xl sm:text-3xl md:text-4xl lg:text-5xl uppercase tracking-[0.1rem] sm:tracking-[0.15rem] md:tracking-[0.2rem] text-white" style="text-shadow: 0 0 16px rgba(220, 20, 60, 0.55), 0 0 32px rgba(220, 20, 60, 0.35);">{contest?.name ?? t('display_current.head.default_contest')}</h1>
     </div>
   </header>
 
@@ -610,7 +610,7 @@
       </div>
     </main>
   {:else}
-    <main class="flex-1 container-full py-12 flex">
+    <main class="flex-1 container-full py-6 sm:py-8 md:py-10 lg:py-12 flex">
       <section class="card flex-1 flex flex-col space-y-10">
         <header class="space-y-4">
           <div class="flex flex-col gap-4">
@@ -647,15 +647,15 @@
 
           <div class="flex flex-col gap-4 lg:flex-row lg:items-stretch flex-1">
             {#each attemptTiles as tile}
-              <div class={`attempt-tile flex-1 min-w-[160px] px-6 py-6 flex flex-col tracking-[0.3em] uppercase text-center shadow-inner transform ${attemptBackgroundClass(tile.status)} ${tile.isHighlighted ? `border-2 border-white ${glowClass(tile.status)} scale-105` : 'hover:scale-102'}`} class:animate-status-success={tile.statusChanged && tile.status === 'successful'} class:animate-status-failed={tile.statusChanged && tile.status === 'failed'}>
+              <div class={`attempt-tile flex-1 min-w-[120px] sm:min-w-[140px] md:min-w-[160px] px-3 sm:px-4 md:px-6 py-4 sm:py-5 md:py-6 flex flex-col tracking-[0.2em] sm:tracking-[0.3em] uppercase text-center shadow-inner transform ${attemptBackgroundClass(tile.status)} ${tile.isHighlighted ? `border-2 border-white ${glowClass(tile.status)} scale-105` : 'hover:scale-102'}`} class:animate-status-success={tile.statusChanged && tile.status === 'successful'} class:animate-status-failed={tile.statusChanged && tile.status === 'failed'}>
                 <p class="text-h3 text-text-secondary">
                   {t('display_current.tiles.attempt', { number: tile.number })}
                 </p>
                 <div class="flex-1 flex items-center justify-center">
-                  <div class="flex items-baseline justify-center gap-4">
-                     <span class="text-[6rem] leading-none font-mono text-text-primary">{attemptWeightsChanged ? decipherAttemptWeights.split('•')[tile.number - 1] || tile.displayWeight : tile.displayWeight}</span>
+                  <div class="flex items-baseline justify-center gap-2 md:gap-4">
+                     <span class="text-4xl sm:text-5xl md:text-6xl lg:text-[6rem] leading-none font-mono text-text-primary">{attemptWeightsChanged ? decipherAttemptWeights.split('•')[tile.number - 1] || tile.displayWeight : tile.displayWeight}</span>
                     {#if tile.displayWeight !== '—'}
-                      <span class="text-3xl font-mono text-text-secondary uppercase tracking-[0.3em]">kg</span>
+                      <span class="text-lg sm:text-xl md:text-2xl lg:text-3xl font-mono text-text-secondary uppercase tracking-[0.3em]">kg</span>
                     {/if}
                   </div>
                 </div>

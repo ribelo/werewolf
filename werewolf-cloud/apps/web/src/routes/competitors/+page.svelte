@@ -33,7 +33,7 @@
     }
     const term = searchTerm.toLowerCase();
     filteredCompetitors = competitors.filter((c) => {
-      const name = `${c.firstName} ${c.lastName}`.toLowerCase();
+      const name = `${c.lastName} ${c.firstName}`.toLowerCase();
       const club = c.club?.toLowerCase() ?? '';
       const city = c.city?.toLowerCase() ?? '';
       return name.includes(term) || club.includes(term) || city.includes(term);
@@ -60,7 +60,7 @@
 
   async function openEditModal(competitor: CompetitorSummary) {
     const translate = get(_);
-    const name = `${competitor.firstName} ${competitor.lastName}`;
+    const name = `${competitor.lastName} ${competitor.firstName}`;
 
     const result = await modalStore.open({
       title: `${translate('competitor_modal.title.edit')} • ${name}`,
@@ -191,7 +191,7 @@
               {#each filteredCompetitors as competitor, index}
                 <tr class={`border-b border-border-color ${index % 2 === 0 ? 'bg-main-bg' : 'bg-card-bg'}`}>
                   <td class="px-4 py-3">
-                    <p class="text-text-primary font-semibold">{competitor.firstName} {competitor.lastName}</p>
+                    <p class="text-text-primary font-semibold">{competitor.lastName} {competitor.firstName}</p>
                     <p class="text-caption text-text-secondary mt-1">{competitor.gender}</p>
                   </td>
                   <td class="px-4 py-3">{new Date(competitor.birthDate).toLocaleDateString()}</td>

@@ -25,6 +25,7 @@ export interface UnifiedRow {
   bestDeadlift: number;
   total: number;
   points: number | null;
+  pointsByLift: Record<LiftKind, number | null>;
   maxLift: number;
   placeOpen?: number | null;
   placeAge?: number | null;
@@ -50,6 +51,11 @@ export function deriveContestLifts(
   contest: ContestDetail | null,
   attempts: Attempt[],
 ): LiftKind[] {
+  const competitionTypeLifts = normaliseCompetitionType(contest?.competitionType ?? null);
+  if (competitionTypeLifts.length > 0) {
+    return LIFTS.filter((lift) => competitionTypeLifts.includes(lift));
+  }
+
   const liftsFromAttempts = new Set<LiftKind>();
   for (const attempt of attempts) {
     if (LIFTS.includes(attempt.liftType as LiftKind)) {
@@ -59,11 +65,6 @@ export function deriveContestLifts(
 
   if (liftsFromAttempts.size > 0) {
     return LIFTS.filter((lift) => liftsFromAttempts.has(lift));
-  }
-
-  const competitionTypeLifts = normaliseCompetitionType(contest?.competitionType ?? null);
-  if (competitionTypeLifts.length > 0) {
-    return LIFTS.filter((lift) => competitionTypeLifts.includes(lift));
   }
 
   switch (contest?.discipline) {
@@ -167,12 +168,54 @@ export function buildUnifiedRows(params: {
 
   return registrations.map((registration) => {
     const attemptGrid = getAttemptsForRegistration(registration.id, attempts);
-    const bestSquat = bestSuccessfulWeight(attemptGrid.Squat);
-    const bestBench = bestSuccessfulWeight(attemptGrid.Bench);
-    const bestDeadlift = bestSuccessfulWeight(attemptGrid.Deadlift);
-    const total = bestSquat + bestBench + bestDeadlift;
-    const points = computePoints(total, registration.reshelCoefficient ?? null, registration.mcculloughCoefficient ?? null);
-    const maxLift = Math.max(bestSquat, bestBench, bestDeadlift);
+    const permittedLifts = (registration.lifts && registration.lifts.length > 0
+      ? (registration.lifts as LiftKind[])
+      : [...LIFTS]);
+    const uniquePermitted = Array.from(new Set(permittedLifts)) as LiftKind[];
+    const bestByLift: Record<LiftKind, number> = {
+      Squat: bestSuccessfulWeight(attemptGrid.Squat),
+      Bench: bestSuccessfulWeight(attemptGrid.Bench),
+      Deadlift: bestSuccessfulWeight(attemptGrid.Deadlift),
+    };
+    const total = uniquePermitted.reduce((sum, lift) => sum + (bestByLift[lift] ?? 0), 0);
+    const pointsByLift: Record<LiftKind, number | null> = {
+      Squat: uniquePermitted.includes('Squat')
+        ? computePoints(
+            bestByLift.Squat,
+            registration.reshelCoefficient ?? null,
+            registration.mcculloughCoefficient ?? null
+          )
+        : null,
+      Bench: uniquePermitted.includes('Bench')
+        ? computePoints(
+            bestByLift.Bench,
+            registration.reshelCoefficient ?? null,
+            registration.mcculloughCoefficient ?? null
+          )
+        : null,
+      Deadlift: uniquePermitted.includes('Deadlift')
+        ? computePoints(
+            bestByLift.Deadlift,
+            registration.reshelCoefficient ?? null,
+            registration.mcculloughCoefficient ?? null
+          )
+        : null,
+    };
+    let aggregatedPoints = 0;
+    let pointsValid = true;
+    for (const lift of uniquePermitted) {
+      const liftPoints = pointsByLift[lift] ?? null;
+      if (liftPoints === null) {
+        pointsValid = false;
+        break;
+      }
+      aggregatedPoints += liftPoints;
+    }
+    const points = pointsValid ? aggregatedPoints : null;
+    const maxLift = uniquePermitted.reduce((maxValue, lift) => {
+      const value = bestByLift[lift] ?? 0;
+      return value > maxValue ? value : maxValue;
+    }, 0);
 
     const openResult = openMap.get(registration.id) ?? null;
     const ageResult = ageMap.get(registration.id) ?? null;
@@ -189,11 +232,12 @@ export function buildUnifiedRows(params: {
       age,
       birthDate,
       attempts: attemptGrid,
-      bestSquat,
-      bestBench,
-      bestDeadlift,
+      bestSquat: bestByLift.Squat,
+      bestBench: bestByLift.Bench,
+      bestDeadlift: bestByLift.Deadlift,
       total,
       points,
+      pointsByLift,
       maxLift,
       placeOpen: openResult?.placeOpen ?? null,
       placeAge: ageResult?.placeInAgeClass ?? null,

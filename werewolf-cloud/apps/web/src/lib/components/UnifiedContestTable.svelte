@@ -5,7 +5,7 @@
   import type { Attempt, Registration, AgeCategory, WeightClass, AttemptStatus } from '$lib/types';
   import { getAttemptStatusClass } from '$lib/ui/status';
   import { _ } from 'svelte-i18n';
-  import { CheckCircle2, Clock, Loader2, Radio, XCircle, ArrowUpDown, ChevronUp, ChevronDown } from 'lucide-svelte';
+  import { CheckCircle2, Circle, Clock, Loader2, Radio, XCircle, ArrowUpDown, ChevronUp, ChevronDown } from 'lucide-svelte';
   import { locale } from 'svelte-i18n';
 
   export let rows: UnifiedRow[] = [];
@@ -19,6 +19,7 @@
   export let showPointsColumn = true;
   export let showMaxColumn = true;
   export let attemptNumbers: AttemptNumber[] = [...ATTEMPT_NUMBERS];
+  export let mode: 'attempts' | 'registration' = 'attempts';
 
   export let onSortChange: (column: string) => void = () => {};
   export let onOpenCompetitorModal: (registration: Registration) => void = () => {};
@@ -31,8 +32,10 @@
     attemptId?: string;
     weight: number;
   }) => void = () => {};
+  export let onToggleLift: (registration: Registration, lift: LiftKind, nextValue: boolean) => void = () => {};
   export let currentAttemptId: string | null = null;
   export let currentAttemptLoading: Record<string, boolean> = {};
+  export let toggleLiftLoading: Record<string, boolean> = {};
   const NAME_COLUMN_WIDTH = 220;
   const attemptLabels: Record<number, string> = { 1: 'I', 2: 'II', 3: 'III' };
   const liftHeaderKey: Record<LiftKind, string> = {
@@ -48,6 +51,7 @@
 
   const LIVE_BUTTON_BASE = 'inline-flex h-7 w-7 items-center justify-center rounded-sm border transition-colors duration-200';
   const STATUS_BUTTON_BASE = 'inline-flex h-7 w-7 items-center justify-center rounded-sm border transition-colors duration-200';
+  const TOGGLE_BUTTON_BASE = 'inline-flex h-7 w-[3.75rem] items-center justify-center rounded border transition-colors duration-200';
   const statusIconMap: Record<AttemptStatus, typeof Clock> = {
     Pending: Clock,
     Successful: CheckCircle2,
@@ -82,6 +86,13 @@
     return `${LIVE_BUTTON_BASE} border-border-color text-text-secondary hover:border-primary-red hover:text-primary-red`;
   }
 
+  function liftToggleButtonClass(isActive: boolean): string {
+    if (isActive) {
+      return `${TOGGLE_BUTTON_BASE} border-primary-red bg-primary-red/20 text-primary-red shadow-glow`;
+    }
+    return `${TOGGLE_BUTTON_BASE} border-border-color text-text-secondary hover:border-primary-red hover:text-primary-red`;
+  }
+
   let activeLifts: LiftKind[] = [...LIFTS];
   let activeAttemptNumbers: AttemptNumber[] = [...ATTEMPT_NUMBERS];
   $: activeLifts = (lifts?.length ?? 0) > 0 ? [...lifts] : [...LIFTS];
@@ -109,6 +120,47 @@
       return '—';
     }
     return formatWeight(weight);
+  }
+
+  function resolvePoints(row: UnifiedRow): number | null {
+    if (!row) return null;
+    if (activeLifts.length === 1) {
+      const [soleLift] = activeLifts;
+      return row.pointsByLift?.[soleLift] ?? row.points ?? null;
+    }
+    return row.points ?? null;
+  }
+
+  function displayPoints(row: UnifiedRow): string {
+    const value = resolvePoints(row);
+    return value !== null ? formatCoefficient(value) : '—';
+  }
+
+  function resolveBestForLift(row: UnifiedRow, lift: LiftKind): number {
+    switch (lift) {
+      case 'Squat':
+        return row.bestSquat;
+      case 'Bench':
+        return row.bestBench;
+      case 'Deadlift':
+        return row.bestDeadlift;
+      default:
+        return 0;
+    }
+  }
+
+  function resolveMax(row: UnifiedRow): number {
+    if (!row) return 0;
+    if (activeLifts.length === 1) {
+      const [soleLift] = activeLifts;
+      return resolveBestForLift(row, soleLift);
+    }
+    return row.maxLift ?? 0;
+  }
+
+  function displayMax(row: UnifiedRow): string {
+    const value = resolveMax(row);
+    return value > 0 ? formatWeight(value) : '—';
   }
 
   function ageDisplay(row: UnifiedRow): { birth: string; age: string } {
@@ -314,7 +366,7 @@
           style={`min-width: ${NAME_COLUMN_WIDTH}px; width: ${NAME_COLUMN_WIDTH}px;`}
         >
           <div class="flex flex-col">
-            <span class="font-semibold text-text-primary">{row.registration.firstName} {row.registration.lastName}</span>
+            <span class="font-semibold text-text-primary">{row.registration.lastName} {row.registration.firstName}</span>
             {#if competitorMeta(row.registration)}
               <span class="text-caption text-text-secondary">{competitorMeta(row.registration)}</span>
             {:else}
@@ -362,79 +414,109 @@
         {#each activeLifts as lift}
           {#each row.attempts[lift].filter((cell) => activeAttemptNumbers.includes(cell.attemptNumber)) as cell}
             <td class="px-2 py-2 text-center">
-              <div class="flex flex-col items-center gap-1">
-                <div class="flex items-center gap-1">
-                  {#if cell.attempt}
-                    {@const attemptId = cell.attempt.id}
-                    {@const status = resolveStatus(cell.attempt.status)}
-                    {#if !readOnly}
-                      {@const isCurrent = currentAttemptId === attemptId}
-                      {@const isLoading = Boolean(currentAttemptLoading[attemptId])}
-                      <button
-                        class={liveButtonClass(isCurrent, isLoading)}
-                        type="button"
-                        aria-label={isCurrent ? $_('contest_table.actions.live_now') : $_('contest_table.actions.set_live')}
-                        title={isCurrent ? $_('contest_table.actions.live_now') : $_('contest_table.actions.set_live')}
-                        aria-pressed={isCurrent}
-                        disabled={isCurrent || isLoading}
-                        on:click={() => onSetCurrentAttempt(cell.attempt)}
-                      >
-                        {#if isLoading}
-                          <Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
-                        {:else}
-                          <Radio class="h-4 w-4" aria-hidden="true" />
-                        {/if}
-                      </button>
-                    {/if}
-                    {#if readOnly}
-                      <span
-                        class={`${STATUS_BUTTON_BASE} ${getAttemptStatusClass(status)} opacity-70`}
-                        aria-label={statusLabels[status]}
-                      >
-                        <svelte:component this={statusIconMap[status] || Clock} class="h-4 w-4" aria-hidden="true" />
-                      </span>
-                    {:else}
-                      <button
-                        class={`${STATUS_BUTTON_BASE} ${getAttemptStatusClass(status)} hover:brightness-110`}
-                        type="button"
-                        aria-label={statusLabels[status]}
-                        title={statusLabels[status]}
-                        on:click={() => onAttemptStatusCycle(cell.attempt)}
-                      >
-                        <svelte:component this={statusIconMap[status] || Clock} class="h-4 w-4" aria-hidden="true" />
-                      </button>
-                    {/if}
+              {#if mode === 'registration'}
+                {@const isActive = !row.registration.lifts || row.registration.lifts.includes(lift)}
+                {@const toggleKey = `${row.registration.id}:${lift}`}
+                {@const isLoading = Boolean(toggleLiftLoading[toggleKey])}
+                {@const label = isActive
+                  ? translate('contest_table.actions.disable_lift', { lift: translate(liftHeaderKey[lift]) })
+                  : translate('contest_table.actions.enable_lift', { lift: translate(liftHeaderKey[lift]) })}
+                <button
+                  class={liftToggleButtonClass(isActive)}
+                  type="button"
+                  aria-label={label}
+                  title={label}
+                  aria-pressed={isActive}
+                  disabled={isLoading}
+                  on:click={() => onToggleLift(row.registration, lift, !isActive)}
+                >
+                  {#if isLoading}
+                    <Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
+                  {:else if isActive}
+                    <CheckCircle2 class="h-4 w-4" aria-hidden="true" />
                   {:else}
-                    <span class="inline-flex h-7 w-[3.75rem] items-center justify-center rounded border border-border-color/40 bg-element-bg/60 text-xs text-text-tertiary">
-                      —
+                    <Circle class="h-4 w-4" aria-hidden="true" />
+                  {/if}
+                </button>
+              {:else if !row.registration.lifts || row.registration.lifts.includes(lift)}
+                <div class="flex flex-col items-center gap-1">
+                  <div class="flex items-center gap-1">
+                    {#if cell.attempt}
+                      {@const attemptId = cell.attempt.id}
+                      {@const status = resolveStatus(cell.attempt.status)}
+                      {#if !readOnly}
+                        {@const isCurrent = currentAttemptId === attemptId}
+                        {@const isLoading = Boolean(currentAttemptLoading[attemptId])}
+                        <button
+                          class={liveButtonClass(isCurrent, isLoading)}
+                          type="button"
+                          aria-label={isCurrent ? $_('contest_table.actions.live_now') : $_('contest_table.actions.set_live')}
+                          title={isCurrent ? $_('contest_table.actions.live_now') : $_('contest_table.actions.set_live')}
+                          aria-pressed={isCurrent}
+                          disabled={isCurrent || isLoading}
+                          on:click={() => onSetCurrentAttempt(cell.attempt)}
+                        >
+                          {#if isLoading}
+                            <Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
+                          {:else}
+                            <Radio class="h-4 w-4" aria-hidden="true" />
+                          {/if}
+                        </button>
+                      {/if}
+                      {#if readOnly}
+                        <span
+                          class={`${STATUS_BUTTON_BASE} ${getAttemptStatusClass(status)} opacity-70`}
+                          aria-label={statusLabels[status]}
+                        >
+                          <svelte:component this={statusIconMap[status] || Clock} class="h-4 w-4" aria-hidden="true" />
+                        </span>
+                      {:else}
+                        <button
+                          class={`${STATUS_BUTTON_BASE} ${getAttemptStatusClass(status)} hover:brightness-110`}
+                          type="button"
+                          aria-label={statusLabels[status]}
+                          title={statusLabels[status]}
+                          on:click={() => onAttemptStatusCycle(cell.attempt)}
+                        >
+                          <svelte:component this={statusIconMap[status] || Clock} class="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      {/if}
+                    {:else}
+                      <span class="inline-flex h-7 w-[3.75rem] items-center justify-center rounded border border-border-color/40 bg-element-bg/60 text-xs text-text-tertiary">
+                        —
+                      </span>
+                    {/if}
+                  </div>
+
+                  {#if readOnly}
+                    <span class="inline-flex h-7 w-[3.75rem] items-center justify-center rounded border border-border-color/60 bg-element-bg px-2 text-xs text-text-secondary">
+                      {attemptWeightDisplay(cell)}
                     </span>
+                  {:else}
+                    <input
+                      class="h-7 w-[3.75rem] rounded border border-border-color bg-main-bg px-2 text-center text-xs"
+                      type="text"
+                      inputmode="decimal"
+                      autocomplete="off"
+                      value={cell.attempt?.weight ?? ''}
+                      placeholder="—"
+                      on:change={(event) => handleAttemptInput(row, cell, event)}
+                    />
                   {/if}
                 </div>
-
-                {#if readOnly}
-                  <span class="inline-flex h-7 w-[3.75rem] items-center justify-center rounded border border-border-color/60 bg-element-bg px-2 text-xs text-text-secondary">
-                    {attemptWeightDisplay(cell)}
-                  </span>
-                {:else}
-                  <input
-                    class="h-7 w-[3.75rem] rounded border border-border-color bg-main-bg px-2 text-center text-xs"
-                    type="text"
-                    inputmode="decimal"
-                    autocomplete="off"
-                    value={cell.attempt?.weight ?? ''}
-                    placeholder="—"
-                    on:change={(event) => handleAttemptInput(row, cell, event)}
-                  />
-                {/if}
-              </div>
+              {:else}
+                <span class="inline-flex h-7 w-[3.75rem] items-center justify-center rounded border border-border-color/40 bg-element-bg/60 text-xs text-text-tertiary">
+                  —
+                </span>
+              {/if}
             </td>
           {/each}
         {/each}
         {#if showPointsColumn}
-          <td class="px-3 py-2 text-center">{row.points !== null ? formatCoefficient(row.points) : '—'}</td>
+          <td class="px-3 py-2 text-center">{displayPoints(row)}</td>
         {/if}
         {#if showMaxColumn}
-          <td class="px-3 py-2 text-center">{row.maxLift > 0 ? formatWeight(row.maxLift) : '—'}</td>
+          <td class="px-3 py-2 text-center">{displayMax(row)}</td>
         {/if}
         <td class="px-3 py-2">
           <div class="flex flex-wrap items-center gap-2">

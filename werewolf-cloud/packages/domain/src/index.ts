@@ -10,4 +10,5 @@ export * from './models/reference';
 export * from './constants/categories';
 export * from './services/score-engine';
 export * from './services/coefficients';
+export * from './services/lifts';
 export * from './utils';

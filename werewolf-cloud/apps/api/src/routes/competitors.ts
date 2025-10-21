@@ -8,33 +8,26 @@ import { publishEvent } from '../live/publish';
 import { determineAgeCategory, determineWeightClass } from '@werewolf/domain/services/coefficients';
 import { getReshelCoefficient, getMcCulloughCoefficient } from '../services/coefficients';
 import { getContestAgeDescriptors, getContestWeightDescriptors } from '../utils/category-templates';
+import { mapRegistrationRow } from '../utils/registration-map';
 
 const competitors = new Hono<WerewolfEnvironment>();
 
-function parseLabels(input: unknown): string[] {
-  if (Array.isArray(input)) {
-    return input.map(String);
-  }
-  if (typeof input === 'string') {
-    try {
-      const parsed = JSON.parse(input);
-      return Array.isArray(parsed) ? parsed.map(String) : [];
-    } catch {
-      return [];
-    }
-  }
-  return [];
-}
-
-function mapRegistrationRow(row: Record<string, any>): Record<string, any> {
-  const normalised: Record<string, any> = { ...row };
-
-  if ('labels' in normalised) {
-    normalised.labels = parseLabels(normalised.labels);
-  }
-
-  return normalised;
-}
+const LIFTS_JSON_SELECT = `
+        (
+          SELECT json_group_array(lift_type)
+          FROM (
+            SELECT lift_type
+            FROM registration_lifts rl
+            WHERE rl.registration_id = r.id
+            ORDER BY
+              CASE rl.lift_type
+                WHEN 'Squat' THEN 1
+                WHEN 'Bench' THEN 2
+                WHEN 'Deadlift' THEN 3
+              END
+          )
+        ) AS lifts
+`;
 
 // GET /competitors - List all competitors
 competitors.get('/', async (c) => {
@@ -375,6 +368,7 @@ async function recalculateCompetitorRegistrations(
         r.bodyweight, r.reshel_coefficient, r.mccullough_coefficient,
         r.rack_height_squat, r.rack_height_bench, r.created_at,
         r.flight_code, r.flight_order, COALESCE(r.labels, '[]') AS labels,
+        ${LIFTS_JSON_SELECT},
         c.first_name, c.last_name, c.gender, c.birth_date, c.club, c.city,
         cac.name AS age_category_name,
         cwc.name AS weight_class_name

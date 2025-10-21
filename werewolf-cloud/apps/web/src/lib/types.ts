@@ -75,6 +75,7 @@ export interface Registration {
   flightCode?: string | null;
   flightOrder?: number | null;
   labels?: string[];
+  lifts: LiftType[];
 }
 
 export interface RegistrationSummary {
@@ -91,6 +92,7 @@ export interface RegistrationSummary {
   flightCode?: string | null;
   flightOrder?: number | null;
   labels?: string[];
+  lifts: LiftType[];
 }
 
 export interface ContestDetail {

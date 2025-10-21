@@ -16,7 +16,8 @@
   export let getSnapshot: () => Attempt[] = () => [];
   export let restoreSnapshot: (snapshot: Attempt[]) => void = () => {};
 
-  const LIFTS: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
+  const DEFAULT_LIFTS: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
+  let availableLifts: LiftType[] = [...DEFAULT_LIFTS];
   const ATTEMPT_NUMBERS: AttemptNumber[] = [1, 2, 3];
   const QUICK_INCREMENT = 2.5;
 
@@ -36,6 +37,14 @@
   let formState: Partial<Record<FormKey, AttemptFormValue>> = {};
   let isSaving = false;
   let lastAttemptSnapshot: Attempt[] = [];
+  $: availableLifts = registration?.lifts && registration.lifts.length > 0
+    ? (registration.lifts as LiftType[])
+    : [...DEFAULT_LIFTS];
+  let currentRegistrationId: string | null = null;
+  $: if ((registration?.id ?? null) !== currentRegistrationId) {
+    currentRegistrationId = registration?.id ?? null;
+    initialiseForm();
+  }
 
   function createTempAttemptId(lift: LiftType, attemptNumber: AttemptNumber): string {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -50,7 +59,7 @@
 
   function initialiseForm() {
     const draft: Partial<Record<FormKey, AttemptFormValue>> = {};
-    for (const lift of LIFTS) {
+    for (const lift of availableLifts) {
       for (const number of ATTEMPT_NUMBERS) {
         const existing = attempts.find((attempt) => attempt.liftType === lift && attempt.attemptNumber === number);
         draft[buildKey(lift, number)] = {
@@ -112,7 +121,7 @@
 
     const updates: Array<{ liftType: LiftType; attemptNumber: AttemptNumber; weight: number }> = [];
 
-    for (const lift of LIFTS) {
+    for (const lift of availableLifts) {
       for (const number of ATTEMPT_NUMBERS) {
         const key = buildKey(lift, number);
         const value = formState[key]?.weight?.trim();
@@ -228,7 +237,7 @@
         </tr>
       </thead>
       <tbody>
-        {#each LIFTS as lift}
+        {#each availableLifts as lift}
           <tr class="border-b border-border-color">
             <td class="px-4 py-3 font-semibold text-text-primary">{lift}</td>
             {#each ATTEMPT_NUMBERS as attemptNumber}

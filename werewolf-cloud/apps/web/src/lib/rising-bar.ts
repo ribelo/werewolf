@@ -137,7 +137,7 @@ function resolveName(attempt: Attempt, registrationsMap?: Map<string, Registrati
   }
   const registration = registrationsMap?.get(attempt.registrationId);
   if (registration) {
-    return `${registration.firstName} ${registration.lastName}`.trim();
+    return `${registration.lastName} ${registration.firstName}`.trim();
   }
   return 'Unknown competitor';
 }

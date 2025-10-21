@@ -29,6 +29,45 @@ export let lifts: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
   const genderOptions = ['Male', 'Female'] as const;
   type GenderOption = (typeof genderOptions)[number];
 
+  const DEFAULT_LIFTS: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
+  let availableLifts: LiftType[] = [...DEFAULT_LIFTS];
+  let selectedLifts: LiftType[] = [...DEFAULT_LIFTS];
+  let initialisedRegistrationId: string | null = null;
+
+  function liftsEqualLocal(a: readonly LiftType[], b: readonly LiftType[]): boolean {
+    if (a.length !== b.length) return false;
+    return a.every((lift, index) => lift === b[index]);
+  }
+
+  function normaliseSelectableLifts(source?: readonly LiftType[] | null): LiftType[] {
+    const allowed = availableLifts;
+    if (!Array.isArray(source) || source.length === 0) {
+      return [...allowed];
+    }
+    const allowedSet = new Set(allowed);
+    const filtered = source.filter((lift): lift is LiftType => allowedSet.has(lift));
+    if (filtered.length === 0) {
+      return [...allowed];
+    }
+    return allowed.filter((lift) => filtered.includes(lift));
+  }
+
+  $: availableLifts = (Array.isArray(lifts) && lifts.length > 0 ? lifts : DEFAULT_LIFTS)
+    .filter((lift, index, array) => array.indexOf(lift) === index) as LiftType[];
+
+  $: if (availableLifts.length > 0) {
+    const targetId = registration?.id ?? null;
+    if (initialisedRegistrationId !== targetId) {
+      selectedLifts = normaliseSelectableLifts(registration?.lifts ?? null);
+      initialisedRegistrationId = targetId;
+    } else {
+      const filtered = normaliseSelectableLifts(selectedLifts);
+      if (!liftsEqualLocal(filtered, selectedLifts)) {
+        selectedLifts = filtered;
+      }
+    }
+  }
+
   type MessageValues = Record<string, string | number | boolean | Date | null | undefined>;
 
   function t(key: string, values?: MessageValues): string {
@@ -267,7 +306,7 @@ export let lifts: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
         const updatedOpeningAttempts: Record<LiftType, string> = { Squat: '', Bench: '', Deadlift: '' };
         
         for (const attempt of attempts) {
-          if (attempt.attemptNumber === 1 && lifts.includes(attempt.liftType as LiftType)) {
+          if (attempt.attemptNumber === 1 && selectedLifts.includes(attempt.liftType as LiftType)) {
             updatedOpeningAttempts[attempt.liftType as LiftType] = String(attempt.weight);
           }
         }
@@ -335,11 +374,11 @@ export let lifts: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
   }
 
   function autoAssignWeightClass() {
-    if (!showRegistrationSection) return;
-    if (!Array.isArray(weightClasses) || weightClasses.length === 0) return;
+  if (!showRegistrationSection) return;
+  if (!Array.isArray(weightClasses) || weightClasses.length === 0) return;
 
-    const weight = parseFloatInput(registrationForm.bodyweight);
-    if (weight === null || weight <= 0) {
+  const weight = parseFloatInput(registrationForm.bodyweight);
+  if (weight === null || weight <= 0) {
       return;
     }
 
@@ -397,6 +436,34 @@ export let lifts: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
       }
     } catch (error) {
       console.warn('Failed to auto-assign weight class', error);
+    }
+  }
+
+  function toggleLift(lift: LiftType) {
+    if (!availableLifts.includes(lift)) {
+      return;
+    }
+
+    if (selectedLifts.includes(lift)) {
+      if (selectedLifts.length === 1) {
+        return;
+      }
+      const next = selectedLifts.filter((entry) => entry !== lift);
+      selectedLifts = availableLifts.filter((entry) => next.includes(entry));
+    } else {
+      const next = [...selectedLifts, lift];
+      selectedLifts = availableLifts.filter((entry) => next.includes(entry));
+    }
+
+    if (!selectedLifts.includes('Squat')) {
+      registrationForm = { ...registrationForm, rackHeightSquat: '' };
+    }
+    if (!selectedLifts.includes('Bench')) {
+      registrationForm = { ...registrationForm, rackHeightBench: '' };
+    }
+
+    if (!selectedLifts.includes(lift)) {
+      openingAttemptByLift = { ...openingAttemptByLift, [lift]: '' };
     }
   }
 
@@ -485,6 +552,11 @@ export let lifts: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
       return;
     }
 
+    if (selectedLifts.length === 0) {
+      error = t('competitor_modal.status.validation.lifts_required');
+      return;
+    }
+
     isSaving = true;
     try {
       const payload = {
@@ -527,6 +599,7 @@ export let lifts: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
           rackHeightSquat: parseIntInput(registrationForm.rackHeightSquat),
           rackHeightBench: parseIntInput(registrationForm.rackHeightBench),
         };
+        registrationPayload.lifts = [...selectedLifts];
 
         const response = await apiClient.patch<Registration>(
           `/registrations/${registration.id}`,
@@ -536,6 +609,9 @@ export let lifts: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
           throw new Error(response.error);
         }
         updatedRegistration = response.data ?? updatedRegistration;
+        if (updatedRegistration) {
+          updatedRegistration.lifts = updatedRegistration.lifts?.length ? updatedRegistration.lifts : [...selectedLifts];
+        }
       }
 
       if (!registration && mode === 'create' && contestId && targetId) {
@@ -550,6 +626,7 @@ export let lifts: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
           rackHeightSquat: parseIntInput(registrationForm.rackHeightSquat),
           rackHeightBench: parseIntInput(registrationForm.rackHeightBench),
         };
+        registrationPayload.lifts = [...selectedLifts];
 
         const response = await apiClient.post<Registration>(
           `/contests/${contestId}/registrations`,
@@ -566,14 +643,15 @@ export let lifts: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
           next.gender = form.gender;
           next.club = form.club?.trim() || null;
           next.city = form.city?.trim() || null;
+          next.lifts = next.lifts?.length ? next.lifts : [...selectedLifts];
 
           updatedRegistration = next;
+        }
       }
-    }
 
       if (contestId && updatedRegistration) {
         try {
-          for (const lift of lifts) {
+          for (const lift of selectedLifts) {
             const raw = openingAttemptByLift[lift as LiftType] ?? '';
             const weight = parseFloatInput(raw);
             if (weight !== null && weight > 0) {
@@ -731,6 +809,23 @@ export let lifts: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
                 {ageCategoryDisplay}
               </div>
             </div>
+            <div class="flex flex-col gap-2 md:col-span-2">
+              <span class="input-label">{t('competitor_modal.registration_fields.lifts')}</span>
+              <div class="flex flex-wrap gap-2">
+                {#each availableLifts as lift}
+                  <label class={`px-3 py-2 border rounded-md cursor-pointer transition ${selectedLifts.includes(lift) ? 'border-primary-red bg-primary-red/10 text-text-primary' : 'border-border-color bg-element-bg text-text-secondary hover:text-text-primary'}`}>
+                    <input
+                      type="checkbox"
+                      class="hidden"
+                      checked={selectedLifts.includes(lift)}
+                      on:change={() => toggleLift(lift)}
+                    />
+                    {liftLabel(lift)}
+                  </label>
+                {/each}
+              </div>
+              <p class="text-caption text-text-secondary">{t('competitor_modal.registration_fields.lifts_hint')}</p>
+            </div>
             <label class="flex flex-col gap-2">
               <span class="input-label">{t('competitor_modal.registration_fields.rack_squat')}</span>
               <input
@@ -739,6 +834,7 @@ export let lifts: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
                 step="1"
                 min="0"
                 bind:value={registrationForm.rackHeightSquat}
+                disabled={!selectedLifts.includes('Squat')}
               />
             </label>
             <label class="flex flex-col gap-2">
@@ -749,11 +845,12 @@ export let lifts: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
                 step="1"
                 min="0"
                 bind:value={registrationForm.rackHeightBench}
+                disabled={!selectedLifts.includes('Bench')}
               />
             </label>
             {#if contestId}
               <div class="grid gap-4">
-                {#each lifts as lift}
+                {#each selectedLifts as lift}
                   <label class="flex flex-col gap-2">
                     <span class="input-label">{t('competitor_modal.registration_fields.opening_attempt', { lift: liftLabel(lift) })}</span>
                     <input

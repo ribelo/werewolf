@@ -6,7 +6,7 @@ export function bundleToCurrentAttempt(bundle: CurrentAttemptBundle): CurrentAtt
   return {
     id: attempt.id,
     registrationId: attempt.registrationId,
-    competitorName: `${competitor.firstName} ${competitor.lastName}`.trim(),
+    competitorName: `${competitor.lastName} ${competitor.firstName}`.trim(),
     liftType: attempt.liftType,
     attemptNumber: attempt.attemptNumber as AttemptNumber,
    weight: attempt.weight,

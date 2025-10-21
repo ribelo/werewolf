@@ -264,6 +264,7 @@ import { formatWeight } from '$lib/utils';
       bodyweight,
       rackHeightSquat,
       rackHeightBench,
+      lifts: [...events],
       attempts: normalizeAttemptPlanForGender(createAttemptPlan(events, bodyweight, true), gender),
     };
   }
@@ -390,6 +391,7 @@ import { formatWeight } from '$lib/utils';
     bodyweight: number;
     rackHeightSquat: number | null;
     rackHeightBench: number | null;
+    lifts: ContestEvent[];
     attempts: AttemptPlan;
   }
 
@@ -430,6 +432,7 @@ import { formatWeight } from '$lib/utils';
     bodyweight: 70,
     rackHeightSquat: DEFAULT_RACK_SQUAT,
     rackHeightBench: DEFAULT_RACK_BENCH,
+    lifts: [...form.events],
     attempts: createAttemptPlan(form.events, 70, false),
   };
 
@@ -513,23 +516,39 @@ import { formatWeight } from '$lib/utils';
     bodyweight: 70,
     rackHeightSquat: DEFAULT_RACK_SQUAT,
     rackHeightBench: DEFAULT_RACK_BENCH,
+    lifts: [...form.events],
     attempts: createAttemptPlan(form.events, 70, false),
   };
 }
 
+  function normaliseDraftEvents(source: ContestEvent[]): ContestEvent[] {
+    const allowed = form.events;
+    if (allowed.length === 0) {
+      return [...AVAILABLE_EVENTS];
+    }
+    const uniqueAllowed = Array.from(new Set(allowed));
+    const filtered = Array.from(new Set(source.filter((event) => uniqueAllowed.includes(event))));
+    return filtered.length > 0 ? uniqueAllowed.filter((event) => filtered.includes(event)) : [...uniqueAllowed];
+  }
+
   function syncAttemptPlansWithEvents() {
-    const events = form.events;
+    const updatedDraftEvents = normaliseDraftEvents(competitorDraft.lifts);
     competitorDraft = {
       ...competitorDraft,
+      lifts: updatedDraftEvents,
       attempts: normalizeAttemptPlanForGender(
-        syncAttemptPlan(competitorDraft.attempts, events),
+        syncAttemptPlan(competitorDraft.attempts, updatedDraftEvents),
         competitorDraft.gender,
       ),
     };
-    competitorDrafts = competitorDrafts.map((draft) => ({
-      ...draft,
-      attempts: normalizeAttemptPlanForGender(syncAttemptPlan(draft.attempts, events), draft.gender),
-    }));
+    competitorDrafts = competitorDrafts.map((draft) => {
+      const lifts = normaliseDraftEvents(draft.lifts);
+      return {
+        ...draft,
+        lifts,
+        attempts: normalizeAttemptPlanForGender(syncAttemptPlan(draft.attempts, lifts), draft.gender),
+      };
+    });
   }
 
   function addCompetitorDraft() {
@@ -552,8 +571,9 @@ import { formatWeight } from '$lib/utils';
       return;
     }
 
+    const lifts = normaliseDraftEvents(competitorDraft.lifts);
     const attempts = normalizeAttemptPlanForGender(
-      syncAttemptPlan(competitorDraft.attempts, form.events),
+      syncAttemptPlan(competitorDraft.attempts, lifts),
       competitorDraft.gender,
     );
     competitorDrafts = [
@@ -561,6 +581,7 @@ import { formatWeight } from '$lib/utils';
       {
         ...competitorDraft,
         bodyweight: Number(competitorDraft.bodyweight),
+        lifts,
         attempts,
       },
     ];
@@ -581,9 +602,62 @@ import { formatWeight } from '$lib/utils';
   function updateAttemptDraft(index: number, event: ContestEvent, value: number | null) {
     competitorDrafts = competitorDrafts.map((draft, idx) => {
       if (idx !== index) return draft;
-      const attempts = { ...syncAttemptPlan(draft.attempts, form.events) } as AttemptPlan;
+      const lifts = normaliseDraftEvents(draft.lifts);
+      if (!lifts.includes(event)) {
+        return { ...draft, lifts };
+      }
+      const attempts = { ...syncAttemptPlan(draft.attempts, lifts) } as AttemptPlan;
       attempts[event] = value && Number.isFinite(value) && value > 0 ? Number(value.toFixed(2)) : null;
-      return { ...draft, attempts };
+      return { ...draft, lifts, attempts };
+    });
+  }
+
+  function buildNextLifts(current: ContestEvent[], target: ContestEvent): ContestEvent[] {
+    const allowed = Array.from(new Set(form.events)) as ContestEvent[];
+    if (!allowed.includes(target)) {
+      return normaliseDraftEvents(current);
+    }
+    const normalisedCurrent = normaliseDraftEvents(current);
+    let next: ContestEvent[];
+    if (normalisedCurrent.includes(target)) {
+      next = normalisedCurrent.filter((event) => event !== target);
+      if (next.length === 0) {
+        next = [target];
+      }
+    } else {
+      next = [...normalisedCurrent, target];
+    }
+    return normaliseDraftEvents(next);
+  }
+
+  function toggleCompetitorDraftLift(lift: ContestEvent) {
+    const lifts = buildNextLifts(competitorDraft.lifts, lift);
+    competitorDraft = {
+      ...competitorDraft,
+      lifts,
+      rackHeightSquat: lifts.includes('Squat') ? competitorDraft.rackHeightSquat : null,
+      rackHeightBench: lifts.includes('Bench') ? competitorDraft.rackHeightBench : null,
+      attempts: normalizeAttemptPlanForGender(
+        syncAttemptPlan(competitorDraft.attempts, lifts),
+        competitorDraft.gender,
+      ),
+    };
+  }
+
+  function toggleSavedDraftLift(index: number, lift: ContestEvent) {
+    competitorDrafts = competitorDrafts.map((draft, idx) => {
+      if (idx !== index) return draft;
+      const lifts = buildNextLifts(draft.lifts, lift);
+      return {
+        ...draft,
+        lifts,
+        rackHeightSquat: lifts.includes('Squat') ? draft.rackHeightSquat : null,
+        rackHeightBench: lifts.includes('Bench') ? draft.rackHeightBench : null,
+        attempts: normalizeAttemptPlanForGender(
+          syncAttemptPlan(draft.attempts, lifts),
+          draft.gender,
+        ),
+      };
     });
   }
 
@@ -599,10 +673,11 @@ import { formatWeight } from '$lib/utils';
   function collectAttemptIssues(): AttemptIssue[] {
     const issues: AttemptIssue[] = [];
     competitorDrafts.forEach((competitor, index) => {
-      const attempts = syncAttemptPlan(competitor.attempts, form.events);
-      const displayName = [competitor.firstName, competitor.lastName].filter(Boolean).join(' ').trim() ||
+      const lifts = normaliseDraftEvents(competitor.lifts);
+      const attempts = syncAttemptPlan(competitor.attempts, lifts);
+      const displayName = [competitor.lastName, competitor.firstName].filter(Boolean).join(' ').trim() ||
         translate('contest.wizard.attempts.unnamed', { values: { index: index + 1 } });
-      for (const event of form.events) {
+      for (const event of lifts) {
         const weight = attempts[event];
         if (!weight || weight <= 0) {
           issues.push({
@@ -636,20 +711,25 @@ import { formatWeight } from '$lib/utils';
       return;
     }
 
-    competitorDrafts = competitorDrafts.map((draft) => ({
-      ...draft,
-      attempts: normalizeAttemptPlanForGender(
-        fillAttemptPlan(syncAttemptPlan(draft.attempts, form.events), form.events, draft.bodyweight, true),
-        draft.gender,
-      ),
-    }));
+    competitorDrafts = competitorDrafts.map((draft) => {
+      const lifts = normaliseDraftEvents(draft.lifts);
+      return {
+        ...draft,
+        lifts,
+        attempts: normalizeAttemptPlanForGender(
+          fillAttemptPlan(syncAttemptPlan(draft.attempts, lifts), lifts, draft.bodyweight, true),
+          draft.gender,
+        ),
+      };
+    });
 
     competitorDraft = {
       ...competitorDraft,
+      lifts: normaliseDraftEvents(competitorDraft.lifts),
       attempts: normalizeAttemptPlanForGender(
         fillAttemptPlan(
-          syncAttemptPlan(competitorDraft.attempts, form.events),
-          form.events,
+          syncAttemptPlan(competitorDraft.attempts, normaliseDraftEvents(competitorDraft.lifts)),
+          normaliseDraftEvents(competitorDraft.lifts),
           competitorDraft.bodyweight,
           true,
         ),
@@ -661,18 +741,23 @@ import { formatWeight } from '$lib/utils';
   }
 
   function normalizeAllCompetitorAttempts() {
-    competitorDrafts = competitorDrafts.map((draft) => ({
-      ...draft,
-      attempts: normalizeAttemptPlanForGender(
-        syncAttemptPlan(draft.attempts, form.events),
-        draft.gender,
-      ),
-    }));
+    competitorDrafts = competitorDrafts.map((draft) => {
+      const lifts = normaliseDraftEvents(draft.lifts);
+      return {
+        ...draft,
+        lifts,
+        attempts: normalizeAttemptPlanForGender(
+          syncAttemptPlan(draft.attempts, lifts),
+          draft.gender,
+        ),
+      };
+    });
 
     competitorDraft = {
       ...competitorDraft,
+      lifts: normaliseDraftEvents(competitorDraft.lifts),
       attempts: normalizeAttemptPlanForGender(
-        syncAttemptPlan(competitorDraft.attempts, form.events),
+        syncAttemptPlan(competitorDraft.attempts, normaliseDraftEvents(competitorDraft.lifts)),
         competitorDraft.gender,
       ),
     };
@@ -794,6 +879,7 @@ import { formatWeight } from '$lib/utils';
 
       for (const [draftIndex, draft] of competitorDrafts.entries()) {
         try {
+          const lifts = normaliseDraftEvents(draft.lifts);
           const competitorResponse = await apiClient.post<{ id: string }>('/competitors', {
             firstName: draft.firstName.trim(),
             lastName: draft.lastName.trim(),
@@ -810,14 +896,15 @@ import { formatWeight } from '$lib/utils';
 
           const competitorId = competitorResponse.data.id;
 
-          const includeSquat = form.events.includes('Squat');
-          const includeBench = form.events.includes('Bench');
+          const includeSquat = lifts.includes('Squat');
+          const includeBench = lifts.includes('Bench');
 
           const registrationResponse = await apiClient.post(`/contests/${contest.id}/registrations`, {
             competitorId,
             bodyweight: draft.bodyweight,
             rackHeightSquat: includeSquat ? draft.rackHeightSquat : null,
             rackHeightBench: includeBench ? draft.rackHeightBench : null,
+            lifts,
           });
           if (registrationResponse.error) {
             throw new Error(registrationResponse.error);
@@ -827,13 +914,13 @@ import { formatWeight } from '$lib/utils';
           const registrationId = registrationData?.id;
 
           if (registrationId) {
-            const displayName = [draft.firstName, draft.lastName].filter(Boolean).join(' ').trim() ||
+            const displayName = [draft.lastName, draft.firstName].filter(Boolean).join(' ').trim() ||
               translate('contest.wizard.attempts.unnamed', { values: { index: draftIndex + 1 } });
             const attemptPlan = normalizeAttemptPlanForGender(
-              syncAttemptPlan(draft.attempts, form.events),
+              syncAttemptPlan(draft.attempts, lifts),
               draft.gender,
             );
-            for (const event of form.events) {
+            for (const event of lifts) {
               const weight = attemptPlan[event];
               if (weight && weight > 0) {
                 try {
@@ -1334,6 +1421,21 @@ import { formatWeight } from '$lib/utils';
                 <p class="error-message">{validationErrors['bodyweight']}</p>
               {/if}
             </div>
+            <div class="flex flex-col gap-2 md:col-span-2">
+              <span class="input-label">{$_('contest.wizard.competitor.lifts')}</span>
+              <div class="flex flex-wrap gap-2">
+                {#each form.events as event}
+                  <button
+                    type="button"
+                    class={`px-3 py-2 border rounded-md text-sm transition ${competitorDraft.lifts.includes(event) ? 'border-primary-red bg-primary-red/10 text-text-primary' : 'border-border-color text-text-secondary hover:text-text-primary'}`}
+                    on:click={() => toggleCompetitorDraftLift(event)}
+                  >
+                    {$_(EVENT_LABEL_KEYS[event])}
+                  </button>
+                {/each}
+              </div>
+              <p class="text-caption text-text-secondary">{$_('contest.wizard.competitor.lifts_hint')}</p>
+            </div>
             <div>
               <label class="input-label" for="rackHeightSquat">{$_('contest.wizard.competitor.rack_squat')}</label>
               <input
@@ -1341,6 +1443,7 @@ import { formatWeight } from '$lib/utils';
                 type="number"
                 class="input-field"
                 bind:value={competitorDraft.rackHeightSquat}
+                disabled={!competitorDraft.lifts.includes('Squat')}
               />
             </div>
             <div>
@@ -1350,6 +1453,7 @@ import { formatWeight } from '$lib/utils';
                 type="number"
                 class="input-field"
                 bind:value={competitorDraft.rackHeightBench}
+                disabled={!competitorDraft.lifts.includes('Bench')}
               />
             </div>
           </div>
@@ -1367,32 +1471,45 @@ import { formatWeight } from '$lib/utils';
             <div class="space-y-3">
               <h3 class="text-h3 text-text-primary">{$_('contest.wizard.drafts.title')}</h3>
               {#each competitorDrafts as competitor, index}
-                <div class="bg-element-bg border border-border-color p-4 flex justify-between items-center">
-                  <div>
-                    <p class="text-body text-text-primary font-semibold">
-                      {competitor.firstName} {competitor.lastName}
-                    </p>
-                    <p class="text-caption text-text-secondary">
-                      {$_('contest.wizard.drafts.meta', {
-                        values: {
-                          birthDate: competitor.birthDate,
-                          gender: $_(GENDER_LABEL_KEYS[competitor.gender]),
-                          bodyweight: competitor.bodyweight,
-                        }
-                      })}
-                    </p>
-                    <p class="text-caption text-text-secondary">
-                      {$_('contest.wizard.drafts.club_city', {
-                        values: {
-                          club: competitor.club.trim() ? competitor.club : $_('contest.wizard.drafts.no_club'),
-                          city: competitor.city.trim() ? competitor.city : $_('contest.wizard.drafts.no_city'),
-                        }
-                      })}
-                    </p>
+                <div class="bg-element-bg border border-border-color p-4 space-y-3">
+                  <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between md:gap-4">
+                    <div>
+                      <p class="text-body text-text-primary font-semibold">
+                        {competitor.lastName} {competitor.firstName}
+                      </p>
+                      <p class="text-caption text-text-secondary">
+                        {$_('contest.wizard.drafts.meta', {
+                          values: {
+                            birthDate: competitor.birthDate,
+                            gender: $_(GENDER_LABEL_KEYS[competitor.gender]),
+                            bodyweight: competitor.bodyweight,
+                          }
+                        })}
+                      </p>
+                      <p class="text-caption text-text-secondary">
+                        {$_('contest.wizard.drafts.club_city', {
+                          values: {
+                            club: competitor.club.trim() ? competitor.club : $_('contest.wizard.drafts.no_club'),
+                            city: competitor.city.trim() ? competitor.city : $_('contest.wizard.drafts.no_city'),
+                          }
+                        })}
+                      </p>
+                    </div>
+                    <button class="btn-secondary h-fit" type="button" on:click={() => removeCompetitorDraft(index)}>
+                      {$_('contest.wizard.drafts.remove')}
+                    </button>
                   </div>
-                  <button class="btn-secondary" type="button" on:click={() => removeCompetitorDraft(index)}>
-                    {$_('contest.wizard.drafts.remove')}
-                  </button>
+                  <div class="flex flex-wrap gap-2">
+                    {#each form.events as event}
+                      <button
+                        type="button"
+                        class={`px-3 py-2 border rounded-md text-xs uppercase tracking-[0.2em] transition ${competitor.lifts.includes(event) ? 'border-primary-red bg-primary-red/10 text-text-primary' : 'border-border-color text-text-secondary hover:text-text-primary'}`}
+                        on:click={() => toggleSavedDraftLift(index, event)}
+                      >
+                        {$_(EVENT_LABEL_KEYS[event])}
+                      </button>
+                    {/each}
+                  </div>
                 </div>
               {/each}
             </div>
@@ -1453,13 +1570,14 @@ import { formatWeight } from '$lib/utils';
 
             <div class="space-y-4">
               {#each competitorDrafts as competitor, index}
-                {@const attemptPlan = syncAttemptPlan(competitor.attempts, form.events)}
+                {@const lifts = normaliseDraftEvents(competitor.lifts)}
+                {@const attemptPlan = syncAttemptPlan(competitor.attempts, lifts)}
                 {@const competitorIssues = attemptIssues.filter((issue) => issue.competitorIndex === index)}
                 {@const issuesCount = competitorIssues.length}
                 <div class="card space-y-4">
                   <header class="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
                     <div>
-                      <h4 class="text-h4 text-text-primary">{competitor.firstName} {competitor.lastName}</h4>
+                      <h4 class="text-h4 text-text-primary">{competitor.lastName} {competitor.firstName}</h4>
                       <p class="text-caption text-text-secondary">
                         {$_('contest.wizard.attempts.competitor_meta', {
                           values: {
@@ -1476,8 +1594,8 @@ import { formatWeight } from '$lib/utils';
                     {/if}
                   </header>
 
-                  <div class={`grid gap-4 ${form.events.length > 2 ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
-                    {#each form.events as event}
+                  <div class={`grid gap-4 ${lifts.length > 2 ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+                    {#each lifts as event}
                       <div>
                         <label class="input-label" for={`attempt-${index}-${event}`}>
                           {$_(EVENT_LABEL_KEYS[event])}

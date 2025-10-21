@@ -153,6 +153,8 @@
         "bodyweight": "Bodyweight (kg)",
         "rack_squat": "Rack height (Squat)",
         "rack_bench": "Rack height (Bench)",
+        "lifts": "Disciplines",
+        "lifts_hint": "Toggle the lifts this competitor will contest.",
         "add_button": "Add competitor",
         "reset_button": "Reset form"
       },
@@ -248,7 +250,9 @@
       "edit_competitor": "Edit competitor",
       "view_details": "Details",
       "set_live": "Set live",
-      "live_now": "Live now"
+      "live_now": "Live now",
+      "enable_lift": "Enable {lift}",
+      "disable_lift": "Disable {lift}"
     }
   },
   "ui": {
@@ -687,7 +691,8 @@
         "name_required": "First and last name are required.",
         "birth_required": "Birth date is required.",
         "gender_invalid": "Select a valid gender.",
-        "bodyweight_positive": "Enter a valid bodyweight above 0 kg."
+        "bodyweight_positive": "Enter a valid bodyweight above 0 kg.",
+        "lifts_required": "Select at least one lift for this competitor."
       },
       "error_delete": "Could not delete competitor.",
       "error_opening_attempt": "Could not save the opening attempt."
@@ -720,6 +725,8 @@
       "age_category_auto_assigned": "Assigned automatically",
       "age_category_pending": "Will be assigned after saving",
       "auto_chip": "AUTO",
+      "lifts": "Disciplines",
+      "lifts_hint": "Select at least one lift this competitor will perform.",
       "opening_attempt": "Opening attempt ({lift})"
     },
     "placeholders": {
@@ -814,6 +821,9 @@
       "results": "Results",
       "plates": "Plate sets",
       "backups": "Backups"
+    },
+    "actions": {
+      "edit_contest": "Edit contest"
     },
     "lifts": {
       "squat": "Squat",
@@ -925,6 +935,10 @@
       "reset_flights": "Reset to flight A",
       "flight_placeholder": "e.g. A",
       "empty_filter": "No lifters in this flight.",
+      "lifts": {
+        "cannot_remove_last": "At least one lift must remain enabled.",
+        "update_failed": "Failed to update lift participation."
+      },
       "filters": {
         "flights": "Flights",
         "weights": "Weight classes",
@@ -1106,6 +1120,7 @@
       "competitor_delete_failed": "Could not delete competitor."
     },
     "modal": {
+      "edit_contest_title": "Edit contest • {name}",
       "edit_attempts_title": "Edit attempts • {name}",
       "edit_competitor_title": "Edit competitor • {name}",
       "create_competitor_title": "Add competitor"
@@ -1154,6 +1169,18 @@
       "toast_reset_failed": "Failed to reset categories.",
       "reset_blocked": "Cannot reset while there are unsaved changes."
     }
+  },
+  "contest_edit": {
+    "actions": {
+      "cancel": "Cancel",
+      "save": "Save changes",
+      "saving": "Saving…"
+    },
+    "validation": {
+      "events_required": "Select at least one event"
+    },
+    "toast_saved": "Contest updated.",
+    "toast_failed": "Failed to update contest."
   },
   "display_table": {
     "head": {

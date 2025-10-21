@@ -51,7 +51,7 @@ export function formatAttempt(weight: number, status: string): string {
  * Format competitor full name
  */
 export function formatCompetitorName(firstName: string, lastName: string): string {
-  return `${firstName} ${lastName}`.trim();
+  return `${lastName} ${firstName}`.trim();
 }
 
 /**

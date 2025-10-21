@@ -168,6 +168,123 @@ describe('Werewolf API – integration (Miniflare + D1)', () => {
   expect(registrationBody.data.mcculloughCoefficient).toBeCloseTo(1.0, 3);
   });
 
+  it('enforces per-registration lift selections', async () => {
+    const contestRes = await createContest(app, env, {
+      name: 'Selective Lifts Open',
+      date: '2025-11-20',
+      location: 'Łódź',
+      discipline: 'Powerlifting',
+    });
+    const contestBody = await contestRes.json();
+    const contestId = contestBody.data.id as string;
+
+    const competitorRes = await app.request('http://localhost/competitors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        firstName: 'Ewa',
+        lastName: 'Nowicka',
+        birthDate: '1993-09-18',
+        gender: 'Female',
+      }),
+    }, env);
+    expect(competitorRes.status).toBe(201);
+    const competitorId = (await competitorRes.json()).data.id as string;
+
+    const registrationRes = await app.request(`http://localhost/contests/${contestId}/registrations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        competitorId,
+        bodyweight: 63.2,
+        lifts: ['Squat', 'Deadlift'],
+      }),
+    }, env);
+    expect(registrationRes.status).toBe(201);
+    const registrationData = await registrationRes.json();
+    expect(registrationData.data.lifts).toEqual(['Squat', 'Deadlift']);
+    const registrationId = registrationData.data.id as string;
+
+    const benchAttempt = await app.request(`http://localhost/contests/${contestId}/registrations/${registrationId}/attempts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        registrationId,
+        liftType: 'Bench',
+        attemptNumber: 1,
+        weight: 70,
+      }),
+    }, env);
+    expect(benchAttempt.status).toBe(400);
+    const benchBody = await benchAttempt.json();
+    expect(benchBody.error).toBe('LIFT_NOT_REGISTERED');
+
+    const deadliftAttempt = await app.request(`http://localhost/contests/${contestId}/registrations/${registrationId}/attempts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        registrationId,
+        liftType: 'Deadlift',
+        attemptNumber: 1,
+        weight: 150,
+      }),
+    }, env);
+    expect(deadliftAttempt.status).toBe(200);
+
+    const squatAttempt = await app.request(`http://localhost/contests/${contestId}/registrations/${registrationId}/attempts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        registrationId,
+        liftType: 'Squat',
+        attemptNumber: 1,
+        weight: 140,
+      }),
+    }, env);
+    expect(squatAttempt.status).toBe(200);
+
+    const updateRes = await app.request(`http://localhost/registrations/${registrationId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lifts: ['Deadlift'] }),
+    }, env);
+    expect(updateRes.status).toBe(200);
+    const updateBody = await updateRes.json();
+    expect(updateBody.data.lifts).toEqual(['Deadlift']);
+
+    const attemptsRes = await app.request(`http://localhost/contests/${contestId}/registrations/${registrationId}/attempts`, {}, env);
+    expect(attemptsRes.status).toBe(200);
+    const attemptsBody = await attemptsRes.json();
+    expect(Array.isArray(attemptsBody.data)).toBe(true);
+    expect(attemptsBody.data.every((attempt: any) => attempt.liftType !== 'Squat')).toBe(true);
+
+    const squatAfterUpdate = await app.request(`http://localhost/contests/${contestId}/registrations/${registrationId}/attempts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        registrationId,
+        liftType: 'Squat',
+        attemptNumber: 1,
+        weight: 145,
+      }),
+    }, env);
+    expect(squatAfterUpdate.status).toBe(400);
+    const squatAfterUpdateBody = await squatAfterUpdate.json();
+    expect(squatAfterUpdateBody.error).toBe('LIFT_NOT_REGISTERED');
+
+    const deadliftAfterUpdate = await app.request(`http://localhost/contests/${contestId}/registrations/${registrationId}/attempts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        registrationId,
+        liftType: 'Deadlift',
+        attemptNumber: 2,
+        weight: 155,
+      }),
+    }, env);
+    expect(deadliftAfterUpdate.status).toBe(200);
+  });
+
   it('updates stored coefficients when competitor birth date changes', async () => {
     const contestRes = await createContest(app, env, {
       name: 'Masters Update',
@@ -1090,6 +1207,14 @@ CREATE TABLE registrations (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE registration_lifts (
+    registration_id TEXT NOT NULL,
+    lift_type TEXT NOT NULL CHECK(lift_type IN ('Squat','Bench','Deadlift')),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (registration_id, lift_type),
+    FOREIGN KEY (registration_id) REFERENCES registrations(id) ON DELETE CASCADE
+);
+
 CREATE TABLE attempts (
     id TEXT PRIMARY KEY,
     registration_id TEXT NOT NULL,
@@ -1220,6 +1345,7 @@ async function resetDatabase(db: D1Database) {
   const tables = [
     'results',
     'attempts',
+    'registration_lifts',
     'current_lifts',
     'registrations',
     'contest_states',

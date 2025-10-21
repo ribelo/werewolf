@@ -5,6 +5,7 @@
   import RegistrationDetailModal from '$lib/components/RegistrationDetailModal.svelte';
   import AttemptEditorModal from '$lib/components/AttemptEditorModal.svelte';
   import ContestCategoryModal from '$lib/components/ContestCategoryModal.svelte';
+  import ContestEditorModal from '$lib/components/ContestEditorModal.svelte';
 import { getStatusClasses, formatCompetitorName, formatWeight, normaliseAgeCategoryLabel } from '$lib/utils';
 import { apiClient, ApiError } from '$lib/api';
 import { realtimeClient } from '$lib/realtime';
@@ -16,7 +17,7 @@ import { toast } from '$lib/ui/toast';
   import { getAttemptStatusClass, getAttemptStatusLabel } from '$lib/ui/status';
   import { buildRisingBarQueue, type QueuePhase } from '$lib/rising-bar';
   import UnifiedContestTable from '$lib/components/UnifiedContestTable.svelte';
-  import { buildUnifiedRows, deriveContestLifts, sortUnifiedRows, type UnifiedRow, type LiftKind } from '$lib/contest-table';
+  import { buildUnifiedRows, deriveContestLifts, sortUnifiedRows, LIFTS, type UnifiedRow, type LiftKind } from '$lib/contest-table';
   import type { PageData } from './$types';
 import type {
     Registration,
@@ -28,6 +29,7 @@ import type {
     AttemptStatus,
     AttemptNumber,
     LiftType,
+    ContestDetail,
     ContestRankingEntry,
     ContestPlateSetEntry,
     ContestBarWeights,
@@ -127,8 +129,21 @@ import type {
     Deadlift: ['Deadlift'],
   };
 
+  const DEFAULT_LIFT_ORDER = LIFTS as ReadonlyArray<LiftType>;
+
+  function registrationIncludesLift(registration: Registration, lift: LiftType): boolean {
+    const lifts = Array.isArray(registration.lifts) && registration.lifts.length > 0
+      ? (registration.lifts as LiftType[])
+      : (contestLifts.length > 0 ? (contestLifts as LiftType[]) : (DEFAULT_LIFT_ORDER as LiftType[]));
+    return lifts.includes(lift);
+  }
+
+  function sortLifts(lifts: readonly LiftType[]): LiftType[] {
+    const desired = new Set(lifts);
+    return DEFAULT_LIFT_ORDER.filter((lift) => desired.has(lift)) as LiftType[];
+  }
+
   $: activeContestLifts = contestLifts.length > 0 ? [...contestLifts] : [...FALLBACK_CONTEST_LIFTS];
-  $: registrationLifts = [...activeContestLifts];
   $: competitionTabs = activeContestLifts
     .map((lift) => LIFT_TAB_MAP[lift])
     .filter((entry): entry is { id: LiftTabId; labelKey: string } => Boolean(entry));
@@ -146,6 +161,7 @@ import type {
 
   let statusLoading: Record<string, boolean> = {};
   let setCurrentLoading: Record<string, boolean> = {};
+  let liftToggleLoading: Record<string, boolean> = {};
   let isClearingCurrent = false;
   let currentAttemptEntity: Attempt | null = null;
 
@@ -208,6 +224,9 @@ import type {
   let unifiedRows: UnifiedRow[] = [];
   let sortedRows: UnifiedRow[] = [];
   let filteredRows: UnifiedRow[] = [];
+  let squatRows: UnifiedRow[] = [];
+  let benchRows: UnifiedRow[] = [];
+  let deadliftRows: UnifiedRow[] = [];
   let tablePrefsLoaded = false;
 
   $: if (contestId && !tablePrefsLoaded) {
@@ -869,6 +888,9 @@ import type {
         const targetKey = normaliseLabelKey(targetLabel);
         return labels.some((label) => normaliseLabelKey(label) === targetKey);
       });
+  $: squatRows = filteredRows.filter((row) => registrationIncludesLift(row.registration, 'Squat'));
+  $: benchRows = filteredRows.filter((row) => registrationIncludesLift(row.registration, 'Bench'));
+  $: deadliftRows = filteredRows.filter((row) => registrationIncludesLift(row.registration, 'Deadlift'));
   $: activeFlight = contest?.activeFlight ?? null;
   $: if (selectedWeightFilter !== 'ALL' && !availableWeightFilters.some((item) => item.id === selectedWeightFilter)) {
         selectedWeightFilter = 'ALL';
@@ -1032,6 +1054,39 @@ import type {
       refreshed.forEach(upsertAttemptRecord);
     } catch (error) {
       console.error('Failed to refresh attempts', error);
+    }
+  }
+
+  async function openContestEditor() {
+    if (!contest) return;
+    try {
+      const initial = Array.isArray(activeContestLifts) && activeContestLifts.length > 0
+        ? [...activeContestLifts]
+        : deriveContestLifts(contest, liveAttempts);
+      const result = await modalStore.open<ContestDetail | undefined>({
+        title: t('contest_detail.modal.edit_contest_title', { name: contest.name }),
+        component: ContestEditorModal,
+        size: 'lg',
+        showFooter: false,
+        data: {
+          contest,
+          initialEvents: initial,
+        },
+      });
+
+      if (result) {
+        const mergedContest: ContestDetail = { ...contest, ...result };
+        contest = mergedContest;
+        contestStore.setContest(mergedContest, registrations, referenceData);
+        setContestContext(mergedContest);
+        toast.success(t('contest_edit.toast_saved'));
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Modal closed by closeAll()') {
+        return;
+      }
+      console.error('Failed to open contest editor modal', error);
+      toast.error(t('contest_edit.toast_failed'));
     }
   }
 
@@ -1216,6 +1271,84 @@ import type {
     }
   }
 
+  function liftToggleKey(registrationId: string, lift: LiftType): string {
+    return `${registrationId}:${lift}`;
+  }
+
+  async function handleRegistrationLiftToggle(registration: Registration, lift: LiftType, nextValue: boolean) {
+    if (!contestId) return;
+
+    const isCurrentlyActive = registrationIncludesLift(registration, lift);
+    if (isCurrentlyActive === nextValue) {
+      return;
+    }
+
+    const currentLifts = (Array.isArray(registration.lifts) && registration.lifts.length > 0
+      ? (registration.lifts as LiftType[])
+      : (contestLifts.length > 0 ? (contestLifts as LiftType[]) : (DEFAULT_LIFT_ORDER as LiftType[]))).slice();
+
+    let nextLifts: LiftType[] = [];
+
+    if (nextValue) {
+      const set = new Set(currentLifts);
+      set.add(lift);
+      nextLifts = sortLifts(Array.from(set));
+    } else {
+      if (currentLifts.length <= 1) {
+        toast.warning(t('contest_detail.registrations.lifts.cannot_remove_last'));
+        return;
+      }
+      const filtered = currentLifts.filter((item) => item !== lift);
+      if (filtered.length === 0) {
+        toast.warning(t('contest_detail.registrations.lifts.cannot_remove_last'));
+        return;
+      }
+      nextLifts = sortLifts(filtered);
+    }
+
+    if (nextLifts.length === 0) {
+      toast.warning(t('contest_detail.registrations.lifts.cannot_remove_last'));
+      return;
+    }
+
+    const key = liftToggleKey(registration.id, lift);
+    liftToggleLoading = { ...liftToggleLoading, [key]: true };
+
+    try {
+      const response = await apiClient.patch<Registration>(`/registrations/${registration.id}`, {
+        lifts: nextLifts,
+      });
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      const updated = response.data
+        ? ({ ...registration, ...response.data } as Registration)
+        : ({ ...registration, lifts: nextLifts } as Registration);
+
+      if (!updated.lifts || updated.lifts.length === 0) {
+        updated.lifts = nextLifts;
+      }
+
+      registrations = registrations.map((entry) => (entry.id === updated.id ? updated : entry));
+      contestStore.updateRegistration(updated);
+
+      if (!nextValue) {
+        liveAttempts = liveAttempts.filter((attempt) =>
+          attempt.registrationId !== registration.id ||
+          registrationIncludesLift(updated, attempt.liftType as LiftType)
+        );
+      }
+    } catch (error) {
+      console.error('Failed to toggle registration lift', error);
+      toast.error(t('contest_detail.registrations.lifts.update_failed'));
+    } finally {
+      const { [key]: _omit, ...rest } = liftToggleLoading;
+      liftToggleLoading = rest;
+    }
+  }
+
   function selectWeightFilter(filter: WeightFilter) {
     selectedWeightFilter = selectedWeightFilter === filter ? 'ALL' : filter;
   }
@@ -1372,6 +1505,17 @@ import type {
           if (liveCurrentAttempt?.id === attempt.id) {
             liveCurrentAttempt = normaliseCurrentAttempt({ ...liveCurrentAttempt, ...attempt });
           }
+        }
+        break;
+      }
+      case 'attempt.deleted': {
+        const payload = event.data as { attemptId?: string } | undefined;
+        const attemptId = payload?.attemptId;
+        if (!attemptId) break;
+        liveAttempts = liveAttempts.filter((attempt) => attempt.id !== attemptId);
+        contestStore.setAttempts(liveAttempts);
+        if (liveCurrentAttempt?.id === attemptId) {
+          liveCurrentAttempt = null;
         }
         break;
       }
@@ -1611,6 +1755,13 @@ import type {
             {$_(tab.labelKey)}
           </button>
         {/each}
+        <button
+          type="button"
+          class="px-4 py-2 font-display text-xs uppercase tracking-[0.4em] border-2 transition border-border-color text-text-secondary hover:text-text-primary hover:border-primary-red"
+          on:click={openContestEditor}
+        >
+          {$_('contest_detail.actions.edit_contest')}
+        </button>
         <button type="button" class="px-4 py-2 font-display text-xs uppercase tracking-[0.4em] border-2 transition border-border-color text-text-secondary hover:text-text-primary hover:border-primary-red" on:click={openCategoryManager}>
           {$_('contest_detail.registrations.manage_categories')}
         </button>
@@ -1882,17 +2033,20 @@ import type {
                   sortDirection={sortDirection}
                   readOnly={false}
                   activeFlight={activeFlight}
-                  lifts={registrationLifts}
+                  lifts={contestLifts}
                   attemptNumbers={FIRST_ATTEMPT_NUMBERS}
                   weightClasses={weightClasses}
                   ageCategories={ageCategories}
                   currentAttemptId={liveCurrentAttempt?.id ?? null}
                   currentAttemptLoading={setCurrentLoading}
+                  toggleLiftLoading={liftToggleLoading}
+                  mode="registration"
                   onSortChange={handleSortChange}
                   onOpenCompetitorModal={openCompetitorModal}
                   onSetCurrentAttempt={setCurrentAttemptHandler}
                   onAttemptStatusCycle={handleStatusClick}
                   onAttemptWeightChange={handleAttemptWeightChangeInline}
+                  onToggleLift={handleRegistrationLiftToggle}
                   showPointsColumn={false}
                   showMaxColumn={false}
                 />
@@ -2213,12 +2367,12 @@ import type {
             </div>
             {#if registrations.length === 0}
               <div class="text-center py-8 text-text-secondary">{$_('contest_detail.registrations.empty')}</div>
-            {:else if filteredRows.length === 0}
+            {:else if squatRows.length === 0}
               <div class="text-center py-8 text-text-secondary">{$_('contest_detail.registrations.empty_filter')}</div>
             {:else}
               <div class="max-h-[70vh] overflow-x-auto overflow-y-auto">
                 <UnifiedContestTable
-                  rows={filteredRows}
+                  rows={squatRows}
                   sortColumn={sortColumn}
                   sortDirection={sortDirection}
                   readOnly={false}
@@ -2310,12 +2464,12 @@ import type {
             </div>
             {#if registrations.length === 0}
               <div class="text-center py-8 text-text-secondary">{$_('contest_detail.registrations.empty')}</div>
-            {:else if filteredRows.length === 0}
+            {:else if benchRows.length === 0}
               <div class="text-center py-8 text-text-secondary">{$_('contest_detail.registrations.empty_filter')}</div>
             {:else}
               <div class="max-h-[70vh] overflow-x-auto overflow-y-auto">
                 <UnifiedContestTable
-                  rows={filteredRows}
+                  rows={benchRows}
                   sortColumn={sortColumn}
                   sortDirection={sortDirection}
                   readOnly={false}
@@ -2407,12 +2561,12 @@ import type {
             </div>
             {#if registrations.length === 0}
               <div class="text-center py-8 text-text-secondary">{$_('contest_detail.registrations.empty')}</div>
-            {:else if filteredRows.length === 0}
+            {:else if deadliftRows.length === 0}
               <div class="text-center py-8 text-text-secondary">{$_('contest_detail.registrations.empty_filter')}</div>
             {:else}
               <div class="max-h-[70vh] overflow-x-auto overflow-y-auto">
                 <UnifiedContestTable
-                  rows={filteredRows}
+                  rows={deadliftRows}
                   sortColumn={sortColumn}
                   sortDirection={sortDirection}
                   readOnly={false}

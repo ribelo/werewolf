@@ -5,7 +5,9 @@ import type { WerewolfEnvironment } from '../env';
 import type { Database } from '../utils/database';
 import { executeQuery, executeQueryOne, executeMutation, generateId, getCurrentTimestamp, convertKeysToCamelCase } from '../utils/database';
 import { publishEvent } from '../live/publish';
+import type { LiftType } from '@werewolf/domain';
 import { attemptUpsertSchema, attemptResultUpdateSchema, attemptStatusSchema, liftTypeSchema } from '@werewolf/domain/models/attempt';
+import { ALL_LIFTS } from '@werewolf/domain/services/lifts';
 import { getAttemptWithRelations, buildCurrentAttemptPayload } from '../services/attempts';
 import { buildPlatePlan } from '../services/plate-plan';
 
@@ -122,6 +124,24 @@ registrationAttempts.post('/', zValidator('json', attemptUpsertSchema), async (c
       {
         data: null,
         error: 'MISSING_IDENTIFIERS',
+        requestId: c.get('requestId'),
+      },
+      400
+    );
+  }
+
+  const activeLiftRows = await executeQuery<{ lift_type: string }>(
+    db,
+    'SELECT lift_type FROM registration_lifts WHERE registration_id = ?',
+    [registrationId]
+  );
+  const activeLifts = (activeLiftRows?.map((row) => row.lift_type as LiftType) ?? []).filter(Boolean);
+  const allowedLifts = activeLifts.length > 0 ? activeLifts : [...ALL_LIFTS];
+  if (!allowedLifts.includes(input.liftType as LiftType)) {
+    return c.json(
+      {
+        data: null,
+        error: 'LIFT_NOT_REGISTERED',
         requestId: c.get('requestId'),
       },
       400

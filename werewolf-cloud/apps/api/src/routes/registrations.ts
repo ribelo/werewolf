@@ -3,45 +3,46 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import type { WerewolfEnvironment } from '../env';
 import { executeQuery, executeQueryOne, executeMutation, generateId, getCurrentTimestamp, convertKeysToCamelCase } from '../utils/database';
+import type { LiftType } from '@werewolf/domain';
 import { registrationSchema, registrationCreateSchema, registrationUpdateSchema } from '@werewolf/domain/models/registration';
 import { determineAgeCategory, determineWeightClass } from '@werewolf/domain/services/coefficients';
+import {
+  contestLiftsFromRow,
+  normaliseLiftList,
+  liftsEqual,
+  replaceRegistrationLifts,
+  removeAttemptsForInactiveLifts,
+  ensureLiftsForContest,
+} from '../utils/lifts';
+import { mapRegistrationRow } from '../utils/registration-map';
 import { getReshelCoefficient, getMcCulloughCoefficient } from '../services/coefficients';
 import { getContestAgeDescriptors, getContestWeightDescriptors, seedContestCategories } from '../utils/category-templates';
 import { publishEvent } from '../live/publish';
 
 export const contestRegistrations = new Hono<WerewolfEnvironment>();
 
+const LIFTS_JSON_SELECT = `
+      (
+        SELECT json_group_array(lift_type)
+        FROM (
+          SELECT lift_type
+          FROM registration_lifts rl
+          WHERE rl.registration_id = r.id
+          ORDER BY
+            CASE rl.lift_type
+              WHEN 'Squat' THEN 1
+              WHEN 'Bench' THEN 2
+              WHEN 'Deadlift' THEN 3
+            END
+        )
+      ) AS lifts
+`;
+
 function serialiseLabels(labels: unknown): string {
   if (Array.isArray(labels)) {
     return JSON.stringify(labels);
   }
   return '[]';
-}
-
-function parseLabels(input: unknown): string[] {
-  if (Array.isArray(input)) {
-    return input.map(String);
-  }
-  if (typeof input === 'string') {
-    try {
-      const parsed = JSON.parse(input);
-      return Array.isArray(parsed) ? parsed.map(String) : [];
-    } catch {
-      return [];
-    }
-  }
-  return [];
-}
-
-function mapRegistrationRow(row: Record<string, any>): Record<string, any> {
-  const normalised: Record<string, any> = { ...row };
-
-  if ('labels' in normalised) {
-    const labelsValue = normalised['labels'];
-    normalised['labels'] = parseLabels(labelsValue);
-  }
-
-  return normalised;
 }
 
 const bulkFlightSchema = z.object({
@@ -105,13 +106,16 @@ contestRegistrations.post('/', zValidator('json', registrationCreateSchema), asy
   // Get contest date
   const contest = await executeQueryOne(
     db,
-    'SELECT date FROM contests WHERE id = ?',
+    'SELECT date, discipline, competition_type FROM contests WHERE id = ?',
     [contestId]
   );
 
   if (!contest) {
     return c.json({ data: null, error: 'Contest not found', requestId: c.get('requestId') }, 404);
   }
+
+  const contestLifts = contestLiftsFromRow(contest);
+  const selectedLifts = ensureLiftsForContest(input.lifts, contestLifts);
 
   await seedContestCategories(db, contestId);
 
@@ -166,6 +170,8 @@ contestRegistrations.post('/', zValidator('json', registrationCreateSchema), asy
     ]
   );
 
+  await replaceRegistrationLifts(db, id, selectedLifts);
+
   const registration = await executeQueryOne(
     db,
     `
@@ -174,6 +180,7 @@ contestRegistrations.post('/', zValidator('json', registrationCreateSchema), asy
       r.bodyweight, r.reshel_coefficient, r.mccullough_coefficient,
       r.rack_height_squat, r.rack_height_bench, r.created_at,
       r.flight_code, r.flight_order, COALESCE(r.labels, '[]') AS labels,
+      ${LIFTS_JSON_SELECT},
       cac.name AS age_category_name,
       cwc.name AS weight_class_name,
       c.club,
@@ -270,6 +277,7 @@ contestRegistrations.get('/', async (c) => {
       r.bodyweight, r.reshel_coefficient, r.mccullough_coefficient,
       r.rack_height_squat, r.rack_height_bench, r.created_at,
       r.flight_code, r.flight_order, COALESCE(r.labels, '[]') AS labels,
+      ${LIFTS_JSON_SELECT},
       c.first_name, c.last_name, c.gender, c.club, c.city, c.birth_date,
       cac.name AS age_category_name,
       cwc.name AS weight_class_name
@@ -315,6 +323,7 @@ registrations.get('/:registrationId', async (c) => {
       r.bodyweight, r.reshel_coefficient, r.mccullough_coefficient,
       r.rack_height_squat, r.rack_height_bench, r.created_at,
       r.flight_code, r.flight_order, COALESCE(r.labels, '[]') AS labels,
+      ${LIFTS_JSON_SELECT},
       c.first_name, c.last_name, c.gender, c.birth_date, c.club, c.city,
       cac.name AS age_category_name,
       cwc.name AS weight_class_name
@@ -400,12 +409,28 @@ registrations.patch('/:registrationId', zValidator('json', registrationUpdateSch
 
   const contest = await executeQueryOne(
     db,
-    'SELECT date FROM contests WHERE id = ?',
+    'SELECT date, discipline, competition_type FROM contests WHERE id = ?',
     [nextContestId]
   );
   if (!contest) {
     return c.json({ data: null, error: 'Contest not found', requestId: c.get('requestId') }, 404);
   }
+
+  const contestLifts = contestLiftsFromRow(contest);
+
+  const currentLiftRows = await executeQuery<{ lift_type: LiftType }>(
+    db,
+    'SELECT lift_type FROM registration_lifts WHERE registration_id = ?',
+    [registrationId]
+  );
+  const currentLifts = normaliseLiftList(
+    currentLiftRows.map((row) => row.lift_type as LiftType)
+  );
+
+  const requestedLifts = input.lifts ?? currentLifts;
+  const nextLifts = ensureLiftsForContest(requestedLifts, contestLifts);
+
+  const liftsChanged = !liftsEqual(currentLifts, nextLifts);
 
   const [ageDescriptors, weightDescriptors] = await Promise.all([
     getContestAgeDescriptors(db, nextContestId),
@@ -446,13 +471,24 @@ registrations.patch('/:registrationId', zValidator('json', registrationUpdateSch
     updates.push('bodyweight = ?');
     params.push(nextBodyweight);
   }
-  if (input.rackHeightSquat !== undefined) {
+  if (nextLifts.includes('Squat')) {
+    if (input.rackHeightSquat !== undefined) {
+      updates.push('rack_height_squat = ?');
+      params.push(input.rackHeightSquat);
+    }
+  } else {
     updates.push('rack_height_squat = ?');
-    params.push(input.rackHeightSquat);
+    params.push(null);
   }
-  if (input.rackHeightBench !== undefined) {
+
+  if (nextLifts.includes('Bench')) {
+    if (input.rackHeightBench !== undefined) {
+      updates.push('rack_height_bench = ?');
+      params.push(input.rackHeightBench);
+    }
+  } else {
     updates.push('rack_height_bench = ?');
-    params.push(input.rackHeightBench);
+    params.push(null);
   }
   if (input.flightCode !== undefined) {
     updates.push('flight_code = ?');
@@ -494,6 +530,11 @@ registrations.patch('/:registrationId', zValidator('json', registrationUpdateSch
     params
   );
 
+  if (liftsChanged || input.lifts !== undefined || input.contestId !== undefined) {
+    await replaceRegistrationLifts(db, registrationId, nextLifts);
+    await removeAttemptsForInactiveLifts(c.env, nextContestId, db, registrationId, nextLifts);
+  }
+
   const registration = await executeQueryOne(
     db,
     `
@@ -502,6 +543,7 @@ registrations.patch('/:registrationId', zValidator('json', registrationUpdateSch
       r.bodyweight, r.reshel_coefficient, r.mccullough_coefficient,
       r.rack_height_squat, r.rack_height_bench, r.created_at,
       r.flight_code, r.flight_order, COALESCE(r.labels, '[]') AS labels,
+      ${LIFTS_JSON_SELECT},
       c.first_name, c.last_name, c.gender, c.birth_date, c.club, c.city,
       cac.name AS age_category_name,
       cwc.name AS weight_class_name

@@ -153,6 +153,8 @@
         "bodyweight": "Waga ciała (kg)",
         "rack_squat": "Wysokość stojaków (przysiad)",
         "rack_bench": "Wysokość stojaków (wyciskanie)",
+        "lifts": "Dyscypliny",
+        "lifts_hint": "Wybierz, w których bojach wystartuje zawodnik.",
         "add_button": "Dodaj zawodnika",
         "reset_button": "Wyczyść formularz"
       },
@@ -248,7 +250,9 @@
       "edit_competitor": "Edytuj zawodnika",
       "view_details": "Szczegóły",
       "set_live": "Ustaw na żywo",
-      "live_now": "Na żywo"
+      "live_now": "Na żywo",
+      "enable_lift": "Włącz {lift}",
+      "disable_lift": "Wyłącz {lift}"
     }
   },
   "ui": {
@@ -687,7 +691,8 @@
         "name_required": "Imię i nazwisko są wymagane.",
         "birth_required": "Data urodzenia jest wymagana.",
         "gender_invalid": "Wybierz prawidłową płeć.",
-        "bodyweight_positive": "Podaj poprawną masę ciała większą od 0 kg."
+        "bodyweight_positive": "Podaj poprawną masę ciała większą od 0 kg.",
+        "lifts_required": "Wybierz co najmniej jeden bój dla zawodnika."
       },
       "error_delete": "Nie udało się usunąć zawodnika.",
       "error_opening_attempt": "Nie udało się zapisać pierwszego podejścia."
@@ -720,6 +725,8 @@
       "age_category_auto_assigned": "Przydzielona automatycznie",
       "age_category_pending": "Zostanie przydzielona po zapisaniu",
       "auto_chip": "AUTO",
+      "lifts": "Dyscypliny",
+      "lifts_hint": "Wybierz co najmniej jeden bój, w którym wystartuje zawodnik.",
       "opening_attempt": "Pierwsze podejście ({lift})"
     },
     "placeholders": {
@@ -814,6 +821,9 @@
       "results": "Wyniki",
       "plates": "Obciążenia",
       "backups": "Kopie zapasowe"
+    },
+    "actions": {
+      "edit_contest": "Edytuj zawody"
     },
     "lifts": {
       "squat": "Przysiad",
@@ -925,6 +935,10 @@
       "reset_flights": "Przywróć flight A",
       "flight_placeholder": "np. A",
       "empty_filter": "Brak zawodników w tym flighcie.",
+      "lifts": {
+        "cannot_remove_last": "Musisz zostawić co najmniej jeden bój.",
+        "update_failed": "Nie udało się zaktualizować udziału w boju."
+      },
       "filters": {
         "flights": "Flighty",
         "weights": "Kategorie wagowe",
@@ -1106,6 +1120,7 @@
       "competitor_delete_failed": "Nie udało się usunąć zawodnika."
     },
     "modal": {
+      "edit_contest_title": "Edytuj zawody • {name}",
       "edit_attempts_title": "Edytuj próby • {name}",
       "edit_competitor_title": "Edytuj zawodnika • {name}",
       "create_competitor_title": "Dodaj zawodnika"
@@ -1154,6 +1169,18 @@
       "toast_reset_failed": "Nie udało się zresetować kategorii.",
       "reset_blocked": "Nie można zresetować, gdy są niezapisane zmiany."
     }
+  },
+  "contest_edit": {
+    "actions": {
+      "cancel": "Anuluj",
+      "save": "Zapisz zmiany",
+      "saving": "Zapisywanie..."
+    },
+    "validation": {
+      "events_required": "Wybierz co najmniej jeden bój"
+    },
+    "toast_saved": "Zawody zaktualizowane.",
+    "toast_failed": "Nie udało się zaktualizować zawodów."
   },
   "display_table": {
     "head": {

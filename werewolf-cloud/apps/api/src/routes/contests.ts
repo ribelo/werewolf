@@ -1,10 +1,21 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import type { WerewolfEnvironment } from '../env';
+import type { LiftType } from '@werewolf/domain';
+import type { WerewolfEnvironment, WerewolfBindings } from '../env';
 import { executeQuery, executeQueryOne, executeMutation, generateId, getCurrentTimestamp, convertKeysToCamelCase } from '../utils/database';
 import { DEFAULT_PLATE_SET, getPlateColor } from '../utils/settings-helpers';
 import { seedContestCategories } from '../utils/category-templates';
+import { publishEvent } from '../live/publish';
+import {
+  contestLiftsFromRow,
+  ensureLiftsForContest,
+  normaliseLiftList,
+  liftsEqual,
+  replaceRegistrationLifts,
+  removeAttemptsForInactiveLifts,
+} from '../utils/lifts';
+import { mapRegistrationRow } from '../utils/registration-map';
 import { contestSchema, contestCreateSchema, contestUpdateSchema, contestStatusSchema } from '@werewolf/domain/models/contest';
 
 const activeFlightSchema = z.object({
@@ -12,6 +23,23 @@ const activeFlightSchema = z.object({
 });
 
 const contests = new Hono<WerewolfEnvironment>();
+
+const REGISTRATION_LIFTS_JSON = `
+      (
+        SELECT json_group_array(lift_type)
+        FROM (
+          SELECT lift_type
+          FROM registration_lifts rl
+          WHERE rl.registration_id = r.id
+          ORDER BY
+            CASE rl.lift_type
+              WHEN 'Squat' THEN 1
+              WHEN 'Bench' THEN 2
+              WHEN 'Deadlift' THEN 3
+            END
+        )
+      ) AS lifts
+`;
 
 // GET /contests - List all contests
 contests.get('/', async (c) => {
@@ -144,6 +172,24 @@ contests.patch('/:contestId', zValidator('json', contestUpdateSchema), async (c)
   const contestId = c.req.param('contestId');
   const input = c.req.valid('json');
 
+  const existingContest = await executeQueryOne(
+    db,
+    `
+    SELECT
+      id, name, date, location, discipline, status,
+      federation_rules, competition_type, organizer, notes,
+      is_archived, created_at, updated_at,
+      mens_bar_weight, womens_bar_weight, clamp_weight, active_flight
+    FROM contests
+    WHERE id = ?
+    `,
+    [contestId]
+  );
+
+  if (!existingContest) {
+    return c.json({ data: null, error: 'Contest not found', requestId: c.get('requestId') }, 404);
+  }
+
   // Build dynamic update query
   const updates: string[] = [];
   const params: any[] = [];
@@ -235,6 +281,13 @@ contests.patch('/:contestId', zValidator('json', contestUpdateSchema), async (c)
 
   if (!contest) {
     return c.json({ data: null, error: 'Contest not found', requestId: c.get('requestId') }, 404);
+  }
+
+  const previousLifts = contestLiftsFromRow(existingContest);
+  const nextLifts = contestLiftsFromRow(contest);
+
+  if (!liftsEqual(previousLifts, nextLifts)) {
+    await syncContestRegistrationsForLifts(c.env, db, contestId, nextLifts as LiftType[]);
   }
 
   return c.json({
@@ -423,6 +476,97 @@ contests.put('/:contestId/state', zValidator('json', z.object({
 });
 
 export default contests;
+
+async function syncContestRegistrationsForLifts(
+  env: WerewolfBindings,
+  db: D1Database,
+  contestId: string,
+  contestLifts: LiftType[],
+) {
+  const registrations = await executeQuery<{
+    id: string;
+    rack_height_squat: number | null;
+    rack_height_bench: number | null;
+  }>(
+    db,
+    `SELECT id, rack_height_squat, rack_height_bench FROM registrations WHERE contest_id = ?`,
+    [contestId]
+  );
+
+  if (registrations.length === 0) {
+    return;
+  }
+
+  for (const registration of registrations) {
+    const currentLiftRows = await executeQuery<{ lift_type: LiftType }>(
+      db,
+      'SELECT lift_type FROM registration_lifts WHERE registration_id = ?',
+      [registration.id]
+    );
+    const currentLifts = normaliseLiftList(currentLiftRows.map((row) => row.lift_type as LiftType));
+    const nextLifts = ensureLiftsForContest(currentLifts, contestLifts);
+
+    const liftsChanged = !liftsEqual(currentLifts, nextLifts);
+
+    const rackUpdates: string[] = [];
+    const rackParams: any[] = [];
+
+    if (!nextLifts.includes('Squat') && registration.rack_height_squat !== null) {
+      rackUpdates.push('rack_height_squat = NULL');
+    }
+    if (!nextLifts.includes('Bench') && registration.rack_height_bench !== null) {
+      rackUpdates.push('rack_height_bench = NULL');
+    }
+
+    if (liftsChanged) {
+      await replaceRegistrationLifts(db, registration.id, nextLifts);
+    }
+
+    if (rackUpdates.length > 0) {
+      rackUpdates.push('updated_at = ?');
+      rackParams.push(getCurrentTimestamp());
+      rackParams.push(registration.id);
+      await executeMutation(
+        db,
+        `UPDATE registrations SET ${rackUpdates.join(', ')} WHERE id = ?`,
+        rackParams
+      );
+    }
+
+    if (liftsChanged || rackUpdates.length > 0) {
+      await removeAttemptsForInactiveLifts(env, contestId, db, registration.id, nextLifts);
+
+      const refreshed = await executeQueryOne(
+        db,
+        `
+        SELECT
+          r.id, r.contest_id, r.competitor_id, r.age_category_id, r.weight_class_id,
+          r.bodyweight, r.reshel_coefficient, r.mccullough_coefficient,
+          r.rack_height_squat, r.rack_height_bench, r.created_at,
+          r.flight_code, r.flight_order, COALESCE(r.labels, '[]') AS labels,
+          ${REGISTRATION_LIFTS_JSON},
+          c.first_name, c.last_name, c.gender, c.birth_date, c.club, c.city,
+          cac.name AS age_category_name,
+          cwc.name AS weight_class_name
+        FROM registrations r
+        JOIN competitors c ON r.competitor_id = c.id
+        LEFT JOIN contest_age_categories cac ON r.age_category_id = cac.id
+        LEFT JOIN contest_weight_classes cwc ON r.weight_class_id = cwc.id
+        WHERE r.id = ?
+        `,
+        [registration.id]
+      );
+
+      if (refreshed) {
+        const payload = mapRegistrationRow(convertKeysToCamelCase(refreshed));
+        await publishEvent(env, contestId, {
+          type: 'registration.upserted',
+          payload,
+        });
+      }
+    }
+  }
+}
 
 // Helper function to create default plate sets
 async function createDefaultPlateSets(db: D1Database, contestId: string) {
