@@ -1025,12 +1025,19 @@
       "filters": {
         "weights_all": "Wszystkie kategorie wagowe",
         "weights_female": "Kategorie wagowe kobiet",
-        "weights_male": "Kategorie wagowe mężczyzn",
-        "age": "Kategorie wiekowe",
-        "tags": "Etykiety",
-        "all": "Wszystkie",
-        "open": "Open"
-      },
+      "weights_male": "Kategorie wagowe mężczyzn",
+      "age": "Kategorie wiekowe",
+      "tags": "Etykiety",
+      "all": "Wszystkie",
+      "open": "Open",
+      "weight_button": "Waga",
+      "weight_button_all": "Wszystkie klasy",
+      "age_button": "Wiek",
+      "age_button_all": "Wszystkie kategorie",
+      "tags_button": "Etykiety",
+      "tags_button_all": "Wszystkie etykiety",
+      "clear": "Wyczyść filtry"
+    },
       "tags": {
         "selector_label": "Klasyfikacja tagów",
         "empty": "Brak skonfigurowanych tagów."

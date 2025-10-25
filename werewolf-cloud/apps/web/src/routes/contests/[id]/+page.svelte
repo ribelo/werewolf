@@ -90,11 +90,9 @@ $: void params;
     if (!aValid && bValid) return 1;
     return a.label.localeCompare(b.label);
   });
-  $: resultsViewOptions = sortedContestTags.length > 0
-    ? RESULT_VIEWS
-    : RESULT_VIEWS.filter((option) => option.id !== 'tag');
-  $: if (!resultsViewOptions.some((option) => option.id === selectedResultView)) {
+  $: if (sortedContestTags.length === 0 && selectedResultView === 'tag') {
     selectedResultView = 'open';
+    selectedTagForResults = null;
   }
   $: if (selectedResultView === 'tag') {
     if (!selectedTagForResults || !sortedContestTags.some((tag) => tag.label === selectedTagForResults)) {
@@ -281,20 +279,12 @@ $: void params;
   }
 
   type ResultView = 'open' | 'age' | 'weight' | 'tag';
-  const RESULT_VIEWS: Array<{ id: ResultView; labelKey: string }> = [
-    { id: 'open', labelKey: 'contest_detail.results.views.open' },
-    { id: 'age', labelKey: 'contest_detail.results.views.age' },
-    { id: 'weight', labelKey: 'contest_detail.results.views.weight' },
-    { id: 'tag', labelKey: 'contest_detail.results.views.tags' },
-  ];
-  let resultsViewOptions: Array<{ id: ResultView; labelKey: string }> = [...RESULT_VIEWS];
   let selectedResultView: ResultView = 'open';
   let openRanking: ContestRankingEntry[] = resultsOpen ?? [];
   let ageRanking: ContestRankingEntry[] = resultsAge ?? [];
   let weightRanking: ContestRankingEntry[] = resultsWeight ?? [];
   let tagRankingCache: Record<string, ContestRankingEntry[]> = {};
   let selectedTagForResults: string | null = null;
-  let activeTagFilter: string | 'ALL' = 'ALL';
   let resultsLoading = false;
   let exportingResults = false;
   let resultsError: string | null = null;
@@ -374,7 +364,6 @@ $: void params;
   $: if (selectedAgeCategoryLabel && !ageCategoryValues.has(selectedAgeCategoryLabel)) {
     selectedAgeCategoryLabel = null;
   }
-  $: activeTagFilter = selectedResultView === 'tag' && selectedTagForResults ? selectedTagForResults : 'ALL';
 
   function beginResultsRequest(): number {
     resultsRequestToken += 1;
@@ -1254,12 +1243,17 @@ $: void params;
   }
 
   function selectAllResultWeights() {
-    selectedResultView = 'weight';
+    selectedResultView = 'open';
     activeWeightGender = 'all';
     selectedWeightClassLabel = null;
   }
 
   function selectResultAge(value: string | null) {
+    if (value === null) {
+      selectedResultView = 'open';
+      selectedAgeCategoryLabel = null;
+      return;
+    }
     selectedResultView = 'age';
     selectedAgeCategoryLabel = value;
   }
@@ -1276,6 +1270,77 @@ $: void params;
 
   function resultFilterButtonClass(active: boolean): string {
     return `px-3 py-1 text-xxs ${active ? 'btn-primary text-black' : 'btn-secondary'}`;
+  }
+
+  let openResultFilter: 'weight' | 'age' | 'tags' | null = null;
+
+  function toggleResultFilterPopover(target: 'weight' | 'age' | 'tags') {
+    openResultFilter = openResultFilter === target ? null : target;
+  }
+
+  function closeResultFilterPopover() {
+    openResultFilter = null;
+  }
+
+  function handleWindowClick() {
+    openResultFilter = null;
+  }
+
+  function handleWindowKeydown(event: KeyboardEvent) {
+    if (event.key === 'Escape') {
+      openResultFilter = null;
+    }
+  }
+
+  $: weightSelectionLabel = (() => {
+    if (selectedResultView !== 'weight') {
+      return t('contest_detail.results.filters.weight_button_all');
+    }
+    if (activeWeightGender === 'all' && !selectedWeightClassLabel) {
+      return t('contest_detail.results.filters.weight_button_all');
+    }
+    const genderLabel =
+      activeWeightGender === 'female'
+        ? t('contest_detail.registrations.filters.sex_female')
+        : t('contest_detail.registrations.filters.sex_male');
+    if (!selectedWeightClassLabel) {
+      return `${genderLabel} ${t('contest_detail.results.filters.open')}`;
+    }
+    const options =
+      activeWeightGender === 'female' ? femaleWeightClassOptions : maleWeightClassOptions;
+    const match = options.find((option) => option.value === selectedWeightClassLabel);
+    return `${genderLabel} ${match?.label ?? selectedWeightClassLabel ?? ''}`.trim();
+  })();
+
+  $: ageSelectionLabel = (() => {
+    if (selectedResultView !== 'age') {
+      return t('contest_detail.results.filters.age_button_all');
+    }
+    if (!selectedAgeCategoryLabel) {
+      return t('contest_detail.results.filters.age_button_all');
+    }
+    const match = ageCategoryOptions.find((option) => option.value === selectedAgeCategoryLabel);
+    return match?.label ?? selectedAgeCategoryLabel;
+  })();
+
+  $: tagsSelectionLabel = (() => {
+    if (selectedResultView !== 'tag') {
+      return t('contest_detail.results.filters.tags_button_all');
+    }
+    return selectedTagForResults ?? t('contest_detail.results.filters.tags_button_all');
+  })();
+
+  $: hasActiveResultFilters =
+    selectedResultView !== 'open' ||
+    (selectedResultView === 'tag' && !!selectedTagForResults);
+
+  function clearAllResultFilters() {
+    selectedResultView = 'open';
+    activeWeightGender = 'all';
+    selectedWeightClassLabel = null;
+    selectedAgeCategoryLabel = null;
+    selectedTagForResults = null;
+    closeResultFilterPopover();
   }
 
   async function openContestEditor() {
@@ -2040,6 +2105,8 @@ $: void params;
 
 </script>
 
+<svelte:window on:click={handleWindowClick} on:keydown={handleWindowKeydown} />
+
 <svelte:head>
   <title>{contest?.name ?? t('contest_detail.fallback_title')} • {t('app_name')}</title>
 </svelte:head>
@@ -2404,132 +2471,225 @@ $: void params;
               </div>
             </header>
 
-            <div class="space-y-2">
+            <div class="flex flex-wrap items-center gap-2">
               {#if weightClasses.length > 0}
-                <div
-                  class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2"
-                  role="group"
-                  aria-label={$_('contest_detail.results.filters.weights_all')}
-                >
-                  <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.results.filters.weights_all')}</span>
+                <div class="relative" on:click|stopPropagation>
                   <button
                     type="button"
-                    class={resultFilterButtonClass(selectedResultView === 'weight' && activeWeightGender === 'all' && !selectedWeightClassLabel)}
-                    on:click={selectAllResultWeights}
+                    class={`${resultFilterButtonClass(selectedResultView === 'weight')} flex min-w-[190px] items-center justify-between gap-3`}
+                    on:click|stopPropagation={() => toggleResultFilterPopover('weight')}
                   >
-                    {$_('contest_detail.results.filters.all')}
+                    <div class="flex flex-col text-left leading-tight">
+                      <span class="font-semibold">{$_('contest_detail.results.filters.weight_button')}</span>
+                      <span class="text-text-secondary">{weightSelectionLabel}</span>
+                    </div>
+                    <ChevronDown
+                      class={`h-3.5 w-3.5 transition-transform ${openResultFilter === 'weight' ? 'rotate-180' : ''}`}
+                      aria-hidden="true"
+                    />
                   </button>
-                </div>
-              {/if}
-
-              {#if femaleWeightClassOptions.length > 0}
-                <div
-                  class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2"
-                  role="group"
-                  aria-label={$_('contest_detail.results.filters.weights_female')}
-                >
-                  <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.results.filters.weights_female')}</span>
-                  <button
-                    type="button"
-                    class={resultFilterButtonClass(selectedResultView === 'weight' && activeWeightGender === 'female' && !selectedWeightClassLabel)}
-                    on:click={() => selectResultWeight('female', null)}
-                  >
-                    {$_('contest_detail.results.filters.open')}
-                  </button>
-                  {#each femaleWeightClassOptions as option}
-                    <button
-                      type="button"
-                      class={resultFilterButtonClass(selectedResultView === 'weight' && activeWeightGender === 'female' && selectedWeightClassLabel === option.value)}
-                      on:click={() => selectResultWeight('female', option.value)}
+                  {#if openResultFilter === 'weight'}
+                    <div
+                      class="absolute left-0 top-full z-20 mt-2 w-72 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
+                      on:click|stopPropagation
                     >
-                      {option.label}
-                    </button>
-                  {/each}
-                </div>
-              {/if}
+                      <div class="space-y-4">
+                        <div>
+                          <p class="mb-2 text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.results.filters.weights_all')}</p>
+                          <button
+                            type="button"
+                            class={`${resultFilterButtonClass(selectedResultView !== 'weight')} w-full justify-start`}
+                            on:click={() => {
+                              selectAllResultWeights();
+                              closeResultFilterPopover();
+                            }}
+                          >
+                            {$_('contest_detail.results.filters.all')}
+                          </button>
+                        </div>
 
-              {#if maleWeightClassOptions.length > 0}
-                <div
-                  class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2"
-                  role="group"
-                  aria-label={$_('contest_detail.results.filters.weights_male')}
-                >
-                  <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.results.filters.weights_male')}</span>
-                  <button
-                    type="button"
-                    class={resultFilterButtonClass(selectedResultView === 'weight' && activeWeightGender === 'male' && !selectedWeightClassLabel)}
-                    on:click={() => selectResultWeight('male', null)}
-                  >
-                    {$_('contest_detail.results.filters.open')}
-                  </button>
-                  {#each maleWeightClassOptions as option}
-                    <button
-                      type="button"
-                      class={resultFilterButtonClass(selectedResultView === 'weight' && activeWeightGender === 'male' && selectedWeightClassLabel === option.value)}
-                      on:click={() => selectResultWeight('male', option.value)}
-                    >
-                      {option.label}
-                    </button>
-                  {/each}
+                        {#if femaleWeightClassOptions.length > 0}
+                          <div>
+                            <p class="mb-2 text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.results.filters.weights_female')}</p>
+                            <div class="grid grid-cols-2 gap-2">
+                              <button
+                                type="button"
+                                class={`${resultFilterButtonClass(selectedResultView === 'weight' && activeWeightGender === 'female' && !selectedWeightClassLabel)} w-full`}
+                                on:click={() => {
+                                  selectResultWeight('female', null);
+                                  closeResultFilterPopover();
+                                }}
+                              >
+                                {$_('contest_detail.results.filters.open')}
+                              </button>
+                              {#each femaleWeightClassOptions as option}
+                                <button
+                                  type="button"
+                                  class={`${resultFilterButtonClass(selectedResultView === 'weight' && activeWeightGender === 'female' && selectedWeightClassLabel === option.value)} w-full`}
+                                  on:click={() => {
+                                    selectResultWeight('female', option.value);
+                                    closeResultFilterPopover();
+                                  }}
+                                >
+                                  {option.label}
+                                </button>
+                              {/each}
+                            </div>
+                          </div>
+                        {/if}
+
+                        {#if maleWeightClassOptions.length > 0}
+                          <div>
+                            <p class="mb-2 text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.results.filters.weights_male')}</p>
+                            <div class="grid grid-cols-2 gap-2">
+                              <button
+                                type="button"
+                                class={`${resultFilterButtonClass(selectedResultView === 'weight' && activeWeightGender === 'male' && !selectedWeightClassLabel)} w-full`}
+                                on:click={() => {
+                                  selectResultWeight('male', null);
+                                  closeResultFilterPopover();
+                                }}
+                              >
+                                {$_('contest_detail.results.filters.open')}
+                              </button>
+                              {#each maleWeightClassOptions as option}
+                                <button
+                                  type="button"
+                                  class={`${resultFilterButtonClass(selectedResultView === 'weight' && activeWeightGender === 'male' && selectedWeightClassLabel === option.value)} w-full`}
+                                  on:click={() => {
+                                    selectResultWeight('male', option.value);
+                                    closeResultFilterPopover();
+                                  }}
+                                >
+                                  {option.label}
+                                </button>
+                              {/each}
+                            </div>
+                          </div>
+                        {/if}
+                      </div>
+                    </div>
+                  {/if}
                 </div>
               {/if}
 
               {#if ageCategoryOptions.length > 0}
-                <div
-                  class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2"
-                  role="group"
-                  aria-label={$_('contest_detail.results.filters.age')}
-                >
-                  <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.results.filters.age')}</span>
+                <div class="relative" on:click|stopPropagation>
                   <button
                     type="button"
-                    class={resultFilterButtonClass(selectedResultView === 'age' && !selectedAgeCategoryLabel)}
-                    on:click={() => selectResultAge(null)}
+                    class={`${resultFilterButtonClass(selectedResultView === 'age')} flex min-w-[170px] items-center justify-between gap-3`}
+                    on:click|stopPropagation={() => toggleResultFilterPopover('age')}
                   >
-                    {$_('contest_detail.results.filters.all')}
+                    <div class="flex flex-col text-left leading-tight">
+                      <span class="font-semibold">{$_('contest_detail.results.filters.age_button')}</span>
+                      <span class="text-text-secondary">{ageSelectionLabel}</span>
+                    </div>
+                    <ChevronDown
+                      class={`h-3.5 w-3.5 transition-transform ${openResultFilter === 'age' ? 'rotate-180' : ''}`}
+                      aria-hidden="true"
+                    />
                   </button>
-                  {#each ageCategoryOptions as option}
-                    <button
-                      type="button"
-                      class={resultFilterButtonClass(selectedResultView === 'age' && selectedAgeCategoryLabel === option.value)}
-                      on:click={() => selectResultAge(option.value)}
+                  {#if openResultFilter === 'age'}
+                    <div
+                      class="absolute left-0 top-full z-20 mt-2 w-64 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
+                      on:click|stopPropagation
                     >
-                      {option.label}
-                    </button>
-                  {/each}
+                      <div class="space-y-3">
+                        <button
+                          type="button"
+                          class={`${resultFilterButtonClass(selectedResultView !== 'age')} w-full justify-start`}
+                          on:click={() => {
+                            selectResultAge(null);
+                            closeResultFilterPopover();
+                          }}
+                        >
+                          {$_('contest_detail.results.filters.all')}
+                        </button>
+                        <div class="grid max-h-52 grid-cols-2 gap-2 overflow-y-auto pr-1">
+                          {#each ageCategoryOptions as option}
+                            <button
+                              type="button"
+                              class={`${resultFilterButtonClass(selectedResultView === 'age' && selectedAgeCategoryLabel === option.value)} w-full`}
+                              on:click={() => {
+                                selectResultAge(option.value);
+                                closeResultFilterPopover();
+                              }}
+                            >
+                              {option.label}
+                            </button>
+                          {/each}
+                        </div>
+                      </div>
+                    </div>
+                  {/if}
                 </div>
               {/if}
 
-              {#if sortedContestTags.length > 0}
-                <div
-                  class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2"
-                  role="group"
-                  aria-label={$_('contest_detail.results.filters.tags')}
+              <div class="relative" on:click|stopPropagation>
+                <button
+                  type="button"
+                  class={`${resultFilterButtonClass(selectedResultView === 'tag')} flex min-w-[170px] items-center justify-between gap-3`}
+                  on:click|stopPropagation={() => toggleResultFilterPopover('tags')}
                 >
-                  <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.results.filters.tags')}</span>
-                  <button
-                    type="button"
-                    class={resultFilterButtonClass(activeTagFilter === 'ALL')}
-                    on:click={selectAllResultTags}
+                  <div class="flex flex-col text-left leading-tight">
+                    <span class="font-semibold">{$_('contest_detail.results.filters.tags_button')}</span>
+                    <span class="text-text-secondary">{tagsSelectionLabel}</span>
+                  </div>
+                  <ChevronDown
+                    class={`h-3.5 w-3.5 transition-transform ${openResultFilter === 'tags' ? 'rotate-180' : ''}`}
+                    aria-hidden="true"
+                  />
+                </button>
+                {#if openResultFilter === 'tags'}
+                  <div
+                    class="absolute left-0 top-full z-20 mt-2 w-60 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
+                    on:click|stopPropagation
                   >
-                    {$_('contest_detail.results.filters.all')}
-                  </button>
-                  {#each sortedContestTags as tag}
-                    <button
-                      type="button"
-                      class={resultFilterButtonClass(activeTagFilter === tag.label)}
-                      on:click={() => selectResultTag(tag.label)}
-                      disabled={resultsLoading && activeTagFilter === tag.label}
-                    >
-                      {tag.label}
-                    </button>
-                  {/each}
-                </div>
-              {:else}
-                <p class="text-caption text-text-secondary">{$_('contest_detail.results.tags.empty')}</p>
+                    {#if sortedContestTags.length > 0}
+                      <div class="space-y-3">
+                        <button
+                          type="button"
+                          class={`${resultFilterButtonClass(selectedResultView !== 'tag')} w-full justify-start`}
+                          on:click={() => {
+                            selectAllResultTags();
+                            closeResultFilterPopover();
+                          }}
+                        >
+                          {$_('contest_detail.results.filters.all')}
+                        </button>
+                        <div class="grid max-h-52 grid-cols-2 gap-2 overflow-y-auto pr-1">
+                          {#each sortedContestTags as tag}
+                            <button
+                              type="button"
+                              class={`${resultFilterButtonClass(selectedResultView === 'tag' && selectedTagForResults === tag.label)} w-full`}
+                              on:click={() => {
+                                selectResultTag(tag.label);
+                                closeResultFilterPopover();
+                              }}
+                              disabled={resultsLoading && selectedResultView === 'tag' && selectedTagForResults === tag.label}
+                            >
+                              {tag.label}
+                            </button>
+                          {/each}
+                        </div>
+                      </div>
+                    {:else}
+                      <p class="text-xxs text-text-secondary">{$_('contest_detail.results.tags.empty')}</p>
+                    {/if}
+                  </div>
+                {/if}
+              </div>
+
+              {#if hasActiveResultFilters}
+                <button
+                  type="button"
+                  class="ml-auto text-xxs text-text-secondary underline decoration-dotted decoration-1 underline-offset-4"
+                  on:click={clearAllResultFilters}
+                >
+                  {$_('contest_detail.results.filters.clear')}
+                </button>
               {/if}
             </div>
-
             <div class="flex flex-wrap items-center justify-between gap-3">
               <span class="text-caption uppercase tracking-[0.35em] text-text-secondary">{resultsSummaryLabel}</span>
             </div>

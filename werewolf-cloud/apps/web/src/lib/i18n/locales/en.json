@@ -1025,12 +1025,19 @@
       "filters": {
         "weights_all": "All weight classes",
         "weights_female": "Female weight classes",
-        "weights_male": "Male weight classes",
-        "age": "Age categories",
-        "tags": "Tags",
-        "all": "All",
-        "open": "Open"
-      },
+      "weights_male": "Male weight classes",
+      "age": "Age categories",
+      "tags": "Tags",
+      "all": "All",
+      "open": "Open",
+      "weight_button": "Weight",
+      "weight_button_all": "All classes",
+      "age_button": "Age",
+      "age_button_all": "All categories",
+      "tags_button": "Labels",
+      "tags_button_all": "All labels",
+      "clear": "Clear filters"
+    },
       "tags": {
         "selector_label": "Tag standings",
         "empty": "No custom tags configured."
