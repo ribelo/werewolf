@@ -257,12 +257,14 @@ function compareByName(regA: Registration, regB: Registration): number {
 }
 
 function compareBodyweightAscending(rowA: UnifiedRow, rowB: UnifiedRow): number {
-  const weightA = Number.isFinite(rowA.registration.bodyweight)
-    ? rowA.registration.bodyweight
-    : Number.POSITIVE_INFINITY;
-  const weightB = Number.isFinite(rowB.registration.bodyweight)
-    ? rowB.registration.bodyweight
-    : Number.POSITIVE_INFINITY;
+  const weightA =
+    typeof rowA.registration.bodyweight === 'number'
+      ? rowA.registration.bodyweight
+      : Number.POSITIVE_INFINITY;
+  const weightB =
+    typeof rowB.registration.bodyweight === 'number'
+      ? rowB.registration.bodyweight
+      : Number.POSITIVE_INFINITY;
   if (weightA === weightB) {
     return 0;
   }

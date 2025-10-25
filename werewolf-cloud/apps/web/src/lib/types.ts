@@ -62,11 +62,11 @@ export interface Registration {
   gender: string;
   club?: string;
   city?: string;
-  weightClassId: string;
+  weightClassId: string | null;
   weightClassName?: string | null;
   ageCategoryId: string;
   ageCategoryName?: string | null;
-  bodyweight: number;
+  bodyweight: number | null;
   rackHeightSquat?: number | null;
   rackHeightBench?: number | null;
   reshelCoefficient?: number | null;
@@ -81,8 +81,8 @@ export interface Registration {
 export interface RegistrationSummary {
   id: string;
   contestId: string;
-  bodyweight: number;
-  weightClassId: string;
+  bodyweight: number | null;
+  weightClassId: string | null;
   weightClassName?: string | null;
   ageCategoryId?: string | null;
   ageCategoryName?: string | null;
@@ -93,6 +93,14 @@ export interface RegistrationSummary {
   flightOrder?: number | null;
   labels?: string[];
   lifts: LiftType[];
+}
+
+export interface ContestTag {
+  id: string;
+  contestId: string;
+  label: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ContestDetail {

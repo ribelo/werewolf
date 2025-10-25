@@ -1436,16 +1436,18 @@ import { formatWeight } from '$lib/utils';
               </div>
               <p class="text-caption text-text-secondary">{$_('contest.wizard.competitor.lifts_hint')}</p>
             </div>
-            <div>
-              <label class="input-label" for="rackHeightSquat">{$_('contest.wizard.competitor.rack_squat')}</label>
-              <input
-                id="rackHeightSquat"
-                type="number"
-                class="input-field"
-                bind:value={competitorDraft.rackHeightSquat}
-                disabled={!competitorDraft.lifts.includes('Squat')}
-              />
-            </div>
+            {#if form.events.includes('Squat')}
+              <div>
+                <label class="input-label" for="rackHeightSquat">{$_('contest.wizard.competitor.rack_squat')}</label>
+                <input
+                  id="rackHeightSquat"
+                  type="number"
+                  class="input-field"
+                  bind:value={competitorDraft.rackHeightSquat}
+                  disabled={!competitorDraft.lifts.includes('Squat')}
+                />
+              </div>
+            {/if}
             <div>
               <label class="input-label" for="rackHeightBench">{$_('contest.wizard.competitor.rack_bench')}</label>
               <input

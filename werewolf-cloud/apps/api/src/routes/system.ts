@@ -492,11 +492,11 @@ system.post('/maintenance/recalculate-coefficients', async (c) => {
 
       const registrations = await executeQuery<{
         id: string;
-        bodyweight: number;
+        bodyweight: number | null;
         age_category_id: string;
-        weight_class_id: string;
-        reshel_coefficient: number;
-        mccullough_coefficient: number;
+        weight_class_id: string | null;
+        reshel_coefficient: number | null;
+        mccullough_coefficient: number | null;
         gender: string;
         birth_date: string;
       }>(
@@ -522,23 +522,39 @@ system.post('/maintenance/recalculate-coefficients', async (c) => {
         processed += 1;
 
         const ageCode = determineAgeCategory(registration.birth_date, contest.date, ageDescriptors);
-        const weightCode = determineWeightClass(registration.bodyweight, registration.gender, weightDescriptors);
-
         const ageDescriptor = ageDescriptors.find((descriptor) => descriptor.code === ageCode) ?? ageDescriptors[0];
-        const weightDescriptor = weightDescriptors.find((descriptor) => descriptor.code === weightCode) ?? weightDescriptors[0];
+        let weightDescriptor = null;
+        let reshel: number | null = registration.reshel_coefficient ?? null;
 
-        const [reshel, mccullough] = await Promise.all([
-          getReshelCoefficient(db, registration.gender, registration.bodyweight),
-          getMcCulloughCoefficient(db, registration.birth_date, contest.date),
-        ]);
+        if (registration.bodyweight !== null && Number.isFinite(registration.bodyweight)) {
+          const weightCode = determineWeightClass(registration.bodyweight, registration.gender, weightDescriptors);
+          weightDescriptor =
+            weightDescriptors.find((descriptor) => descriptor.code === weightCode) ??
+            weightDescriptors[0] ??
+            null;
+          reshel = await getReshelCoefficient(db, registration.gender, registration.bodyweight);
+        } else {
+          reshel = null;
+        }
+
+        const mccullough = await getMcCulloughCoefficient(db, registration.birth_date, contest.date);
+
+        const reshelChanged =
+          reshel === null
+            ? registration.reshel_coefficient !== null
+            : Math.abs((registration.reshel_coefficient ?? 0) - reshel) > 0.0001;
+        const weightClassChanged =
+          weightDescriptor === null
+            ? registration.weight_class_id !== null
+            : registration.weight_class_id !== weightDescriptor.id;
 
         const requiresUpdate =
           (ageDescriptor && registration.age_category_id !== ageDescriptor.id) ||
-          (weightDescriptor && registration.weight_class_id !== weightDescriptor.id) ||
-          Math.abs((registration.reshel_coefficient ?? 0) - reshel) > 0.0001 ||
+          weightClassChanged ||
+          reshelChanged ||
           Math.abs((registration.mccullough_coefficient ?? 0) - mccullough) > 0.0001;
 
-        if (!requiresUpdate || !ageDescriptor || !weightDescriptor) {
+        if (!requiresUpdate || !ageDescriptor) {
           continue;
         }
 
@@ -550,7 +566,7 @@ system.post('/maintenance/recalculate-coefficients', async (c) => {
                  reshel_coefficient = ?,
                  mccullough_coefficient = ?
            WHERE id = ?`,
-          [ageDescriptor.id, weightDescriptor.id, reshel, mccullough, registration.id]
+          [ageDescriptor.id, weightDescriptor ? weightDescriptor.id : null, reshel, mccullough, registration.id]
         );
 
         updated += 1;

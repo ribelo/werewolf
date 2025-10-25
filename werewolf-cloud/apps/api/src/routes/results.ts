@@ -1,25 +1,13 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
+import type { D1Database } from '@cloudflare/workers-types';
 import type { WerewolfEnvironment } from '../env';
-import { executeQuery, executeQueryOne, executeMutation, generateId, getCurrentTimestamp, convertKeysToCamelCase } from '../utils/database';
+import { executeQuery, executeQueryOne, convertKeysToCamelCase, getCurrentTimestamp } from '../utils/database';
+import { listContestTags, MANDATORY_TAG_LABEL } from '../utils/tags';
+import { calculateRegistrationResults, updateAllRankings, parseLabelText, hasTag, compareResults } from '../services/results';
 
 export const contestResults = new Hono<WerewolfEnvironment>();
-
-function parseLabelText(input: unknown): string[] {
-  if (Array.isArray(input)) {
-    return input.map(String);
-  }
-  if (typeof input === 'string') {
-    try {
-      const parsed = JSON.parse(input);
-      return Array.isArray(parsed) ? parsed.map(String) : [];
-    } catch {
-      return [];
-    }
-  }
-  return [];
-}
 
 // POST /contests/:contestId/results/recalculate - Recalculate all results
 contestResults.post('/recalculate', async (c) => {
@@ -54,101 +42,156 @@ contestResults.post('/recalculate', async (c) => {
 
 // GET /contests/:contestId/results/rankings - Get rankings by type
 contestResults.get('/rankings', zValidator('query', z.object({
-  type: z.enum(['open', 'age', 'weight']).default('open'),
+  type: z.enum(['open', 'age', 'weight', 'tag']).default('open'),
+  tag: z.string().trim().min(1).optional(),
   label: z.string().trim().min(1).optional(),
 })), async (c) => {
   const db = c.env.DB;
   const contestId = c.req.param('contestId');
-  const { type, label } = c.req.valid('query');
+  const { type, tag, label } = c.req.valid('query');
 
-  const labelMatch = label ? `%"${label}"%` : null;
-
-  let rankings;
-
-  switch (type) {
-    case 'open':
-      rankings = await executeQuery(
-        db,
-        `
-        SELECT
-          r.id, r.registration_id, r.contest_id,
-          r.best_bench, r.best_squat, r.best_deadlift,
-          r.total_weight, r.coefficient_points,
-          r.place_open, r.place_in_age_class, r.place_in_weight_class,
-          r.is_disqualified, r.disqualification_reason,
-          r.broke_record, r.record_type, r.calculated_at,
-          c.first_name, c.last_name,
-          COALESCE(reg.labels, '[]') AS labels
-        FROM results r
-        JOIN registrations reg ON r.registration_id = reg.id
-        JOIN competitors c ON reg.competitor_id = c.id
-        WHERE r.contest_id = ?
-        ${labelMatch ? "AND COALESCE(reg.labels, '[]') LIKE ?" : ''}
-        ORDER BY r.place_open ASC
-        `,
-        labelMatch ? [contestId, labelMatch] : [contestId]
-      );
-      break;
-
-    case 'age':
-      rankings = await executeQuery(
-        db,
-        `
-        SELECT
-          r.id, r.registration_id, r.contest_id,
-          r.best_bench, r.best_squat, r.best_deadlift,
-          r.total_weight, r.coefficient_points,
-          r.place_open, r.place_in_age_class, r.place_in_weight_class,
-          r.is_disqualified, r.disqualification_reason,
-          r.broke_record, r.record_type, r.calculated_at,
-          c.first_name, c.last_name, ac.name as age_category,
-          COALESCE(reg.labels, '[]') AS labels
-        FROM results r
-        JOIN registrations reg ON r.registration_id = reg.id
-        JOIN competitors c ON reg.competitor_id = c.id
-        JOIN contest_age_categories ac ON reg.age_category_id = ac.id
-        WHERE r.contest_id = ?
-        ${labelMatch ? "AND COALESCE(reg.labels, '[]') LIKE ?" : ''}
-        ORDER BY ac.name ASC, r.place_in_age_class ASC
-        `,
-        labelMatch ? [contestId, labelMatch] : [contestId]
-      );
-      break;
-
-    case 'weight':
-      rankings = await executeQuery(
-        db,
-        `
-        SELECT
-          r.id, r.registration_id, r.contest_id,
-          r.best_bench, r.best_squat, r.best_deadlift,
-          r.total_weight, r.coefficient_points,
-          r.place_open, r.place_in_age_class, r.place_in_weight_class,
-          r.is_disqualified, r.disqualification_reason,
-          r.broke_record, r.record_type, r.calculated_at,
-          c.first_name, c.last_name, wc.name as weight_class,
-          COALESCE(reg.labels, '[]') AS labels
-        FROM results r
-        JOIN registrations reg ON r.registration_id = reg.id
-        JOIN competitors c ON reg.competitor_id = c.id
-        JOIN contest_weight_classes wc ON reg.weight_class_id = wc.id
-        WHERE r.contest_id = ?
-        ${labelMatch ? "AND COALESCE(reg.labels, '[]') LIKE ?" : ''}
-        ORDER BY wc.name ASC, r.place_in_weight_class ASC
-        `,
-        labelMatch ? [contestId, labelMatch] : [contestId]
-      );
-      break;
+  if (!contestId) {
+    return c.json({ data: null, error: 'Contest ID is required', requestId: c.get('requestId') }, 400);
   }
 
-  const camel = convertKeysToCamelCase(rankings) as any[];
+  const requestedTag = tag ?? label ?? null;
+
+  if (type === 'tag' && !requestedTag) {
+    return c.json({ data: null, error: 'tag parameter is required for type=tag', requestId: c.get('requestId') }, 400);
+  }
+
+  if (requestedTag) {
+    const tagRows = await listContestTags(db, contestId);
+    const allowedTags = new Set(tagRows.map((row) => row.label));
+    allowedTags.add(MANDATORY_TAG_LABEL);
+    if (!allowedTags.has(requestedTag)) {
+      return c.json({ data: null, error: 'Tag not configured for contest', requestId: c.get('requestId') }, 404);
+    }
+  }
+
+  const rows = await executeQuery(
+    db,
+    `
+    SELECT
+      r.id, r.registration_id, r.contest_id,
+      r.best_bench, r.best_squat, r.best_deadlift,
+      r.total_weight, r.coefficient_points,
+      r.squat_points, r.bench_points, r.deadlift_points,
+      r.place_open, r.place_in_age_class, r.place_in_weight_class,
+      r.is_disqualified, r.disqualification_reason,
+      r.broke_record, r.record_type, r.calculated_at,
+      c.first_name, c.last_name,
+      ac.name AS age_category,
+      wc.name AS weight_class,
+      reg.bodyweight,
+      COALESCE(reg.labels, '[]') AS labels
+    FROM results r
+    JOIN registrations reg ON r.registration_id = reg.id
+    JOIN competitors c ON reg.competitor_id = c.id
+    LEFT JOIN contest_age_categories ac ON reg.age_category_id = ac.id
+    LEFT JOIN contest_weight_classes wc ON reg.weight_class_id = wc.id
+    WHERE r.contest_id = ?
+    `,
+    [contestId]
+  );
+
+  const camel = convertKeysToCamelCase(rows) as any[];
   const enriched = camel.map((row) => ({
     ...row,
     labels: parseLabelText(row.labels),
   }));
 
+  const notDisqualified = enriched.filter((row) => !row.isDisqualified);
+  const filterTag = type === 'tag'
+    ? requestedTag
+    : requestedTag && requestedTag !== MANDATORY_TAG_LABEL
+      ? requestedTag
+      : null;
+
+  const openCandidates = notDisqualified.filter((row) => hasTag(row.labels, MANDATORY_TAG_LABEL));
+  const openFiltered = filterTag ? openCandidates.filter((row) => hasTag(row.labels, filterTag)) : openCandidates;
+  const openSorted = [...openFiltered].sort((a, b) => {
+    const placeA = a.placeOpen ?? 0;
+    const placeB = b.placeOpen ?? 0;
+    if (placeA && placeB && placeA !== placeB) {
+      return placeA - placeB;
+    }
+    return compareResults(a, b);
+  });
+
+  let data: any[] = [];
+
+  switch (type) {
+    case 'open': {
+      data = openSorted;
+      break;
+    }
+    case 'age': {
+      const ageGroups = new Map<string, any[]>();
+      for (const row of openFiltered) {
+        const key = row.ageCategory ?? 'Unassigned';
+        const group = ageGroups.get(key) ?? [];
+        group.push(row);
+        ageGroups.set(key, group);
+      }
+
+      const sortedKeys = Array.from(ageGroups.keys()).sort((a, b) => a.localeCompare(b));
+      const ageResults: any[] = [];
+      for (const key of sortedKeys) {
+        const group = ageGroups.get(key) ?? [];
+        const sortedGroup = [...group].sort((a, b) => {
+          const placeA = a.placeInAgeClass ?? 0;
+          const placeB = b.placeInAgeClass ?? 0;
+          if (placeA && placeB && placeA !== placeB) {
+            return placeA - placeB;
+          }
+          return compareResults(a, b);
+        });
+        ageResults.push(...sortedGroup);
+      }
+      data = ageResults;
+      break;
+    }
+    case 'weight': {
+      const weightGroups = new Map<string, any[]>();
+      for (const row of openFiltered) {
+        const key = row.weightClass ?? 'Unassigned';
+        const group = weightGroups.get(key) ?? [];
+        group.push(row);
+        weightGroups.set(key, group);
+      }
+
+      const sortedKeys = Array.from(weightGroups.keys()).sort((a, b) => a.localeCompare(b));
+      const weightResults: any[] = [];
+      for (const key of sortedKeys) {
+        const group = weightGroups.get(key) ?? [];
+        const sortedGroup = [...group].sort((a, b) => {
+          const placeA = a.placeInWeightClass ?? 0;
+          const placeB = b.placeInWeightClass ?? 0;
+          if (placeA && placeB && placeA !== placeB) {
+            return placeA - placeB;
+          }
+          return compareResults(a, b);
+        });
+        weightResults.push(...sortedGroup);
+      }
+      data = weightResults;
+      break;
+    }
+    case 'tag': {
+      const targetTag = requestedTag!;
+      const tagged = notDisqualified.filter((row) => hasTag(row.labels, targetTag));
+      const sortedTagged = [...tagged].sort(compareResults);
+      data = sortedTagged.map((row, index) => ({
+        ...row,
+        placeOpen: index + 1,
+      }));
+      break;
+    }
+  }
+
   return c.json({
-    data: enriched,
+    data,
     error: null,
     requestId: c.get('requestId'),
   });
@@ -169,6 +212,7 @@ contestResults.post('/export', zValidator('json', z.object({
       r.place_open, r.registration_id,
       r.best_squat, r.best_bench, r.best_deadlift,
       r.total_weight, r.coefficient_points,
+      r.squat_points, r.bench_points, r.deadlift_points,
       c.first_name, c.last_name
     FROM results r
     JOIN registrations reg ON r.registration_id = reg.id
@@ -203,6 +247,7 @@ contestResults.get('/scoreboard', async (c) => {
       r.id, r.registration_id, r.contest_id,
       r.best_bench, r.best_squat, r.best_deadlift,
       r.total_weight, r.coefficient_points,
+      r.squat_points, r.bench_points, r.deadlift_points,
       r.place_open, r.place_in_age_class, r.place_in_weight_class,
       r.is_disqualified, r.disqualification_reason,
       r.broke_record, r.record_type, r.calculated_at,
@@ -251,6 +296,7 @@ results.get('/:registrationId', async (c) => {
       id, registration_id, contest_id,
       best_bench, best_squat, best_deadlift,
       total_weight, coefficient_points,
+      squat_points, bench_points, deadlift_points,
       place_open, place_in_age_class, place_in_weight_class,
       is_disqualified, disqualification_reason,
       broke_record, record_type, calculated_at
@@ -270,6 +316,7 @@ results.get('/:registrationId', async (c) => {
         id, registration_id, contest_id,
         best_bench, best_squat, best_deadlift,
         total_weight, coefficient_points,
+        squat_points, bench_points, deadlift_points,
         place_open, place_in_age_class, place_in_weight_class,
         is_disqualified, disqualification_reason,
         broke_record, record_type, calculated_at
@@ -293,192 +340,12 @@ results.get('/:registrationId', async (c) => {
 
 export default results;
 
-// Helper functions
-
-async function calculateRegistrationResults(db: D1Database, registrationId: string) {
-  // Get registration details
-  const registration = await executeQueryOne(
-    db,
-    `
-    SELECT
-      r.contest_id,
-      r.reshel_coefficient,
-      r.mccullough_coefficient,
-      contest.discipline
-    FROM registrations r
-    JOIN competitors c ON r.competitor_id = c.id
-    JOIN contests contest ON r.contest_id = contest.id
-    WHERE r.id = ?
-    `,
-    [registrationId]
-  );
-
-  if (!registration) return;
-
-  // Get best attempts for each lift
-  const bestAttempts = await executeQuery(
-    db,
-    `
-    SELECT lift_type, MAX(weight) as best_weight
-    FROM attempts
-    WHERE registration_id = ? AND status = 'Successful'
-    GROUP BY lift_type
-    `,
-    [registrationId]
-  );
-
-  const bestSquat = Number(bestAttempts.find((attempt) => attempt.lift_type === 'Squat')?.best_weight ?? 0) || 0;
-  const bestBench = Number(bestAttempts.find((attempt) => attempt.lift_type === 'Bench')?.best_weight ?? 0) || 0;
-  const bestDeadlift = Number(bestAttempts.find((attempt) => attempt.lift_type === 'Deadlift')?.best_weight ?? 0) || 0;
-
-  const discipline = typeof registration.discipline === 'string' ? registration.discipline : 'Powerlifting';
-  const liftsForTotals = getLiftsForDiscipline(discipline);
-
-  const totalsByLift: Record<'Squat' | 'Bench' | 'Deadlift', number> = {
-    Squat: bestSquat,
-    Bench: bestBench,
-    Deadlift: bestDeadlift,
-  };
-
-  const totalWeight = liftsForTotals.reduce((sum, lift) => sum + totalsByLift[lift], 0);
-
-  const reshelCoefficient =
-    registration.reshel_coefficient === null || registration.reshel_coefficient === undefined
-      ? 1
-      : Number(registration.reshel_coefficient);
-  const mcCoefficient =
-    registration.mccullough_coefficient === null || registration.mccullough_coefficient === undefined
-      ? 1
-      : Number(registration.mccullough_coefficient);
-
-  const normalizedReshel = Number.isFinite(reshelCoefficient) ? reshelCoefficient : 1;
-  const normalizedMc = Number.isFinite(mcCoefficient) ? mcCoefficient : 1;
-
-  const coefficientPoints = totalWeight * normalizedReshel * normalizedMc;
-
-  const id = generateId();
-  const now = getCurrentTimestamp();
-
-  await executeMutation(
-    db,
-    `
-    INSERT OR REPLACE INTO results (
-      id, registration_id, contest_id,
-      best_squat, best_bench, best_deadlift,
-      total_weight, coefficient_points,
-      calculated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-    [
-      id, registrationId, registration.contest_id,
-      bestSquat, bestBench, bestDeadlift,
-      totalWeight, coefficientPoints, now
-    ]
-  );
-}
-
-async function updateAllRankings(db: D1Database, contestId: string) {
-  // Update open rankings
-  const openRankings = await executeQuery(
-    db,
-    `
-    SELECT r.id, r.coefficient_points
-    FROM results r
-    JOIN registrations reg ON r.registration_id = reg.id
-    WHERE r.contest_id = ? AND r.is_disqualified = false
-    ORDER BY r.coefficient_points DESC, r.total_weight DESC, reg.bodyweight ASC, r.registration_id ASC
-    `,
-    [contestId]
-  );
-
-  for (let i = 0; i < openRankings.length; i++) {
-    await executeMutation(
-      db,
-      'UPDATE results SET place_open = ? WHERE id = ?',
-      [i + 1, openRankings[i].id]
-    );
-  }
-
-  // Update age class rankings
-  const ageCategories = await executeQuery(
-    db,
-    'SELECT DISTINCT age_category_id FROM registrations WHERE contest_id = ?',
-    [contestId]
-  );
-
-  for (const category of ageCategories) {
-    const ageRankings = await executeQuery(
-      db,
-      `
-      SELECT r.id, r.coefficient_points
-      FROM results r
-      JOIN registrations reg ON r.registration_id = reg.id
-      WHERE r.contest_id = ? AND reg.age_category_id = ? AND r.is_disqualified = false
-      ORDER BY r.coefficient_points DESC, r.total_weight DESC, reg.bodyweight ASC, r.registration_id ASC
-      `,
-      [contestId, category.age_category_id]
-    );
-
-    for (let i = 0; i < ageRankings.length; i++) {
-      await executeMutation(
-        db,
-        'UPDATE results SET place_in_age_class = ? WHERE id = ?',
-        [i + 1, ageRankings[i].id]
-      );
-    }
-  }
-
-  // Update weight class rankings
-  const weightClasses = await executeQuery(
-    db,
-    'SELECT DISTINCT weight_class_id FROM registrations WHERE contest_id = ?',
-    [contestId]
-  );
-
-  for (const weightClass of weightClasses) {
-    const weightRankings = await executeQuery(
-      db,
-      `
-      SELECT r.id, r.coefficient_points
-      FROM results r
-      JOIN registrations reg ON r.registration_id = reg.id
-      WHERE r.contest_id = ? AND reg.weight_class_id = ? AND r.is_disqualified = false
-      ORDER BY r.coefficient_points DESC, r.total_weight DESC, reg.bodyweight ASC, r.registration_id ASC
-      `,
-      [contestId, weightClass.weight_class_id]
-    );
-
-    for (let i = 0; i < weightRankings.length; i++) {
-      await executeMutation(
-        db,
-        'UPDATE results SET place_in_weight_class = ? WHERE id = ?',
-        [i + 1, weightRankings[i].id]
-      );
-    }
-  }
-}
-
 function exportToCsv(rankings: any[]): string {
-  let csv = 'Place,Name,Best Squat,Best Bench,Best Deadlift,Total,Coefficient Points\n';
+  let csv = 'Place,Name,Best Squat,Best Bench,Best Deadlift,Total,Squat Points,Bench Points,Deadlift Points,Coefficient Points\n';
 
   for (const result of rankings) {
-    csv += `${result.place_open || ''},${result.first_name} ${result.last_name},${result.best_squat || 0},${result.best_bench || 0},${result.best_deadlift || 0},${result.total_weight || 0},${result.coefficient_points || 0}\n`;
+    csv += `${result.place_open || ''},${result.first_name} ${result.last_name},${result.best_squat || 0},${result.best_bench || 0},${result.best_deadlift || 0},${result.total_weight || 0},${result.squat_points || 0},${result.bench_points || 0},${result.deadlift_points || 0},${result.coefficient_points || 0}\n`;
   }
 
   return csv;
-}
-
-function getLiftsForDiscipline(discipline: string): Array<'Squat' | 'Bench' | 'Deadlift'> {
-  switch (discipline) {
-    case 'Bench':
-      return ['Bench'];
-    case 'Squat':
-      return ['Squat'];
-    case 'Deadlift':
-      return ['Deadlift'];
-    case 'Powerlifting':
-      return ['Squat', 'Bench', 'Deadlift'];
-    default:
-      return ['Squat', 'Bench', 'Deadlift'];
-  }
 }

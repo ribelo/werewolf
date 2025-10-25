@@ -250,7 +250,7 @@ async function recalculateCompetitorRegistrations(
   const registrations = await executeQuery<{
     id: string;
     contest_id: string;
-    bodyweight: number;
+    bodyweight: number | null;
     age_category_id: string | null;
     weight_class_id: string | null;
     reshel_coefficient: number | null;

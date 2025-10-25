@@ -55,39 +55,39 @@
       "title": "Konfiguracja zawodów",
       "step_label": "Krok",
       "step_connector": "z",
-  "steps": {
-    "basic": "Informacje podstawowe",
-    "basic_hint": "Podaj datę i miejsce rozgrywania zawodów.",
-    "details": "Szczegóły zawodów",
-    "details_hint": "Uzupełnij dane organizatora oraz ewentualne dodatkowe informacje.",
-    "competitors": "Wstępna lista zawodników",
-    "competitors_hint": "Możesz dodać zawodników z wyprzedzeniem, aby przyspieszyć pracę w dniu zawodów.",
-    "attempts": "Podejścia",
-    "attempts_hint": "Skonfiguruj pierwsze podejścia dla każdego zawodnika."
-  },
-  "actions": {
-    "previous": "Wstecz",
-    "next": "Dalej",
-    "submit": "Utwórz zawody",
-    "submitting": "Tworzenie…",
-    "generate_sample": "Wygeneruj przykładowe dane",
-    "generating_sample": "Generowanie przykładowych danych…"
-  },
-  "attempts": {
-    "auto_fill": "Uzupełnij podejścia",
-    "auto_fill_success": "Podejścia zostały uzupełnione.",
-    "auto_fill_error": "Nie udało się uzupełnić podejść.",
-    "submit_error": "Nie udało się zapisać podejść.",
-    "unnamed": "Zawodnik {index}",
-    "empty": "Dodaj co najmniej jednego zawodnika, aby skonfigurować podejścia.",
-    "issues_title": "Wykryte problemy",
-    "issue_missing": "{name}: brak podejścia {event}.",
-    "issue_below_bar": "{name}: podejście {event} jest poniżej wagi gryfu.",
-    "issue_unloadable": "{name}: podejście {event} nie może być załadowane{suggested}.",
-    "competitor_meta": "{gender} • {bodyweight} kg",
-    "issue_badge": "{count, plural, one '{count} problem' few '{count} problemy' many '{count} problemów' other '{count} problemów'}",
-    "suggested_suffix": " (spróbuj {weight})"
-  },
+      "steps": {
+        "basic": "Informacje podstawowe",
+        "basic_hint": "Podaj datę i miejsce rozgrywania zawodów.",
+        "details": "Szczegóły zawodów",
+        "details_hint": "Uzupełnij dane organizatora oraz ewentualne dodatkowe informacje.",
+        "competitors": "Wstępna lista zawodników",
+        "competitors_hint": "Możesz dodać zawodników z wyprzedzeniem, aby przyspieszyć pracę w dniu zawodów.",
+        "attempts": "Podejścia",
+        "attempts_hint": "Skonfiguruj pierwsze podejścia dla każdego zawodnika."
+      },
+      "actions": {
+        "previous": "Wstecz",
+        "next": "Dalej",
+        "submit": "Utwórz zawody",
+        "submitting": "Tworzenie…",
+        "generate_sample": "Wygeneruj przykładowe dane",
+        "generating_sample": "Generowanie przykładowych danych…"
+      },
+      "attempts": {
+        "auto_fill": "Uzupełnij podejścia",
+        "auto_fill_success": "Podejścia zostały uzupełnione.",
+        "auto_fill_error": "Nie udało się uzupełnić podejść.",
+        "submit_error": "Nie udało się zapisać podejść.",
+        "unnamed": "Zawodnik {index}",
+        "empty": "Dodaj co najmniej jednego zawodnika, aby skonfigurować podejścia.",
+        "issues_title": "Wykryte problemy",
+        "issue_missing": "{name}: brak podejścia {event}.",
+        "issue_below_bar": "{name}: podejście {event} jest poniżej wagi gryfu.",
+        "issue_unloadable": "{name}: podejście {event} nie może być załadowane{suggested}.",
+        "competitor_meta": "{gender} • {bodyweight} kg",
+        "issue_badge": "{count, plural, one '{count} problem' few '{count} problemy' many '{count} problemów' other '{count} problemów'}",
+        "suggested_suffix": " (spróbuj {weight})"
+      },
       "fields": {
         "name": {
           "label": "Nazwa zawodów",
@@ -725,6 +725,9 @@
       "age_category_auto_assigned": "Przydzielona automatycznie",
       "age_category_pending": "Zostanie przydzielona po zapisaniu",
       "auto_chip": "AUTO",
+      "tags": "Tagi",
+      "tags_hint": "Dodaj do dodatkowych klasyfikacji",
+      "tags_empty": "Brak tagów dla tych zawodów.",
       "lifts": "Dyscypliny",
       "lifts_hint": "Wybierz co najmniej jeden bój, w którym wystartuje zawodnik.",
       "opening_attempt": "Pierwsze podejście ({lift})"
@@ -1016,7 +1019,21 @@
       "views": {
         "open": "Open",
         "age": "Kategorie wiekowe",
-        "weight": "Kategorie wagowe"
+        "weight": "Kategorie wagowe",
+        "tags": "Tagi"
+      },
+      "filters": {
+        "weights_all": "Wszystkie kategorie wagowe",
+        "weights_female": "Kategorie wagowe kobiet",
+        "weights_male": "Kategorie wagowe mężczyzn",
+        "age": "Kategorie wiekowe",
+        "tags": "Etykiety",
+        "all": "Wszystkie",
+        "open": "Open"
+      },
+      "tags": {
+        "selector_label": "Klasyfikacja tagów",
+        "empty": "Brak skonfigurowanych tagów."
       },
       "loading": "Ładowanie wyników...",
       "empty": "Brak obliczonych wyników.",
@@ -1033,8 +1050,11 @@
         "best_squat": "Najlepszy przysiad",
         "best_bench": "Najlepsze wyciskanie",
         "best_deadlift": "Najlepszy martwy ciąg",
+        "squat_points": "Punkty przysiadu",
+        "bench_points": "Punkty wyciskania",
+        "deadlift_points": "Punkty martwego ciągu",
         "total": "Suma",
-        "points": "Punkty",
+        "points": "Najlepsze punkty",
         "status": "Status"
       },
       "disqualified": "Dyskwalifikacja",
@@ -1180,7 +1200,44 @@
       "events_required": "Wybierz co najmniej jeden bój"
     },
     "toast_saved": "Zawody zaktualizowane.",
-    "toast_failed": "Nie udało się zaktualizować zawodów."
+    "toast_failed": "Nie udało się zaktualizować zawodów.",
+    "tags": {
+      "title": "Tagi",
+      "description": "Konfiguruj tagi zawodów, aby tworzyć dodatkowe klasyfikacje i filtry.",
+      "loading": "Ładowanie tagów...",
+      "empty": "Brak zdefiniowanych tagów.",
+      "mandatory_hint": "Tag Open jest obowiązkowy i nie można go usunąć.",
+      "fields": {
+        "label": "Nazwa tagu",
+        "position": "Kolejność dodania"
+      },
+      "actions": {
+        "reset": "Resetuj",
+        "save": "Zapisz",
+        "saving": "Zapisywanie...",
+        "delete": "Usuń",
+        "deleting": "Usuwanie..."
+      },
+      "new": {
+        "label": "Nazwa nowego tagu",
+        "placeholder": "np. Mundurowi",
+        "add": "Dodaj tag",
+        "saving": "Dodawanie...",
+        "order_hint": "Tagi są wyświetlane w kolejności utworzenia. Nowe pojawiają się na końcu automatycznie."
+      },
+      "validation": {
+        "label_required": "Podaj nazwę tagu.",
+        "no_changes": "Brak zmian do zapisania."
+      },
+      "toast": {
+        "created": "Tag \"{label}\" został dodany.",
+        "updated": "Tag zaktualizowany.",
+        "deleted": "Tag usunięty."
+      },
+      "unknown_error": "Coś poszło nie tak. Spróbuj ponownie.",
+      "confirm_delete": "Usunąć tag \"{label}\"? Zgłoszenia z tym tagiem stracą przypisanie.",
+      "load_failed": "Nie udało się wczytać tagów."
+    }
   },
   "display_table": {
     "head": {

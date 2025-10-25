@@ -57,7 +57,10 @@ export function formatCompetitorName(firstName: string, lastName: string): strin
 /**
  * Format weight with proper units (kg)
  */
-export function formatWeight(weight: number): string {
+export function formatWeight(weight: number | null | undefined, options: { fallback?: string } = {}): string {
+  if (weight === null || weight === undefined || Number.isNaN(weight)) {
+    return options.fallback ?? '—';
+  }
   return `${weight}kg`;
 }
 
@@ -90,7 +93,10 @@ export function formatAge(birthDate: string): number {
 /**
  * Format weight class ID into display text
  */
-export function formatWeightClass(weightClassId: string, weightClasses: WeightClass[]): string {
+export function formatWeightClass(weightClassId: string | null | undefined, weightClasses: WeightClass[]): string {
+  if (!weightClassId) {
+    return '—';
+  }
   const weightClass = weightClasses.find((wc) => wc.id === weightClassId || wc.code === weightClassId);
   return weightClass ? weightClass.name : weightClassId;
 }

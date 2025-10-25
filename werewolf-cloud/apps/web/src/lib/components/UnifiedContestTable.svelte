@@ -395,7 +395,7 @@
           <span class="block leading-tight">{row.age !== null ? row.age : '—'}</span>
         </td>
         <td class="px-3 py-2 text-center">{formatWeight(row.registration.bodyweight)}</td>
-        <td class="px-3 py-2 text-center">{formatWeightClass(row.registration.weightClassId, weightClasses) ?? row.registration.weightClassName ?? '—'}</td>
+        <td class="px-3 py-2 text-center">{row.registration.weightClassName ?? formatWeightClass(row.registration.weightClassId, weightClasses)}</td>
         <td class="px-3 py-2 text-center">{formatAgeClass(row.registration.ageCategoryId, ageCategories) ?? row.registration.ageCategoryName ?? '—'}</td>
         <td class="px-3 py-2 text-center">{formatCoefficient(row.registration.reshelCoefficient)}</td>
         <td class="px-3 py-2 text-center">{formatCoefficient(row.registration.mcculloughCoefficient)}</td>

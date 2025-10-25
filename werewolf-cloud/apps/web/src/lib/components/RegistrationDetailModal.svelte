@@ -1,7 +1,7 @@
 <script lang="ts">
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
-  import { formatCompetitorName, formatWeightClass, formatAgeClass, formatCoefficient } from '$lib/utils';
+  import { formatCompetitorName, formatWeightClass, formatAgeClass, formatCoefficient, formatWeight } from '$lib/utils';
   import type { Registration, WeightClass, AgeCategory } from '$lib/types';
 
   export let registration: Registration;
@@ -55,7 +55,7 @@
       </div>
       <div class="rounded-lg border border-border-color bg-element-bg/60 p-4">
         <p class="text-caption text-text-secondary uppercase tracking-[0.3em] mb-1">{t('contest_detail.registration_detail.fields.bodyweight')}</p>
-        <p class="text-body text-text-primary">{registration.bodyweight ? `${registration.bodyweight.toFixed(1)} kg` : '—'}</p>
+        <p class="text-body text-text-primary">{formatWeight(registration.bodyweight)}</p>
       </div>
       <div class="rounded-lg border border-border-color bg-element-bg/60 p-4">
         <p class="text-caption text-text-secondary uppercase tracking-[0.3em] mb-1">{t('contest_detail.registration_detail.fields.weight_class')}</p>

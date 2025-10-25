@@ -3,6 +3,7 @@ export * from './models/contest';
 export * from './models/contest-state';
 export * from './models/competitor';
 export * from './models/category';
+export * from './models/tag';
 export * from './models/registration';
 export * from './models/result';
 export * from './models/settings';

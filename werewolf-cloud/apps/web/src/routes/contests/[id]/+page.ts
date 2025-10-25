@@ -11,6 +11,7 @@ import type {
   ContestBarWeights,
   BackupSummary,
   ContestCategories,
+  ContestTag,
 } from '$lib/types';
 
 export const load = async ({ params, fetch }) => {
@@ -23,6 +24,7 @@ export const load = async ({ params, fetch }) => {
       apiClient.get<Attempt[]>(`/contests/${contestId}/attempts`, fetch),
       apiClient.get<CurrentAttemptBundle | null>(`/contests/${contestId}/attempts/current`, fetch),
       apiClient.get<ContestCategories>(`/contests/${contestId}/categories`, fetch),
+      apiClient.get<ContestTag[]>(`/contests/${contestId}/tags`, fetch),
       apiClient.get<ContestRankingEntry[]>(`/contests/${contestId}/results/rankings?type=open`, fetch),
       apiClient.get<ContestRankingEntry[]>(`/contests/${contestId}/results/rankings?type=age`, fetch),
       apiClient.get<ContestRankingEntry[]>(`/contests/${contestId}/results/rankings?type=weight`, fetch),
@@ -35,6 +37,7 @@ export const load = async ({ params, fetch }) => {
       PromiseSettledResult<ApiResponse<Attempt[]>>,
       PromiseSettledResult<ApiResponse<CurrentAttemptBundle | null>>,
       PromiseSettledResult<ApiResponse<ContestCategories>>,
+      PromiseSettledResult<ApiResponse<ContestTag[]>>,
       PromiseSettledResult<ApiResponse<ContestRankingEntry[]>>,
       PromiseSettledResult<ApiResponse<ContestRankingEntry[]>>,
       PromiseSettledResult<ApiResponse<ContestRankingEntry[]>>,
@@ -61,12 +64,13 @@ export const load = async ({ params, fetch }) => {
     const attemptsResponse = unwrap(results[2]);
     const currentAttemptResponse = unwrap(results[3]);
     const categoriesResponse = unwrap(results[4]);
-    const openResultsResponse = unwrap(results[5]);
-    const ageResultsResponse = unwrap(results[6]);
-    const weightResultsResponse = unwrap(results[7]);
-    const plateSetsResponse = unwrap(results[8]);
-    const barWeightsResponse = unwrap(results[9]);
-    const backupsResponse = unwrap(results[10]);
+    const tagsResponse = unwrap(results[5]);
+    const openResultsResponse = unwrap(results[6]);
+    const ageResultsResponse = unwrap(results[7]);
+    const weightResultsResponse = unwrap(results[8]);
+    const plateSetsResponse = unwrap(results[9]);
+    const barWeightsResponse = unwrap(results[10]);
+    const backupsResponse = unwrap(results[11]);
 
     const referenceData: ReferenceData = categoriesResponse.data ?? {
       weightClasses: [],
@@ -78,6 +82,7 @@ export const load = async ({ params, fetch }) => {
       || attemptsResponse.error
       || currentAttemptResponse.error
       || categoriesResponse.error
+      || tagsResponse.error
       || openResultsResponse.error
       || ageResultsResponse.error
       || weightResultsResponse.error
@@ -92,6 +97,7 @@ export const load = async ({ params, fetch }) => {
       attempts: attemptsResponse.data ?? [],
       currentAttempt: currentAttemptResponse.data,
       referenceData,
+      contestTags: tagsResponse.data ?? [],
       resultsOpen: openResultsResponse.data ?? [],
       resultsAge: ageResultsResponse.data ?? [],
       resultsWeight: weightResultsResponse.data ?? [],
@@ -110,6 +116,7 @@ export const load = async ({ params, fetch }) => {
       attempts: [],
       currentAttempt: null,
       referenceData: { weightClasses: [], ageCategories: [] },
+      contestTags: [],
       error: message,
       apiBase: apiClient.baseUrl,
       contestId,

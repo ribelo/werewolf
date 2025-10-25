@@ -35,19 +35,21 @@ import type {
     ContestBarWeights,
     BackupSummary,
     ContestCategories,
+    ContestTag,
   } from '$lib/types';
   import { bundleToCurrentAttempt } from '$lib/current-attempt';
   import { _ } from 'svelte-i18n';
   import { get } from 'svelte/store';
+  import { ArrowUpDown, ChevronUp, ChevronDown } from 'lucide-svelte';
   import reshelMenData from '@werewolf/domain/data/reshel-men.json';
   import reshelWomenData from '@werewolf/domain/data/reshel-women.json';
   import mccData from '@werewolf/domain/data/mccullough.json';
   import { browser } from '$app/environment';
 
-  export let data: PageData;
-  export let params: Record<string, string> = {};
+export let data: PageData;
+export let params: Record<string, string> = {};
 
-  $: void params;
+$: void params;
   let {
     contest,
     registrations,
@@ -60,6 +62,7 @@ import type {
     plateSets,
     barWeights,
     backupsSummary,
+    contestTags,
     error,
     apiBase,
     contestId,
@@ -74,6 +77,33 @@ import type {
 
   let weightClasses = referenceData?.weightClasses ?? [];
   let ageCategories = referenceData?.ageCategories ?? [];
+  let contestTagPresets: ContestTag[] = [...(contestTags ?? [])];
+  $: sortedContestTags = [...contestTagPresets].sort((a, b) => {
+    const aTime = Date.parse(a.createdAt);
+    const bTime = Date.parse(b.createdAt);
+    const aValid = Number.isFinite(aTime);
+    const bValid = Number.isFinite(bTime);
+    if (aValid && bValid && aTime !== bTime) {
+      return aTime - bTime;
+    }
+    if (aValid && !bValid) return -1;
+    if (!aValid && bValid) return 1;
+    return a.label.localeCompare(b.label);
+  });
+  $: resultsViewOptions = sortedContestTags.length > 0
+    ? RESULT_VIEWS
+    : RESULT_VIEWS.filter((option) => option.id !== 'tag');
+  $: if (!resultsViewOptions.some((option) => option.id === selectedResultView)) {
+    selectedResultView = 'open';
+  }
+  $: if (selectedResultView === 'tag') {
+    if (!selectedTagForResults || !sortedContestTags.some((tag) => tag.label === selectedTagForResults)) {
+      selectedTagForResults = sortedContestTags[0]?.label ?? null;
+    }
+  }
+  $: if (selectedResultView === 'tag' && selectedTagForResults) {
+    void ensureTagResults(selectedTagForResults);
+  }
   $: weightClasses = ($currentWeightClasses?.length ?? 0) > 0
     ? $currentWeightClasses
     : referenceData?.weightClasses ?? [];
@@ -158,6 +188,9 @@ import type {
     const fallback = tabs.find((tab) => tab.id === 'registrations') ?? tabs[0];
     activeTab = fallback.id;
   }
+  $: hasSquatResults = activeContestLifts.includes('Squat');
+  $: hasBenchResults = activeContestLifts.includes('Bench');
+  $: hasDeadliftResults = activeContestLifts.includes('Deadlift');
 
   let statusLoading: Record<string, boolean> = {};
   let setCurrentLoading: Record<string, boolean> = {};
@@ -200,6 +233,8 @@ import type {
 
   let sortColumn = 'order';
   let sortDirection: 'asc' | 'desc' = 'asc';
+  let resultsSortColumn = 'place';
+  let resultsSortDirection: 'asc' | 'desc' = 'asc';
   let selectedWeightFilter: WeightFilter = 'ALL';
   let weightFilterGroups: {
     femaleOpen: WeightFilterOption;
@@ -245,19 +280,116 @@ import type {
     persistTablePrefs();
   }
 
-  type ResultView = 'open' | 'age' | 'weight';
+  type ResultView = 'open' | 'age' | 'weight' | 'tag';
   const RESULT_VIEWS: Array<{ id: ResultView; labelKey: string }> = [
     { id: 'open', labelKey: 'contest_detail.results.views.open' },
     { id: 'age', labelKey: 'contest_detail.results.views.age' },
     { id: 'weight', labelKey: 'contest_detail.results.views.weight' },
+    { id: 'tag', labelKey: 'contest_detail.results.views.tags' },
   ];
+  let resultsViewOptions: Array<{ id: ResultView; labelKey: string }> = [...RESULT_VIEWS];
   let selectedResultView: ResultView = 'open';
   let openRanking: ContestRankingEntry[] = resultsOpen ?? [];
   let ageRanking: ContestRankingEntry[] = resultsAge ?? [];
   let weightRanking: ContestRankingEntry[] = resultsWeight ?? [];
+  let tagRankingCache: Record<string, ContestRankingEntry[]> = {};
+  let selectedTagForResults: string | null = null;
+  let activeTagFilter: string | 'ALL' = 'ALL';
   let resultsLoading = false;
   let exportingResults = false;
   let resultsError: string | null = null;
+  let resultsRequestToken = 0;
+  let activeWeightGender: 'all' | 'female' | 'male' = 'all';
+  let selectedWeightClassLabel: string | null = null;
+  let selectedAgeCategoryLabel: string | null = null;
+  const trimValue = (value?: string | null): string => (value ?? '').trim();
+
+  $: weightClassGenderMap = new Map<string, 'female' | 'male' | 'unknown'>(
+    weightClasses
+      .map((entry) => {
+        const label = trimValue(entry.name ?? entry.code);
+        if (!label) return null;
+        const genderValue = (entry.gender ?? '').toLowerCase();
+        const gender: 'female' | 'male' | 'unknown' = genderValue.startsWith('f')
+          ? 'female'
+          : genderValue.startsWith('m')
+            ? 'male'
+            : 'unknown';
+        return [label, gender] as const;
+      })
+      .filter(Boolean) as Array<[string, 'female' | 'male' | 'unknown']>
+  );
+
+  $: femaleWeightClassOptions = weightClasses
+    .filter((entry) => (entry.gender ?? '').toLowerCase().startsWith('f'))
+    .slice()
+    .sort((a, b) => (a.sortOrder ?? Number.MAX_SAFE_INTEGER) - (b.sortOrder ?? Number.MAX_SAFE_INTEGER))
+    .map((entry) => ({
+      value: trimValue(entry.name ?? entry.code),
+      label: trimValue(entry.name ?? entry.code),
+    }))
+    .filter((entry) => entry.value);
+
+  $: maleWeightClassOptions = weightClasses
+    .filter((entry) => (entry.gender ?? '').toLowerCase().startsWith('m'))
+    .slice()
+    .sort((a, b) => (a.sortOrder ?? Number.MAX_SAFE_INTEGER) - (b.sortOrder ?? Number.MAX_SAFE_INTEGER))
+    .map((entry) => ({
+      value: trimValue(entry.name ?? entry.code),
+      label: trimValue(entry.name ?? entry.code),
+    }))
+    .filter((entry) => entry.value);
+
+  $: allWeightClassLabels = new Set([
+    ...femaleWeightClassOptions.map((entry) => entry.value),
+    ...maleWeightClassOptions.map((entry) => entry.value),
+  ]);
+
+  $: ageCategoryOptions = ageCategories
+    .slice()
+    .sort((a, b) => (a.sortOrder ?? Number.MAX_SAFE_INTEGER) - (b.sortOrder ?? Number.MAX_SAFE_INTEGER))
+    .map((entry) => {
+      const label = normaliseAgeCategoryLabel(entry.name, entry.code) ?? entry.name ?? entry.code ?? '';
+      return {
+        value: trimValue(entry.name ?? entry.code),
+        label,
+      };
+    })
+    .filter((entry) => entry.value);
+
+  $: ageCategoryValues = new Set(ageCategoryOptions.map((entry) => entry.value));
+
+  $: if (selectedWeightClassLabel && !allWeightClassLabels.has(selectedWeightClassLabel)) {
+    selectedWeightClassLabel = null;
+  }
+  $: {
+    if (activeWeightGender === 'female' && femaleWeightClassOptions.length === 0) {
+      activeWeightGender = 'all';
+      selectedWeightClassLabel = null;
+    } else if (activeWeightGender === 'male' && maleWeightClassOptions.length === 0) {
+      activeWeightGender = 'all';
+      selectedWeightClassLabel = null;
+    }
+  }
+  $: if (selectedAgeCategoryLabel && !ageCategoryValues.has(selectedAgeCategoryLabel)) {
+    selectedAgeCategoryLabel = null;
+  }
+  $: activeTagFilter = selectedResultView === 'tag' && selectedTagForResults ? selectedTagForResults : 'ALL';
+
+  function beginResultsRequest(): number {
+    resultsRequestToken += 1;
+    resultsLoading = true;
+    resultsError = null;
+    return resultsRequestToken;
+  }
+
+  function endResultsRequest(token: number, errorMessage: string | null = null): void {
+    if (token !== resultsRequestToken) {
+      return;
+    }
+    resultsError = errorMessage ?? null;
+    resultsLoading = false;
+  }
 
   let contestPlateSets: ContestPlateSetEntry[] = plateSets ?? [];
   let attemptWeightStep: number = deriveAttemptStep(contestPlateSets);
@@ -556,8 +688,9 @@ import type {
   }
 
   async function reloadResults() {
-    resultsLoading = true;
-    resultsError = null;
+    const requestId = beginResultsRequest();
+    tagRankingCache = {};
+    let errorMessage: string | null = null;
     try {
       const [openResp, ageResp, weightResp] = await Promise.all([
         apiClient.get<ContestRankingEntry[]>(`/contests/${contestId}/results/rankings?type=open`),
@@ -571,30 +704,42 @@ import type {
 
       const respError = openResp.error || ageResp.error || weightResp.error || null;
       if (respError) {
-        resultsError = respError;
+        errorMessage = respError;
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : t('contest_detail.results.reload_failed');
-      resultsError = message;
-      toast.error(message);
+      errorMessage = err instanceof Error ? err.message : t('contest_detail.results.reload_failed');
+      toast.error(errorMessage);
     } finally {
-      resultsLoading = false;
+      endResultsRequest(requestId, errorMessage);
     }
   }
 
-  async function recalcResults() {
-    resultsLoading = true;
+  async function ensureTagResults(tagLabel: string, { force = false }: { force?: boolean } = {}) {
+    if (!browser || !contestId || !tagLabel) {
+      return;
+    }
+    if (!force && tagRankingCache[tagLabel]) {
+      return;
+    }
+    const requestId = beginResultsRequest();
+    let errorMessage: string | null = null;
     try {
-      const response = await apiClient.post(`/contests/${contestId}/results/recalculate`);
+      const response = await apiClient.get<ContestRankingEntry[]>(`/contests/${contestId}/results/rankings?type=tag&tag=${encodeURIComponent(tagLabel)}`);
       if (response.error) {
-        throw new Error(response.error);
+        errorMessage = response.error;
+        tagRankingCache = { ...tagRankingCache, [tagLabel]: [] };
+      } else {
+        tagRankingCache = {
+          ...tagRankingCache,
+          [tagLabel]: response.data ?? [],
+        };
       }
-      toast.success(t('contest_detail.results.toast_recalc_success'));
     } catch (err) {
-      const message = err instanceof Error ? err.message : t('contest_detail.results.toast_recalc_error');
-      toast.error(message);
+      errorMessage = err instanceof Error ? err.message : t('contest_detail.results.reload_failed');
+      toast.error(errorMessage);
     } finally {
-      await reloadResults();
+      const shouldDisplayError = selectedResultView === 'tag' && selectedTagForResults === tagLabel;
+      endResultsRequest(requestId, shouldDisplayError ? errorMessage : null);
     }
   }
 
@@ -901,11 +1046,43 @@ import type {
   $: if (selectedLabelFilter !== 'ALL' && !availableLabelFilters.some((item) => item.id === selectedLabelFilter)) {
         selectedLabelFilter = 'ALL';
       }
-  $: displayedResults = selectedResultView === 'open'
-    ? openRanking
-    : selectedResultView === 'age'
-      ? ageRanking
-      : weightRanking;
+  $: displayedResults = (() => {
+        let baseResults: ContestRankingEntry[] = [];
+        
+        if (selectedResultView === 'open') {
+          baseResults = openRanking;
+        }
+        if (selectedResultView === 'age') {
+          if (!selectedAgeCategoryLabel) {
+            baseResults = ageRanking;
+          } else {
+            baseResults = ageRanking.filter(
+              (entry) => trimValue(entry.ageCategory) === selectedAgeCategoryLabel
+            );
+          }
+        }
+        if (selectedResultView === 'weight') {
+          let results = weightRanking;
+          if (activeWeightGender !== 'all') {
+            results = results.filter((entry) => {
+              const className = trimValue(entry.weightClass);
+              const gender = weightClassGenderMap.get(className) ?? 'unknown';
+              return gender === activeWeightGender;
+            });
+          }
+          if (selectedWeightClassLabel) {
+            results = results.filter(
+              (entry) => trimValue(entry.weightClass) === selectedWeightClassLabel
+            );
+          }
+          baseResults = results;
+        }
+        if (selectedResultView === 'tag') {
+          baseResults = selectedTagForResults ? (tagRankingCache[selectedTagForResults] ?? []) : [];
+        }
+        
+        return sortResultsData(baseResults, resultsSortColumn, resultsSortDirection);
+      })();
   $: resultsSummaryLabel = t('contest_detail.results.entries', { count: displayedResults.length });
   $: hasPlateSets = contestPlateSets.length > 0;
   $: attemptWeightStep = deriveAttemptStep(contestPlateSets);
@@ -1057,6 +1234,50 @@ import type {
     }
   }
 
+  async function refreshContestTags() {
+    if (!contestId) return;
+    try {
+      const response = await apiClient.get<ContestTag[]>(`/contests/${contestId}/tags`);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      contestTagPresets = response.data ?? [];
+    } catch (error) {
+      console.error('Failed to refresh contest tags', error);
+    }
+  }
+
+  function selectResultWeight(gender: 'female' | 'male', value: string | null) {
+    selectedResultView = 'weight';
+    activeWeightGender = gender;
+    selectedWeightClassLabel = value;
+  }
+
+  function selectAllResultWeights() {
+    selectedResultView = 'weight';
+    activeWeightGender = 'all';
+    selectedWeightClassLabel = null;
+  }
+
+  function selectResultAge(value: string | null) {
+    selectedResultView = 'age';
+    selectedAgeCategoryLabel = value;
+  }
+
+  function selectResultTag(label: string) {
+    selectedResultView = 'tag';
+    selectedTagForResults = label;
+  }
+
+  function selectAllResultTags() {
+    selectedTagForResults = null;
+    selectedResultView = 'open';
+  }
+
+  function resultFilterButtonClass(active: boolean): string {
+    return `px-3 py-1 text-xxs ${active ? 'btn-primary text-black' : 'btn-secondary'}`;
+  }
+
   async function openContestEditor() {
     if (!contest) return;
     try {
@@ -1071,8 +1292,11 @@ import type {
         data: {
           contest,
           initialEvents: initial,
+          contestTags: sortedContestTags,
         },
       });
+
+      await refreshContestTags();
 
       if (result) {
         const mergedContest: ContestDetail = { ...contest, ...result };
@@ -1154,6 +1378,98 @@ import type {
       sortColumn = column;
       sortDirection = 'asc';
     }
+  }
+
+  function handleResultsSortChange(column: string) {
+    if (resultsSortColumn === column) {
+      resultsSortDirection = resultsSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      resultsSortColumn = column;
+      resultsSortDirection = 'asc';
+    }
+  }
+
+  function isResultsSorted(column: string): boolean {
+    return resultsSortColumn === column;
+  }
+
+  function resultsSortIndicatorIcon(column: string): typeof ArrowUpDown | typeof ChevronUp | typeof ChevronDown | null {
+    if (!isResultsSorted(column)) return ArrowUpDown;
+    return resultsSortDirection === 'asc' ? ChevronUp : ChevronDown;
+  }
+
+  function resultsAriaSort(column: string): 'none' | 'ascending' | 'descending' {
+    if (!isResultsSorted(column)) return 'none';
+    return resultsSortDirection === 'asc' ? 'ascending' : 'descending';
+  }
+
+  function sortResultsData(results: ContestRankingEntry[], column: string, direction: 'asc' | 'desc'): ContestRankingEntry[] {
+    const sorted = [...results].sort((a, b) => {
+      let comparison = 0;
+      
+      switch (column) {
+        case 'place':
+          const placeA = getResultPlace(a, selectedResultView) ?? Number.MAX_SAFE_INTEGER;
+          const placeB = getResultPlace(b, selectedResultView) ?? Number.MAX_SAFE_INTEGER;
+          comparison = placeA - placeB;
+          break;
+          
+        case 'lifter':
+          const nameA = `${a.lastName} ${a.firstName}`.toLowerCase();
+          const nameB = `${b.lastName} ${b.firstName}`.toLowerCase();
+          comparison = nameA.localeCompare(nameB);
+          break;
+          
+        case 'category':
+          const categoryA = getResultCategory(a, selectedResultView).toLowerCase();
+          const categoryB = getResultCategory(b, selectedResultView).toLowerCase();
+          comparison = categoryA.localeCompare(categoryB);
+          break;
+          
+        case 'bestSquat':
+          const squatA = a.bestSquat ?? 0;
+          const squatB = b.bestSquat ?? 0;
+          comparison = squatA - squatB;
+          break;
+          
+        case 'bestBench':
+          const benchA = a.bestBench ?? 0;
+          const benchB = b.bestBench ?? 0;
+          comparison = benchA - benchB;
+          break;
+          
+        case 'bestDeadlift':
+          const deadliftA = a.bestDeadlift ?? 0;
+          const deadliftB = b.bestDeadlift ?? 0;
+          comparison = deadliftA - deadliftB;
+          break;
+          
+        case 'squatPoints':
+          const squatPointsA = a.squatPoints ?? 0;
+          const squatPointsB = b.squatPoints ?? 0;
+          comparison = squatPointsA - squatPointsB;
+          break;
+          
+        case 'benchPoints':
+          const benchPointsA = a.benchPoints ?? 0;
+          const benchPointsB = b.benchPoints ?? 0;
+          comparison = benchPointsA - benchPointsB;
+          break;
+          
+        case 'deadliftPoints':
+          const deadliftPointsA = a.deadliftPoints ?? 0;
+          const deadliftPointsB = b.deadliftPoints ?? 0;
+          comparison = deadliftPointsA - deadliftPointsB;
+          break;
+          
+        default:
+          return 0;
+      }
+      
+      return direction === 'desc' ? -comparison : comparison;
+    });
+    
+    return sorted;
   }
 
   async function handleAttemptWeightChangeInline(payload: {
@@ -1506,6 +1822,7 @@ import type {
             liveCurrentAttempt = normaliseCurrentAttempt({ ...liveCurrentAttempt, ...attempt });
           }
         }
+        void reloadResults();
         break;
       }
       case 'attempt.deleted': {
@@ -1517,6 +1834,7 @@ import type {
         if (liveCurrentAttempt?.id === attemptId) {
           liveCurrentAttempt = null;
         }
+        void reloadResults();
         break;
       }
       case 'attempt.currentSet': {
@@ -1542,6 +1860,7 @@ import type {
           registrations = [...registrations, registration];
           contestStore.addRegistration(registration);
         }
+        void reloadResults();
         break;
       }
       case 'registration.deleted': {
@@ -1554,6 +1873,7 @@ import type {
         contestStore.removeRegistration(registrationId);
         liveAttempts = liveAttempts.filter((attempt) => attempt.registrationId !== registrationId);
         contestStore.setAttempts(liveAttempts);
+        void reloadResults();
         break;
       }
       case 'heartbeat':
@@ -1610,6 +1930,7 @@ import type {
           contestId,
           weightClasses,
           ageCategories,
+          contestTags: sortedContestTags,
           lifts: contestLifts,
         },
       });
@@ -1671,6 +1992,7 @@ import type {
           contestId,
           weightClasses,
           ageCategories,
+          contestTags: sortedContestTags,
           lifts: contestLifts,
         },
       });
@@ -2063,34 +2385,6 @@ import type {
                 <p class="text-body text-text-secondary">{$_('contest_detail.results.subtitle')}</p>
               </div>
               <div class="flex flex-wrap items-center gap-2">
-                {#each RESULT_VIEWS as option}
-                  <button
-                    type="button"
-                    class={`px-3 py-1 text-xxs uppercase tracking-[0.35em] border-2 transition ${
-                      selectedResultView === option.id
-                        ? 'bg-primary-red text-black border-primary-red'
-                        : 'border-border-color text-text-secondary hover:border-primary-red hover:text-text-primary'
-                    }`}
-                    on:click={() => (selectedResultView = option.id)}
-                    disabled={resultsLoading && selectedResultView === option.id}
-                  >
-                    {$_(option.labelKey)}
-                  </button>
-                {/each}
-              </div>
-            </header>
-
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <span class="text-caption uppercase tracking-[0.35em] text-text-secondary">{resultsSummaryLabel}</span>
-              <div class="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  class="btn-secondary px-3 py-1 text-xxs"
-                  on:click={recalcResults}
-                  disabled={resultsLoading}
-                >
-                  {resultsLoading ? $_('contest_detail.results.recalculating') : $_('contest_detail.results.recalculate')}
-                </button>
                 <button
                   type="button"
                   class="btn-secondary px-3 py-1 text-xxs"
@@ -2108,6 +2402,136 @@ import type {
                   {exportingResults ? $_('contest_detail.results.exporting') : $_('contest_detail.results.export_json')}
                 </button>
               </div>
+            </header>
+
+            <div class="space-y-2">
+              {#if weightClasses.length > 0}
+                <div
+                  class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2"
+                  role="group"
+                  aria-label={$_('contest_detail.results.filters.weights_all')}
+                >
+                  <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.results.filters.weights_all')}</span>
+                  <button
+                    type="button"
+                    class={resultFilterButtonClass(selectedResultView === 'weight' && activeWeightGender === 'all' && !selectedWeightClassLabel)}
+                    on:click={selectAllResultWeights}
+                  >
+                    {$_('contest_detail.results.filters.all')}
+                  </button>
+                </div>
+              {/if}
+
+              {#if femaleWeightClassOptions.length > 0}
+                <div
+                  class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2"
+                  role="group"
+                  aria-label={$_('contest_detail.results.filters.weights_female')}
+                >
+                  <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.results.filters.weights_female')}</span>
+                  <button
+                    type="button"
+                    class={resultFilterButtonClass(selectedResultView === 'weight' && activeWeightGender === 'female' && !selectedWeightClassLabel)}
+                    on:click={() => selectResultWeight('female', null)}
+                  >
+                    {$_('contest_detail.results.filters.open')}
+                  </button>
+                  {#each femaleWeightClassOptions as option}
+                    <button
+                      type="button"
+                      class={resultFilterButtonClass(selectedResultView === 'weight' && activeWeightGender === 'female' && selectedWeightClassLabel === option.value)}
+                      on:click={() => selectResultWeight('female', option.value)}
+                    >
+                      {option.label}
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+
+              {#if maleWeightClassOptions.length > 0}
+                <div
+                  class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2"
+                  role="group"
+                  aria-label={$_('contest_detail.results.filters.weights_male')}
+                >
+                  <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.results.filters.weights_male')}</span>
+                  <button
+                    type="button"
+                    class={resultFilterButtonClass(selectedResultView === 'weight' && activeWeightGender === 'male' && !selectedWeightClassLabel)}
+                    on:click={() => selectResultWeight('male', null)}
+                  >
+                    {$_('contest_detail.results.filters.open')}
+                  </button>
+                  {#each maleWeightClassOptions as option}
+                    <button
+                      type="button"
+                      class={resultFilterButtonClass(selectedResultView === 'weight' && activeWeightGender === 'male' && selectedWeightClassLabel === option.value)}
+                      on:click={() => selectResultWeight('male', option.value)}
+                    >
+                      {option.label}
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+
+              {#if ageCategoryOptions.length > 0}
+                <div
+                  class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2"
+                  role="group"
+                  aria-label={$_('contest_detail.results.filters.age')}
+                >
+                  <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.results.filters.age')}</span>
+                  <button
+                    type="button"
+                    class={resultFilterButtonClass(selectedResultView === 'age' && !selectedAgeCategoryLabel)}
+                    on:click={() => selectResultAge(null)}
+                  >
+                    {$_('contest_detail.results.filters.all')}
+                  </button>
+                  {#each ageCategoryOptions as option}
+                    <button
+                      type="button"
+                      class={resultFilterButtonClass(selectedResultView === 'age' && selectedAgeCategoryLabel === option.value)}
+                      on:click={() => selectResultAge(option.value)}
+                    >
+                      {option.label}
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+
+              {#if sortedContestTags.length > 0}
+                <div
+                  class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2"
+                  role="group"
+                  aria-label={$_('contest_detail.results.filters.tags')}
+                >
+                  <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.results.filters.tags')}</span>
+                  <button
+                    type="button"
+                    class={resultFilterButtonClass(activeTagFilter === 'ALL')}
+                    on:click={selectAllResultTags}
+                  >
+                    {$_('contest_detail.results.filters.all')}
+                  </button>
+                  {#each sortedContestTags as tag}
+                    <button
+                      type="button"
+                      class={resultFilterButtonClass(activeTagFilter === tag.label)}
+                      on:click={() => selectResultTag(tag.label)}
+                      disabled={resultsLoading && activeTagFilter === tag.label}
+                    >
+                      {tag.label}
+                    </button>
+                  {/each}
+                </div>
+              {:else}
+                <p class="text-caption text-text-secondary">{$_('contest_detail.results.tags.empty')}</p>
+              {/if}
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <span class="text-caption uppercase tracking-[0.35em] text-text-secondary">{resultsSummaryLabel}</span>
             </div>
 
             {#if resultsError}
@@ -2123,21 +2547,124 @@ import type {
                 <table class="min-w-full text-left text-sm text-text-secondary">
                   <thead class="bg-element-bg text-label">
                     <tr>
-                      <th class="px-4 py-3">{$_('contest_detail.results.columns.place')}</th>
-                      <th class="px-4 py-3">{$_('contest_detail.results.columns.lifter')}</th>
+                      <th 
+                        class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
+                        role="columnheader"
+                        aria-sort={resultsAriaSort('place')}
+                        on:click={() => handleResultsSortChange('place')}
+                      >
+                        <div class="flex items-center gap-1">
+                          <span>{$_('contest_detail.results.columns.place')}</span>
+                          <span aria-hidden="true">{#if resultsSortIndicatorIcon('place')}<svelte:component this={resultsSortIndicatorIcon('place')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
+                        </div>
+                      </th>
+                      <th 
+                        class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
+                        role="columnheader"
+                        aria-sort={resultsAriaSort('lifter')}
+                        on:click={() => handleResultsSortChange('lifter')}
+                      >
+                        <div class="flex items-center gap-1">
+                          <span>{$_('contest_detail.results.columns.lifter')}</span>
+                          <span aria-hidden="true">{#if resultsSortIndicatorIcon('lifter')}<svelte:component this={resultsSortIndicatorIcon('lifter')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
+                        </div>
+                      </th>
                       {#if selectedResultView !== 'open'}
-                        <th class="px-4 py-3">
-                          {selectedResultView === 'age'
-                            ? $_('contest_detail.results.columns.age_category')
-                            : $_('contest_detail.results.columns.weight_class')}
+                        <th 
+                          class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
+                          role="columnheader"
+                          aria-sort={resultsAriaSort('category')}
+                          on:click={() => handleResultsSortChange('category')}
+                        >
+                          <div class="flex items-center gap-1">
+                            <span>
+                              {selectedResultView === 'age'
+                                ? $_('contest_detail.results.columns.age_category')
+                                : $_('contest_detail.results.columns.weight_class')}
+                            </span>
+                            <span aria-hidden="true">{#if resultsSortIndicatorIcon('category')}<svelte:component this={resultsSortIndicatorIcon('category')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
+                          </div>
                         </th>
                       {/if}
-                      <th class="px-4 py-3">{$_('contest_detail.results.columns.best_squat')}</th>
-                      <th class="px-4 py-3">{$_('contest_detail.results.columns.best_bench')}</th>
-                      <th class="px-4 py-3">{$_('contest_detail.results.columns.best_deadlift')}</th>
-                      <th class="px-4 py-3">{$_('contest_detail.results.columns.total')}</th>
-                      <th class="px-4 py-3">{$_('contest_detail.results.columns.points')}</th>
-                      <th class="px-4 py-3 text-right">{$_('contest_detail.results.columns.status')}</th>
+                      {#if hasSquatResults}
+                        <th 
+                          class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
+                          role="columnheader"
+                          aria-sort={resultsAriaSort('bestSquat')}
+                          on:click={() => handleResultsSortChange('bestSquat')}
+                        >
+                          <div class="flex items-center gap-1">
+                            <span>{$_('contest_detail.results.columns.best_squat')}</span>
+                            <span aria-hidden="true">{#if resultsSortIndicatorIcon('bestSquat')}<svelte:component this={resultsSortIndicatorIcon('bestSquat')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
+                          </div>
+                        </th>
+                      {/if}
+                      {#if hasBenchResults}
+                        <th 
+                          class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
+                          role="columnheader"
+                          aria-sort={resultsAriaSort('bestBench')}
+                          on:click={() => handleResultsSortChange('bestBench')}
+                        >
+                          <div class="flex items-center gap-1">
+                            <span>{$_('contest_detail.results.columns.best_bench')}</span>
+                            <span aria-hidden="true">{#if resultsSortIndicatorIcon('bestBench')}<svelte:component this={resultsSortIndicatorIcon('bestBench')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
+                          </div>
+                        </th>
+                      {/if}
+                      {#if hasDeadliftResults}
+                        <th 
+                          class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
+                          role="columnheader"
+                          aria-sort={resultsAriaSort('bestDeadlift')}
+                          on:click={() => handleResultsSortChange('bestDeadlift')}
+                        >
+                          <div class="flex items-center gap-1">
+                            <span>{$_('contest_detail.results.columns.best_deadlift')}</span>
+                            <span aria-hidden="true">{#if resultsSortIndicatorIcon('bestDeadlift')}<svelte:component this={resultsSortIndicatorIcon('bestDeadlift')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
+                          </div>
+                        </th>
+                      {/if}
+                      {#if hasSquatResults}
+                        <th 
+                          class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
+                          role="columnheader"
+                          aria-sort={resultsAriaSort('squatPoints')}
+                          on:click={() => handleResultsSortChange('squatPoints')}
+                        >
+                          <div class="flex items-center gap-1">
+                            <span>{$_('contest_detail.results.columns.squat_points')}</span>
+                            <span aria-hidden="true">{#if resultsSortIndicatorIcon('squatPoints')}<svelte:component this={resultsSortIndicatorIcon('squatPoints')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
+                          </div>
+                        </th>
+                      {/if}
+                      {#if hasBenchResults}
+                        <th 
+                          class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
+                          role="columnheader"
+                          aria-sort={resultsAriaSort('benchPoints')}
+                          on:click={() => handleResultsSortChange('benchPoints')}
+                        >
+                          <div class="flex items-center gap-1">
+                            <span>{$_('contest_detail.results.columns.bench_points')}</span>
+                            <span aria-hidden="true">{#if resultsSortIndicatorIcon('benchPoints')}<svelte:component this={resultsSortIndicatorIcon('benchPoints')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
+                          </div>
+                        </th>
+                      {/if}
+                      {#if hasDeadliftResults}
+                        <th 
+                          class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
+                          role="columnheader"
+                          aria-sort={resultsAriaSort('deadliftPoints')}
+                          on:click={() => handleResultsSortChange('deadliftPoints')}
+                        >
+                          <div class="flex items-center gap-1">
+                            <span>{$_('contest_detail.results.columns.deadlift_points')}</span>
+                            <span aria-hidden="true">{#if resultsSortIndicatorIcon('deadliftPoints')}<svelte:component this={resultsSortIndicatorIcon('deadliftPoints')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
+                          </div>
+                        </th>
+                      {/if}
+
                     </tr>
                   </thead>
                   <tbody>
@@ -2156,24 +2683,25 @@ import type {
                         {#if selectedResultView !== 'open'}
                           <td class="px-4 py-3 text-text-secondary">{getResultCategory(result, selectedResultView)}</td>
                         {/if}
-                        <td class="px-4 py-3 text-text-secondary">{formatLift(result.bestSquat)}</td>
-                        <td class="px-4 py-3 text-text-secondary">{formatLift(result.bestBench)}</td>
-                        <td class="px-4 py-3 text-text-secondary">{formatLift(result.bestDeadlift)}</td>
-                        <td class="px-4 py-3 text-text-secondary">{formatLift(result.totalWeight)}</td>
-                        <td class="px-4 py-3 text-text-secondary">{formatPoints(result.coefficientPoints)}</td>
-                        <td class="px-4 py-3 text-right">
-                          {#if result.isDisqualified}
-                            <span class="inline-flex items-center rounded bg-status-error px-2 py-1 text-xxs font-semibold text-black">
-                              {$_('contest_detail.results.disqualified')}
-                            </span>
-                          {:else if result.brokeRecord}
-                            <span class="inline-flex items-center rounded bg-primary-red px-2 py-1 text-xxs font-semibold text-black">
-                              {$_('contest_detail.results.record')}
-                            </span>
-                          {:else}
-                            <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.results.status_ok')}</span>
-                          {/if}
-                        </td>
+                        {#if hasSquatResults}
+                          <td class="px-4 py-3 text-text-secondary">{formatLift(result.bestSquat)}</td>
+                        {/if}
+                        {#if hasBenchResults}
+                          <td class="px-4 py-3 text-text-secondary">{formatLift(result.bestBench)}</td>
+                        {/if}
+                        {#if hasDeadliftResults}
+                          <td class="px-4 py-3 text-text-secondary">{formatLift(result.bestDeadlift)}</td>
+                        {/if}
+                        {#if hasSquatResults}
+                          <td class="px-4 py-3 text-text-secondary">{formatPoints(result.squatPoints)}</td>
+                        {/if}
+                        {#if hasBenchResults}
+                          <td class="px-4 py-3 text-text-secondary">{formatPoints(result.benchPoints)}</td>
+                        {/if}
+                        {#if hasDeadliftResults}
+                          <td class="px-4 py-3 text-text-secondary">{formatPoints(result.deadliftPoints)}</td>
+                        {/if}
+
                       </tr>
                     {/each}
                   </tbody>

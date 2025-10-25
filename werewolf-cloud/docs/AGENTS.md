@@ -23,3 +23,13 @@
 - Run the dev stack (`bun run dev` in repo root, `PUBLIC_API_BASE=http://127.0.0.1:8787 bun run dev` in `apps/web`) and confirm `/settings` renders without console errors.
 
 Keep this file current when flows change so the next agent can jump in without re-discovering these conventions.
+
+## Quality Bar
+- Always implement the best long-term design you can justify; do not ship stopgaps, throw-aways, or "temporary" workarounds.
+- Do not preserve backward compatibility for legacy data or APIs unless explicitly requested.
+- Optimize for clarity, maintainability, performance over minimizing churn.
+- When adding a component, build it as if it will stay.
+- Complexity is a demon we must fight with
+- Best code is no code
+- Simplicity is the key
+- The only thing worse than no documentation is wrong or outdated documentation

@@ -5,6 +5,7 @@ import contests from './contests';
 import competitors from './competitors';
 import plateSets from './plate-sets';
 import categories from './categories';
+import tags from './tags';
 import reference from './reference';
 import registrations, { contestRegistrations } from './registrations';
 import results, { contestResults } from './results';
@@ -28,5 +29,6 @@ export const registerRoutes = (app: Hono<WerewolfEnvironment>) => {
   app.route('/reference', reference);
   app.route('/contests/:contestId/platesets', plateSets);
   app.route('/contests/:contestId/categories', categories);
+  app.route('/contests/:contestId/tags', tags);
   app.route('/', live);
 };

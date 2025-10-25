@@ -725,6 +725,9 @@
       "age_category_auto_assigned": "Assigned automatically",
       "age_category_pending": "Will be assigned after saving",
       "auto_chip": "AUTO",
+      "tags": "Tags",
+      "tags_hint": "Include in extra rankings",
+      "tags_empty": "No tags configured for this contest.",
       "lifts": "Disciplines",
       "lifts_hint": "Select at least one lift this competitor will perform.",
       "opening_attempt": "Opening attempt ({lift})"
@@ -1016,7 +1019,21 @@
       "views": {
         "open": "Overall",
         "age": "Age classes",
-        "weight": "Weight classes"
+        "weight": "Weight classes",
+        "tags": "Tags"
+      },
+      "filters": {
+        "weights_all": "All weight classes",
+        "weights_female": "Female weight classes",
+        "weights_male": "Male weight classes",
+        "age": "Age categories",
+        "tags": "Tags",
+        "all": "All",
+        "open": "Open"
+      },
+      "tags": {
+        "selector_label": "Tag standings",
+        "empty": "No custom tags configured."
       },
       "loading": "Loading results...",
       "empty": "No results calculated yet.",
@@ -1033,8 +1050,11 @@
         "best_squat": "Best squat",
         "best_bench": "Best bench",
         "best_deadlift": "Best deadlift",
+        "squat_points": "Squat points",
+        "bench_points": "Bench points",
+        "deadlift_points": "Deadlift points",
         "total": "Total",
-        "points": "Points",
+        "points": "Best points",
         "status": "Status"
       },
       "disqualified": "Disqualified",
@@ -1132,7 +1152,7 @@
         "description": "Define age divisions for the competition."
       },
       "weight": {
-        "title": "Weight Classes", 
+        "title": "Weight Classes",
         "description": "Configure weight classes by gender."
       },
       "columns": {
@@ -1180,7 +1200,44 @@
       "events_required": "Select at least one event"
     },
     "toast_saved": "Contest updated.",
-    "toast_failed": "Failed to update contest."
+    "toast_failed": "Failed to update contest.",
+    "tags": {
+      "title": "Tags",
+      "description": "Configure contest tags to drive additional leaderboards and filters.",
+      "loading": "Loading tags…",
+      "empty": "No tags configured yet.",
+      "mandatory_hint": "The Open tag is required and cannot be removed.",
+      "fields": {
+        "label": "Tag label",
+        "position": "Creation order"
+      },
+      "actions": {
+        "reset": "Reset",
+        "save": "Save",
+        "saving": "Saving…",
+        "delete": "Remove",
+        "deleting": "Removing…"
+      },
+      "new": {
+        "label": "New tag name",
+        "placeholder": "e.g. Uniformed",
+        "add": "Add tag",
+        "saving": "Adding…",
+        "order_hint": "Tags are listed in creation order. Newly added tags appear at the end automatically."
+      },
+      "validation": {
+        "label_required": "Enter a tag name.",
+        "no_changes": "No changes to save."
+      },
+      "toast": {
+        "created": "Tag \"{label}\" added.",
+        "updated": "Tag updated.",
+        "deleted": "Tag removed."
+      },
+      "unknown_error": "Something went wrong. Try again.",
+      "confirm_delete": "Remove the tag \"{label}\"? Registrations assigned to it will lose the tag.",
+      "load_failed": "Couldn't load contest tags."
+    }
   },
   "display_table": {
     "head": {

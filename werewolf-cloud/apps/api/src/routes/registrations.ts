@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
+import type { D1Database } from '@cloudflare/workers-types';
 import type { WerewolfEnvironment } from '../env';
 import { executeQuery, executeQueryOne, executeMutation, generateId, getCurrentTimestamp, convertKeysToCamelCase } from '../utils/database';
 import type { LiftType } from '@werewolf/domain';
@@ -15,9 +16,11 @@ import {
   ensureLiftsForContest,
 } from '../utils/lifts';
 import { mapRegistrationRow } from '../utils/registration-map';
+import { listContestTags, seedContestTags, MANDATORY_TAG_LABEL } from '../utils/tags';
 import { getReshelCoefficient, getMcCulloughCoefficient } from '../services/coefficients';
 import { getContestAgeDescriptors, getContestWeightDescriptors, seedContestCategories } from '../utils/category-templates';
 import { publishEvent } from '../live/publish';
+import { calculateRegistrationResults, updateAllRankings } from '../services/results';
 
 export const contestRegistrations = new Hono<WerewolfEnvironment>();
 
@@ -38,11 +41,61 @@ const LIFTS_JSON_SELECT = `
       ) AS lifts
 `;
 
-function serialiseLabels(labels: unknown): string {
-  if (Array.isArray(labels)) {
-    return JSON.stringify(labels);
+function serialiseLabels(labels: readonly string[] | null | undefined): string {
+  if (!labels || labels.length === 0) {
+    return '[]';
   }
-  return '[]';
+  return JSON.stringify(labels);
+}
+
+
+interface ContestTagDescriptor {
+  label: string;
+  order: number;
+}
+
+async function loadContestTagDescriptors(db: D1Database, contestId: string): Promise<ContestTagDescriptor[]> {
+  await seedContestTags(db, contestId);
+  const rows = await listContestTags(db, contestId);
+  return rows.map((row, index) => ({
+    label: row.label,
+    order: index,
+  }));
+}
+
+function normaliseLabelsForContest(
+  labels: readonly string[] | undefined,
+  descriptors: ContestTagDescriptor[],
+  { defaultToMandatory }: { defaultToMandatory: boolean },
+): string[] {
+  const allowed = new Map(descriptors.map((descriptor) => [descriptor.label, descriptor.order] as const));
+  const unique: string[] = [];
+
+  for (const raw of labels ?? []) {
+    const value = typeof raw === 'string' ? raw.trim() : '';
+    if (!value) continue;
+    if (!allowed.has(value)) {
+      throw new Error(`Unknown tag: ${value}`);
+    }
+    if (!unique.includes(value)) {
+      unique.push(value);
+    }
+  }
+
+  if (unique.length === 0 && defaultToMandatory && allowed.has(MANDATORY_TAG_LABEL)) {
+    unique.push(MANDATORY_TAG_LABEL);
+  }
+
+  const ordered = [...unique].sort((a, b) => {
+    const aOrder = allowed.get(a) ?? Number.MAX_SAFE_INTEGER;
+    const bOrder = allowed.get(b) ?? Number.MAX_SAFE_INTEGER;
+    if (aOrder !== bOrder) {
+      return aOrder - bOrder;
+    }
+    return a.localeCompare(b);
+  });
+
+  return ordered;
 }
 
 const bulkFlightSchema = z.object({
@@ -116,8 +169,18 @@ contestRegistrations.post('/', zValidator('json', registrationCreateSchema), asy
 
   const contestLifts = contestLiftsFromRow(contest);
   const selectedLifts = ensureLiftsForContest(input.lifts, contestLifts);
+  const bodyweight = typeof input.bodyweight === 'number' ? input.bodyweight : null;
 
   await seedContestCategories(db, contestId);
+
+  const tagDescriptors = await loadContestTagDescriptors(db, contestId);
+  let labels: string[];
+  try {
+    labels = normaliseLabelsForContest(input.labels, tagDescriptors, { defaultToMandatory: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Invalid tags provided';
+    return c.json({ data: null, error: message, requestId: c.get('requestId') }, 400);
+  }
 
   const [ageDescriptors, weightDescriptors] = await Promise.all([
     getContestAgeDescriptors(db, contestId),
@@ -125,17 +188,27 @@ contestRegistrations.post('/', zValidator('json', registrationCreateSchema), asy
   ]);
 
   const [reshelCoefficient, mcculloughCoefficient] = await Promise.all([
-    getReshelCoefficient(db, competitor.gender, input.bodyweight),
+    bodyweight !== null ? getReshelCoefficient(db, competitor.gender, bodyweight) : Promise.resolve(null),
     getMcCulloughCoefficient(db, competitor.birth_date, contest.date),
   ]);
 
   const resolvedAgeCode = determineAgeCategory(competitor.birth_date, contest.date, ageDescriptors);
   const ageCategory = ageDescriptors.find((descriptor) => descriptor.code === resolvedAgeCode) ?? ageDescriptors[0];
 
-  const resolvedWeightCode = determineWeightClass(input.bodyweight, competitor.gender, weightDescriptors);
-  const weightClass = weightDescriptors.find((descriptor) => descriptor.code === resolvedWeightCode) ?? weightDescriptors[0];
+  let weightClassId: string | null = null;
+  if (typeof input.weightClassId === 'string' && input.weightClassId.length > 0) {
+    const providedWeightClass = weightDescriptors.find((descriptor) => descriptor.id === input.weightClassId);
+    if (!providedWeightClass) {
+      return c.json({ data: null, error: 'Invalid weight class selection', requestId: c.get('requestId') }, 400);
+    }
+    weightClassId = providedWeightClass.id;
+  } else if (bodyweight !== null && weightDescriptors.length > 0) {
+    const resolvedWeightCode = determineWeightClass(bodyweight, competitor.gender, weightDescriptors);
+    const descriptor = weightDescriptors.find((entry) => entry.code === resolvedWeightCode) ?? weightDescriptors[0] ?? null;
+    weightClassId = descriptor?.id ?? null;
+  }
 
-  if (!ageCategory || !weightClass) {
+  if (!ageCategory) {
     return c.json({ data: null, error: 'Contest categories not configured', requestId: c.get('requestId') }, 400);
   }
 
@@ -157,16 +230,16 @@ contestRegistrations.post('/', zValidator('json', registrationCreateSchema), asy
       contestId,
       competitorId,
       ageCategory.id,
-      weightClass.id,
-      input.bodyweight,
+      weightClassId,
+      bodyweight,
       reshelCoefficient,
       mcculloughCoefficient,
-      input.rackHeightSquat || null,
-      input.rackHeightBench || null,
+      input.rackHeightSquat ?? null,
+      input.rackHeightBench ?? null,
       now,
       normaliseFlightCode(input.flightCode) ?? 'A',
       input.flightOrder ?? null,
-      serialiseLabels(input.labels),
+      serialiseLabels(labels),
     ]
   );
 
@@ -355,18 +428,39 @@ registrations.patch('/:registrationId/labels', zValidator('json', labelsSchema),
   const registrationId = c.req.param('registrationId');
   const { labels } = c.req.valid('json');
 
+  const existing = await executeQueryOne<{ contest_id: string }>(
+    db,
+    'SELECT contest_id FROM registrations WHERE id = ?',
+    [registrationId]
+  );
+
+  if (!existing) {
+    return c.json({ data: null, error: 'Registration not found', requestId: c.get('requestId') }, 404);
+  }
+
+  const tagDescriptors = await loadContestTagDescriptors(db, existing.contest_id);
+  let normalised: string[];
+  try {
+    normalised = normaliseLabelsForContest(labels, tagDescriptors, { defaultToMandatory: false });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Invalid tags provided';
+    return c.json({ data: null, error: message, requestId: c.get('requestId') }, 400);
+  }
+
   const result = await executeMutation(
     db,
     'UPDATE registrations SET labels = ? WHERE id = ?',
-    [serialiseLabels(labels), registrationId]
+    [serialiseLabels(normalised), registrationId]
   );
 
   if (result.changes === 0) {
     return c.json({ data: null, error: 'Registration not found', requestId: c.get('requestId') }, 404);
   }
 
+  await updateAllRankings(db, existing.contest_id);
+
   return c.json({
-    data: { labels },
+    data: { labels: normalised },
     error: null,
     requestId: c.get('requestId'),
   });
@@ -381,10 +475,11 @@ registrations.patch('/:registrationId', zValidator('json', registrationUpdateSch
   const existing = await executeQueryOne<{
     contest_id: string;
     competitor_id: string;
-    bodyweight: number;
+    bodyweight: number | null;
+    weight_class_id: string | null;
   }>(
     db,
-    'SELECT contest_id, competitor_id, bodyweight FROM registrations WHERE id = ?',
+    'SELECT contest_id, competitor_id, bodyweight, weight_class_id FROM registrations WHERE id = ?',
     [registrationId]
   );
 
@@ -394,9 +489,23 @@ registrations.patch('/:registrationId', zValidator('json', registrationUpdateSch
 
   const nextContestId = input.contestId ?? existing.contest_id;
   const nextCompetitorId = input.competitorId ?? existing.competitor_id;
-  const nextBodyweight = input.bodyweight ?? existing.bodyweight;
+  const bodyweightProvided = Object.prototype.hasOwnProperty.call(input, 'bodyweight');
+  const nextBodyweight = bodyweightProvided
+    ? (typeof input.bodyweight === 'number' ? input.bodyweight : null)
+    : existing.bodyweight;
 
   await seedContestCategories(db, nextContestId);
+
+  const tagDescriptors = await loadContestTagDescriptors(db, nextContestId);
+  let nextLabels: string[] | null = null;
+  if (input.labels !== undefined) {
+    try {
+      nextLabels = normaliseLabelsForContest(input.labels, tagDescriptors, { defaultToMandatory: false });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Invalid tags provided';
+      return c.json({ data: null, error: message, requestId: c.get('requestId') }, 400);
+    }
+  }
 
   const competitor = await executeQueryOne(
     db,
@@ -442,17 +551,29 @@ registrations.patch('/:registrationId', zValidator('json', registrationUpdateSch
     : determineAgeCategory(competitor.birth_date, contest.date, ageDescriptors);
   const ageCategory = ageDescriptors.find((descriptor) => descriptor.code === resolvedAgeCode) ?? ageDescriptors[0];
 
-  const resolvedWeightCode = input.weightClassId
-    ? weightDescriptors.find((descriptor) => descriptor.id === input.weightClassId)?.code ?? undefined
-    : determineWeightClass(nextBodyweight, competitor.gender, weightDescriptors);
-  const weightClass = weightDescriptors.find((descriptor) => descriptor.code === resolvedWeightCode) ?? weightDescriptors[0];
+  let weightClassId: string | null = existing.weight_class_id ?? null;
+  if (typeof input.weightClassId === 'string' && input.weightClassId.length > 0) {
+    const provided = weightDescriptors.find((descriptor) => descriptor.id === input.weightClassId);
+    if (!provided) {
+      return c.json({ data: null, error: 'Invalid weight class selection', requestId: c.get('requestId') }, 400);
+    }
+    weightClassId = provided.id;
+  } else if (bodyweightProvided && nextBodyweight === null) {
+    weightClassId = null;
+  } else if (nextBodyweight !== null && weightDescriptors.length > 0) {
+    const resolvedWeightCode = determineWeightClass(nextBodyweight, competitor.gender, weightDescriptors);
+    const descriptor = weightDescriptors.find((entry) => entry.code === resolvedWeightCode) ?? weightDescriptors[0] ?? null;
+    weightClassId = descriptor?.id ?? null;
+  }
 
-  if (!ageCategory || !weightClass) {
+  if (!ageCategory) {
     return c.json({ data: null, error: 'Contest categories not configured', requestId: c.get('requestId') }, 400);
   }
 
   const [recalculatedReshel, recalculatedMcCullough] = await Promise.all([
-    getReshelCoefficient(db, competitor.gender, nextBodyweight),
+    nextBodyweight !== null
+      ? getReshelCoefficient(db, competitor.gender, nextBodyweight)
+      : Promise.resolve(null),
     getMcCulloughCoefficient(db, competitor.birth_date, contest.date),
   ]);
 
@@ -467,7 +588,7 @@ registrations.patch('/:registrationId', zValidator('json', registrationUpdateSch
     updates.push('competitor_id = ?');
     params.push(nextCompetitorId);
   }
-  if (input.bodyweight !== undefined) {
+  if (bodyweightProvided) {
     updates.push('bodyweight = ?');
     params.push(nextBodyweight);
   }
@@ -500,16 +621,19 @@ registrations.patch('/:registrationId', zValidator('json', registrationUpdateSch
   }
   if (input.labels !== undefined) {
     updates.push('labels = ?');
-    params.push(serialiseLabels(input.labels));
+    params.push(serialiseLabels(nextLabels));
   }
 
   updates.push('age_category_id = ?');
   params.push(ageCategory.id);
 
   updates.push('weight_class_id = ?');
-  params.push(weightClass.id);
+  params.push(weightClassId);
 
-  const nextReshel = input.reshelCoefficient ?? recalculatedReshel;
+  const nextReshel =
+    input.reshelCoefficient !== undefined
+      ? input.reshelCoefficient
+      : recalculatedReshel;
   const nextMcCullough = input.mcculloughCoefficient ?? recalculatedMcCullough;
 
   updates.push('reshel_coefficient = ?');
@@ -533,6 +657,12 @@ registrations.patch('/:registrationId', zValidator('json', registrationUpdateSch
   if (liftsChanged || input.lifts !== undefined || input.contestId !== undefined) {
     await replaceRegistrationLifts(db, registrationId, nextLifts);
     await removeAttemptsForInactiveLifts(c.env, nextContestId, db, registrationId, nextLifts);
+  }
+
+  await calculateRegistrationResults(db, registrationId);
+  const affectedContestIds = new Set<string>([existing.contest_id, nextContestId]);
+  for (const contestIdentifier of affectedContestIds) {
+    await updateAllRankings(db, contestIdentifier);
   }
 
   const registration = await executeQueryOne(
@@ -598,6 +728,13 @@ registrations.delete('/:registrationId', async (c) => {
   if ((result.changes ?? 0) === 0) {
     return c.json({ data: null, error: 'Registration not found', requestId: c.get('requestId') }, 404);
   }
+
+  await executeMutation(
+    db,
+    'DELETE FROM results WHERE registration_id = ?',
+    [registrationId]
+  );
+  await updateAllRankings(db, existing.contest_id);
 
   await publishEvent(c.env, existing.contest_id, {
     type: 'registration.deleted',

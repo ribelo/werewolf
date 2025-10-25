@@ -6,6 +6,7 @@ import type { WerewolfEnvironment, WerewolfBindings } from '../env';
 import { executeQuery, executeQueryOne, executeMutation, generateId, getCurrentTimestamp, convertKeysToCamelCase } from '../utils/database';
 import { DEFAULT_PLATE_SET, getPlateColor } from '../utils/settings-helpers';
 import { seedContestCategories } from '../utils/category-templates';
+import { seedContestTags } from '../utils/tags';
 import { publishEvent } from '../live/publish';
 import {
   contestLiftsFromRow,
@@ -114,6 +115,7 @@ contests.post('/', zValidator('json', contestCreateSchema), async (c) => {
   // Create default plate sets for the contest
   await createDefaultPlateSets(db, id);
   await seedContestCategories(db, id);
+  await seedContestTags(db, id);
 
   const contest = await executeQueryOne(
     db,

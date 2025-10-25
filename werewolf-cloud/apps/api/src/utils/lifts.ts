@@ -3,6 +3,7 @@ import { resolveContestLifts, ensureLiftsWithinContest, ALL_LIFTS } from '@werew
 import { executeMutation, executeQuery } from './database';
 import { publishEvent } from '../live/publish';
 import type { WerewolfBindings } from '../env';
+import { calculateRegistrationResults, updateAllRankings } from '../services/results';
 
 export function contestLiftsFromRow(contest: { discipline?: string | null; competition_type?: string | null }): LiftType[] {
   return resolveContestLifts({
@@ -64,6 +65,8 @@ export async function removeAttemptsForInactiveLifts(
     }
 
     await executeMutation(db, 'DELETE FROM attempts WHERE registration_id = ?', [registrationId]);
+    await calculateRegistrationResults(db, registrationId);
+    await updateAllRankings(db, contestId);
 
     for (const attempt of removed) {
       await publishEvent(env, contestId, {
@@ -105,6 +108,8 @@ export async function removeAttemptsForInactiveLifts(
     `,
     params
   );
+  await calculateRegistrationResults(db, registrationId);
+  await updateAllRankings(db, contestId);
 
   for (const attempt of removedAttempts) {
     await publishEvent(env, contestId, {

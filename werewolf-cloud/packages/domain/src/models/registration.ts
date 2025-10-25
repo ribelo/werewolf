@@ -8,6 +8,8 @@ const flightCodeSchema = z
   .regex(/^[A-Za-z]$/)
   .transform((value) => value.toUpperCase());
 
+const bodyweightSchema = z.number().positive().nullable();
+
 export const registrationSchema = z.object({
   id: z.string().uuid(),
   contestId: z.string().uuid(),
@@ -15,7 +17,7 @@ export const registrationSchema = z.object({
   ageCategoryId: z.string().min(1).optional(),
   weightClassId: z.string().min(1).optional(),
   gender: genderSchema.optional(),
-  bodyweight: z.number().positive(),
+  bodyweight: bodyweightSchema,
   reshelCoefficient: z.number().nullable().optional(),
   mcculloughCoefficient: z.number().nullable().optional(),
   rackHeightSquat: z.number().int().nullable().optional(),
@@ -29,22 +31,25 @@ export const registrationSchema = z.object({
 
 export type Registration = z.infer<typeof registrationSchema>;
 
-export const registrationCreateSchema = registrationSchema.pick({
-  competitorId: true,
-  bodyweight: true,
-  reshelCoefficient: true,
-  mcculloughCoefficient: true,
-  rackHeightSquat: true,
-  rackHeightBench: true,
-  ageCategoryId: true,
-  weightClassId: true,
-  flightCode: true,
-  flightOrder: true,
-  labels: true,
-}).extend({
-  contestId: z.string().uuid().optional(),
-  lifts: registrationSchema.shape.lifts.optional(),
-});
+export const registrationCreateSchema = registrationSchema
+  .pick({
+    competitorId: true,
+    bodyweight: true,
+    reshelCoefficient: true,
+    mcculloughCoefficient: true,
+    rackHeightSquat: true,
+    rackHeightBench: true,
+    ageCategoryId: true,
+    weightClassId: true,
+    flightCode: true,
+    flightOrder: true,
+    labels: true,
+  })
+  .extend({
+    contestId: z.string().uuid().optional(),
+    lifts: registrationSchema.shape.lifts.optional(),
+    bodyweight: bodyweightSchema.optional(),
+  });
 
 export type RegistrationCreateInput = z.infer<typeof registrationCreateSchema>;
 

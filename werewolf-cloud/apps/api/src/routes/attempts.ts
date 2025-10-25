@@ -10,6 +10,7 @@ import { attemptUpsertSchema, attemptResultUpdateSchema, attemptStatusSchema, li
 import { ALL_LIFTS } from '@werewolf/domain/services/lifts';
 import { getAttemptWithRelations, buildCurrentAttemptPayload } from '../services/attempts';
 import { buildPlatePlan } from '../services/plate-plan';
+import { calculateRegistrationResults, updateAllRankings } from '../services/results';
 
 const FLOAT_EPSILON = 1e-6;
 
@@ -199,6 +200,11 @@ registrationAttempts.post('/', zValidator('json', attemptUpsertSchema), async (c
       `,
       [id, registrationId, input.liftType, input.attemptNumber, input.weight, getCurrentTimestamp(), getCurrentTimestamp()]
     );
+  }
+
+  if (contestId) {
+    await calculateRegistrationResults(db, registrationId);
+    await updateAllRankings(db, contestId);
   }
 
   // Broadcast attempt upserted with full attempt payload
@@ -641,10 +647,19 @@ attempts.patch('/:attemptId/result', zValidator('json', attemptResultUpdateSchem
   // Find contestId to broadcast to appropriate room
   const contestRow = await executeQueryOne(
     db,
-    `SELECT r.contest_id as contestId FROM attempts a JOIN registrations r ON a.registration_id = r.id WHERE a.id = ?`,
+    `SELECT r.contest_id as contestId, a.registration_id as registrationId FROM attempts a JOIN registrations r ON a.registration_id = r.id WHERE a.id = ?`,
     [attemptId]
   );
   const contestId = contestRow?.contestId ? String(contestRow.contestId) : undefined;
+  const registrationId = contestRow?.registrationId ? String(contestRow.registrationId) : undefined;
+
+  if (registrationId) {
+    await calculateRegistrationResults(db, registrationId);
+  }
+  if (contestId) {
+    await updateAllRankings(db, contestId);
+  }
+
   const updatedAttempt = await getAttemptWithRelations(db, attemptId, contestId);
   if (contestId) {
     await publishEvent(c.env, contestId, {

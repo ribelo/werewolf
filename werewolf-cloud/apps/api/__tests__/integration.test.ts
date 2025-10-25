@@ -139,33 +139,92 @@ describe('Werewolf API – integration (Miniflare + D1)', () => {
     expect(competitorRes.status).toBe(201);
     const competitorId = (await competitorRes.json()).data.id as string;
 
-  const registrationRes = await app.request(`http://localhost/contests/${contestId}/registrations`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contestId,
-      competitorId,
-      bodyweight: 93.4,
-    }),
-  }, env);
+    const registrationRes = await app.request(`http://localhost/contests/${contestId}/registrations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contestId,
+        competitorId,
+        bodyweight: 93.4,
+      }),
+    }, env);
 
-  expect(registrationRes.status).toBe(201);
-  const registrationBody = await registrationRes.json();
-  expect(registrationBody.data).toMatchObject({
-    competitorId,
-    contestId,
-    ageCategoryId: expect.any(String),
-    weightClassId: expect.any(String),
-    ageCategoryName: expect.any(String),
-    weightClassName: expect.any(String),
-    reshelCoefficient: expect.any(Number),
-    mcculloughCoefficient: expect.any(Number),
+    expect(registrationRes.status).toBe(201);
+    const registrationBody = await registrationRes.json();
+    expect(registrationBody.data).toMatchObject({
+      competitorId,
+      contestId,
+      ageCategoryId: expect.any(String),
+      weightClassId: expect.any(String),
+      ageCategoryName: expect.any(String),
+      weightClassName: expect.any(String),
+      reshelCoefficient: expect.any(Number),
+      mcculloughCoefficient: expect.any(Number),
+    });
+
+    expect(registrationBody.data.ageCategoryName).toBe('Senior (24-39)');
+    expect(registrationBody.data.weightClassName).toBe('Do 95 kg');
+    expect(registrationBody.data.reshelCoefficient).toBeCloseTo(0.945, 3);
+    expect(registrationBody.data.mcculloughCoefficient).toBeCloseTo(1.0, 3);
   });
 
-  expect(registrationBody.data.ageCategoryName).toBe('Senior (24-39)');
-  expect(registrationBody.data.weightClassName).toBe('Do 95 kg');
-  expect(registrationBody.data.reshelCoefficient).toBeCloseTo(0.945, 3);
-  expect(registrationBody.data.mcculloughCoefficient).toBeCloseTo(1.0, 3);
+  it('allows creating a registration without bodyweight and classifies once provided', async () => {
+    const contestRes = await createContest(app, env, {
+      name: 'Pending Weigh-In',
+      date: '2025-08-15',
+      location: 'Poznań',
+      discipline: 'Powerlifting',
+    });
+    const contestId = (await contestRes.json()).data.id as string;
+
+    const competitorRes = await app.request('http://localhost/competitors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        firstName: 'Mikołaj',
+        lastName: 'Testowy',
+        birthDate: '2009-05-20',
+        gender: 'Male',
+      }),
+    }, env);
+    expect(competitorRes.status).toBe(201);
+    const competitorId = (await competitorRes.json()).data.id as string;
+
+    const registrationRes = await app.request(`http://localhost/contests/${contestId}/registrations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        competitorId,
+      }),
+    }, env);
+
+    expect(registrationRes.status).toBe(201);
+    const registrationBody = await registrationRes.json();
+    expect(registrationBody.data).toMatchObject({
+      competitorId,
+      contestId,
+      bodyweight: null,
+      weightClassId: null,
+      weightClassName: null,
+      reshelCoefficient: null,
+    });
+    expect(registrationBody.data.ageCategoryId).toEqual(expect.any(String));
+
+    const registrationId = registrationBody.data.id as string;
+
+    const updateRes = await app.request(`http://localhost/registrations/${registrationId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bodyweight: 84.5,
+      }),
+    }, env);
+
+    expect(updateRes.status).toBe(200);
+    const updatedBody = await updateRes.json();
+    expect(updatedBody.data?.bodyweight).toBe(84.5);
+    expect(updatedBody.data?.weightClassName).toBe('Do 95 kg');
+    expect(updatedBody.data?.reshelCoefficient).toBeGreaterThan(0);
   });
 
   it('enforces per-registration lift selections', async () => {
@@ -531,6 +590,21 @@ describe('Werewolf API – integration (Miniflare + D1)', () => {
       discipline: 'Powerlifting',
     });
     const contestId = (await contestRes.json()).data.id as string;
+
+    const uniformedTagRes = await app.request(`http://localhost/contests/${contestId}/tags`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label: 'uniformed', sortOrder: 1 }),
+    }, env);
+    expect(uniformedTagRes.status).toBe(201);
+
+    const vipTagRes = await app.request(`http://localhost/contests/${contestId}/tags`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label: 'vip', sortOrder: 2 }),
+    }, env);
+    expect(vipTagRes.status).toBe(201);
+
 
     const competitorRes = await app.request('http://localhost/competitors', {
       method: 'POST',
@@ -1174,6 +1248,17 @@ CREATE TABLE contests (
     active_flight TEXT
 );
 
+CREATE TABLE contest_tags (
+    id TEXT PRIMARY KEY,
+    contest_id TEXT NOT NULL,
+    label TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX contest_tags_contest_label_idx
+    ON contest_tags (contest_id, label);
+
 CREATE TABLE competitors (
     id TEXT PRIMARY KEY,
     first_name TEXT NOT NULL,
@@ -1195,8 +1280,8 @@ CREATE TABLE registrations (
     contest_id TEXT NOT NULL,
     competitor_id TEXT NOT NULL,
     age_category_id TEXT NOT NULL,
-    weight_class_id TEXT NOT NULL,
-    bodyweight REAL NOT NULL,
+    weight_class_id TEXT,
+    bodyweight REAL,
     reshel_coefficient REAL,
     mccullough_coefficient REAL,
     rack_height_squat INTEGER,
@@ -1240,6 +1325,9 @@ CREATE TABLE results (
     best_deadlift REAL DEFAULT 0,
     total_weight REAL NOT NULL DEFAULT 0,
     coefficient_points REAL NOT NULL DEFAULT 0,
+    squat_points REAL NOT NULL DEFAULT 0,
+    bench_points REAL NOT NULL DEFAULT 0,
+    deadlift_points REAL NOT NULL DEFAULT 0,
     place_open INTEGER,
     place_in_age_class INTEGER,
     place_in_weight_class INTEGER,
@@ -1354,6 +1442,7 @@ async function resetDatabase(db: D1Database) {
     'mccullough_coefficients',
     'contest_weight_classes',
     'contest_age_categories',
+    'contest_tags',
     'competitors',
     'contests',
     'settings'
