@@ -380,13 +380,24 @@ $: void params;
     resultsLoading = false;
   }
 
-  let contestPlateSets: ContestPlateSetEntry[] = plateSets ?? [];
-  let attemptWeightStep: number = deriveAttemptStep(contestPlateSets);
-  let contestBarWeights: ContestBarWeights | null = barWeights ?? null;
-  let mensBarWeightSetting: number | null = contestBarWeights?.mensBarWeight ?? contest?.mensBarWeight ?? null;
-  let womensBarWeightSetting: number | null = contestBarWeights?.womensBarWeight ?? contest?.womensBarWeight ?? null;
-  let clampWeightSetting: number | null = contestBarWeights?.clampWeight ?? contest?.clampWeight ?? 2.5;
-  let globalBackups: BackupSummary | null = backupsSummary ?? null;
+let contestPlateSets: ContestPlateSetEntry[] = plateSets ?? [];
+let attemptWeightStep: number = deriveAttemptStep(contestPlateSets);
+let contestBarWeights: ContestBarWeights | null = barWeights ?? null;
+let mensBarWeightSetting: number | null = contestBarWeights?.mensBarWeight ?? contest?.mensBarWeight ?? null;
+let womensBarWeightSetting: number | null = contestBarWeights?.womensBarWeight ?? contest?.womensBarWeight ?? null;
+let clampWeightSetting: number | null = contestBarWeights?.clampWeight ?? contest?.clampWeight ?? 2.5;
+let globalBackups: BackupSummary | null = backupsSummary ?? null;
+
+let previousContestBarWeights: ContestBarWeights | null = contestBarWeights;
+let previousContestDetail: ContestDetail | null | undefined = contest;
+
+$: if (contestBarWeights !== previousContestBarWeights || contest !== previousContestDetail) {
+  previousContestBarWeights = contestBarWeights;
+  previousContestDetail = contest;
+  mensBarWeightSetting = contestBarWeights?.mensBarWeight ?? contest?.mensBarWeight ?? null;
+  womensBarWeightSetting = contestBarWeights?.womensBarWeight ?? contest?.womensBarWeight ?? null;
+  clampWeightSetting = contestBarWeights?.clampWeight ?? contest?.clampWeight ?? 2.5;
+}
 
   // Plates & bar weights editing helpers
   let newPlateWeight: number | null = null;
@@ -976,9 +987,6 @@ $: void params;
 
         return base;
       })();
-  $: mensBarWeightSetting = contestBarWeights?.mensBarWeight ?? contest?.mensBarWeight ?? null;
-  $: womensBarWeightSetting = contestBarWeights?.womensBarWeight ?? contest?.womensBarWeight ?? null;
-  $: clampWeightSetting = contestBarWeights?.clampWeight ?? contest?.clampWeight ?? 2.5;
   $: unifiedRows = buildUnifiedRows({
         registrations,
         attempts: liveAttempts,
@@ -1272,9 +1280,53 @@ $: void params;
     return `px-3 py-1 text-xxs ${active ? 'btn-primary text-black' : 'btn-secondary'}`;
   }
 
+  $: registrationWeightSelectionLabel = (() => {
+    if (selectedWeightFilter === 'ALL') {
+      return t('contest_detail.registrations.filters.weight_button_all');
+    }
+    if (selectedWeightFilter === 'FEMALE_OPEN') {
+      return `${t('contest_detail.registrations.filters.sex_female')} ${t('contest_detail.registrations.filters.open')}`;
+    }
+    if (selectedWeightFilter === 'MALE_OPEN') {
+      return `${t('contest_detail.registrations.filters.sex_male')} ${t('contest_detail.registrations.filters.open')}`;
+    }
+    const femaleMatch = femaleWeightFilters.find((option) => option.id === selectedWeightFilter);
+    if (femaleMatch) {
+      return `${t('contest_detail.registrations.filters.sex_female')} ${femaleMatch.label}`;
+    }
+    const maleMatch = maleWeightFilters.find((option) => option.id === selectedWeightFilter);
+    if (maleMatch) {
+      return `${t('contest_detail.registrations.filters.sex_male')} ${maleMatch.label}`;
+    }
+    const fallback = availableWeightFilters.find((option) => option.id === selectedWeightFilter);
+    return fallback?.label ?? t('contest_detail.registrations.filters.weight_button_all');
+  })();
+
+  $: registrationAgeSelectionLabel = (() => {
+    const match = availableAgeFilters.find((option) => option.id === selectedAgeFilter);
+    return match?.label ?? t('contest_detail.registrations.filters.age_button_all');
+  })();
+
+  $: registrationLabelSelectionLabel = (() => {
+    const match = availableLabelFilters.find((option) => option.id === selectedLabelFilter);
+    return match?.label ?? t('contest_detail.registrations.filters.labels_button_all');
+  })();
+
+  $: hasRegistrationFiltersActive =
+    selectedWeightFilter !== 'ALL' || selectedAgeFilter !== 'ALL' || selectedLabelFilter !== 'ALL';
+
+  function clearRegistrationFilters() {
+    selectedWeightFilter = 'ALL';
+    selectedAgeFilter = 'ALL';
+    selectedLabelFilter = 'ALL';
+    closeRegistrationFilterPopover();
+  }
+
   let openResultFilter: 'weight' | 'age' | 'tags' | null = null;
+  let openRegistrationFilter: 'weight' | 'age' | 'labels' | null = null;
 
   function toggleResultFilterPopover(target: 'weight' | 'age' | 'tags') {
+    openRegistrationFilter = null;
     openResultFilter = openResultFilter === target ? null : target;
   }
 
@@ -1282,13 +1334,24 @@ $: void params;
     openResultFilter = null;
   }
 
+  function toggleRegistrationFilterPopover(target: 'weight' | 'age' | 'labels') {
+    openResultFilter = null;
+    openRegistrationFilter = openRegistrationFilter === target ? null : target;
+  }
+
+  function closeRegistrationFilterPopover() {
+    openRegistrationFilter = null;
+  }
+
   function handleWindowClick() {
     openResultFilter = null;
+    openRegistrationFilter = null;
   }
 
   function handleWindowKeydown(event: KeyboardEvent) {
     if (event.key === 'Escape') {
       openResultFilter = null;
+      openRegistrationFilter = null;
     }
   }
 
@@ -2410,6 +2473,169 @@ $: void params;
 
               </div>
             </header>
+            <div class="flex flex-wrap items-center gap-2">
+              {#if femaleWeightFilters.length > 0 || maleWeightFilters.length > 0}
+                <div class="relative" on:click|stopPropagation>
+                  <button
+                    type="button"
+                    class={`${resultFilterButtonClass(selectedWeightFilter !== 'ALL')} flex min-w-[190px] items-center justify-between gap-3`}
+                    on:click|stopPropagation={() => toggleRegistrationFilterPopover('weight')}
+                  >
+                    <div class="flex flex-col text-left leading-tight">
+                      <span class="font-semibold">{$_('contest_detail.registrations.filters.weight_button')}</span>
+                      <span class="text-text-secondary">{registrationWeightSelectionLabel}</span>
+                    </div>
+                    <ChevronDown
+                      class={`h-3.5 w-3.5 transition-transform ${openRegistrationFilter === 'weight' ? 'rotate-180' : ''}`}
+                      aria-hidden="true"
+                    />
+                  </button>
+                  {#if openRegistrationFilter === 'weight'}
+                    <div
+                      class="absolute left-0 top-full z-40 mt-2 w-72 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
+                      on:click|stopPropagation
+                    >
+                      <div class="space-y-4">
+                        <button
+                          type="button"
+                          class={`${resultFilterButtonClass(selectedWeightFilter === 'ALL')} w-full justify-start`}
+                          on:click={() => {
+                            selectWeightFilter('ALL');
+                            closeRegistrationFilterPopover();
+                          }}
+                        >
+                          {$_('contest_detail.results.filters.all')}
+                        </button>
+                        {#if femaleWeightFilters.length > 0}
+                          <div>
+                            <p class="mb-2 text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_female')}</p>
+                            <div class="grid grid-cols-2 gap-2">
+                              {#each femaleWeightFilters as filter}
+                                <button
+                                  type="button"
+                                  class={`${resultFilterButtonClass(selectedWeightFilter === filter.id)} w-full`}
+                                  on:click={() => {
+                                    selectWeightFilter(filter.id);
+                                    closeRegistrationFilterPopover();
+                                  }}
+                                >
+                                  {filter.label}
+                                </button>
+                              {/each}
+                            </div>
+                          </div>
+                        {/if}
+                        {#if maleWeightFilters.length > 0}
+                          <div>
+                            <p class="mb-2 text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_male')}</p>
+                            <div class="grid grid-cols-2 gap-2">
+                              {#each maleWeightFilters as filter}
+                                <button
+                                  type="button"
+                                  class={`${resultFilterButtonClass(selectedWeightFilter === filter.id)} w-full`}
+                                  on:click={() => {
+                                    selectWeightFilter(filter.id);
+                                    closeRegistrationFilterPopover();
+                                  }}
+                                >
+                                  {filter.label}
+                                </button>
+                              {/each}
+                            </div>
+                          </div>
+                        {/if}
+                      </div>
+                    </div>
+                  {/if}
+                </div>
+              {/if}
+
+              <div class="relative" on:click|stopPropagation>
+                <button
+                  type="button"
+                  class={`${resultFilterButtonClass(selectedAgeFilter !== 'ALL')} flex min-w-[170px] items-center justify-between gap-3`}
+                  on:click|stopPropagation={() => toggleRegistrationFilterPopover('age')}
+                >
+                  <div class="flex flex-col text-left leading-tight">
+                    <span class="font-semibold">{$_('contest_detail.registrations.filters.age_button')}</span>
+                    <span class="text-text-secondary">{registrationAgeSelectionLabel}</span>
+                  </div>
+                  <ChevronDown
+                    class={`h-3.5 w-3.5 transition-transform ${openRegistrationFilter === 'age' ? 'rotate-180' : ''}`}
+                    aria-hidden="true"
+                  />
+                </button>
+                {#if openRegistrationFilter === 'age'}
+                  <div
+                    class="absolute left-0 top-full z-40 mt-2 w-60 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
+                    on:click|stopPropagation
+                  >
+                    <div class="grid max-h-52 grid-cols-2 gap-2 overflow-y-auto pr-1">
+                      {#each availableAgeFilters as filter}
+                        <button
+                          type="button"
+                          class={`${resultFilterButtonClass(selectedAgeFilter === filter.id)} w-full`}
+                          on:click={() => {
+                            selectAgeFilter(filter.id);
+                            closeRegistrationFilterPopover();
+                          }}
+                        >
+                          {filter.label}
+                        </button>
+                      {/each}
+                    </div>
+                  </div>
+                {/if}
+              </div>
+
+              <div class="relative" on:click|stopPropagation>
+                <button
+                  type="button"
+                  class={`${resultFilterButtonClass(selectedLabelFilter !== 'ALL')} flex min-w-[170px] items-center justify-between gap-3`}
+                  on:click|stopPropagation={() => toggleRegistrationFilterPopover('labels')}
+                >
+                  <div class="flex flex-col text-left leading-tight">
+                    <span class="font-semibold">{$_('contest_detail.registrations.filters.labels_button')}</span>
+                    <span class="text-text-secondary">{registrationLabelSelectionLabel}</span>
+                  </div>
+                  <ChevronDown
+                    class={`h-3.5 w-3.5 transition-transform ${openRegistrationFilter === 'labels' ? 'rotate-180' : ''}`}
+                    aria-hidden="true"
+                  />
+                </button>
+                {#if openRegistrationFilter === 'labels'}
+                  <div
+                    class="absolute left-0 top-full z-40 mt-2 w-60 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
+                    on:click|stopPropagation
+                  >
+                    <div class="grid max-h-52 grid-cols-2 gap-2 overflow-y-auto pr-1">
+                      {#each availableLabelFilters as filter}
+                        <button
+                          type="button"
+                          class={`${resultFilterButtonClass(selectedLabelFilter === filter.id)} w-full`}
+                          on:click={() => {
+                            selectLabelFilter(filter.id);
+                            closeRegistrationFilterPopover();
+                          }}
+                        >
+                          {filter.label}
+                        </button>
+                      {/each}
+                    </div>
+                  </div>
+                {/if}
+              </div>
+
+              {#if hasRegistrationFiltersActive}
+                <button
+                  type="button"
+                  class="ml-auto text-xxs text-text-secondary underline decoration-dotted decoration-1 underline-offset-4"
+                  on:click={clearRegistrationFilters}
+                >
+                  {$_('contest_detail.registrations.filters.clear')}
+                </button>
+              {/if}
+            </div>
             {#if registrations.length === 0}
               <div class="text-center py-8 text-text-secondary">{$_('contest_detail.registrations.empty')}</div>
             {:else if filteredRows.length === 0}
@@ -2490,7 +2716,7 @@ $: void params;
                   </button>
                   {#if openResultFilter === 'weight'}
                     <div
-                      class="absolute left-0 top-full z-20 mt-2 w-72 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
+                      class="absolute left-0 top-full z-40 mt-2 w-72 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
                       on:click|stopPropagation
                     >
                       <div class="space-y-4">
@@ -2591,7 +2817,7 @@ $: void params;
                   </button>
                   {#if openResultFilter === 'age'}
                     <div
-                      class="absolute left-0 top-full z-20 mt-2 w-64 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
+                      class="absolute left-0 top-full z-40 mt-2 w-64 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
                       on:click|stopPropagation
                     >
                       <div class="space-y-3">
@@ -2642,7 +2868,7 @@ $: void params;
                 </button>
                 {#if openResultFilter === 'tags'}
                   <div
-                    class="absolute left-0 top-full z-20 mt-2 w-60 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
+                    class="absolute left-0 top-full z-40 mt-2 w-60 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
                     on:click|stopPropagation
                   >
                     {#if sortedContestTags.length > 0}
@@ -2986,72 +3212,171 @@ $: void params;
       {:else if activeTab === 'squat' && activeContestLifts.includes('Squat')}
         <section class="space-y-4">
           <div class="card space-y-6">
-            <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h3 class="text-h3 text-text-primary">{$_('contest_detail.registrations.title')}</h3>
-
-              </div>
-              <div class="flex flex-wrap items-center gap-3">
-                <button type="button" class="btn-primary px-3 py-1" on:click={() => void openCreateCompetitorModal()}>
-                  {t('contest_detail.registrations.add_competitor')}
-                </button>
-
-
-              </div>
+            <header class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <h3 class="text-h3 text-text-primary">{$_('contest_detail.tabs.squat_table')}</h3>
             </header>
-            <div class="space-y-2">
-              {#if femaleWeightFilters.length > 0}
-                <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.weights_female')}>
-                  <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_female')}</span>
-                  {#each femaleWeightFilters as filter}
-                    <button
-                      type="button"
-                      class={`px-3 py-1 text-xxs ${selectedWeightFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
-                      on:click={() => selectWeightFilter(filter.id)}
-                    >
-                      {filter.label}
-                    </button>
-                  {/each}
-                </div>
-              {/if}
-              {#if maleWeightFilters.length > 0}
-                <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.weights_male')}>
-                  <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_male')}</span>
-                  {#each maleWeightFilters as filter}
-                    <button
-                      type="button"
-                      class={`px-3 py-1 text-xxs ${selectedWeightFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
-                      on:click={() => selectWeightFilter(filter.id)}
-                    >
-                      {filter.label}
-                    </button>
-                  {/each}
-                </div>
-              {/if}
-              <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.age')}>
-                <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.age')}</span>
-                {#each availableAgeFilters as filter}
+            <div class="flex flex-wrap items-center gap-2">
+              {#if femaleWeightFilters.length > 0 || maleWeightFilters.length > 0}
+                <div class="relative" on:click|stopPropagation>
                   <button
                     type="button"
-                    class={`px-3 py-1 text-xxs ${selectedAgeFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
-                    on:click={() => selectAgeFilter(filter.id)}
+                    class={`${resultFilterButtonClass(selectedWeightFilter !== 'ALL')} flex min-w-[190px] items-center justify-between gap-3`}
+                    on:click|stopPropagation={() => toggleRegistrationFilterPopover('weight')}
                   >
-                    {filter.label}
+                    <div class="flex flex-col text-left leading-tight">
+                      <span class="font-semibold">{$_('contest_detail.registrations.filters.weight_button')}</span>
+                      <span class="text-text-secondary">{registrationWeightSelectionLabel}</span>
+                    </div>
+                    <ChevronDown
+                      class={`h-3.5 w-3.5 transition-transform ${openRegistrationFilter === 'weight' ? 'rotate-180' : ''}`}
+                      aria-hidden="true"
+                    />
                   </button>
-                {/each}
-              </div>
-              <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.labels')}>
-                <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.labels')}</span>
-                {#each availableLabelFilters as filter}
-                  <button
-                    type="button"
-                    class={`px-3 py-1 text-xxs ${selectedLabelFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
-                    on:click={() => selectLabelFilter(filter.id)}
+                  {#if openRegistrationFilter === 'weight'}
+                    <div
+                      class="absolute left-0 top-full z-40 mt-2 w-72 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
+                      on:click|stopPropagation
+                    >
+                      <div class="space-y-4">
+                        <button
+                          type="button"
+                          class={`${resultFilterButtonClass(selectedWeightFilter === 'ALL')} w-full justify-start`}
+                          on:click={() => {
+                            selectWeightFilter('ALL');
+                            closeRegistrationFilterPopover();
+                          }}
+                        >
+                          {$_('contest_detail.results.filters.all')}
+                        </button>
+                        {#if femaleWeightFilters.length > 0}
+                          <div>
+                            <p class="mb-2 text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_female')}</p>
+                            <div class="grid grid-cols-2 gap-2">
+                              {#each femaleWeightFilters as filter}
+                                <button
+                                  type="button"
+                                  class={`${resultFilterButtonClass(selectedWeightFilter === filter.id)} w-full`}
+                                  on:click={() => {
+                                    selectWeightFilter(filter.id);
+                                    closeRegistrationFilterPopover();
+                                  }}
+                                >
+                                  {filter.label}
+                                </button>
+                              {/each}
+                            </div>
+                          </div>
+                        {/if}
+                        {#if maleWeightFilters.length > 0}
+                          <div>
+                            <p class="mb-2 text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_male')}</p>
+                            <div class="grid grid-cols-2 gap-2">
+                              {#each maleWeightFilters as filter}
+                                <button
+                                  type="button"
+                                  class={`${resultFilterButtonClass(selectedWeightFilter === filter.id)} w-full`}
+                                  on:click={() => {
+                                    selectWeightFilter(filter.id);
+                                    closeRegistrationFilterPopover();
+                                  }}
+                                >
+                                  {filter.label}
+                                </button>
+                              {/each}
+                            </div>
+                          </div>
+                        {/if}
+                      </div>
+                    </div>
+                  {/if}
+                </div>
+              {/if}
+
+              <div class="relative" on:click|stopPropagation>
+                <button
+                  type="button"
+                  class={`${resultFilterButtonClass(selectedAgeFilter !== 'ALL')} flex min-w-[170px] items-center justify-between gap-3`}
+                  on:click|stopPropagation={() => toggleRegistrationFilterPopover('age')}
+                >
+                  <div class="flex flex-col text-left leading-tight">
+                    <span class="font-semibold">{$_('contest_detail.registrations.filters.age_button')}</span>
+                    <span class="text-text-secondary">{registrationAgeSelectionLabel}</span>
+                  </div>
+                  <ChevronDown
+                    class={`h-3.5 w-3.5 transition-transform ${openRegistrationFilter === 'age' ? 'rotate-180' : ''}`}
+                    aria-hidden="true"
+                  />
+                </button>
+                {#if openRegistrationFilter === 'age'}
+                  <div
+                    class="absolute left-0 top-full z-40 mt-2 w-60 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
+                    on:click|stopPropagation
                   >
-                    {filter.label}
-                  </button>
-                {/each}
+                    <div class="grid max-h-52 grid-cols-2 gap-2 overflow-y-auto pr-1">
+                      {#each availableAgeFilters as filter}
+                        <button
+                          type="button"
+                          class={`${resultFilterButtonClass(selectedAgeFilter === filter.id)} w-full`}
+                          on:click={() => {
+                            selectAgeFilter(filter.id);
+                            closeRegistrationFilterPopover();
+                          }}
+                        >
+                          {filter.label}
+                        </button>
+                      {/each}
+                    </div>
+                  </div>
+                {/if}
               </div>
+
+              <div class="relative" on:click|stopPropagation>
+                <button
+                  type="button"
+                  class={`${resultFilterButtonClass(selectedLabelFilter !== 'ALL')} flex min-w-[170px] items-center justify-between gap-3`}
+                  on:click|stopPropagation={() => toggleRegistrationFilterPopover('labels')}
+                >
+                  <div class="flex flex-col text-left leading-tight">
+                    <span class="font-semibold">{$_('contest_detail.registrations.filters.labels_button')}</span>
+                    <span class="text-text-secondary">{registrationLabelSelectionLabel}</span>
+                  </div>
+                  <ChevronDown
+                    class={`h-3.5 w-3.5 transition-transform ${openRegistrationFilter === 'labels' ? 'rotate-180' : ''}`}
+                    aria-hidden="true"
+                  />
+                </button>
+                {#if openRegistrationFilter === 'labels'}
+                  <div
+                    class="absolute left-0 top-full z-40 mt-2 w-60 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
+                    on:click|stopPropagation
+                  >
+                    <div class="grid max-h-52 grid-cols-2 gap-2 overflow-y-auto pr-1">
+                      {#each availableLabelFilters as filter}
+                        <button
+                          type="button"
+                          class={`${resultFilterButtonClass(selectedLabelFilter === filter.id)} w-full`}
+                          on:click={() => {
+                            selectLabelFilter(filter.id);
+                            closeRegistrationFilterPopover();
+                          }}
+                        >
+                          {filter.label}
+                        </button>
+                      {/each}
+                    </div>
+                  </div>
+                {/if}
+              </div>
+
+              {#if hasRegistrationFiltersActive}
+                <button
+                  type="button"
+                  class="ml-auto text-xxs text-text-secondary underline decoration-dotted decoration-1 underline-offset-4"
+                  on:click={clearRegistrationFilters}
+                >
+                  {$_('contest_detail.registrations.filters.clear')}
+                </button>
+              {/if}
             </div>
             {#if registrations.length === 0}
               <div class="text-center py-8 text-text-secondary">{$_('contest_detail.registrations.empty')}</div>
@@ -3083,72 +3408,171 @@ $: void params;
       {:else if activeTab === 'bench' && activeContestLifts.includes('Bench')}
         <section class="space-y-4">
           <div class="card space-y-6">
-            <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h3 class="text-h3 text-text-primary">{$_('contest_detail.registrations.title')}</h3>
-
-              </div>
-              <div class="flex flex-wrap items-center gap-3">
-                <button type="button" class="btn-primary px-3 py-1" on:click={() => void openCreateCompetitorModal()}>
-                  {t('contest_detail.registrations.add_competitor')}
-                </button>
-
-
-              </div>
+            <header class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <h3 class="text-h3 text-text-primary">{$_('contest_detail.tabs.bench_table')}</h3>
             </header>
-            <div class="space-y-2">
-              {#if femaleWeightFilters.length > 0}
-                <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.weights_female')}>
-                  <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_female')}</span>
-                  {#each femaleWeightFilters as filter}
-                    <button
-                      type="button"
-                      class={`px-3 py-1 text-xxs ${selectedWeightFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
-                      on:click={() => selectWeightFilter(filter.id)}
-                    >
-                      {filter.label}
-                    </button>
-                  {/each}
-                </div>
-              {/if}
-              {#if maleWeightFilters.length > 0}
-                <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.weights_male')}>
-                  <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_male')}</span>
-                  {#each maleWeightFilters as filter}
-                    <button
-                      type="button"
-                      class={`px-3 py-1 text-xxs ${selectedWeightFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
-                      on:click={() => selectWeightFilter(filter.id)}
-                    >
-                      {filter.label}
-                    </button>
-                  {/each}
-                </div>
-              {/if}
-              <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.age')}>
-                <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.age')}</span>
-                {#each availableAgeFilters as filter}
+            <div class="flex flex-wrap items-center gap-2">
+              {#if femaleWeightFilters.length > 0 || maleWeightFilters.length > 0}
+                <div class="relative" on:click|stopPropagation>
                   <button
                     type="button"
-                    class={`px-3 py-1 text-xxs ${selectedAgeFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
-                    on:click={() => selectAgeFilter(filter.id)}
+                    class={`${resultFilterButtonClass(selectedWeightFilter !== 'ALL')} flex min-w-[190px] items-center justify-between gap-3`}
+                    on:click|stopPropagation={() => toggleRegistrationFilterPopover('weight')}
                   >
-                    {filter.label}
+                    <div class="flex flex-col text-left leading-tight">
+                      <span class="font-semibold">{$_('contest_detail.registrations.filters.weight_button')}</span>
+                      <span class="text-text-secondary">{registrationWeightSelectionLabel}</span>
+                    </div>
+                    <ChevronDown
+                      class={`h-3.5 w-3.5 transition-transform ${openRegistrationFilter === 'weight' ? 'rotate-180' : ''}`}
+                      aria-hidden="true"
+                    />
                   </button>
-                {/each}
-              </div>
-              <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.labels')}>
-                <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.labels')}</span>
-                {#each availableLabelFilters as filter}
-                  <button
-                    type="button"
-                    class={`px-3 py-1 text-xxs ${selectedLabelFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
-                    on:click={() => selectLabelFilter(filter.id)}
+                  {#if openRegistrationFilter === 'weight'}
+                    <div
+                      class="absolute left-0 top-full z-40 mt-2 w-72 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
+                      on:click|stopPropagation
+                    >
+                      <div class="space-y-4">
+                        <button
+                          type="button"
+                          class={`${resultFilterButtonClass(selectedWeightFilter === 'ALL')} w-full justify-start`}
+                          on:click={() => {
+                            selectWeightFilter('ALL');
+                            closeRegistrationFilterPopover();
+                          }}
+                        >
+                          {$_('contest_detail.results.filters.all')}
+                        </button>
+                        {#if femaleWeightFilters.length > 0}
+                          <div>
+                            <p class="mb-2 text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_female')}</p>
+                            <div class="grid grid-cols-2 gap-2">
+                              {#each femaleWeightFilters as filter}
+                                <button
+                                  type="button"
+                                  class={`${resultFilterButtonClass(selectedWeightFilter === filter.id)} w-full`}
+                                  on:click={() => {
+                                    selectWeightFilter(filter.id);
+                                    closeRegistrationFilterPopover();
+                                  }}
+                                >
+                                  {filter.label}
+                                </button>
+                              {/each}
+                            </div>
+                          </div>
+                        {/if}
+                        {#if maleWeightFilters.length > 0}
+                          <div>
+                            <p class="mb-2 text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_male')}</p>
+                            <div class="grid grid-cols-2 gap-2">
+                              {#each maleWeightFilters as filter}
+                                <button
+                                  type="button"
+                                  class={`${resultFilterButtonClass(selectedWeightFilter === filter.id)} w-full`}
+                                  on:click={() => {
+                                    selectWeightFilter(filter.id);
+                                    closeRegistrationFilterPopover();
+                                  }}
+                                >
+                                  {filter.label}
+                                </button>
+                              {/each}
+                            </div>
+                          </div>
+                        {/if}
+                      </div>
+                    </div>
+                  {/if}
+                </div>
+              {/if}
+
+              <div class="relative" on:click|stopPropagation>
+                <button
+                  type="button"
+                  class={`${resultFilterButtonClass(selectedAgeFilter !== 'ALL')} flex min-w-[170px] items-center justify-between gap-3`}
+                  on:click|stopPropagation={() => toggleRegistrationFilterPopover('age')}
+                >
+                  <div class="flex flex-col text-left leading-tight">
+                    <span class="font-semibold">{$_('contest_detail.registrations.filters.age_button')}</span>
+                    <span class="text-text-secondary">{registrationAgeSelectionLabel}</span>
+                  </div>
+                  <ChevronDown
+                    class={`h-3.5 w-3.5 transition-transform ${openRegistrationFilter === 'age' ? 'rotate-180' : ''}`}
+                    aria-hidden="true"
+                  />
+                </button>
+                {#if openRegistrationFilter === 'age'}
+                  <div
+                    class="absolute left-0 top-full z-40 mt-2 w-60 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
+                    on:click|stopPropagation
                   >
-                    {filter.label}
-                  </button>
-                {/each}
+                    <div class="grid max-h-52 grid-cols-2 gap-2 overflow-y-auto pr-1">
+                      {#each availableAgeFilters as filter}
+                        <button
+                          type="button"
+                          class={`${resultFilterButtonClass(selectedAgeFilter === filter.id)} w-full`}
+                          on:click={() => {
+                            selectAgeFilter(filter.id);
+                            closeRegistrationFilterPopover();
+                          }}
+                        >
+                          {filter.label}
+                        </button>
+                      {/each}
+                    </div>
+                  </div>
+                {/if}
               </div>
+
+              <div class="relative" on:click|stopPropagation>
+                <button
+                  type="button"
+                  class={`${resultFilterButtonClass(selectedLabelFilter !== 'ALL')} flex min-w-[170px] items-center justify-between gap-3`}
+                  on:click|stopPropagation={() => toggleRegistrationFilterPopover('labels')}
+                >
+                  <div class="flex flex-col text-left leading-tight">
+                    <span class="font-semibold">{$_('contest_detail.registrations.filters.labels_button')}</span>
+                    <span class="text-text-secondary">{registrationLabelSelectionLabel}</span>
+                  </div>
+                  <ChevronDown
+                    class={`h-3.5 w-3.5 transition-transform ${openRegistrationFilter === 'labels' ? 'rotate-180' : ''}`}
+                    aria-hidden="true"
+                  />
+                </button>
+                {#if openRegistrationFilter === 'labels'}
+                  <div
+                    class="absolute left-0 top-full z-40 mt-2 w-60 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
+                    on:click|stopPropagation
+                  >
+                    <div class="grid max-h-52 grid-cols-2 gap-2 overflow-y-auto pr-1">
+                      {#each availableLabelFilters as filter}
+                        <button
+                          type="button"
+                          class={`${resultFilterButtonClass(selectedLabelFilter === filter.id)} w-full`}
+                          on:click={() => {
+                            selectLabelFilter(filter.id);
+                            closeRegistrationFilterPopover();
+                          }}
+                        >
+                          {filter.label}
+                        </button>
+                      {/each}
+                    </div>
+                  </div>
+                {/if}
+              </div>
+
+              {#if hasRegistrationFiltersActive}
+                <button
+                  type="button"
+                  class="ml-auto text-xxs text-text-secondary underline decoration-dotted decoration-1 underline-offset-4"
+                  on:click={clearRegistrationFilters}
+                >
+                  {$_('contest_detail.registrations.filters.clear')}
+                </button>
+              {/if}
             </div>
             {#if registrations.length === 0}
               <div class="text-center py-8 text-text-secondary">{$_('contest_detail.registrations.empty')}</div>
@@ -3180,72 +3604,171 @@ $: void params;
       {:else if activeTab === 'deadlift' && activeContestLifts.includes('Deadlift')}
         <section class="space-y-4">
           <div class="card space-y-6">
-            <header class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h3 class="text-h3 text-text-primary">{$_('contest_detail.registrations.title')}</h3>
-
-              </div>
-              <div class="flex flex-wrap items-center gap-3">
-                <button type="button" class="btn-primary px-3 py-1" on:click={() => void openCreateCompetitorModal()}>
-                  {t('contest_detail.registrations.add_competitor')}
-                </button>
-
-
-              </div>
+            <header class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <h3 class="text-h3 text-text-primary">{$_('contest_detail.tabs.deadlift_table')}</h3>
             </header>
-            <div class="space-y-2">
-              {#if femaleWeightFilters.length > 0}
-                <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.weights_female')}>
-                  <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_female')}</span>
-                  {#each femaleWeightFilters as filter}
-                    <button
-                      type="button"
-                      class={`px-3 py-1 text-xxs ${selectedWeightFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
-                      on:click={() => selectWeightFilter(filter.id)}
-                    >
-                      {filter.label}
-                    </button>
-                  {/each}
-                </div>
-              {/if}
-              {#if maleWeightFilters.length > 0}
-                <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.weights_male')}>
-                  <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_male')}</span>
-                  {#each maleWeightFilters as filter}
-                    <button
-                      type="button"
-                      class={`px-3 py-1 text-xxs ${selectedWeightFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
-                      on:click={() => selectWeightFilter(filter.id)}
-                    >
-                      {filter.label}
-                    </button>
-                  {/each}
-                </div>
-              {/if}
-              <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.age')}>
-                <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.age')}</span>
-                {#each availableAgeFilters as filter}
+            <div class="flex flex-wrap items-center gap-2">
+              {#if femaleWeightFilters.length > 0 || maleWeightFilters.length > 0}
+                <div class="relative" on:click|stopPropagation>
                   <button
                     type="button"
-                    class={`px-3 py-1 text-xxs ${selectedAgeFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
-                    on:click={() => selectAgeFilter(filter.id)}
+                    class={`${resultFilterButtonClass(selectedWeightFilter !== 'ALL')} flex min-w-[190px] items-center justify-between gap-3`}
+                    on:click|stopPropagation={() => toggleRegistrationFilterPopover('weight')}
                   >
-                    {filter.label}
+                    <div class="flex flex-col text-left leading-tight">
+                      <span class="font-semibold">{$_('contest_detail.registrations.filters.weight_button')}</span>
+                      <span class="text-text-secondary">{registrationWeightSelectionLabel}</span>
+                    </div>
+                    <ChevronDown
+                      class={`h-3.5 w-3.5 transition-transform ${openRegistrationFilter === 'weight' ? 'rotate-180' : ''}`}
+                      aria-hidden="true"
+                    />
                   </button>
-                {/each}
-              </div>
-              <div class="flex flex-wrap items-center gap-2 rounded border border-border-color bg-element-bg/40 px-3 py-2" role="group" aria-label={$_('contest_detail.registrations.filters.labels')}>
-                <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.labels')}</span>
-                {#each availableLabelFilters as filter}
-                  <button
-                    type="button"
-                    class={`px-3 py-1 text-xxs ${selectedLabelFilter === filter.id ? 'btn-primary text-black' : 'btn-secondary'}`}
-                    on:click={() => selectLabelFilter(filter.id)}
+                  {#if openRegistrationFilter === 'weight'}
+                    <div
+                      class="absolute left-0 top-full z-40 mt-2 w-72 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
+                      on:click|stopPropagation
+                    >
+                      <div class="space-y-4">
+                        <button
+                          type="button"
+                          class={`${resultFilterButtonClass(selectedWeightFilter === 'ALL')} w-full justify-start`}
+                          on:click={() => {
+                            selectWeightFilter('ALL');
+                            closeRegistrationFilterPopover();
+                          }}
+                        >
+                          {$_('contest_detail.results.filters.all')}
+                        </button>
+                        {#if femaleWeightFilters.length > 0}
+                          <div>
+                            <p class="mb-2 text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_female')}</p>
+                            <div class="grid grid-cols-2 gap-2">
+                              {#each femaleWeightFilters as filter}
+                                <button
+                                  type="button"
+                                  class={`${resultFilterButtonClass(selectedWeightFilter === filter.id)} w-full`}
+                                  on:click={() => {
+                                    selectWeightFilter(filter.id);
+                                    closeRegistrationFilterPopover();
+                                  }}
+                                >
+                                  {filter.label}
+                                </button>
+                              {/each}
+                            </div>
+                          </div>
+                        {/if}
+                        {#if maleWeightFilters.length > 0}
+                          <div>
+                            <p class="mb-2 text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_male')}</p>
+                            <div class="grid grid-cols-2 gap-2">
+                              {#each maleWeightFilters as filter}
+                                <button
+                                  type="button"
+                                  class={`${resultFilterButtonClass(selectedWeightFilter === filter.id)} w-full`}
+                                  on:click={() => {
+                                    selectWeightFilter(filter.id);
+                                    closeRegistrationFilterPopover();
+                                  }}
+                                >
+                                  {filter.label}
+                                </button>
+                              {/each}
+                            </div>
+                          </div>
+                        {/if}
+                      </div>
+                    </div>
+                  {/if}
+                </div>
+              {/if}
+
+              <div class="relative" on:click|stopPropagation>
+                <button
+                  type="button"
+                  class={`${resultFilterButtonClass(selectedAgeFilter !== 'ALL')} flex min-w-[170px] items-center justify-between gap-3`}
+                  on:click|stopPropagation={() => toggleRegistrationFilterPopover('age')}
+                >
+                  <div class="flex flex-col text-left leading-tight">
+                    <span class="font-semibold">{$_('contest_detail.registrations.filters.age_button')}</span>
+                    <span class="text-text-secondary">{registrationAgeSelectionLabel}</span>
+                  </div>
+                  <ChevronDown
+                    class={`h-3.5 w-3.5 transition-transform ${openRegistrationFilter === 'age' ? 'rotate-180' : ''}`}
+                    aria-hidden="true"
+                  />
+                </button>
+                {#if openRegistrationFilter === 'age'}
+                  <div
+                    class="absolute left-0 top-full z-40 mt-2 w-60 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
+                    on:click|stopPropagation
                   >
-                    {filter.label}
-                  </button>
-                {/each}
+                    <div class="grid max-h-52 grid-cols-2 gap-2 overflow-y-auto pr-1">
+                      {#each availableAgeFilters as filter}
+                        <button
+                          type="button"
+                          class={`${resultFilterButtonClass(selectedAgeFilter === filter.id)} w-full`}
+                          on:click={() => {
+                            selectAgeFilter(filter.id);
+                            closeRegistrationFilterPopover();
+                          }}
+                        >
+                          {filter.label}
+                        </button>
+                      {/each}
+                    </div>
+                  </div>
+                {/if}
               </div>
+
+              <div class="relative" on:click|stopPropagation>
+                <button
+                  type="button"
+                  class={`${resultFilterButtonClass(selectedLabelFilter !== 'ALL')} flex min-w-[170px] items-center justify-between gap-3`}
+                  on:click|stopPropagation={() => toggleRegistrationFilterPopover('labels')}
+                >
+                  <div class="flex flex-col text-left leading-tight">
+                    <span class="font-semibold">{$_('contest_detail.registrations.filters.labels_button')}</span>
+                    <span class="text-text-secondary">{registrationLabelSelectionLabel}</span>
+                  </div>
+                  <ChevronDown
+                    class={`h-3.5 w-3.5 transition-transform ${openRegistrationFilter === 'labels' ? 'rotate-180' : ''}`}
+                    aria-hidden="true"
+                  />
+                </button>
+                {#if openRegistrationFilter === 'labels'}
+                  <div
+                    class="absolute left-0 top-full z-40 mt-2 w-60 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
+                    on:click|stopPropagation
+                  >
+                    <div class="grid max-h-52 grid-cols-2 gap-2 overflow-y-auto pr-1">
+                      {#each availableLabelFilters as filter}
+                        <button
+                          type="button"
+                          class={`${resultFilterButtonClass(selectedLabelFilter === filter.id)} w-full`}
+                          on:click={() => {
+                            selectLabelFilter(filter.id);
+                            closeRegistrationFilterPopover();
+                          }}
+                        >
+                          {filter.label}
+                        </button>
+                      {/each}
+                    </div>
+                  </div>
+                {/if}
+              </div>
+
+              {#if hasRegistrationFiltersActive}
+                <button
+                  type="button"
+                  class="ml-auto text-xxs text-text-secondary underline decoration-dotted decoration-1 underline-offset-4"
+                  on:click={clearRegistrationFilters}
+                >
+                  {$_('contest_detail.registrations.filters.clear')}
+                </button>
+              {/if}
             </div>
             {#if registrations.length === 0}
               <div class="text-center py-8 text-text-secondary">{$_('contest_detail.registrations.empty')}</div>

@@ -165,6 +165,40 @@
         "no_club": "Brak klubu",
         "no_city": "Brak miasta",
         "remove": "Usuń"
+      },
+      "categories": {
+        "age": {
+          "title": "Kategorie wiekowe",
+          "description": "Zdefiniuj podziały wiekowe dla zawodów.",
+          "add": "Dodaj kategorię wiekową"
+        },
+        "weight": {
+          "title": "Kategorie wagowe",
+          "description": "Skonfiguruj kategorie wagowe według płci.",
+          "add": "Dodaj kategorię wagową"
+        },
+        "columns": {
+          "code": "Kod",
+          "name": "Nazwa",
+          "min_age": "Min wiek",
+          "max_age": "Max wiek",
+          "min_weight": "Min waga",
+          "max_weight": "Max waga",
+          "sort_order": "Kolejność",
+          "gender": "Płeć",
+          "actions": "Akcje"
+        },
+        "gender": {
+          "female": "Kobiety",
+          "male": "Mężczyźni"
+        },
+        "placeholders": {
+          "age_name": "np. Junior 16-17",
+          "weight_name": "np. Lekka"
+        },
+        "actions": {
+          "reset_defaults": "Resetuj do domyślnych"
+        }
       }
     }
   },
@@ -960,7 +994,14 @@
         "age_unassigned": "Bez kategorii",
         "labels_all": "Wszystkie",
         "labels_unlabeled": "Bez etykiety",
-        "age_senior": "Senior (24-39)"
+        "age_senior": "Senior (24-39)",
+        "weight_button": "Waga",
+        "weight_button_all": "Wszystkie klasy",
+        "age_button": "Wiek",
+        "age_button_all": "Wszystkie kategorie",
+        "labels_button": "Etykiety",
+        "labels_button_all": "Wszystkie etykiety",
+        "clear": "Wyczyść filtry"
       },
       "active_flight_label": "Aktywny flight",
       "active_flight_none": "Brak",
@@ -1234,7 +1275,8 @@
       },
       "validation": {
         "label_required": "Podaj nazwę tagu.",
-        "no_changes": "Brak zmian do zapisania."
+        "no_changes": "Brak zmian do zapisania.",
+        "duplicate": "Każdy tag musi mieć unikalną nazwę."
       },
       "toast": {
         "created": "Tag \"{label}\" został dodany.",

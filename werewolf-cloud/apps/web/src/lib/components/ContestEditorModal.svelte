@@ -5,6 +5,7 @@
   import { toast } from '$lib/ui/toast';
   import type { ContestDetail, ContestTag } from '$lib/types';
   import type { LiftKind } from '$lib/contest-table';
+  import ContestTagsForm, { type ContestTagRowView } from '$lib/components/ContestTagsForm.svelte';
 
   const translateStore = _;
   type MessageValues = Record<string, string | number | boolean | Date | null | undefined>;
@@ -118,6 +119,24 @@
   function hasTagChanges(row: TagRow): boolean {
     return row.label.trim() !== row.originalLabel;
   }
+
+  let tagRowsView: ContestTagRowView[] = [];
+
+  $: tagRowsView = tagRows.map((row) => ({
+    id: row.id,
+    label: row.label,
+    isMandatory: row.isMandatory,
+    error: row.error,
+    inputDisabled: row.isMandatory || row.saving || row.deleting || tagsLoading,
+    showReset: !row.isMandatory,
+    showSave: !row.isMandatory,
+    showDelete: !row.isMandatory,
+    resetDisabled: row.saving || row.deleting || tagsLoading || !hasTagChanges(row),
+    saveDisabled: row.saving || row.deleting || tagsLoading || !hasTagChanges(row),
+    deleteDisabled: row.saving || row.deleting || tagsLoading,
+    saving: row.saving,
+    deleting: row.deleting,
+  }));
 
   function resetTagRow(row: TagRow) {
     row.label = row.originalLabel;
@@ -459,110 +478,67 @@
       />
     </div>
 
-    <div class="space-y-4">
-      <div>
-        <span class="input-label">{t('contest_edit.tags.title')}</span>
-        <p class="text-caption text-text-secondary">{t('contest_edit.tags.description')}</p>
-      </div>
-
-      {#if tagsError}
-        <div class="border border-status-error bg-status-error/10 text-status-error px-3 py-2 text-sm">
-          {tagsError}
-        </div>
-      {/if}
-
-      {#if tagsLoading}
-        <p class="text-caption text-text-secondary">{t('contest_edit.tags.loading')}</p>
-      {:else if tagRows.length === 0}
-        <p class="text-caption text-text-secondary">{t('contest_edit.tags.empty')}</p>
-      {:else}
-        <div class="space-y-3">
-          {#each tagRows as row, index (row.id)}
-            <div
-              class="border border-border-color rounded-lg p-4 space-y-3"
-            >
-              <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)] md:items-start">
-                <div class="flex flex-col gap-2">
-                  <label class="input-label" for={`contest-tag-label-${row.id}`}>{t('contest_edit.tags.fields.label')}</label>
-                  <input
-                    id={`contest-tag-label-${row.id}`}
-                    class="input-field"
-                    bind:value={row.label}
-                    disabled={row.isMandatory || row.saving || row.deleting || tagsLoading}
-                    maxlength="64"
-                    on:input={() => (row.error = null)}
-                  />
-                </div>
-              </div>
-              {#if row.error}
-                <p class="error-message">{row.error}</p>
-              {/if}
-              <div class="flex flex-wrap gap-2">
-                {#if row.isMandatory}
-                  <span class="text-caption text-text-secondary">{t('contest_edit.tags.mandatory_hint')}</span>
-                {:else}
-                  <button
-                    type="button"
-                    class="btn-secondary px-3 py-1"
-                    on:click={() => resetTagRow(row)}
-                    disabled={row.saving || row.deleting || tagsLoading || !hasTagChanges(row)}
-                  >
-                    {t('contest_edit.tags.actions.reset')}
-                  </button>
-                  <button
-                    type="button"
-                    class="btn-primary px-3 py-1"
-                    on:click={() => saveTagRow(row)}
-                    disabled={row.saving || row.deleting || tagsLoading || !hasTagChanges(row)}
-                  >
-                    {row.saving ? t('contest_edit.tags.actions.saving') : t('contest_edit.tags.actions.save')}
-                  </button>
-                  <button
-                    type="button"
-                    class="btn-danger px-3 py-1"
-                    on:click={() => deleteTagRow(row)}
-                    disabled={row.saving || row.deleting || tagsLoading}
-                  >
-                    {row.deleting ? t('contest_edit.tags.actions.deleting') : t('contest_edit.tags.actions.delete')}
-                  </button>
-                {/if}
-              </div>
-            </div>
-          {/each}
-        </div>
-      {/if}
-
-      <div class="border border-dashed border-border-color rounded-lg p-4 space-y-3">
-        <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-          <div class="flex-1 flex flex-col gap-2">
-            <label class="input-label" for="contest-new-tag-label">{t('contest_edit.tags.new.label')}</label>
-            <input
-              id="contest-new-tag-label"
-              class="input-field"
-              bind:value={newTagLabel}
-              placeholder={t('contest_edit.tags.new.placeholder')}
-              maxlength="64"
-              disabled={newTagSaving || tagsLoading}
-              on:input={() => (newTagError = null)}
-            />
-          </div>
-          <div class="flex justify-end">
-            <button
-              type="button"
-              class="btn-primary px-3 py-1"
-              on:click={createTag}
-              disabled={newTagSaving || tagsLoading}
-            >
-              {newTagSaving ? t('contest_edit.tags.new.saving') : t('contest_edit.tags.new.add')}
-            </button>
-          </div>
-        </div>
-        <p class="text-caption text-text-secondary">{t('contest_edit.tags.new.order_hint')}</p>
-        {#if newTagError}
-          <p class="error-message">{newTagError}</p>
-        {/if}
-      </div>
-    </div>
+    <ContestTagsForm
+      title={t('contest_edit.tags.title')}
+      description={t('contest_edit.tags.description')}
+      mandatoryHint={t('contest_edit.tags.mandatory_hint')}
+      loadingMessage={t('contest_edit.tags.loading')}
+      emptyMessage={t('contest_edit.tags.empty')}
+      orderHint={t('contest_edit.tags.new.order_hint')}
+      labelFieldTitle={t('contest_edit.tags.fields.label')}
+      newTagFieldTitle={t('contest_edit.tags.new.label')}
+      rows={tagRowsView}
+      tagsLoading={tagsLoading}
+      tagsError={tagsError}
+      newTagLabel={newTagLabel}
+      newTagPlaceholder={t('contest_edit.tags.new.placeholder')}
+      newTagError={newTagError}
+      newTagDisabled={newTagSaving || tagsLoading}
+      newTagSaving={newTagSaving}
+      actionLabels={{
+        reset: t('contest_edit.tags.actions.reset'),
+        save: t('contest_edit.tags.actions.save'),
+        saving: t('contest_edit.tags.actions.saving'),
+        delete: t('contest_edit.tags.actions.delete'),
+        deleting: t('contest_edit.tags.actions.deleting'),
+      }}
+      addButtonLabel={t('contest_edit.tags.new.add')}
+      addButtonLoadingLabel={t('contest_edit.tags.new.saving')}
+      resetButtonClass="btn-secondary px-3 py-1"
+      saveButtonClass="btn-primary px-3 py-1"
+      deleteButtonClass="btn-danger px-3 py-1"
+      addButtonClass="btn-primary px-3 py-1"
+      on:rowChange={({ detail }) => {
+        const row = tagRows.find((item) => item.id === detail.id);
+        if (row) {
+          row.label = detail.value;
+          row.error = null;
+        }
+      }}
+      on:reset={({ detail }) => {
+        const row = tagRows.find((item) => item.id === detail.id);
+        if (row) {
+          resetTagRow(row);
+        }
+      }}
+      on:save={({ detail }) => {
+        const row = tagRows.find((item) => item.id === detail.id);
+        if (row) {
+          saveTagRow(row);
+        }
+      }}
+      on:delete={({ detail }) => {
+        const row = tagRows.find((item) => item.id === detail.id);
+        if (row) {
+          deleteTagRow(row);
+        }
+      }}
+      on:add={createTag}
+      on:newTagInput={({ detail }) => {
+        newTagLabel = detail.value;
+        newTagError = null;
+      }}
+    />
 
     <div class="flex justify-end gap-3">
       <button type="button" class="btn-secondary" on:click={() => onClose()}>

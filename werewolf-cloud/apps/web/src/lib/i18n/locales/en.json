@@ -165,6 +165,40 @@
         "no_club": "No club",
         "no_city": "No city",
         "remove": "Remove"
+      },
+      "categories": {
+        "age": {
+          "title": "Age Categories",
+          "description": "Define age divisions for competition.",
+          "add": "Add Age Category"
+        },
+        "weight": {
+          "title": "Weight Classes",
+          "description": "Configure weight classes by gender.",
+          "add": "Add Weight Class"
+        },
+        "columns": {
+          "code": "Code",
+          "name": "Name",
+          "min_age": "Min Age",
+          "max_age": "Max Age",
+          "min_weight": "Min Weight",
+          "max_weight": "Max Weight",
+          "sort_order": "Order",
+          "gender": "Gender",
+          "actions": "Actions"
+        },
+        "gender": {
+          "female": "Female",
+          "male": "Male"
+        },
+        "placeholders": {
+          "age_name": "e.g. Teen 16-17",
+          "weight_name": "e.g. Lightweight"
+        },
+        "actions": {
+          "reset_defaults": "Reset to Defaults"
+        }
       }
     }
   },
@@ -960,7 +994,14 @@
         "age_unassigned": "Unassigned",
         "labels_all": "All",
         "labels_unlabeled": "Without labels",
-        "age_senior": "Senior (24-39)"
+        "age_senior": "Senior (24-39)",
+        "weight_button": "Weight",
+        "weight_button_all": "All classes",
+        "age_button": "Age",
+        "age_button_all": "All categories",
+        "labels_button": "Labels",
+        "labels_button_all": "All labels",
+        "clear": "Clear filters"
       },
       "active_flight_label": "Active flight",
       "active_flight_none": "None",
@@ -1234,7 +1275,8 @@
       },
       "validation": {
         "label_required": "Enter a tag name.",
-        "no_changes": "No changes to save."
+        "no_changes": "No changes to save.",
+        "duplicate": "Each tag must use a unique label."
       },
       "toast": {
         "created": "Tag \"{label}\" added.",

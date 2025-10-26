@@ -1,6 +1,7 @@
 <script lang="ts">
 import { goto } from '$app/navigation';
 import Layout from '$lib/components/Layout.svelte';
+import ContestTagsForm, { type ContestTagRowView } from '$lib/components/ContestTagsForm.svelte';
 import { apiClient } from '$lib/api';
 import type { PageData } from './$types';
 import type { ContestSummary, AgeCategory, WeightClass, ContestCategories, RegistrationSummary } from '$lib/types';
@@ -31,6 +32,96 @@ import { formatWeight } from '$lib/utils';
     Male: 'contest.wizard.genders.male',
     Female: 'contest.wizard.genders.female',
   };
+
+  const MANDATORY_TAG_LABEL = 'Open';
+  const MANDATORY_TAG_KEY = MANDATORY_TAG_LABEL.toLowerCase();
+
+  function arraysEqual(a: readonly string[], b: readonly string[]): boolean {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i += 1) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
+  }
+
+  type TagDraft = {
+    id: string;
+    label: string;
+    isMandatory: boolean;
+    error: string | null;
+  };
+
+  let tagDraftSequence = 0;
+  function nextTagDraftId(): string {
+    tagDraftSequence += 1;
+    return `tag-${tagDraftSequence}`;
+  }
+
+  function createTagDraft(label: string, options: { mandatory?: boolean } = {}): TagDraft {
+    return {
+      id: nextTagDraftId(),
+      label,
+      isMandatory: Boolean(options.mandatory),
+      error: null,
+    };
+  }
+
+  let availableTagOptions: string[] = [MANDATORY_TAG_LABEL];
+
+  function computeAvailableTagOptions(): string[] {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const draft of tagDrafts) {
+      const label = draft.label.trim();
+      if (!label) continue;
+      const key = label.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      result.push(label);
+    }
+    if (!seen.has(MANDATORY_TAG_KEY)) {
+      result.unshift(MANDATORY_TAG_LABEL);
+    }
+    return result;
+  }
+
+  function canonicaliseTagLabel(label: string): string | null {
+    const key = label.trim().toLowerCase();
+    if (!key) return null;
+    for (const option of availableTagOptions) {
+      if (option.toLowerCase() === key) {
+        return option;
+      }
+    }
+    return null;
+  }
+
+  function normaliseTagSelection(
+    source: readonly string[] | undefined,
+    { enforceMandatory = true }: { enforceMandatory?: boolean } = {},
+  ): string[] {
+    if (availableTagOptions.length === 0) {
+      return enforceMandatory ? [MANDATORY_TAG_LABEL] : [];
+    }
+    const optionMap = new Map(availableTagOptions.map((label) => [label.toLowerCase(), label]));
+    const unique: string[] = [];
+    for (const raw of source ?? []) {
+      const key = raw.trim().toLowerCase();
+      if (!key) continue;
+      const canonical = optionMap.get(key);
+      if (!canonical) continue;
+      if (!unique.includes(canonical)) {
+        unique.push(canonical);
+      }
+    }
+    if (enforceMandatory) {
+      const mandatory = optionMap.get(MANDATORY_TAG_KEY);
+      if (mandatory && !unique.includes(mandatory)) {
+        unique.unshift(mandatory);
+      }
+    }
+    return unique;
+  }
 
   export let data: PageData;
   export let params: Record<string, string> = {};
@@ -243,7 +334,11 @@ import { formatWeight } from '$lib/utils';
     return shuffled.slice(0, count);
   }
 
-  function buildRandomCompetitor(gender: Gender, usedNames: Set<string>, events: ContestEvent[]): CompetitorDraft {
+  function buildRandomCompetitor(
+    gender: Gender,
+    usedNames: Set<string>,
+    events: ContestEvent[],
+  ): CompetitorDraft {
     const baseNames = NAME_SETS[gender];
     const available = baseNames.filter(([firstName, lastName]) => !usedNames.has(`${firstName}|${lastName}`));
     const [firstName, lastName] = available.length > 0
@@ -253,6 +348,18 @@ import { formatWeight } from '$lib/utils';
     const rackHeightSquat = DEFAULT_RACK_SQUAT + Math.floor(Math.random() * 5) - 2;
     const rackHeightBench = DEFAULT_RACK_BENCH + Math.floor(Math.random() * 3) - 1;
     const bodyweight = randomBodyweight(gender);
+    const randomTags = availableTagOptions.reduce<string[]>((acc, option) => {
+      const key = option.toLowerCase();
+      if (key === MANDATORY_TAG_KEY) {
+        if (!acc.includes(option)) acc.push(option);
+        return acc;
+      }
+      if (Math.random() < 0.35) {
+        acc.push(option);
+      }
+      return acc;
+    }, [] as string[]);
+    const tags = normaliseTagSelection(randomTags);
 
     return {
       firstName,
@@ -266,6 +373,7 @@ import { formatWeight } from '$lib/utils';
       rackHeightBench,
       lifts: [...events],
       attempts: normalizeAttemptPlanForGender(createAttemptPlan(events, bodyweight, true), gender),
+      tags,
     };
   }
 
@@ -370,6 +478,96 @@ import { formatWeight } from '$lib/utils';
     };
   }
 
+  function resetTagDrafts() {
+    tagDrafts = [createTagDraft(MANDATORY_TAG_LABEL, { mandatory: true })];
+    newTagLabel = '';
+    newTagError = null;
+    syncAllCompetitorTags();
+  }
+
+  function removeTagDraft(id: string) {
+    const target = tagDrafts.find((draft) => draft.id === id);
+    if (!target || target.isMandatory) {
+      return;
+    }
+    tagDrafts = tagDrafts.filter((draft) => draft.id !== id);
+    syncAllCompetitorTags();
+  }
+
+  function addTagDraft() {
+    const label = newTagLabel.trim();
+    if (!label) {
+      newTagError = translate('contest_edit.tags.validation.label_required');
+      return;
+    }
+
+    const exists = tagDrafts.some(
+      (draft) => draft.label.trim().toLowerCase() === label.toLowerCase()
+    );
+    if (exists) {
+      newTagError = translate('contest_edit.tags.validation.duplicate');
+      return;
+    }
+
+    tagDrafts = [...tagDrafts, createTagDraft(label)];
+    newTagLabel = '';
+    newTagError = null;
+    syncAllCompetitorTags();
+  }
+
+  function validateTagDrafts(): boolean {
+    newTagError = null;
+    let hasError = false;
+    const counts: Record<string, number> = {};
+
+    for (const draft of tagDrafts) {
+      const key = draft.label.trim().toLowerCase();
+      if (!key) continue;
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+
+    tagDrafts = tagDrafts.map((draft) => {
+      const label = draft.label.trim();
+      let error: string | null = null;
+      if (!label) {
+        error = translate('contest_edit.tags.validation.label_required');
+        hasError = true;
+      } else if ((counts[label.toLowerCase()] ?? 0) > 1) {
+        error = translate('contest_edit.tags.validation.duplicate');
+        hasError = true;
+      }
+      return { ...draft, label, error };
+    });
+
+    if (!hasError) {
+      syncAllCompetitorTags();
+    }
+
+    return !hasError;
+  }
+
+  let tagDraftRows: ContestTagRowView[] = [];
+
+  $: {
+    const nextOptions = computeAvailableTagOptions();
+    if (!arraysEqual(availableTagOptions, nextOptions)) {
+      availableTagOptions = nextOptions;
+      syncAllCompetitorTags();
+    }
+  }
+
+  $: tagDraftRows = tagDrafts.map((draft) => ({
+    id: draft.id,
+    label: draft.label,
+    isMandatory: draft.isMandatory,
+    error: draft.error,
+    inputDisabled: draft.isMandatory,
+    showReset: false,
+    showSave: false,
+    showDelete: !draft.isMandatory,
+    deleteDisabled: false,
+  }));
+
   interface ContestForm {
     name: string;
     date: string;
@@ -393,6 +591,7 @@ import { formatWeight } from '$lib/utils';
     rackHeightBench: number | null;
     lifts: ContestEvent[];
     attempts: AttemptPlan;
+    tags: string[];
   }
 
   const MIN_STEP = 1;
@@ -434,11 +633,15 @@ import { formatWeight } from '$lib/utils';
     rackHeightBench: DEFAULT_RACK_BENCH,
     lifts: [...form.events],
     attempts: createAttemptPlan(form.events, 70, false),
+    tags: normaliseTagSelection([MANDATORY_TAG_LABEL]),
   };
 
   let competitorDrafts: CompetitorDraft[] = [];
   let validationErrors: Record<string, string> = {};
   let attemptIssues: AttemptIssue[] = [];
+  let tagDrafts: TagDraft[] = [createTagDraft(MANDATORY_TAG_LABEL, { mandatory: true })];
+  let newTagLabel = '';
+  let newTagError: string | null = null;
 
   function generateSampleContestData() {
     if (isGeneratingSample) return;
@@ -464,12 +667,22 @@ import { formatWeight } from '$lib/utils';
         notes: translate('contest.wizard.sample.notes'),
       };
 
+      tagDrafts = [
+        createTagDraft(MANDATORY_TAG_LABEL, { mandatory: true }),
+        createTagDraft('Mundurówka'),
+      ];
+      newTagLabel = '';
+      newTagError = null;
+      availableTagOptions = computeAvailableTagOptions();
+      syncAllCompetitorTags();
+
       const competitorCount = 6 + Math.floor(Math.random() * 4);
       const usedNames = new Set<string>();
       competitorDrafts = Array.from({ length: competitorCount }, (_, index) => {
         const gender: Gender = index % 2 === 0 ? 'Male' : 'Female';
         return buildRandomCompetitor(gender, usedNames, events);
       });
+      syncAllCompetitorTags();
 
       validationErrors = {};
       step = 4;
@@ -512,14 +725,15 @@ import { formatWeight } from '$lib/utils';
       birthDate: '',
       gender: 'Male',
       club: '',
-    city: '',
-    bodyweight: 70,
-    rackHeightSquat: DEFAULT_RACK_SQUAT,
-    rackHeightBench: DEFAULT_RACK_BENCH,
-    lifts: [...form.events],
-    attempts: createAttemptPlan(form.events, 70, false),
-  };
-}
+      city: '',
+      bodyweight: 70,
+      rackHeightSquat: DEFAULT_RACK_SQUAT,
+      rackHeightBench: DEFAULT_RACK_BENCH,
+      lifts: [...form.events],
+      attempts: createAttemptPlan(form.events, 70, false),
+      tags: normaliseTagSelection([MANDATORY_TAG_LABEL]),
+    };
+  }
 
   function normaliseDraftEvents(source: ContestEvent[]): ContestEvent[] {
     const allowed = form.events;
@@ -529,6 +743,26 @@ import { formatWeight } from '$lib/utils';
     const uniqueAllowed = Array.from(new Set(allowed));
     const filtered = Array.from(new Set(source.filter((event) => uniqueAllowed.includes(event))));
     return filtered.length > 0 ? uniqueAllowed.filter((event) => filtered.includes(event)) : [...uniqueAllowed];
+  }
+
+  function syncAllCompetitorTags() {
+    const nextDraftTags = normaliseTagSelection(competitorDraft.tags);
+    if (!arraysEqual(competitorDraft.tags, nextDraftTags)) {
+      competitorDraft = { ...competitorDraft, tags: nextDraftTags };
+    }
+
+    let updated = false;
+    const nextDrafts = competitorDrafts.map((draft) => {
+      const normalised = normaliseTagSelection(draft.tags);
+      if (!arraysEqual(draft.tags, normalised)) {
+        updated = true;
+        return { ...draft, tags: normalised };
+      }
+      return draft;
+    });
+    if (updated) {
+      competitorDrafts = nextDrafts;
+    }
   }
 
   function syncAttemptPlansWithEvents() {
@@ -576,6 +810,7 @@ import { formatWeight } from '$lib/utils';
       syncAttemptPlan(competitorDraft.attempts, lifts),
       competitorDraft.gender,
     );
+    const tags = normaliseTagSelection(competitorDraft.tags);
     competitorDrafts = [
       ...competitorDrafts,
       {
@@ -583,6 +818,7 @@ import { formatWeight } from '$lib/utils';
         bodyweight: Number(competitorDraft.bodyweight),
         lifts,
         attempts,
+        tags,
       },
     ];
     resetCompetitorDraft();
@@ -659,6 +895,125 @@ import { formatWeight } from '$lib/utils';
         ),
       };
     });
+  }
+
+  function toggleCompetitorDraftTag(label: string, checked: boolean) {
+    const canonical = canonicaliseTagLabel(label);
+    if (!canonical) return;
+    const key = canonical.toLowerCase();
+    if (key === MANDATORY_TAG_KEY) {
+      competitorDraft = {
+        ...competitorDraft,
+        tags: normaliseTagSelection([canonical, ...competitorDraft.tags]),
+      };
+      return;
+    }
+    const current = competitorDraft.tags ?? [];
+    let next: string[];
+    if (checked) {
+      if (current.some((tag) => tag.toLowerCase() === key)) {
+        next = [...current];
+      } else {
+        next = [...current, canonical];
+      }
+    } else {
+      next = current.filter((tag) => tag.toLowerCase() !== key);
+    }
+    competitorDraft = { ...competitorDraft, tags: normaliseTagSelection(next) };
+  }
+
+  function toggleSavedDraftTag(index: number, label: string, checked: boolean) {
+    const canonical = canonicaliseTagLabel(label);
+    if (!canonical) return;
+    const key = canonical.toLowerCase();
+    if (key === MANDATORY_TAG_KEY) {
+      return;
+    }
+    competitorDrafts = competitorDrafts.map((draft, idx) => {
+      if (idx !== index) return draft;
+      const current = draft.tags ?? [];
+      let next: string[];
+      if (checked) {
+        if (current.some((tag) => tag.toLowerCase() === key)) {
+          next = [...current];
+        } else {
+          next = [...current, canonical];
+        }
+      } else {
+        next = current.filter((tag) => tag.toLowerCase() !== key);
+      }
+      const normalised = normaliseTagSelection(next);
+      if (arraysEqual(draft.tags, normalised)) {
+        return draft;
+      }
+      return { ...draft, tags: normalised };
+    });
+  }
+
+  function replaceTagLabelAcrossDrafts(previousLabel: string, nextLabel: string) {
+    const previousKey = previousLabel.trim().toLowerCase();
+    const trimmedNext = nextLabel.trim();
+    if (!previousKey) {
+      syncAllCompetitorTags();
+      return;
+    }
+
+    let draftChanged = false;
+    const updatedDraftTags = competitorDraft.tags.map((tag) => {
+      if (tag.toLowerCase() === previousKey) {
+        draftChanged = true;
+        return trimmedNext || tag;
+      }
+      return tag;
+    });
+    if (draftChanged) {
+      competitorDraft = { ...competitorDraft, tags: updatedDraftTags };
+    }
+
+    let listChanged = false;
+    const nextDrafts = competitorDrafts.map((draft) => {
+      let changed = false;
+      const nextTags = draft.tags.map((tag) => {
+        if (tag.toLowerCase() === previousKey) {
+          changed = true;
+          return trimmedNext || tag;
+        }
+        return tag;
+      });
+      if (changed) {
+        listChanged = true;
+        return { ...draft, tags: nextTags };
+      }
+      return draft;
+    });
+    if (listChanged) {
+      competitorDrafts = nextDrafts;
+    }
+
+    syncAllCompetitorTags();
+  }
+
+  function handleTagRowChange(event: CustomEvent<{ id: string; value: string }>) {
+    const { id, value } = event.detail ?? {};
+    if (!id) {
+      return;
+    }
+    let previousLabel: string | null = null;
+    tagDrafts = tagDrafts.map((draft) => {
+      if (draft.id === id) {
+        previousLabel = draft.label;
+        return { ...draft, label: value, error: null };
+      }
+      return draft;
+    });
+
+    const prevKey = previousLabel?.trim().toLowerCase() ?? null;
+    const nextKey = value.trim().toLowerCase();
+    if (previousLabel !== null && prevKey !== nextKey) {
+      replaceTagLabelAcrossDrafts(previousLabel, value);
+    } else {
+      syncAllCompetitorTags();
+    }
   }
 
   function handleAttemptInput(index: number, event: ContestEvent) {
@@ -790,10 +1145,16 @@ import { formatWeight } from '$lib/utils';
         categoryIssues = [];
       }
 
-    if (categoryIssues.length > 0) {
-      return false;
+      const tagsValid = validateTagDrafts();
+
+      if (categoryIssues.length > 0) {
+        return false;
+      }
+
+      if (!tagsValid) {
+        return false;
+      }
     }
-  }
 
     if (stepNumber === 3 && competitorDrafts.length === 0) {
       validationErrors = {};
@@ -837,6 +1198,13 @@ import { formatWeight } from '$lib/utils';
 
     categoryIssues = [];
 
+    const tagsValid = validateTagDrafts();
+    if (!tagsValid) {
+      isSubmitting = false;
+      toast.error(translate('contest.wizard.validation.warning'));
+      return;
+    }
+
     const payload = {
       name: form.name.trim(),
       date: form.date,
@@ -877,9 +1245,28 @@ import { formatWeight } from '$lib/utils';
         }
       }
 
+      const normalizedLabels = new Map<string, string>();
+      for (const draft of tagDrafts) {
+        const trimmed = draft.label.trim();
+        if (!trimmed) continue;
+        const key = trimmed.toLowerCase();
+        if (!normalizedLabels.has(key)) {
+          normalizedLabels.set(key, trimmed);
+        }
+      }
+      normalizedLabels.delete(MANDATORY_TAG_LABEL.toLowerCase());
+
+      for (const label of normalizedLabels.values()) {
+        const tagResponse = await apiClient.post(`/contests/${contest.id}/tags`, { label });
+        if (tagResponse.error) {
+          throw new Error(tagResponse.error);
+        }
+      }
+
       for (const [draftIndex, draft] of competitorDrafts.entries()) {
         try {
           const lifts = normaliseDraftEvents(draft.lifts);
+          const labels = normaliseTagSelection(draft.tags);
           const competitorResponse = await apiClient.post<{ id: string }>('/competitors', {
             firstName: draft.firstName.trim(),
             lastName: draft.lastName.trim(),
@@ -905,6 +1292,7 @@ import { formatWeight } from '$lib/utils';
             rackHeightSquat: includeSquat ? draft.rackHeightSquat : null,
             rackHeightBench: includeBench ? draft.rackHeightBench : null,
             lifts,
+            labels,
           });
           if (registrationResponse.error) {
             throw new Error(registrationResponse.error);
@@ -976,6 +1364,7 @@ import { formatWeight } from '$lib/utils';
     };
     validationErrors = {};
     resetCategoryDraftsToDefault();
+    resetTagDrafts();
     syncAttemptPlansWithEvents();
   }
 </script>
@@ -1160,6 +1549,46 @@ import { formatWeight } from '$lib/utils';
               />
             </div>
           </div>
+
+          <ContestTagsForm
+            title={$_('contest_edit.tags.title')}
+            description={$_('contest_edit.tags.description')}
+            mandatoryHint={$_('contest_edit.tags.mandatory_hint')}
+            loadingMessage={$_('contest_edit.tags.loading')}
+            emptyMessage={$_('contest_edit.tags.empty')}
+            orderHint={$_('contest_edit.tags.new.order_hint')}
+            labelFieldTitle={$_('contest_edit.tags.fields.label')}
+            newTagFieldTitle={$_('contest_edit.tags.new.label')}
+            rows={tagDraftRows}
+            tagsLoading={false}
+            tagsError={null}
+            newTagLabel={newTagLabel}
+            newTagPlaceholder={$_('contest_edit.tags.new.placeholder')}
+            newTagError={newTagError}
+            newTagDisabled={false}
+            newTagSaving={false}
+            actionLabels={{
+              reset: '',
+              save: '',
+              saving: '',
+              delete: $_('buttons.remove'),
+              deleting: $_('contest_edit.tags.actions.deleting'),
+            }}
+            addButtonLabel={$_('contest_edit.tags.new.add')}
+            addButtonLoadingLabel={$_('contest_edit.tags.new.saving')}
+            resetButtonClass="btn-secondary px-3 py-1"
+            saveButtonClass="btn-primary px-3 py-1"
+            deleteButtonClass="btn-secondary px-3 py-1"
+            addButtonClass="btn-secondary px-3 py-1"
+            showNewTagForm={true}
+            on:rowChange={handleTagRowChange}
+            on:delete={({ detail }) => removeTagDraft(detail.id)}
+            on:add={addTagDraft}
+            on:newTagInput={({ detail }) => {
+              newTagLabel = detail.value;
+              newTagError = null;
+            }}
+          />
 
           <div class="space-y-6 border-t border-border-color pt-6">
             <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
@@ -1436,6 +1865,32 @@ import { formatWeight } from '$lib/utils';
               </div>
               <p class="text-caption text-text-secondary">{$_('contest.wizard.competitor.lifts_hint')}</p>
             </div>
+            <div class="flex flex-col gap-2 md:col-span-2">
+              <span class="input-label flex items-center gap-2">
+                {$_('competitor_modal.registration_fields.tags')}
+                <span class="text-caption text-text-secondary uppercase tracking-[0.3em]">
+                  {$_('competitor_modal.registration_fields.tags_hint')}
+                </span>
+              </span>
+              {#if availableTagOptions.length > 0}
+                <div class="flex flex-wrap gap-2">
+                  {#each availableTagOptions as tagLabel}
+                    {@const isSelected = competitorDraft.tags.includes(tagLabel)}
+                    {@const isMandatoryTag = tagLabel.toLowerCase() === MANDATORY_TAG_KEY}
+                    <button
+                      type="button"
+                      class={`px-3 py-2 border rounded-md text-sm transition ${isSelected ? 'border-primary-red bg-primary-red/10 text-text-primary' : 'border-border-color bg-element-bg text-text-secondary hover:text-text-primary'}`}
+                      disabled={isMandatoryTag}
+                      on:click={() => toggleCompetitorDraftTag(tagLabel, !isSelected)}
+                    >
+                      {tagLabel}
+                    </button>
+                  {/each}
+                </div>
+              {:else}
+                <p class="text-caption text-text-secondary">{$_('competitor_modal.registration_fields.tags_empty')}</p>
+              {/if}
+            </div>
             {#if form.events.includes('Squat')}
               <div>
                 <label class="input-label" for="rackHeightSquat">{$_('contest.wizard.competitor.rack_squat')}</label>
@@ -1512,6 +1967,27 @@ import { formatWeight } from '$lib/utils';
                       </button>
                     {/each}
                   </div>
+                  {#if availableTagOptions.length > 0}
+                    <div class="space-y-2">
+                      <span class="text-xxs uppercase tracking-[0.3em] text-text-secondary">
+                        {$_('competitor_modal.registration_fields.tags')}
+                      </span>
+                      <div class="flex flex-wrap gap-2">
+                        {#each availableTagOptions as tagLabel}
+                          {@const isSelected = competitor.tags.includes(tagLabel)}
+                          {@const isMandatoryTag = tagLabel.toLowerCase() === MANDATORY_TAG_KEY}
+                          <button
+                            type="button"
+                            class={`px-3 py-1 border rounded-md text-xxs uppercase tracking-[0.2em] transition ${isSelected ? 'border-primary-red bg-primary-red/10 text-text-primary' : 'border-border-color bg-element-bg text-text-secondary hover:text-text-primary'}`}
+                            disabled={isMandatoryTag}
+                            on:click={() => toggleSavedDraftTag(index, tagLabel, !isSelected)}
+                          >
+                            {tagLabel}
+                          </button>
+                        {/each}
+                      </div>
+                    </div>
+                  {/if}
                 </div>
               {/each}
             </div>

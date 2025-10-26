@@ -295,7 +295,7 @@
       <table class="min-w-full text-left text-sm">
         <thead class="bg-element-bg text-label">
           <tr>
-            <th class="px-3 py-2">{t('contest_detail.categories.columns.gender')}</th>
+            <th class="px-3 py-2 min-w-[150px]">{t('contest_detail.categories.columns.gender')}</th>
             <th class="px-3 py-2">{t('contest_detail.categories.columns.code')}</th>
             <th class="px-3 py-2">{t('contest_detail.categories.columns.name')}</th>
             <th class="px-3 py-2">{t('contest_detail.categories.columns.min_weight')}</th>
@@ -307,7 +307,7 @@
         <tbody>
           {#each weightClasses as weightClass, index}
             <tr class="border-t border-border-color">
-              <td class="px-3 py-2">
+              <td class="px-3 py-2 min-w-[150px]">
                 <select
                   class="table-input-field w-full"
                   value={weightClass.gender}
