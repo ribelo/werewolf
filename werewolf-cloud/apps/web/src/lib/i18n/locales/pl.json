@@ -125,6 +125,9 @@
         "male": "Mężczyzna",
         "female": "Kobieta"
       },
+      "sample": {
+        "notes": "Przykładowe notatki dotyczące zawodów"
+      },
       "messages": {
         "events_hint": "Dyscyplina jest ustalana automatycznie na podstawie wybranych prób.",
         "success": "Zawody zostały utworzone.",
@@ -627,6 +630,10 @@
       "checking": "Sprawdzanie…",
       "offline": "Brak połączenia",
       "fallback_detail": "Brak połączenia z Werewolf API"
+    },
+    "queue": {
+      "button_failed": "Sprawdź",
+      "button_pending": "Połączono"
     }
   },
   "dashboard": {

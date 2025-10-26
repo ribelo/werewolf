@@ -254,11 +254,9 @@ contestRegistrations.post('/', zValidator('json', registrationCreateSchema), asy
       r.rack_height_squat, r.rack_height_bench, r.created_at,
       r.flight_code, r.flight_order, COALESCE(r.labels, '[]') AS labels,
       ${LIFTS_JSON_SELECT},
+      c.first_name, c.last_name, c.gender, c.birth_date, c.club, c.city,
       cac.name AS age_category_name,
-      cwc.name AS weight_class_name,
-      c.club,
-      c.city,
-      c.birth_date
+      cwc.name AS weight_class_name
     FROM registrations r
     JOIN competitors c ON r.competitor_id = c.id
     LEFT JOIN contest_age_categories cac ON r.age_category_id = cac.id

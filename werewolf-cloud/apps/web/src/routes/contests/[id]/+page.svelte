@@ -1939,6 +1939,32 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
     }
   });
 
+  function mergeRegistrationPayload(existing: Registration | undefined, incoming: Registration): Registration {
+    const merged: Registration = {
+      ...(existing ?? incoming),
+      ...incoming,
+    };
+
+    merged.firstName = incoming.firstName ?? existing?.firstName ?? '';
+    merged.lastName = incoming.lastName ?? existing?.lastName ?? '';
+    merged.gender = incoming.gender ?? existing?.gender ?? '';
+    merged.birthDate = incoming.birthDate ?? existing?.birthDate ?? '';
+    merged.club = incoming.club ?? existing?.club;
+    merged.city = incoming.city ?? existing?.city;
+    merged.labels = Array.isArray(incoming.labels)
+      ? [...incoming.labels]
+      : Array.isArray(existing?.labels)
+        ? [...existing.labels]
+        : [];
+    merged.lifts = Array.isArray(incoming.lifts) && incoming.lifts.length > 0
+      ? [...incoming.lifts]
+      : Array.isArray(existing?.lifts) && existing.lifts.length > 0
+        ? [...existing.lifts]
+        : [];
+
+    return merged;
+  }
+
   function handleLiveEvent(event: LiveEvent) {
     switch (event.type) {
       case 'attempt.upserted':
@@ -1980,13 +2006,18 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
         if (!registration) break;
         const index = registrations.findIndex((entry) => entry.id === registration.id);
         if (index >= 0) {
-          registrations = registrations.map((entry) =>
-            entry.id === registration.id ? { ...entry, ...registration } : entry
-          );
-          contestStore.updateRegistration(registration);
+          const existing = registrations[index];
+          const merged = mergeRegistrationPayload(existing, registration);
+          registrations = [
+            ...registrations.slice(0, index),
+            merged,
+            ...registrations.slice(index + 1),
+          ];
+          contestStore.updateRegistration(merged);
         } else {
-          registrations = [...registrations, registration];
-          contestStore.addRegistration(registration);
+          const merged = mergeRegistrationPayload(undefined, registration);
+          registrations = [...registrations, merged];
+          contestStore.addRegistration(merged);
         }
         void reloadResults();
         break;

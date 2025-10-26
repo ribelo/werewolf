@@ -68,10 +68,10 @@ import { formatWeight } from '$lib/utils';
 
   let availableTagOptions: string[] = [MANDATORY_TAG_LABEL];
 
-  function computeAvailableTagOptions(): string[] {
+  function computeAvailableTagOptions(drafts: TagDraft[]): string[] {
     const seen = new Set<string>();
     const result: string[] = [];
-    for (const draft of tagDrafts) {
+    for (const draft of drafts) {
       const label = draft.label.trim();
       if (!label) continue;
       const key = label.toLowerCase();
@@ -549,7 +549,7 @@ import { formatWeight } from '$lib/utils';
   let tagDraftRows: ContestTagRowView[] = [];
 
   $: {
-    const nextOptions = computeAvailableTagOptions();
+    const nextOptions = computeAvailableTagOptions(tagDrafts);
     if (!arraysEqual(availableTagOptions, nextOptions)) {
       availableTagOptions = nextOptions;
       syncAllCompetitorTags();
@@ -673,7 +673,7 @@ import { formatWeight } from '$lib/utils';
       ];
       newTagLabel = '';
       newTagError = null;
-      availableTagOptions = computeAvailableTagOptions();
+      availableTagOptions = computeAvailableTagOptions(tagDrafts);
       syncAllCompetitorTags();
 
       const competitorCount = 6 + Math.floor(Math.random() * 4);

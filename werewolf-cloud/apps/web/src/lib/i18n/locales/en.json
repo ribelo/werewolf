@@ -125,6 +125,9 @@
         "male": "Male",
         "female": "Female"
       },
+      "sample": {
+        "notes": "Sample contest notes"
+      },
       "messages": {
         "events_hint": "Discipline is derived automatically from the selected events.",
         "success": "Contest created successfully.",
@@ -627,6 +630,10 @@
       "checking": "Checking…",
       "offline": "Offline",
       "fallback_detail": "Unable to reach the Werewolf API"
+    },
+    "queue": {
+      "button_failed": "Check",
+      "button_pending": "Connected"
     }
   },
   "dashboard": {
