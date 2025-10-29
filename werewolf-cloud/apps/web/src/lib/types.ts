@@ -210,6 +210,9 @@ export interface BackupRecord {
     registrations: number;
     attempts: number;
     results: number;
+    contestAgeCategories?: number;
+    contestWeightClasses?: number;
+    contestTags?: number;
   };
 }
 
@@ -225,6 +228,14 @@ export interface BackupCreateResult {
   timestamp: string;
   size: number;
   recordCounts: BackupRecord['recordCounts'];
+}
+
+export interface BackupSnapshot {
+  id: string;
+  timestamp: string;
+  version?: string | null;
+  size?: number;
+  data: Record<string, unknown>;
 }
 
 export interface DatabaseStats {

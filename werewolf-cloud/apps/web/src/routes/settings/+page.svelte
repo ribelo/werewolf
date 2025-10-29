@@ -6,7 +6,7 @@
   import { _, locale } from 'svelte-i18n';
   import { get } from 'svelte/store';
   import type { PageData } from './$types';
-  import type { BackupSummary, BackupRecord, BackupCreateResult } from '$lib/types';
+  import type { BackupSummary, BackupRecord, BackupCreateResult, BackupSnapshot } from '$lib/types';
   import { toast } from '$lib/ui/toast';
 
   type MessageValues = Record<string, string | number | boolean | Date | null | undefined>;
@@ -43,6 +43,11 @@
   let backupsError = data.backupsError;
   let backupsLoading = false;
   let backupsBusy = false;
+  let restoringBackupId: string | null = null;
+  let downloadingBackupId: string | null = null;
+  let deletingBackupId: string | null = null;
+  let importingBackup = false;
+  let backupFileInput: HTMLInputElement | null = null;
 
 let busy = false;
 
@@ -115,6 +120,153 @@ $: currentLocale = $locale;
     }
   }
 
+  async function downloadBackup(backup: BackupRecord) {
+    if (typeof window === 'undefined') {
+      toast.error($_('settings_page.download_error'));
+      return;
+    }
+
+    downloadingBackupId = backup.id;
+    try {
+      const response = await apiClient.get<BackupSnapshot>(`/system/backups/${backup.id}`);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      const snapshot = response.data;
+      if (!snapshot) {
+        throw new Error($_('settings_page.download_error'));
+      }
+
+      const json = JSON.stringify(snapshot, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = backup.id.endsWith('.json') ? backup.id : `${backup.id}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success($_('settings_page.download_success'));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : $_('settings_page.download_error');
+      toast.error(message);
+    } finally {
+      downloadingBackupId = null;
+    }
+  }
+
+  async function restoreBackup(backup: BackupRecord) {
+    const confirmTitle = $_('backup.confirm_restore_title');
+    const confirmWarning = $_('backup.confirm_restore_warning');
+    const confirmBackupLabel = $_('backup.confirm_restore_backup');
+    const safetyNote = $_('backup.confirm_restore_safety');
+    const confirmationMessage = `${confirmTitle}\n\n${confirmWarning}\n${confirmBackupLabel} ${backup.id}\n${safetyNote}`;
+
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm(confirmationMessage);
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      toast.error($_('settings_page.restore_error'));
+      return;
+    }
+
+    backupsBusy = true;
+    restoringBackupId = backup.id;
+
+    try {
+      const response = await apiClient.post<{ success: boolean; message?: string }>(
+        `/system/backups/${backup.id}/restore`,
+      );
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      toast.success(response.data?.message ?? $_('settings_page.restore_success'));
+      await refreshBackups();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : $_('settings_page.restore_error');
+      toast.error(message);
+    } finally {
+      restoringBackupId = null;
+      backupsBusy = false;
+    }
+  }
+
+  function openImportDialog() {
+    if (backupFileInput) {
+      backupFileInput.value = '';
+      backupFileInput.click();
+    }
+  }
+
+  async function handleBackupImport(event: Event) {
+    const input = event.currentTarget as HTMLInputElement | null;
+    const file = input?.files?.[0];
+    if (!file) return;
+
+    backupsBusy = true;
+    importingBackup = true;
+
+    try {
+      const text = await file.text();
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch (error) {
+        throw new Error($_('settings_page.import_error'));
+      }
+
+      const response = await apiClient.post<{ success: boolean; backupId: string }>(
+        '/system/backups/import',
+        parsed,
+      );
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      toast.success($_('settings_page.import_success'));
+      await refreshBackups();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : $_('settings_page.import_error');
+      toast.error(message);
+    } finally {
+      importingBackup = false;
+      backupsBusy = false;
+      if (input) {
+        input.value = '';
+      }
+    }
+  }
+
+  async function deleteBackup(backup: BackupRecord) {
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm($_('settings_page.delete_backup_confirm'));
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    backupsBusy = true;
+    deletingBackupId = backup.id;
+    try {
+      const response = await apiClient.delete<{ success: boolean }>(`/system/backups/${backup.id}`);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      toast.success($_('settings_page.delete_success'));
+      await refreshBackups();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : $_('settings_page.delete_error');
+      toast.error(message);
+    } finally {
+      deletingBackupId = null;
+      backupsBusy = false;
+    }
+  }
+
   async function triggerReset() {
     const confirmed = confirm($_('settings.reset_database_warning'));
     if (!confirmed) return;
@@ -163,12 +315,9 @@ $: currentLocale = $locale;
 
   const formatMessage = (key: string, vars?: MessageValues) => {
     try {
-      let text = get(_)(key);
-      // Simple string replacement for problematic ICU messages
-      if (vars && text.includes('PLACEHOLDER_COUNT') && 'count' in vars) {
-        text = text.replace('PLACEHOLDER_COUNT', String(vars['count']));
-      }
-      return text;
+      const translate = get(_);
+      const result = translate(key, vars ? { values: vars } : undefined);
+      return typeof result === 'string' ? result : String(result);
     } catch (error) {
       console.debug('[settings] formatMessage fallback', key, error);
       return key;
@@ -274,8 +423,23 @@ $: currentLocale = $locale;
               >
                 {backupsBusy ? $_('settings_page.creating_backup') : $_('settings_page.create_backup')}
               </button>
+              <button
+                type="button"
+                class="btn-secondary px-3 py-1"
+                on:click={openImportDialog}
+                disabled={backupsBusy}
+              >
+                {importingBackup ? $_('settings_page.importing_backup') : $_('settings_page.import_backup')}
+              </button>
             </div>
           </div>
+          <input
+            type="file"
+            accept="application/json"
+            class="hidden"
+            bind:this={backupFileInput}
+            on:change={handleBackupImport}
+          />
 
           {#if backupsLoading}
             <p class="text-caption text-text-secondary">{$_('settings_page.loading')}</p>
@@ -289,13 +453,47 @@ $: currentLocale = $locale;
               <ul class="space-y-2 text-caption text-text-secondary">
                 {#each backups.backups.slice(0, 5) as backup}
                   <li class="border border-border-color/50 px-3 py-2 bg-black/20">
-                    <div class="flex justify-between items-start gap-2">
-                      <div>
-                        <span class="font-mono text-xxs text-text-secondary">{backup.id}</span>
-                        <p>{formatBackupTimestamp(backup.timestamp)} • {formatBytes(backup.size)}</p>
+                    <div class="flex flex-col gap-2">
+                      <div class="flex justify-between items-start gap-2">
+                        <div>
+                          <span class="font-mono text-xxs text-text-secondary">{backup.id}</span>
+                          <p>{formatBackupTimestamp(backup.timestamp)} • {formatBytes(backup.size)}</p>
+                        </div>
+                        <div class="text-right text-xxs text-text-secondary">
+                          {formatBackupCounts(backup.recordCounts)}
+                        </div>
                       </div>
-                      <div class="text-right text-xxs text-text-secondary">
-                        {formatBackupCounts(backup.recordCounts)}
+                      <div class="flex flex-wrap justify-end gap-2">
+                        <button
+                          type="button"
+                          class="btn-secondary px-3 py-1 text-xxs border border-status-error text-status-error hover:border-primary-red hover:text-primary-red"
+                          disabled={backupsBusy || deletingBackupId === backup.id}
+                          on:click={() => deleteBackup(backup)}
+                        >
+                          {deletingBackupId === backup.id
+                            ? $_('settings_page.deleting_backup')
+                            : $_('settings_page.delete_backup')}
+                        </button>
+                        <button
+                          type="button"
+                          class="btn-secondary px-3 py-1 text-xxs"
+                          disabled={backupsBusy || downloadingBackupId === backup.id}
+                          on:click={() => downloadBackup(backup)}
+                        >
+                          {downloadingBackupId === backup.id
+                            ? $_('settings_page.downloading_backup')
+                            : $_('settings_page.download_backup')}
+                        </button>
+                        <button
+                          type="button"
+                          class="btn-primary px-3 py-1 text-xxs"
+                          disabled={backupsBusy || restoringBackupId === backup.id}
+                          on:click={() => restoreBackup(backup)}
+                        >
+                          {restoringBackupId === backup.id
+                            ? $_('settings_page.restoring_backup')
+                            : $_('settings_page.restore_backup')}
+                        </button>
                       </div>
                     </div>
                   </li>

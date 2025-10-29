@@ -3,10 +3,6 @@ export const PAGE_LINKS = {
     href: '/',
     labelKey: 'layout.nav.contests'
   },
-  competitors: {
-    href: '/competitors',
-    labelKey: 'layout.nav.competitors'
-  },
   settings: {
     href: '/settings',
     labelKey: 'layout.nav.settings'

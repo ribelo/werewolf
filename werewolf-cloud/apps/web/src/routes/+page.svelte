@@ -21,7 +21,6 @@
   const { contests, error, database, databaseError, apiBase } = data;
 
   const stats = database?.stats;
-  const totalCompetitors = stats?.competitors ?? 0;
   const totalRegistrations = stats?.registrations ?? 0;
 
   const translate = (key: string, values?: Record<string, unknown>) => get(_)(key, values) as string;
@@ -70,21 +69,13 @@
   currentPage="contests"
   apiBase={apiBase}
 >
-  <section class="grid gap-6 md:grid-cols-2 xl:grid-cols-3 mb-12">
+  <section class="grid gap-6 md:grid-cols-2 mb-12">
     <a href="/contests/new" class="card group no-select">
       <header class="card-header flex items-center justify-between">
         <h2 class="text-h2 text-text-primary">{$_('dashboard.tiles.create.title')}</h2>
         <span class="btn-primary">{$_('dashboard.tiles.create.cta')}</span>
       </header>
       <p class="text-body text-text-secondary">{$_('dashboard.tiles.create.description')}</p>
-    </a>
-
-    <a href={PAGE_LINKS.competitors.href} class="card group no-select">
-      <header class="card-header flex items-center justify-between">
-        <h2 class="text-h2 text-text-primary">{$_('dashboard.tiles.competitors.title')}</h2>
-        <span class="text-h3 text-text-secondary">{totalCompetitors}</span>
-      </header>
-      <p class="text-body text-text-secondary">{$_('dashboard.tiles.competitors.description')}</p>
     </a>
 
     <a href={PAGE_LINKS.settings.href} class="card group no-select">
