@@ -815,6 +815,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
         ageCategories,
         translate,
         statusLabels,
+        showRowNumbers: true,
       });
       const now = new Date();
       const contestTitle = contest?.name ?? t('contest_detail.fallback_title');
@@ -2793,6 +2794,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
                   currentAttemptLoading={setCurrentLoading}
                   toggleLiftLoading={liftToggleLoading}
                   mode="registration"
+                  showRowNumbers={true}
                   onSortChange={handleSortChange}
                   onOpenCompetitorModal={openCompetitorModal}
                   onSetCurrentAttempt={setCurrentAttemptHandler}
@@ -3583,6 +3585,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
                   onSortChange={handleSortChange}
                   onOpenCompetitorModal={openCompetitorModal}
                   onSetCurrentAttempt={setCurrentAttemptHandler}
+                  showRowNumbers={true}
                   onAttemptStatusCycle={handleStatusClick}
                   onAttemptWeightChange={handleAttemptWeightChangeInline}
                 />
@@ -3828,6 +3831,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
                   onOpenCompetitorModal={openCompetitorModal}
                   onSetCurrentAttempt={setCurrentAttemptHandler}
                   onAttemptStatusCycle={handleStatusClick}
+                  showRowNumbers={true}
                   onAttemptWeightChange={handleAttemptWeightChangeInline}
                 />
               </div>
@@ -4073,6 +4077,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
                   onSetCurrentAttempt={setCurrentAttemptHandler}
                   onAttemptStatusCycle={handleStatusClick}
                   onAttemptWeightChange={handleAttemptWeightChangeInline}
+                  showRowNumbers={true}
                 />
               </div>
             {/if}

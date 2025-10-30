@@ -100,8 +100,33 @@
   $: activeAttemptNumbers = (attemptNumbers?.length ?? 0) > 0 ? [...attemptNumbers] : [...ATTEMPT_NUMBERS];
   $: hasSquat = activeLifts.includes('Squat');
   $: hasBench = activeLifts.includes('Bench');
+  $: soleLift = activeLifts.length === 1 ? activeLifts[0] : null;
+  $: maxSortKey = soleLift ? `max:${soleLift}` : 'max';
+  $: pointsSortKey = soleLift ? `points:${soleLift}` : 'points';
+
+  // Sorting indicator state for Max/Points (support legacy 'max'/'points' keys)
+  let isMaxSorted = false;
+  let isPointsSorted = false;
+  let maxAriaSort: 'none' | 'ascending' | 'descending' = 'none';
+  let pointsAriaSort: 'none' | 'ascending' | 'descending' = 'none';
+  let maxSortIcon: typeof ArrowUpDown | typeof ChevronUp | typeof ChevronDown = ArrowUpDown;
+  let pointsSortIcon: typeof ArrowUpDown | typeof ChevronUp | typeof ChevronDown = ArrowUpDown;
+
+  $: isMaxSorted = sortColumn === 'max' || sortColumn === maxSortKey;
+  $: isPointsSorted = sortColumn === 'points' || sortColumn === pointsSortKey;
+  $: maxAriaSort = isMaxSorted ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none';
+  $: pointsAriaSort = isPointsSorted ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none';
+  $: maxSortIcon = isMaxSorted ? (sortDirection === 'asc' ? ChevronUp : ChevronDown) : ArrowUpDown;
+  $: pointsSortIcon = isPointsSorted ? (sortDirection === 'asc' ? ChevronUp : ChevronDown) : ArrowUpDown;
 
   function isSorted(column: string): boolean {
+    // Handle dynamic mapping for points and max columns
+    if (column === pointsSortKey && (sortColumn.startsWith('points:') || sortColumn === 'points')) {
+      return true;
+    }
+    if (column === maxSortKey && (sortColumn.startsWith('max:') || sortColumn === 'max')) {
+      return true;
+    }
     return sortColumn === column;
   }
 
@@ -113,6 +138,10 @@
   function ariaSort(column: string): 'none' | 'ascending' | 'descending' {
     if (!isSorted(column)) return 'none';
     return sortDirection === 'asc' ? 'ascending' : 'descending';
+  }
+
+  function attemptSortKey(lift: LiftKind, attemptNumber: AttemptNumber): string {
+    return `attempt:${lift}:${attemptNumber}`;
   }
 
   function attemptWeightDisplay(cell: AttemptCell): string {
@@ -330,18 +359,18 @@
         </th>
       {/each}
       {#if showPointsColumn}
-        <th class="sticky top-0 z-10 bg-element-bg px-3 py-2 cursor-pointer" rowspan="2" role="columnheader" aria-sort={ariaSort('points')} on:click={() => onSortChange('points')}>
+        <th class="sticky top-0 z-10 bg-element-bg px-3 py-2 cursor-pointer" rowspan="2" role="columnheader" aria-sort={pointsAriaSort} on:click={() => onSortChange(pointsSortKey)}>
           <div class="flex items-center gap-1">
             <span>{$_('contest_table.columns.points')}</span>
-            <span aria-hidden="true"><svelte:component this={sortIndicatorIcon('points')} class="h-3.5 w-3.5 opacity-70" /></span>
+            <span aria-hidden="true"><svelte:component this={pointsSortIcon} class="h-3.5 w-3.5 opacity-70" /></span>
           </div>
         </th>
       {/if}
       {#if showMaxColumn}
-        <th class="sticky top-0 z-10 bg-element-bg px-3 py-2 cursor-pointer" rowspan="2" role="columnheader" aria-sort={ariaSort('max')} on:click={() => onSortChange('max')}>
+        <th class="sticky top-0 z-10 bg-element-bg px-3 py-2 cursor-pointer" rowspan="2" role="columnheader" aria-sort={maxAriaSort} on:click={() => onSortChange(maxSortKey)}>
           <div class="flex items-center gap-1">
             <span>{$_('contest_table.columns.max')}</span>
-            <span aria-hidden="true"><svelte:component this={sortIndicatorIcon('max')} class="h-3.5 w-3.5 opacity-70" /></span>
+            <span aria-hidden="true"><svelte:component this={maxSortIcon} class="h-3.5 w-3.5 opacity-70" /></span>
           </div>
         </th>
       {/if}
@@ -353,16 +382,20 @@
     <tr>
       {#each activeLifts as lift}
         {#each activeAttemptNumbers as attemptNumber}
+          {@const attemptKey = attemptSortKey(lift, attemptNumber)}
+          {@const attemptSorted = sortColumn === attemptKey}
+          {@const attemptAria = attemptSorted ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+          {@const attemptIcon = attemptSorted ? (sortDirection === 'asc' ? ChevronUp : ChevronDown) : ArrowUpDown}
           <th
             class="px-2 py-1 text-center text-xxs uppercase tracking-[0.3em] cursor-pointer select-none"
             role="columnheader"
-            aria-sort={ariaSort(`attempt:${lift}:${attemptNumber}`)}
-            on:click={() => onSortChange(`attempt:${lift}:${attemptNumber}`)}
+            aria-sort={attemptAria}
+            on:click={() => onSortChange(attemptKey)}
             title={`${$_(liftAbbrevKey[lift])} ${attemptLabels[attemptNumber]}`}
           >
             <div class="inline-flex items-center gap-1">
               <span>{$_(liftAbbrevKey[lift])}&nbsp;{attemptLabels[attemptNumber]}</span>
-              <span aria-hidden="true"><svelte:component this={sortIndicatorIcon(`attempt:${lift}:${attemptNumber}`)} class="h-3 w-3 opacity-70" /></span>
+              <span aria-hidden="true"><svelte:component this={attemptIcon} class="h-3 w-3 opacity-70" /></span>
             </div>
           </th>
         {/each}

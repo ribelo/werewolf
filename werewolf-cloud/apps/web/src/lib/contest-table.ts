@@ -361,6 +361,38 @@ function compareAttemptProgressionDescending(rowA: UnifiedRow, rowB: UnifiedRow)
   return 0;
 }
 
+function buildAttemptSequenceForLift(row: UnifiedRow, lift: LiftKind): number[] {
+  const attemptCells = row.attempts?.[lift] ?? [];
+  return ATTEMPT_NUMBERS.map((attemptNumber) => {
+    const cell = attemptCells[attemptNumber - 1];
+    const attempt = cell?.attempt ?? null;
+    if (attempt && attempt.status === 'Successful') {
+      return attempt.weight;
+    }
+    return -1;
+  });
+}
+
+function compareAttemptProgressionForLiftDescending(
+  rowA: UnifiedRow,
+  rowB: UnifiedRow,
+  lift: LiftKind
+): number {
+  const sequenceA = buildAttemptSequenceForLift(rowA, lift);
+  const sequenceB = buildAttemptSequenceForLift(rowB, lift);
+
+  for (let index = 0; index < sequenceA.length; index += 1) {
+    const weightA = sequenceA[index]!;
+    const weightB = sequenceB[index]!;
+    if (weightA === weightB) {
+      continue;
+    }
+    return weightB - weightA;
+  }
+
+  return 0;
+}
+
 function compareMaxTieBreakers(
   rowA: UnifiedRow,
   rowB: UnifiedRow,
@@ -380,6 +412,64 @@ function compareMaxTieBreakers(
   return compareByName(rowA.registration, rowB.registration);
 }
 
+function compareLiftMaxTieBreakers(
+  rowA: UnifiedRow,
+  rowB: UnifiedRow,
+  direction: 'asc' | 'desc',
+  lift: LiftKind
+): number {
+  const bodyweightComparison = compareBodyweightAscending(rowA, rowB);
+  if (bodyweightComparison !== 0) {
+    return bodyweightComparison;
+  }
+
+  const attemptComparison = compareAttemptProgressionForLiftDescending(rowA, rowB, lift);
+  const attemptAdjusted = direction === 'asc' ? -attemptComparison : attemptComparison;
+  if (attemptAdjusted !== 0) {
+    return attemptAdjusted;
+  }
+
+  return compareByName(rowA.registration, rowB.registration);
+}
+
+function getPreviousAttemptWeight(
+  row: UnifiedRow,
+  lift: LiftKind,
+  attemptNumber: AttemptNumber
+): number | null {
+  if (attemptNumber <= 1) {
+    return null;
+  }
+  const attemptIndex = (attemptNumber as number) - 2;
+  const previousCell = row.attempts?.[lift]?.[attemptIndex] ?? null;
+  const weight = previousCell?.attempt?.weight;
+  return Number.isFinite(weight as number) ? (weight as number) : null;
+}
+
+function compareAttemptTieBreakers(
+  rowA: UnifiedRow,
+  rowB: UnifiedRow,
+  lift: LiftKind,
+  attemptNumber: AttemptNumber,
+  direction: 'asc' | 'desc'
+): number {
+  const bodyweightComparison = compareBodyweightAscending(rowA, rowB);
+  if (bodyweightComparison !== 0) {
+    return bodyweightComparison;
+  }
+
+  const previousA = getPreviousAttemptWeight(rowA, lift, attemptNumber);
+  const previousB = getPreviousAttemptWeight(rowB, lift, attemptNumber);
+
+  if (previousA !== previousB) {
+    const safeA = previousA ?? Number.NEGATIVE_INFINITY;
+    const safeB = previousB ?? Number.NEGATIVE_INFINITY;
+    return direction === 'asc' ? safeA - safeB : safeB - safeA;
+  }
+
+  return compareByName(rowA.registration, rowB.registration);
+}
+
 export function sortUnifiedRows(
   rows: UnifiedRow[],
   column: string,
@@ -390,6 +480,41 @@ export function sortUnifiedRows(
   const sorted = [...rows].sort((a, b) => {
     const regA = a.registration;
     const regB = b.registration;
+
+    // Sort by max for a specific lift (e.g., 'max:Deadlift')
+    if (column.startsWith('max:')) {
+      const parts = column.split(':');
+      const lift = (parts[1] ?? '') as LiftKind;
+      const bestA = lift === 'Squat' ? a.bestSquat : lift === 'Bench' ? a.bestBench : a.bestDeadlift;
+      const bestB = lift === 'Squat' ? b.bestSquat : lift === 'Bench' ? b.bestBench : b.bestDeadlift;
+      const cmp = direction === 'asc' ? bestA - bestB : bestB - bestA;
+      if (cmp !== 0) {
+        return cmp;
+      }
+
+      return compareLiftMaxTieBreakers(a, b, direction, lift);
+    }
+
+    // Sort by points for a specific lift (e.g., 'points:Deadlift')
+    if (column.startsWith('points:')) {
+      const parts = column.split(':');
+      const lift = (parts[1] ?? '') as LiftKind;
+      const pointsA = a.pointsByLift?.[lift] ?? Number.NEGATIVE_INFINITY;
+      const pointsB = b.pointsByLift?.[lift] ?? Number.NEGATIVE_INFINITY;
+      if (pointsA !== pointsB) {
+        return direction === 'asc' ? pointsA - pointsB : pointsB - pointsA;
+      }
+
+      // Tiebreaker: best within the same lift, then lift-specific tie-breakers
+      const bestA = lift === 'Squat' ? a.bestSquat : lift === 'Bench' ? a.bestBench : a.bestDeadlift;
+      const bestB = lift === 'Squat' ? b.bestSquat : lift === 'Bench' ? b.bestBench : b.bestDeadlift;
+      const maxCmp = direction === 'asc' ? bestA - bestB : bestB - bestA;
+      if (maxCmp !== 0) {
+        return maxCmp;
+      }
+
+      return compareLiftMaxTieBreakers(a, b, direction, lift);
+    }
 
     // Sort by specific attempt weight (e.g., 'attempt:Bench:1')
     if (column.startsWith('attempt:')) {
@@ -405,7 +530,12 @@ export function sortUnifiedRows(
       if (weightA !== weightB) {
         return (weightA - weightB) * modifier;
       }
-      // Tiebreaker: name
+
+      const attemptTieBreaker = compareAttemptTieBreakers(a, b, lift, attemptNum, direction);
+      if (attemptTieBreaker !== 0) {
+        return attemptTieBreaker;
+      }
+
       return `${regA.lastName} ${regA.firstName}`.localeCompare(`${regB.lastName} ${regB.firstName}`) * modifier;
     }
 

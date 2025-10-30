@@ -40,6 +40,7 @@ export interface BuildUnifiedTableExportOptions {
   ageCategories: AgeCategory[];
   translate: (key: string, params?: Record<string, unknown>) => string;
   statusLabels: Record<AttemptStatus, string>;
+  showRowNumbers?: boolean;
 }
 
 function competitorMeta(registration: Registration): string | null {
@@ -123,19 +124,26 @@ export function buildUnifiedTableExportModel(
     ageCategories,
     translate,
     statusLabels,
+    showRowNumbers = false,
   } = options;
 
   const hasSquat = lifts.includes('Squat');
   const hasBench = lifts.includes('Bench');
-  const columns: TableColumn[] = [
+  const columns: TableColumn[] = [];
+
+  if (showRowNumbers) {
+    columns.push({ key: 'rowNumber', header: '#' });
+  }
+
+  columns.push(
     { key: 'name', header: translate('contest_table.columns.lifter') },
     { key: 'age', header: translate('contest_table.columns.age') },
     { key: 'bodyweight', header: translate('contest_table.columns.bodyweight') },
     { key: 'weightClass', header: translate('contest_table.columns.weight_class') },
     { key: 'ageClass', header: translate('contest_table.columns.age_class') },
     { key: 'reshel', header: translate('contest_table.columns.reshel') },
-    { key: 'mccullough', header: translate('contest_table.columns.mccullough') },
-  ];
+    { key: 'mccullough', header: translate('contest_table.columns.mccullough') }
+  );
 
   if (hasSquat || hasBench) {
     columns.push({ key: 'rack', header: translate('contest_table.columns.rack') });
@@ -156,7 +164,7 @@ export function buildUnifiedTableExportModel(
     columns.push({ key: 'max', header: translate('contest_table.columns.max') });
   }
 
-  const exportRows = rows.map((row) => {
+  const exportRows = rows.map((row, index) => {
     const registration = row.registration;
     const nameParts = [registration.lastName, registration.firstName].filter(Boolean);
     const primaryName = nameParts.length > 0 ? nameParts.join(' ') : '—';
@@ -170,7 +178,13 @@ export function buildUnifiedTableExportModel(
       rackLines.push(`BP: ${registration.rackHeightBench ?? '—'}`);
     }
 
-    const record: Record<string, string> = {
+    const record: Record<string, string> = {};
+
+    if (showRowNumbers) {
+      record['rowNumber'] = (index + 1).toString();
+    }
+
+    Object.assign(record, {
       name: meta ? `${primaryName}\n${meta}` : primaryName,
       age: `${ageInfo.birth}\n${ageInfo.age}`,
       bodyweight: formatWeight(registration.bodyweight),
@@ -184,10 +198,10 @@ export function buildUnifiedTableExportModel(
         '—',
       reshel: formatCoefficient(registration.reshelCoefficient),
       mccullough: formatCoefficient(registration.mcculloughCoefficient),
-    };
+    });
 
     if (hasSquat || hasBench) {
-      record.rack = rackLines.join('\n');
+      record['rack'] = rackLines.join('\n');
     }
 
     for (const lift of lifts) {
@@ -212,12 +226,12 @@ export function buildUnifiedTableExportModel(
 
     if (showPointsColumn) {
       const points = resolvePoints(row, lifts);
-      record.points = points !== null ? formatCoefficient(points) : '—';
+      record['points'] = points !== null ? formatCoefficient(points) : '—';
     }
 
     if (showMaxColumn) {
       const max = resolveMax(row, lifts);
-      record.max = max > 0 ? formatWeight(max) : '—';
+      record['max'] = max > 0 ? formatWeight(max) : '—';
     }
 
     return record;
