@@ -19,6 +19,7 @@
     "types": ["@cloudflare/workers-types"],
     "baseUrl": "./",
     "paths": {
+      "@werewolf/domain": ["../packages/domain/src/index.ts"],
       "@werewolf/domain/*": ["../packages/domain/src/*"]
     }
   }

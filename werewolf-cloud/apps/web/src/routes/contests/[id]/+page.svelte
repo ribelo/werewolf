@@ -6,18 +6,19 @@
   import AttemptEditorModal from '$lib/components/AttemptEditorModal.svelte';
   import ContestCategoryModal from '$lib/components/ContestCategoryModal.svelte';
   import ContestEditorModal from '$lib/components/ContestEditorModal.svelte';
-import { getStatusClasses, formatCompetitorName, formatWeight, normaliseAgeCategoryLabel } from '$lib/utils';
-import { apiClient, ApiError } from '$lib/api';
-import { realtimeClient } from '$lib/realtime';
-  import { modalStore } from '$lib/ui/modal';
   import FlightAssignmentModal from '$lib/components/FlightAssignmentModal.svelte';
-import { toast } from '$lib/ui/toast';
+  import UnifiedContestTable from '$lib/components/UnifiedContestTable.svelte';
+  import { buildUnifiedRows, deriveContestLifts, sortUnifiedRows, LIFTS, ATTEMPT_NUMBERS, type UnifiedRow, type LiftKind } from '$lib/contest-table';
+  import { buildUnifiedTableExportModel, createCsvBlob, createPdfBlob } from '$lib/export';
+  import { getStatusClasses, formatCompetitorName, formatWeight, normaliseAgeCategoryLabel } from '$lib/utils';
+  import { apiClient, ApiError } from '$lib/api';
+  import { realtimeClient } from '$lib/realtime';
+  import { modalStore } from '$lib/ui/modal';
+  import { toast } from '$lib/ui/toast';
   import { contestStore, currentAgeCategories, currentWeightClasses } from '$lib/ui/contest-store';
   import { setContestContext } from '$lib/ui/context-helpers';
   import { getAttemptStatusClass, getAttemptStatusLabel } from '$lib/ui/status';
   import { buildRisingBarQueue, type QueuePhase } from '$lib/rising-bar';
-  import UnifiedContestTable from '$lib/components/UnifiedContestTable.svelte';
-  import { buildUnifiedRows, deriveContestLifts, sortUnifiedRows, LIFTS, type UnifiedRow, type LiftKind } from '$lib/contest-table';
   import type { PageData } from './$types';
 import type {
     Registration,
@@ -38,7 +39,7 @@ import type {
     ContestTag,
   } from '$lib/types';
   import { bundleToCurrentAttempt } from '$lib/current-attempt';
-  import { _ } from 'svelte-i18n';
+  import { _, locale } from 'svelte-i18n';
   import { get } from 'svelte/store';
   import { ArrowUpDown, ChevronUp, ChevronDown } from 'lucide-svelte';
   import reshelMenData from '@werewolf/domain/data/reshel-men.json';
@@ -754,6 +755,95 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
     URL.revokeObjectURL(url);
   }
 
+  interface LiftTableExportContext {
+    id: ExportMenuId;
+    rows: UnifiedRow[];
+    lifts: LiftKind[];
+    attemptNumbers?: AttemptNumber[];
+    showPointsColumn?: boolean;
+    showMaxColumn?: boolean;
+    title: string;
+  }
+
+  function formatTimestampForFilename(date: Date): string {
+    const pad = (value: number) => value.toString().padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}${pad(date.getMinutes())}`;
+  }
+
+  function formatDisplayTimestamp(date: Date, currentLocale: string): string {
+    try {
+      return new Intl.DateTimeFormat(currentLocale || undefined, {
+        dateStyle: 'short',
+        timeStyle: 'short',
+      }).format(date);
+    } catch {
+      return date.toLocaleString();
+    }
+  }
+
+  function safeFileName(input: string): string {
+    const cleaned = input.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim();
+    if (!cleaned) {
+      return 'export';
+    }
+    return cleaned;
+  }
+
+  async function exportUnifiedTable(format: 'csv' | 'pdf', context: LiftTableExportContext) {
+    if (!contest || context.rows.length === 0) {
+      toast.error(context.rows.length === 0 ? t('contest_detail.export.empty') : t('contest_detail.export.error'));
+      closeExportMenu();
+      return;
+    }
+
+    exportingUnifiedTable = true;
+    try {
+      const translate = get(_);
+      const currentLocale = get(locale) ?? 'en';
+      const statusLabels = {
+        Pending: translate('attempt.status.pending'),
+        Successful: translate('attempt.status.successful'),
+        Failed: translate('attempt.status.failed'),
+      };
+      const model = buildUnifiedTableExportModel({
+        rows: context.rows,
+        lifts: context.lifts,
+        attemptNumbers: context.attemptNumbers ?? ATTEMPT_NUMBERS,
+        showPointsColumn: context.showPointsColumn ?? true,
+        showMaxColumn: context.showMaxColumn ?? true,
+        weightClasses,
+        ageCategories,
+        translate,
+        statusLabels,
+      });
+      const now = new Date();
+      const contestTitle = contest?.name ?? t('contest_detail.fallback_title');
+      const fileBase = `${contestTitle} - ${context.title} - ${formatTimestampForFilename(now)}`;
+      const filename = `${safeFileName(fileBase)}.${format}`;
+      if (format === 'csv') {
+        const blob = createCsvBlob(model);
+        downloadFile(blob, filename);
+      } else {
+        const generatedLabel = t('contest_detail.export.generated_at', {
+          timestamp: formatDisplayTimestamp(now, currentLocale),
+        });
+        const blob = await createPdfBlob(model, {
+          title: contestTitle,
+          subtitle: context.title,
+          generatedAtLabel: generatedLabel,
+        });
+        downloadFile(blob, filename);
+      }
+      toast.success(t('contest_detail.export.success'));
+    } catch (error) {
+      console.error('Unified contest table export failed', error);
+      toast.error(t('contest_detail.export.error'));
+    } finally {
+      exportingUnifiedTable = false;
+      closeExportMenu();
+    }
+  }
+
   async function exportResults(format: 'csv' | 'json') {
     exportingResults = true;
     try {
@@ -1324,6 +1414,9 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
 
   let openResultFilter: 'weight' | 'age' | 'tags' | null = null;
   let openRegistrationFilter: 'weight' | 'age' | 'labels' | null = null;
+  type ExportMenuId = 'squat' | 'bench' | 'deadlift';
+  let openExportMenu: ExportMenuId | null = null;
+  let exportingUnifiedTable = false;
 
   function toggleResultFilterPopover(target: 'weight' | 'age' | 'tags') {
     openRegistrationFilter = null;
@@ -1343,15 +1436,27 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
     openRegistrationFilter = null;
   }
 
+  function toggleExportMenu(target: ExportMenuId) {
+    openResultFilter = null;
+    openRegistrationFilter = null;
+    openExportMenu = openExportMenu === target ? null : target;
+  }
+
+  function closeExportMenu() {
+    openExportMenu = null;
+  }
+
   function handleWindowClick() {
     openResultFilter = null;
     openRegistrationFilter = null;
+    closeExportMenu();
   }
 
   function handleWindowKeydown(event: KeyboardEvent) {
     if (event.key === 'Escape') {
       openResultFilter = null;
       openRegistrationFilter = null;
+      closeExportMenu();
     }
   }
 
@@ -3246,6 +3351,54 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
           <div class="card space-y-6">
             <header class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <h3 class="text-h3 text-text-primary">{$_('contest_detail.tabs.squat_table')}</h3>
+              <div class="relative" on:click|stopPropagation>
+                <button
+                  type="button"
+                  class="btn-secondary px-3 py-1 text-xxs"
+                  disabled={exportingUnifiedTable || squatRows.length === 0}
+                  on:click={() => toggleExportMenu('squat')}
+                >
+                  {exportingUnifiedTable ? $_('contest_detail.export.exporting') : $_('contest_detail.export.menu')}
+                </button>
+                {#if openExportMenu === 'squat'}
+                  <div class="absolute right-0 top-full z-40 mt-2 w-48 rounded border border-border-color bg-element-bg shadow-lg">
+                    <button
+                      type="button"
+                      class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
+                      disabled={exportingUnifiedTable}
+                      on:click={() =>
+                        void exportUnifiedTable('csv', {
+                          id: 'squat',
+                          rows: squatRows,
+                          lifts: LIFT_SINGLETONS.Squat,
+                          showPointsColumn: true,
+                          showMaxColumn: true,
+                          title: t('contest_detail.tabs.squat_table'),
+                        })
+                      }
+                    >
+                      <span>{$_('contest_detail.export.csv')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
+                      disabled={exportingUnifiedTable}
+                      on:click={() =>
+                        void exportUnifiedTable('pdf', {
+                          id: 'squat',
+                          rows: squatRows,
+                          lifts: LIFT_SINGLETONS.Squat,
+                          showPointsColumn: true,
+                          showMaxColumn: true,
+                          title: t('contest_detail.tabs.squat_table'),
+                        })
+                      }
+                    >
+                      <span>{$_('contest_detail.export.pdf')}</span>
+                    </button>
+                  </div>
+                {/if}
+              </div>
             </header>
             <div class="flex flex-wrap items-center gap-2">
               {#if femaleWeightFilters.length > 0 || maleWeightFilters.length > 0}
@@ -3442,6 +3595,54 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
           <div class="card space-y-6">
             <header class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <h3 class="text-h3 text-text-primary">{$_('contest_detail.tabs.bench_table')}</h3>
+              <div class="relative" on:click|stopPropagation>
+                <button
+                  type="button"
+                  class="btn-secondary px-3 py-1 text-xxs"
+                  disabled={exportingUnifiedTable || benchRows.length === 0}
+                  on:click={() => toggleExportMenu('bench')}
+                >
+                  {exportingUnifiedTable ? $_('contest_detail.export.exporting') : $_('contest_detail.export.menu')}
+                </button>
+                {#if openExportMenu === 'bench'}
+                  <div class="absolute right-0 top-full z-40 mt-2 w-48 rounded border border-border-color bg-element-bg shadow-lg">
+                    <button
+                      type="button"
+                      class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
+                      disabled={exportingUnifiedTable}
+                      on:click={() =>
+                        void exportUnifiedTable('csv', {
+                          id: 'bench',
+                          rows: benchRows,
+                          lifts: LIFT_SINGLETONS.Bench,
+                          showPointsColumn: true,
+                          showMaxColumn: true,
+                          title: t('contest_detail.tabs.bench_table'),
+                        })
+                      }
+                    >
+                      <span>{$_('contest_detail.export.csv')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
+                      disabled={exportingUnifiedTable}
+                      on:click={() =>
+                        void exportUnifiedTable('pdf', {
+                          id: 'bench',
+                          rows: benchRows,
+                          lifts: LIFT_SINGLETONS.Bench,
+                          showPointsColumn: true,
+                          showMaxColumn: true,
+                          title: t('contest_detail.tabs.bench_table'),
+                        })
+                      }
+                    >
+                      <span>{$_('contest_detail.export.pdf')}</span>
+                    </button>
+                  </div>
+                {/if}
+              </div>
             </header>
             <div class="flex flex-wrap items-center gap-2">
               {#if femaleWeightFilters.length > 0 || maleWeightFilters.length > 0}
@@ -3638,6 +3839,54 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
           <div class="card space-y-6">
             <header class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <h3 class="text-h3 text-text-primary">{$_('contest_detail.tabs.deadlift_table')}</h3>
+              <div class="relative" on:click|stopPropagation>
+                <button
+                  type="button"
+                  class="btn-secondary px-3 py-1 text-xxs"
+                  disabled={exportingUnifiedTable || deadliftRows.length === 0}
+                  on:click={() => toggleExportMenu('deadlift')}
+                >
+                  {exportingUnifiedTable ? $_('contest_detail.export.exporting') : $_('contest_detail.export.menu')}
+                </button>
+                {#if openExportMenu === 'deadlift'}
+                  <div class="absolute right-0 top-full z-40 mt-2 w-48 rounded border border-border-color bg-element-bg shadow-lg">
+                    <button
+                      type="button"
+                      class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
+                      disabled={exportingUnifiedTable}
+                      on:click={() =>
+                        void exportUnifiedTable('csv', {
+                          id: 'deadlift',
+                          rows: deadliftRows,
+                          lifts: LIFT_SINGLETONS.Deadlift,
+                          showPointsColumn: true,
+                          showMaxColumn: true,
+                          title: t('contest_detail.tabs.deadlift_table'),
+                        })
+                      }
+                    >
+                      <span>{$_('contest_detail.export.csv')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
+                      disabled={exportingUnifiedTable}
+                      on:click={() =>
+                        void exportUnifiedTable('pdf', {
+                          id: 'deadlift',
+                          rows: deadliftRows,
+                          lifts: LIFT_SINGLETONS.Deadlift,
+                          showPointsColumn: true,
+                          showMaxColumn: true,
+                          title: t('contest_detail.tabs.deadlift_table'),
+                        })
+                      }
+                    >
+                      <span>{$_('contest_detail.export.pdf')}</span>
+                    </button>
+                  </div>
+                {/if}
+              </div>
             </header>
             <div class="flex flex-wrap items-center gap-2">
               {#if femaleWeightFilters.length > 0 || maleWeightFilters.length > 0}

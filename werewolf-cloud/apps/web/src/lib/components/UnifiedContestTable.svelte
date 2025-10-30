@@ -20,6 +20,7 @@
   export let showMaxColumn = true;
   export let attemptNumbers: AttemptNumber[] = [...ATTEMPT_NUMBERS];
   export let mode: 'attempts' | 'registration' = 'attempts';
+  export let showRowNumbers = false;
 
   export let onSortChange: (column: string) => void = () => {};
   export let onOpenCompetitorModal: (registration: Registration) => void = () => {};
@@ -240,13 +241,23 @@
   }
 </script>
 
-<table class="w-full min-w-[1200px] border-collapse text-sm">
+  <table class="w-full min-w-[1200px] border-collapse text-sm">
   <thead class="bg-element-bg text-label sticky top-0 z-20">
     <tr>
+      {#if showRowNumbers}
+        <th
+          class="sticky left-0 top-0 z-20 bg-element-bg px-2 py-2 text-center border-r border-border-color"
+          rowspan="2"
+          style="min-width: 40px; width: 40px;"
+          role="columnheader"
+        >
+          <span class="text-xs uppercase tracking-[0.3em]">#</span>
+        </th>
+      {/if}
       <th
         class="sticky left-0 top-0 z-20 bg-element-bg px-3 py-2 text-left border-r border-border-color cursor-pointer"
         rowspan="2"
-        style={`min-width: ${NAME_COLUMN_WIDTH}px; width: ${NAME_COLUMN_WIDTH}px;`}
+        style={`min-width: ${NAME_COLUMN_WIDTH}px; width: ${NAME_COLUMN_WIDTH}px; ${showRowNumbers ? 'left: 40px;' : ''}`}
         role="columnheader"
         aria-sort={ariaSort('name')}
         on:click={() => onSortChange('name')}
@@ -359,11 +370,19 @@
     </tr>
   </thead>
   <tbody>
-    {#each rows as row (row.registration.id)}
+    {#each rows as row, index (row.registration.id)}
       <tr class="border-b border-border-color hover:bg-element-bg/50">
+        {#if showRowNumbers}
+          <td
+            class="sticky left-0 z-10 bg-main-bg/95 px-2 py-2 text-center border-r border-border-color"
+            style="min-width: 40px; width: 40px;"
+          >
+            <span class="text-sm text-text-secondary">{index + 1}</span>
+          </td>
+        {/if}
         <td
           class="sticky left-0 z-10 bg-main-bg/95 px-3 py-2 border-r border-border-color"
-          style={`min-width: ${NAME_COLUMN_WIDTH}px; width: ${NAME_COLUMN_WIDTH}px;`}
+          style={`min-width: ${NAME_COLUMN_WIDTH}px; width: ${NAME_COLUMN_WIDTH}px; ${showRowNumbers ? 'left: 40px;' : ''}`}
         >
           <div class="flex flex-col">
             <span class="font-semibold text-text-primary">{row.registration.lastName} {row.registration.firstName}</span>

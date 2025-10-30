@@ -891,6 +891,16 @@
       "bench": "Wyciskanie leżąc",
       "deadlift": "Martwy ciąg"
     },
+    "export": {
+      "menu": "Eksportuj",
+      "csv": "Eksport CSV",
+      "pdf": "Eksport PDF",
+      "exporting": "Eksportowanie...",
+      "generated_at": "Wygenerowano: {timestamp}",
+      "success": "Eksport zakończony",
+      "error": "Nie udało się przygotować eksportu",
+      "empty": "Brak danych do eksportu"
+    },
     "cards": {
       "status": {
         "title": "Status zawodów",

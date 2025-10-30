@@ -279,38 +279,37 @@
 </svelte:head>
 
 <div class="min-h-screen bg-black text-white flex flex-col">
-  <header class="w-full bg-black px-4 sm:px-6 md:px-8 lg:px-10 py-6 sm:py-8 md:py-10">
+  <header class="w-full bg-black px-3 sm:px-4 py-3 sm:py-4">
     <div class="flex flex-col items-center gap-3 sm:gap-4 text-center">
-      <h1 class="font-display text-2xl sm:text-3xl md:text-4xl lg:text-5xl uppercase tracking-[0.1rem] sm:tracking-[0.15rem] md:tracking-[0.2rem] text-white" style="text-shadow: 0 0 16px rgba(220, 20, 60, 0.5), 0 0 32px rgba(220, 20, 60, 0.3);">{contest?.name ?? t('display_table.head.default_contest')}</h1>
+      <h1 class="font-display text-xl sm:text-2xl md:text-3xl uppercase tracking-[0.1rem] sm:tracking-[0.15rem] text-white" style="text-shadow: 0 0 16px rgba(220, 20, 60, 0.5), 0 0 32px rgba(220, 20, 60, 0.3);">{contest?.name ?? t('display_table.head.default_contest')}</h1>
       <ApiStatus {apiBase} />
     </div>
   </header>
 
-  <main class="flex-1 container-full py-6 sm:py-8 md:py-10 lg:py-12 space-y-6 sm:space-y-8 md:space-y-10">
+  <main class="flex-1 container-full py-3 sm:py-4 space-y-3 sm:space-y-4">
     {#if error}
       <div class="card border-primary-red text-center space-y-4">
         <h2 class="text-h2 text-status-error">{t('display_table.errors.load_failed_title')}</h2>
         <p class="text-body text-text-secondary">{error}</p>
       </div>
     {:else}
-      <section class="grid gap-6 md:grid-cols-2">
-        <div class="card text-center space-y-3">
+      <section class="grid gap-3 md:grid-cols-2">
+        <div class="card text-center space-y-2">
           <p class="text-label text-text-secondary uppercase tracking-[0.4em]">{t('display_table.metrics.lifters')}</p>
-          <p class="text-h1 text-text-primary">{lifterCount}</p>
+          <p class="text-h2 text-text-primary">{lifterCount}</p>
         </div>
-
-        <div class="card text-center space-y-3">
+        <div class="card text-center space-y-2">
           <p class="text-label text-text-secondary uppercase tracking-[0.4em]">{t('display_table.metrics.last_update')}</p>
-          <p class="text-h1 text-text-primary">{lastUpdateTime ? lastUpdateTime.toLocaleTimeString() : '—'}</p>
+          <p class="text-h2 text-text-primary">{lastUpdateTime ? lastUpdateTime.toLocaleTimeString() : '—'}</p>
         </div>
       </section>
 
-      <section class="card space-y-6">
+      <section class="card space-y-3">
         <div class="flex flex-wrap items-center justify-center gap-2 md:justify-start">
           {#each contestLifts as lift}
             <button
               type="button"
-              class={`px-3 py-1 text-xxs ${selectedLift === lift ? 'btn-primary text-black' : 'btn-secondary'}`}
+              class={`px-2 py-1 text-xxs ${selectedLift === lift ? 'btn-primary text-black' : 'btn-secondary'}`}
               on:click={() => selectLift(lift)}
             >
               {liftTabLabel(lift)}
@@ -318,7 +317,7 @@
           {/each}
         </div>
         {#if filteredRows.length === 0}
-          <p class="text-caption text-text-secondary text-center py-8">{$_('contest_detail.registrations.empty_filter')}</p>
+          <p class="text-caption text-text-secondary text-center py-4">{$_('contest_detail.registrations.empty_filter')}</p>
         {:else}
           <div class="overflow-x-auto">
             <UnifiedContestTable
@@ -330,6 +329,7 @@
               lifts={visibleLifts}
               weightClasses={referenceData?.weightClasses ?? []}
               ageCategories={referenceData?.ageCategories ?? []}
+              showRowNumbers={true}
               onSortChange={handleSortChange}
             />
           </div>

@@ -38,8 +38,11 @@
   "dependencies": {
     "@formatjs/icu-messageformat-parser": "^2",
     "@sveltejs/adapter-cloudflare": "^4.4.4",
+    "@werewolf/domain": "workspace:*",
     "idb": "^8.0.3",
     "intl-messageformat": "^10",
+    "jspdf": "^2.5.1",
+    "jspdf-autotable": "^3.8.4",
     "lucide-svelte": "^0.471.0",
     "qrcode": "^1.5.3",
     "svelte-i18n": "3.6.0"

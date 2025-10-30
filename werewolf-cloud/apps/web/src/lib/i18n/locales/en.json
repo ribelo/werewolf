@@ -273,6 +273,16 @@
       "bench": "Bench press",
       "deadlift": "Deadlift"
     },
+    "export": {
+      "menu": "Export",
+      "csv": "Export CSV",
+      "pdf": "Export PDF",
+      "exporting": "Exporting...",
+      "generated_at": "Generated: {timestamp}",
+      "success": "Export ready",
+      "error": "Failed to prepare export",
+      "empty": "No rows to export"
+    },
     "lifts_short": {
       "squat": "SQ",
       "bench": "BP",
@@ -890,6 +900,16 @@
       "squat": "Squat",
       "bench": "Bench press",
       "deadlift": "Deadlift"
+    },
+    "export": {
+      "menu": "Export",
+      "csv": "Export CSV",
+      "pdf": "Export PDF",
+      "exporting": "Exporting...",
+      "generated_at": "Generated: {timestamp}",
+      "success": "Export ready",
+      "error": "Failed to prepare export",
+      "empty": "No rows to export"
     },
     "cards": {
       "status": {
