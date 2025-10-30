@@ -9,7 +9,12 @@
   import FlightAssignmentModal from '$lib/components/FlightAssignmentModal.svelte';
   import UnifiedContestTable from '$lib/components/UnifiedContestTable.svelte';
   import { buildUnifiedRows, deriveContestLifts, sortUnifiedRows, LIFTS, ATTEMPT_NUMBERS, type UnifiedRow, type LiftKind } from '$lib/contest-table';
-  import { buildUnifiedTableExportModel, createCsvBlob, createPdfBlob } from '$lib/export';
+  import {
+    buildUnifiedTableExportModel,
+    createCsvBlob,
+    createPdfBlob,
+    createJpgBlob,
+  } from '$lib/export';
   import { getStatusClasses, formatCompetitorName, formatWeight, normaliseAgeCategoryLabel } from '$lib/utils';
   import { apiClient, ApiError } from '$lib/api';
   import { realtimeClient } from '$lib/realtime';
@@ -20,7 +25,7 @@
   import { getAttemptStatusClass, getAttemptStatusLabel } from '$lib/ui/status';
   import { buildRisingBarQueue, type QueuePhase } from '$lib/rising-bar';
   import type { PageData } from './$types';
-import type {
+  import type {
     Registration,
     Attempt,
     CurrentAttempt,
@@ -789,7 +794,10 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
     return cleaned;
   }
 
-  async function exportUnifiedTable(format: 'csv' | 'pdf', context: LiftTableExportContext) {
+  async function exportUnifiedTable(
+    format: 'csv' | 'pdf' | 'jpg',
+    context: LiftTableExportContext
+  ) {
     if (!contest || context.rows.length === 0) {
       toast.error(context.rows.length === 0 ? t('contest_detail.export.empty') : t('contest_detail.export.error'));
       closeExportMenu();
@@ -824,11 +832,21 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
       if (format === 'csv') {
         const blob = createCsvBlob(model);
         downloadFile(blob, filename);
-      } else {
+      } else if (format === 'pdf') {
         const generatedLabel = t('contest_detail.export.generated_at', {
           timestamp: formatDisplayTimestamp(now, currentLocale),
         });
         const blob = await createPdfBlob(model, {
+          title: contestTitle,
+          subtitle: context.title,
+          generatedAtLabel: generatedLabel,
+        });
+        downloadFile(blob, filename);
+      } else {
+        const generatedLabel = t('contest_detail.export.generated_at', {
+          timestamp: formatDisplayTimestamp(now, currentLocale),
+        });
+        const blob = await createJpgBlob(model, {
           title: contestTitle,
           subtitle: context.title,
           generatedAtLabel: generatedLabel,
@@ -2397,7 +2415,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
           </div>
         </section>
 
-        <section class="grid gap-4 md:grid-cols-2">
+        <section class="grid gap-4 md:grid-cols-3">
           <a
           class="card transition-transform hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-primary-red focus:ring-offset-2 focus:ring-offset-main-bg"
           href={`/display/table?contestId=${contestId}`}
@@ -2421,6 +2439,18 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
             <span class="text-h2">🏋️</span>
           </div>
           <p class="text-body text-text-secondary">{$_('contest_detail.links.display.description')}</p>
+          </a>
+          <a
+          class="card transition-transform hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-primary-red focus:ring-offset-2 focus:ring-offset-main-bg"
+          href={`/display/share?contestId=${contestId}`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-h3 text-text-primary">{$_('contest_detail.links.shareable.title')}</h3>
+            <span class="text-h2">🔗</span>
+          </div>
+          <p class="text-body text-text-secondary">{$_('contest_detail.links.shareable.description')}</p>
           </a>
         </section>
 
@@ -3398,6 +3428,23 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
                     >
                       <span>{$_('contest_detail.export.pdf')}</span>
                     </button>
+                    <button
+                      type="button"
+                      class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
+                      disabled={exportingUnifiedTable}
+                      on:click={() =>
+                        void exportUnifiedTable('jpg', {
+                          id: 'squat',
+                          rows: squatRows,
+                          lifts: LIFT_SINGLETONS.Squat,
+                          showPointsColumn: true,
+                          showMaxColumn: true,
+                          title: t('contest_detail.tabs.squat_table'),
+                        })
+                      }
+                    >
+                      <span>{$_('contest_detail.export.jpg')}</span>
+                    </button>
                   </div>
                 {/if}
               </div>
@@ -3643,6 +3690,23 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
                     >
                       <span>{$_('contest_detail.export.pdf')}</span>
                     </button>
+                    <button
+                      type="button"
+                      class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
+                      disabled={exportingUnifiedTable}
+                      on:click={() =>
+                        void exportUnifiedTable('jpg', {
+                          id: 'bench',
+                          rows: benchRows,
+                          lifts: LIFT_SINGLETONS.Bench,
+                          showPointsColumn: true,
+                          showMaxColumn: true,
+                          title: t('contest_detail.tabs.bench_table'),
+                        })
+                      }
+                    >
+                      <span>{$_('contest_detail.export.jpg')}</span>
+                    </button>
                   </div>
                 {/if}
               </div>
@@ -3887,6 +3951,23 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
                       }
                     >
                       <span>{$_('contest_detail.export.pdf')}</span>
+                    </button>
+                    <button
+                      type="button"
+                      class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
+                      disabled={exportingUnifiedTable}
+                      on:click={() =>
+                        void exportUnifiedTable('jpg', {
+                          id: 'deadlift',
+                          rows: deadliftRows,
+                          lifts: LIFT_SINGLETONS.Deadlift,
+                          showPointsColumn: true,
+                          showMaxColumn: true,
+                          title: t('contest_detail.tabs.deadlift_table'),
+                        })
+                      }
+                    >
+                      <span>{$_('contest_detail.export.jpg')}</span>
                     </button>
                   </div>
                 {/if}

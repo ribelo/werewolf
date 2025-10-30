@@ -18,6 +18,10 @@
   export let lifts: LiftKind[] = [...LIFTS];
   export let showPointsColumn = true;
   export let showMaxColumn = true;
+  export let showLabelsColumn = true;
+  export let showFlightColumn = true;
+  export let showRackColumn = true;
+  export let showAttemptGrid = true;
   export let attemptNumbers: AttemptNumber[] = [...ATTEMPT_NUMBERS];
   export let mode: 'attempts' | 'registration' = 'attempts';
   export let showRowNumbers = false;
@@ -308,12 +312,14 @@
           <span aria-hidden="true">{#if sortIndicatorIcon('gender')}<svelte:component this={sortIndicatorIcon('gender')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
         </div>
       </th>
-      <th class="sticky top-0 z-10 bg-element-bg px-3 py-2 cursor-pointer" rowspan="2" role="columnheader" aria-sort={ariaSort('flight')} on:click={() => onSortChange('flight')}>
-        <div class="flex items-center gap-1">
-          <span>{$_('contest_table.columns.flight')}</span>
-          <span aria-hidden="true">{#if sortIndicatorIcon('flight')}<svelte:component this={sortIndicatorIcon('flight')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
-        </div>
-      </th>
+      {#if showFlightColumn}
+        <th class="sticky top-0 z-10 bg-element-bg px-3 py-2 cursor-pointer" rowspan="2" role="columnheader" aria-sort={ariaSort('flight')} on:click={() => onSortChange('flight')}>
+          <div class="flex items-center gap-1">
+            <span>{$_('contest_table.columns.flight')}</span>
+            <span aria-hidden="true">{#if sortIndicatorIcon('flight')}<svelte:component this={sortIndicatorIcon('flight')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
+          </div>
+        </th>
+      {/if}
       <th class="sticky top-0 z-10 bg-element-bg px-3 py-2 cursor-pointer" rowspan="2" role="columnheader" aria-sort={ariaSort('age')} on:click={() => onSortChange('age')}>
         <div class="flex items-center gap-1">
           <span>{$_('contest_table.columns.age')}</span>
@@ -350,14 +356,16 @@
           <span aria-hidden="true">{#if sortIndicatorIcon('mccullough')}<svelte:component this={sortIndicatorIcon('mccullough')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
         </div>
       </th>
-      {#if hasSquat || hasBench}
+      {#if showRackColumn && (hasSquat || hasBench)}
         <th class="sticky top-0 z-10 bg-element-bg px-3 py-2" rowspan="2">{$_('contest_table.columns.rack')}</th>
       {/if}
-      {#each activeLifts as lift}
-        <th class="px-3 py-2 text-center uppercase tracking-[0.3em]" colspan={activeAttemptNumbers.length}>
-          {$_(liftHeaderKey[lift])}
-        </th>
-      {/each}
+      {#if showAttemptGrid}
+        {#each activeLifts as lift}
+          <th class="px-3 py-2 text-center uppercase tracking-[0.3em]" colspan={activeAttemptNumbers.length}>
+            {$_(liftHeaderKey[lift])}
+          </th>
+        {/each}
+      {/if}
       {#if showPointsColumn}
         <th class="sticky top-0 z-10 bg-element-bg px-3 py-2 cursor-pointer" rowspan="2" role="columnheader" aria-sort={pointsAriaSort} on:click={() => onSortChange(pointsSortKey)}>
           <div class="flex items-center gap-1">
@@ -374,33 +382,37 @@
           </div>
         </th>
       {/if}
-      <th class="sticky top-0 z-10 bg-element-bg px-3 py-2" rowspan="2">{$_('contest_table.columns.labels')}</th>
+      {#if showLabelsColumn}
+        <th class="sticky top-0 z-10 bg-element-bg px-3 py-2" rowspan="2">{$_('contest_table.columns.labels')}</th>
+      {/if}
       {#if !readOnly}
         <th class="sticky top-0 z-10 bg-element-bg px-3 py-2" rowspan="2">{$_('contest_table.columns.actions')}</th>
       {/if}
     </tr>
-    <tr>
-      {#each activeLifts as lift}
-        {#each activeAttemptNumbers as attemptNumber}
-          {@const attemptKey = attemptSortKey(lift, attemptNumber)}
-          {@const attemptSorted = sortColumn === attemptKey}
-          {@const attemptAria = attemptSorted ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
-          {@const attemptIcon = attemptSorted ? (sortDirection === 'asc' ? ChevronUp : ChevronDown) : ArrowUpDown}
-          <th
-            class="px-2 py-1 text-center text-xxs uppercase tracking-[0.3em] cursor-pointer select-none"
-            role="columnheader"
-            aria-sort={attemptAria}
-            on:click={() => onSortChange(attemptKey)}
-            title={`${$_(liftAbbrevKey[lift])} ${attemptLabels[attemptNumber]}`}
-          >
-            <div class="inline-flex items-center gap-1">
-              <span>{$_(liftAbbrevKey[lift])}&nbsp;{attemptLabels[attemptNumber]}</span>
-              <span aria-hidden="true"><svelte:component this={attemptIcon} class="h-3 w-3 opacity-70" /></span>
-            </div>
-          </th>
+    {#if showAttemptGrid}
+      <tr>
+        {#each activeLifts as lift}
+          {#each activeAttemptNumbers as attemptNumber}
+            {@const attemptKey = attemptSortKey(lift, attemptNumber)}
+            {@const attemptSorted = sortColumn === attemptKey}
+            {@const attemptAria = attemptSorted ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+            {@const attemptIcon = attemptSorted ? (sortDirection === 'asc' ? ChevronUp : ChevronDown) : ArrowUpDown}
+            <th
+              class="px-2 py-1 text-center text-xxs uppercase tracking-[0.3em] cursor-pointer select-none"
+              role="columnheader"
+              aria-sort={attemptAria}
+              on:click={() => onSortChange(attemptKey)}
+              title={`${$_(liftAbbrevKey[lift])} ${attemptLabels[attemptNumber]}`}
+            >
+              <div class="inline-flex items-center gap-1">
+                <span>{$_(liftAbbrevKey[lift])}&nbsp;{attemptLabels[attemptNumber]}</span>
+                <span aria-hidden="true"><svelte:component this={attemptIcon} class="h-3 w-3 opacity-70" /></span>
+              </div>
+            </th>
+          {/each}
         {/each}
-      {/each}
-    </tr>
+      </tr>
+    {/if}
   </thead>
   <tbody>
     {#each rows as row, index (row.registration.id)}
@@ -433,14 +445,18 @@
         >
           {genderSymbol(row.registration)}
         </td>
-        <td class="px-3 py-2 text-center text-xxs">
-          <span class={`inline-flex items-center justify-center rounded px-2 py-1 text-xxs font-medium uppercase tracking-[0.2em] ${row.registration.flightCode === activeFlight ? 'bg-primary-red text-black' : 'bg-element-bg text-text-secondary'}`}>
-            {row.registration.flightCode ?? '—'}
-          </span>
-        </td>
+        {#if showFlightColumn}
+          <td class="px-3 py-2 text-center text-xxs">
+            <span class={`inline-flex items-center justify-center rounded px-2 py-1 text-xxs font-medium uppercase tracking-[0.2em] ${row.registration.flightCode === activeFlight ? 'bg-primary-red text-black' : 'bg-element-bg text-text-secondary'}`}>
+              {row.registration.flightCode ?? '—'}
+            </span>
+          </td>
+        {/if}
         <td class="px-3 py-2 text-center">
           {#if row.birthDate ?? row.registration.birthDate}
-            <span class="block leading-tight">({row.birthDate ?? row.registration.birthDate})</span>
+            <span class="block leading-tight">
+              ({row.birthDate ?? row.registration.birthDate})
+            </span>
           {:else}
             <span class="block leading-tight">—</span>
           {/if}
@@ -448,10 +464,12 @@
         </td>
         <td class="px-3 py-2 text-center">{formatWeight(row.registration.bodyweight)}</td>
         <td class="px-3 py-2 text-center">{row.registration.weightClassName ?? formatWeightClass(row.registration.weightClassId, weightClasses)}</td>
-        <td class="px-3 py-2 text-center">{formatAgeClass(row.registration.ageCategoryId, ageCategories) ?? row.registration.ageCategoryName ?? '—'}</td>
+        <td class="px-3 py-2 text-center">
+          <span class="block leading-tight">{formatAgeClass(row.registration.ageCategoryId, ageCategories) ?? row.registration.ageCategoryName ?? '—'}</span>
+        </td>
         <td class="px-3 py-2 text-center">{formatCoefficient(row.registration.reshelCoefficient)}</td>
         <td class="px-3 py-2 text-center">{formatCoefficient(row.registration.mcculloughCoefficient)}</td>
-        {#if hasSquat || hasBench}
+        {#if showRackColumn && (hasSquat || hasBench)}
           <td class="px-3 py-2 text-center">
             <div class="flex flex-col gap-1 text-xxs uppercase tracking-[0.2em]">
               {#if hasSquat}
@@ -463,126 +481,130 @@
             </div>
           </td>
         {/if}
-        {#each activeLifts as lift}
-          {#each row.attempts[lift].filter((cell) => activeAttemptNumbers.includes(cell.attemptNumber)) as cell}
-            <td class="px-2 py-2 text-center">
-              {#if mode === 'registration'}
-                {@const isActive = !row.registration.lifts || row.registration.lifts.includes(lift)}
-                {@const toggleKey = `${row.registration.id}:${lift}`}
-                {@const isLoading = Boolean(toggleLiftLoading[toggleKey])}
-                {@const label = isActive
-                  ? translate('contest_table.actions.disable_lift', { lift: translate(liftHeaderKey[lift]) })
-                  : translate('contest_table.actions.enable_lift', { lift: translate(liftHeaderKey[lift]) })}
-                <button
-                  class={liftToggleButtonClass(isActive)}
-                  type="button"
-                  aria-label={label}
-                  title={label}
-                  aria-pressed={isActive}
-                  disabled={isLoading}
-                  on:click={() => onToggleLift(row.registration, lift, !isActive)}
-                >
-                  {#if isLoading}
-                    <Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
-                  {:else if isActive}
-                    <CheckCircle2 class="h-4 w-4" aria-hidden="true" />
-                  {:else}
-                    <Circle class="h-4 w-4" aria-hidden="true" />
-                  {/if}
-                </button>
-              {:else if !row.registration.lifts || row.registration.lifts.includes(lift)}
-                <div class="flex flex-col items-center gap-1">
-                  <div class="flex items-center gap-1">
-                    {#if cell.attempt}
-                      {@const attemptId = cell.attempt.id}
-                      {@const status = resolveStatus(cell.attempt.status)}
-                      {#if !readOnly}
-                        {@const isCurrent = currentAttemptId === attemptId}
-                        {@const isLoading = Boolean(currentAttemptLoading[attemptId])}
-                        <button
-                          class={liveButtonClass(isCurrent, isLoading)}
-                          type="button"
-                          aria-label={isCurrent ? $_('contest_table.actions.live_now') : $_('contest_table.actions.set_live')}
-                          title={isCurrent ? $_('contest_table.actions.live_now') : $_('contest_table.actions.set_live')}
-                          aria-pressed={isCurrent}
-                          disabled={isCurrent || isLoading}
-                          on:click={() => onSetCurrentAttempt(cell.attempt)}
-                        >
-                          {#if isLoading}
-                            <Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
-                          {:else}
-                            <Radio class="h-4 w-4" aria-hidden="true" />
-                          {/if}
-                        </button>
-                      {/if}
-                      {#if readOnly}
-                        <span
-                          class={`${STATUS_BUTTON_BASE} ${getAttemptStatusClass(status)} opacity-70`}
-                          aria-label={statusLabels[status]}
-                        >
-                          <svelte:component this={statusIconMap[status] || Clock} class="h-4 w-4" aria-hidden="true" />
-                        </span>
-                      {:else}
-                        <button
-                          class={`${STATUS_BUTTON_BASE} ${getAttemptStatusClass(status)} hover:brightness-110`}
-                          type="button"
-                          aria-label={statusLabels[status]}
-                          title={statusLabels[status]}
-                          on:click={() => onAttemptStatusCycle(cell.attempt)}
-                        >
-                          <svelte:component this={statusIconMap[status] || Clock} class="h-4 w-4" aria-hidden="true" />
-                        </button>
-                      {/if}
+        {#if showAttemptGrid}
+          {#each activeLifts as lift}
+            {#each row.attempts[lift].filter((cell) => activeAttemptNumbers.includes(cell.attemptNumber)) as cell}
+              <td class="px-2 py-2 text-center">
+                {#if mode === 'registration'}
+                  {@const isActive = !row.registration.lifts || row.registration.lifts.includes(lift)}
+                  {@const toggleKey = `${row.registration.id}:${lift}`}
+                  {@const isLoading = Boolean(toggleLiftLoading[toggleKey])}
+                  {@const label = isActive
+                    ? translate('contest_table.actions.disable_lift', { lift: translate(liftHeaderKey[lift]) })
+                    : translate('contest_table.actions.enable_lift', { lift: translate(liftHeaderKey[lift]) })}
+                  <button
+                    class={liftToggleButtonClass(isActive)}
+                    type="button"
+                    aria-label={label}
+                    title={label}
+                    aria-pressed={isActive}
+                    disabled={isLoading}
+                    on:click={() => onToggleLift(row.registration, lift, !isActive)}
+                  >
+                    {#if isLoading}
+                      <Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
+                    {:else if isActive}
+                      <CheckCircle2 class="h-4 w-4" aria-hidden="true" />
                     {:else}
-                      <span class="inline-flex h-7 w-[3.75rem] items-center justify-center rounded border border-border-color/40 bg-element-bg/60 text-xs text-text-tertiary">
-                        —
+                      <Circle class="h-4 w-4" aria-hidden="true" />
+                    {/if}
+                  </button>
+                {:else if !row.registration.lifts || row.registration.lifts.includes(lift)}
+                  <div class="flex flex-col items-center gap-1">
+                    <div class="flex items-center gap-1">
+                      {#if cell.attempt}
+                        {@const attemptId = cell.attempt.id}
+                        {@const status = resolveStatus(cell.attempt.status)}
+                        {#if !readOnly}
+                          {@const isCurrent = currentAttemptId === attemptId}
+                          {@const isLoading = Boolean(currentAttemptLoading[attemptId])}
+                          <button
+                            class={liveButtonClass(isCurrent, isLoading)}
+                            type="button"
+                            aria-label={isCurrent ? $_('contest_table.actions.live_now') : $_('contest_table.actions.set_live')}
+                            title={isCurrent ? $_('contest_table.actions.live_now') : $_('contest_table.actions.set_live')}
+                            aria-pressed={isCurrent}
+                            disabled={isCurrent || isLoading}
+                            on:click={() => onSetCurrentAttempt(cell.attempt)}
+                          >
+                            {#if isLoading}
+                              <Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
+                            {:else}
+                              <Radio class="h-4 w-4" aria-hidden="true" />
+                            {/if}
+                          </button>
+                        {/if}
+                        {#if readOnly}
+                          <span
+                            class={`${STATUS_BUTTON_BASE} ${getAttemptStatusClass(status)} opacity-70`}
+                            aria-label={statusLabels[status]}
+                          >
+                            <svelte:component this={statusIconMap[status] || Clock} class="h-4 w-4" aria-hidden="true" />
+                          </span>
+                        {:else}
+                          <button
+                            class={`${STATUS_BUTTON_BASE} ${getAttemptStatusClass(status)} hover:brightness-110`}
+                            type="button"
+                            aria-label={statusLabels[status]}
+                            title={statusLabels[status]}
+                            on:click={() => onAttemptStatusCycle(cell.attempt)}
+                          >
+                            <svelte:component this={statusIconMap[status] || Clock} class="h-4 w-4" aria-hidden="true" />
+                          </button>
+                        {/if}
+                      {:else}
+                        <span class="inline-flex h-7 w-[3.75rem] items-center justify-center rounded border border-border-color/40 bg-element-bg/60 text-xs text-text-tertiary">
+                          —
+                        </span>
+                      {/if}
+                    </div>
+
+                    {#if readOnly}
+                      <span class="inline-flex h-7 w-[3.75rem] items-center justify-center rounded border border-border-color/60 bg-element-bg px-2 text-xs text-text-secondary">
+                        {attemptWeightDisplay(cell)}
                       </span>
+                    {:else}
+                      <input
+                        class="h-7 w-[3.75rem] rounded border border-border-color bg-main-bg px-2 text-center text-xs"
+                        type="text"
+                        inputmode="decimal"
+                        autocomplete="off"
+                        value={cell.attempt?.weight ?? ''}
+                        placeholder="—"
+                        on:change={(event) => handleAttemptInput(row, cell, event)}
+                      />
                     {/if}
                   </div>
-
-                  {#if readOnly}
-                    <span class="inline-flex h-7 w-[3.75rem] items-center justify-center rounded border border-border-color/60 bg-element-bg px-2 text-xs text-text-secondary">
-                      {attemptWeightDisplay(cell)}
-                    </span>
-                  {:else}
-                    <input
-                      class="h-7 w-[3.75rem] rounded border border-border-color bg-main-bg px-2 text-center text-xs"
-                      type="text"
-                      inputmode="decimal"
-                      autocomplete="off"
-                      value={cell.attempt?.weight ?? ''}
-                      placeholder="—"
-                      on:change={(event) => handleAttemptInput(row, cell, event)}
-                    />
-                  {/if}
-                </div>
-              {:else}
-                <span class="inline-flex h-7 w-[3.75rem] items-center justify-center rounded border border-border-color/40 bg-element-bg/60 text-xs text-text-tertiary">
-                  —
-                </span>
-              {/if}
-            </td>
+                {:else}
+                  <span class="inline-flex h-7 w-[3.75rem] items-center justify-center rounded border border-border-color/40 bg-element-bg/60 text-xs text-text-tertiary">
+                    —
+                  </span>
+                {/if}
+              </td>
+            {/each}
           {/each}
-        {/each}
+        {/if}
         {#if showPointsColumn}
           <td class="px-3 py-2 text-center">{displayPoints(row)}</td>
         {/if}
         {#if showMaxColumn}
           <td class="px-3 py-2 text-center">{displayMax(row)}</td>
         {/if}
-        <td class="px-3 py-2">
-          <div class="flex flex-wrap items-center gap-2">
-            {#if row.registration.labels && row.registration.labels.length > 0}
-              {#each row.registration.labels as label (label)}
-                <span class="inline-flex items-center rounded bg-element-bg px-2 py-1 text-xxs uppercase tracking-[0.2em]">
-                  {label}
-                </span>
-              {/each}
-            {:else}
-              <span class="text-xxs uppercase tracking-[0.2em] text-text-tertiary">—</span>
-            {/if}
-          </div>
-        </td>
+        {#if showLabelsColumn}
+          <td class="px-3 py-2">
+            <div class="flex flex-wrap items-center gap-2">
+              {#if row.registration.labels && row.registration.labels.length > 0}
+                {#each row.registration.labels as label (label)}
+                  <span class="inline-flex items-center rounded bg-element-bg px-2 py-1 text-xxs uppercase tracking-[0.2em]">
+                    {label}
+                  </span>
+                {/each}
+              {:else}
+                <span class="text-xxs uppercase tracking-[0.2em] text-text-tertiary">—</span>
+              {/if}
+            </div>
+          </td>
+        {/if}
         {#if !readOnly}
           <td class="px-3 py-2">
             <div class="flex flex-wrap gap-2">

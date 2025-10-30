@@ -895,6 +895,7 @@
       "menu": "Eksportuj",
       "csv": "Eksport CSV",
       "pdf": "Eksport PDF",
+      "jpg": "Eksport JPG",
       "exporting": "Eksportowanie...",
       "generated_at": "Wygenerowano: {timestamp}",
       "success": "Eksport zakończony",
@@ -927,6 +928,10 @@
       "display": {
         "title": "Ekran sceniczny",
         "description": "Ekran dla publiczności z aktualnym zawodnikiem i planem talerzy."
+      },
+      "shareable": {
+        "title": "Tabela publiczna",
+        "description": "Udostępnij wyniki bez panelu sędziego – link idealny do posta."
       }
     },
     "current": {
@@ -1035,7 +1040,10 @@
         "age_button_all": "Wszystkie kategorie",
         "labels_button": "Etykiety",
         "labels_button_all": "Wszystkie etykiety",
-        "clear": "Wyczyść filtry"
+        "lift_button": "Bój",
+        "lift_button_all": "Wszystkie boje",
+        "clear": "Wyczyść filtry",
+        "heading": "Filtry"
       },
       "active_flight_label": "Aktywny flight",
       "active_flight_none": "Brak",
