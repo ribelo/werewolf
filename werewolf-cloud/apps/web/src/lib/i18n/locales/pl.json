@@ -621,7 +621,8 @@
     "check_status": "Sprawdź",
     "nav": {
       "contests": "Zawody",
-      "settings": "Ustawienia"
+      "settings": "Ustawienia",
+      "sign_out": "Wyloguj"
     },
     "status": {
       "online": "Połączono",

@@ -34,10 +34,13 @@ class ApiClient {
     const { fetch: _, ...fetchOptions } = options;
 
     try {
-      const response = await fetchFn(url, {
+      const requestInit: RequestInit = {
         ...fetchOptions,
         headers,
-      });
+        credentials: 'include',
+      };
+
+      const response = await fetchFn(url, requestInit);
 
       if (!response.ok) {
         throw new ApiError(`HTTP ${response.status}: ${response.statusText}`, response.status);

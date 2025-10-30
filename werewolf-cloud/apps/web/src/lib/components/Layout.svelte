@@ -1,12 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { apiClient } from '$lib/api';
+  import { apiClient, ApiError } from '$lib/api';
   import { PAGE_LINKS } from '$lib/nav';
   import { _ } from 'svelte-i18n';
   import type { SystemHealth } from '$lib/types';
   import { initializeMutationQueue, queueCounts } from '$lib/offline/mutation-queue';
   import MutationQueueModal from '$lib/components/MutationQueueModal.svelte';
   import { modalStore } from '$lib/ui/modal';
+  import { goto } from '$app/navigation';
+
+  type SessionInfo = { authenticated: boolean; checked?: boolean };
 
   type ApiStatus = 'checking' | 'online' | 'degraded' | 'offline';
 
@@ -14,6 +17,7 @@
   export let subtitle = '';
   export let currentPage: keyof typeof PAGE_LINKS = 'contests';
   export let apiBase = '';
+  export let session: SessionInfo = { authenticated: false, checked: false };
 
   let status: ApiStatus = 'checking';
   let statusDetail = '';
@@ -111,6 +115,16 @@
       showFooter: false,
     });
   };
+
+  const handleSignOut = async () => {
+    try {
+      await apiClient.post('/auth/logout');
+    } catch (err) {
+      console.error('Failed to logout', err instanceof ApiError ? err.message : err);
+    } finally {
+      await goto('/login');
+    }
+  };
 </script>
 
 <div class="min-h-screen bg-main-bg text-text-primary flex flex-col">
@@ -137,6 +151,15 @@
               {$_(link.labelKey)}
             </a>
           {/each}
+          {#if session.authenticated}
+            <button
+              type="button"
+              class="px-4 py-2 font-display text-xs tracking-[0.4em] uppercase border-2 transition border-border-color text-text-secondary hover:text-text-primary hover:border-primary-red"
+              on:click={handleSignOut}
+            >
+              {$_('layout.nav.sign_out')}
+            </button>
+          {/if}
         </nav>
 
         <div class="flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.4em] text-text-secondary">

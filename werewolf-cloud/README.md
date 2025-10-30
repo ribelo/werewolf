@@ -38,4 +38,11 @@ bun run dev
 ## Cloudflare Resources
 
 Provisioned IDs and deployment instructions live in `docs/cloudflare-environments.md`. Update that reference whenever new environments or bindings are added.
+
+## Authentication
+
+- The API issues HttpOnly session cookies after a successful `POST /auth/login`.
+- Configure the organizer password with `wrangler secret put ADMIN_PASSWORD` (repeat per environment).
+- Sessions are stored in the existing `KV` binding and expire after 14 days of inactivity.
+- `POST /auth/logout` clears the session cookie; a lightweight `/auth/session` probe is available for the web client.
 ```

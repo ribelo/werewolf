@@ -2212,6 +2212,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
   subtitle={$_('contest_detail.subtitle')}
   currentPage="contests"
   apiBase={apiBase}
+  session={data.session}
 >
   {#if error}
     <div class="card border-status-error">

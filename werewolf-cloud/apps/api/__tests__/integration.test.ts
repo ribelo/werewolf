@@ -53,6 +53,7 @@ describe('Werewolf API – integration (Miniflare + D1)', () => {
       DB: db,
       KV: kv,
       ENV: 'test',
+      ADMIN_PASSWORD: 'test-password',
     } as WerewolfEnvironment;
 
     (env as any)['werewolf-contest-room'] = {
@@ -73,6 +74,104 @@ describe('Werewolf API – integration (Miniflare + D1)', () => {
     await resetDatabase(db);
     await clearKv(kv);
     resetCoefficientCaches();
+  });
+
+  const withSecureEnv = () =>
+    ({
+      ...env,
+      ENV: 'development',
+    }) as WerewolfEnvironment;
+
+  describe('auth routes', () => {
+    it('rejects invalid admin password', async () => {
+      const secureEnv = withSecureEnv();
+
+      const res = await app.request('http://localhost/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: 'wrong-password' }),
+      }, secureEnv);
+
+      expect(res.status).toBe(401);
+      const body = await res.json();
+      expect(body).toMatchObject({
+        data: { authenticated: false },
+        error: 'Invalid credentials',
+      });
+      expect(res.headers.get('Set-Cookie')).toBeNull();
+    });
+
+    it('issues cookie on successful login', async () => {
+      const secureEnv = withSecureEnv();
+
+      const res = await app.request('http://localhost/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: 'test-password' }),
+      }, secureEnv);
+
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body).toMatchObject({
+        data: { authenticated: true },
+        error: null,
+      });
+
+      const setCookie = res.headers.get('Set-Cookie');
+      expect(setCookie).toBeTruthy();
+      expect(setCookie).toContain('werewolf_session=');
+      expect(setCookie).toContain('HttpOnly');
+    });
+
+    it('blocks write routes without session cookie', async () => {
+      const secureEnv = withSecureEnv();
+
+      const res = await app.request('http://localhost/competitors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName: 'Unauth',
+          lastName: 'User',
+          birthDate: '1990-01-01',
+          gender: 'Male',
+        }),
+      }, secureEnv);
+
+      expect(res.status).toBe(401);
+      const body = await res.json();
+      expect(body.error).toBe('Authentication required');
+    });
+
+    it('allows write routes when session cookie provided', async () => {
+      const secureEnv = withSecureEnv();
+
+      const loginRes = await app.request('http://localhost/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: 'test-password' }),
+      }, secureEnv);
+
+      expect(loginRes.status).toBe(200);
+      const cookie = loginRes.headers.get('Set-Cookie');
+      expect(cookie).toBeTruthy();
+      const sessionCookie = cookie!.split(';')[0];
+
+      const res = await app.request('http://localhost/competitors', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: sessionCookie,
+        },
+        body: JSON.stringify({
+          firstName: 'Auth',
+          lastName: 'User',
+          birthDate: '1990-01-01',
+          gender: 'Female',
+        }),
+      }, secureEnv);
+
+      expect(res.status).toBe(201);
+    });
   });
 
   it('GET /health returns service status', async () => {

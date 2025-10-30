@@ -68,6 +68,7 @@
   subtitle={$_('dashboard.subtitle')}
   currentPage="contests"
   apiBase={apiBase}
+  session={data.session}
 >
   <section class="grid gap-6 md:grid-cols-2 mb-12">
     <a href="/contests/new" class="card group no-select">

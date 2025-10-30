@@ -338,6 +338,7 @@ $: currentLocale = $locale;
   subtitle={$_('settings.subtitle')}
   currentPage="settings"
   apiBase={apiBase}
+  session={data.session}
 >
   <div class="space-y-6">
     <section class="card">

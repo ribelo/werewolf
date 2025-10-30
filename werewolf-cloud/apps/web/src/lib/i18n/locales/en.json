@@ -621,7 +621,8 @@
     "check_status": "Check",
     "nav": {
       "contests": "Contests",
-      "settings": "Settings"
+      "settings": "Settings",
+      "sign_out": "Sign out"
     },
     "status": {
       "online": "Online",

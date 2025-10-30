@@ -1378,6 +1378,7 @@ import { formatWeight } from '$lib/utils';
   subtitle={$_('contest.wizard.layout_subtitle')}
   currentPage="contests"
   apiBase={apiBase}
+  session={data.session}
 >
   <div class="container-medium space-y-8">
     <div class="card">

@@ -3,19 +3,53 @@ import { registerRoutes } from './routes';
 import { requestLogger } from './middleware/request-logger';
 import { errorHandler } from './middleware/error-handler';
 import type { WerewolfEnvironment } from './env';
+import { requireAuth } from './middleware/auth';
 import { cors } from 'hono/cors';
 
 export const createApp = () => {
   const app = new Hono<WerewolfEnvironment>();
 
   app.use('*', requestLogger);
-  app.use('*', cors({
-    origin: '*',
-    allowHeaders: ['Content-Type', 'Authorization'],
-    allowMethods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-    exposeHeaders: ['Content-Length', 'Content-Type', 'Request-Id'],
-    maxAge: 600,
-  }));
+  app.use(
+    '*',
+    cors({
+      origin: (origin, c) => {
+        if (!origin) {
+          return undefined;
+        }
+
+        const allowedOrigins = new Set([
+          'http://localhost:5173',
+          'http://127.0.0.1:5173',
+          'http://localhost:4173',
+          'http://127.0.0.1:4173',
+          'https://werewolf.pages.dev',
+          'https://werewolf.r-krzywaznia-2c4.workers.dev',
+        ]);
+
+        if (allowedOrigins.has(origin)) {
+          return origin;
+        }
+
+        try {
+          const requestUrl = new URL(c.req.url);
+          const sameOrigin = `${requestUrl.protocol}//${requestUrl.host}`;
+          if (origin === sameOrigin) {
+            return origin;
+          }
+        } catch {
+          // ignore URL parsing errors
+        }
+
+        return undefined;
+      },
+      allowHeaders: ['Content-Type', 'Authorization'],
+      allowMethods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+      exposeHeaders: ['Content-Length', 'Content-Type', 'Request-Id'],
+      maxAge: 600,
+      credentials: true,
+    }),
+  );
 
   // Middleware to intercept and reformat zValidator responses
   app.use('*', async (c, next) => {
@@ -102,6 +136,8 @@ export const createApp = () => {
   );
 
   app.onError(errorHandler);
+
+  app.use('*', requireAuth);
 
   registerRoutes(app);
 

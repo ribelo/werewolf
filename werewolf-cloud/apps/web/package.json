@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "bunx vite dev",
+    "dev": "bunx vite dev --host 127.0.0.1",
     "build": "SVELTE_ADAPTER=cloudflare bunx vite build",
     "build:report": "SVELTE_ADAPTER=cloudflare BUNDLE_ANALYZE=true bunx vite build",
     "preview": "SVELTE_ADAPTER=cloudflare bunx vite preview",
