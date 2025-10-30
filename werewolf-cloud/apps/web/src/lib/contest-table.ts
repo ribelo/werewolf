@@ -393,6 +393,32 @@ function compareAttemptProgressionForLiftDescending(
   return 0;
 }
 
+function compareAttemptHistoryForLiftDescending(
+  rowA: UnifiedRow,
+  rowB: UnifiedRow,
+  lift: LiftKind,
+  attemptNumber: AttemptNumber
+): number {
+  const lastRelevantIndex = (attemptNumber as number) - 2;
+  if (lastRelevantIndex < 0) {
+    return 0;
+  }
+
+  const sequenceA = buildAttemptSequenceForLift(rowA, lift);
+  const sequenceB = buildAttemptSequenceForLift(rowB, lift);
+
+  for (let index = lastRelevantIndex; index >= 0; index -= 1) {
+    const weightA = sequenceA[index]!;
+    const weightB = sequenceB[index]!;
+    if (weightA === weightB) {
+      continue;
+    }
+    return weightB - weightA;
+  }
+
+  return 0;
+}
+
 function compareMaxTieBreakers(
   rowA: UnifiedRow,
   rowB: UnifiedRow,
@@ -432,20 +458,6 @@ function compareLiftMaxTieBreakers(
   return compareByName(rowA.registration, rowB.registration);
 }
 
-function getPreviousAttemptWeight(
-  row: UnifiedRow,
-  lift: LiftKind,
-  attemptNumber: AttemptNumber
-): number | null {
-  if (attemptNumber <= 1) {
-    return null;
-  }
-  const attemptIndex = (attemptNumber as number) - 2;
-  const previousCell = row.attempts?.[lift]?.[attemptIndex] ?? null;
-  const weight = previousCell?.attempt?.weight;
-  return Number.isFinite(weight as number) ? (weight as number) : null;
-}
-
 function compareAttemptTieBreakers(
   rowA: UnifiedRow,
   rowB: UnifiedRow,
@@ -453,18 +465,21 @@ function compareAttemptTieBreakers(
   attemptNumber: AttemptNumber,
   direction: 'asc' | 'desc'
 ): number {
-  const bodyweightComparison = compareBodyweightAscending(rowA, rowB);
-  if (bodyweightComparison !== 0) {
+  const bodyweightComparisonRaw = compareBodyweightAscending(rowA, rowB);
+  if (bodyweightComparisonRaw !== 0) {
+    const bodyweightComparison =
+      direction === 'asc' ? -bodyweightComparisonRaw : bodyweightComparisonRaw;
     return bodyweightComparison;
   }
 
-  const previousA = getPreviousAttemptWeight(rowA, lift, attemptNumber);
-  const previousB = getPreviousAttemptWeight(rowB, lift, attemptNumber);
-
-  if (previousA !== previousB) {
-    const safeA = previousA ?? Number.NEGATIVE_INFINITY;
-    const safeB = previousB ?? Number.NEGATIVE_INFINITY;
-    return direction === 'asc' ? safeA - safeB : safeB - safeA;
+  const progressionComparison = compareAttemptHistoryForLiftDescending(
+    rowA,
+    rowB,
+    lift,
+    attemptNumber
+  );
+  if (progressionComparison !== 0) {
+    return direction === 'asc' ? -progressionComparison : progressionComparison;
   }
 
   return compareByName(rowA.registration, rowB.registration);
@@ -536,7 +551,7 @@ export function sortUnifiedRows(
         return attemptTieBreaker;
       }
 
-      return `${regA.lastName} ${regA.firstName}`.localeCompare(`${regB.lastName} ${regB.firstName}`) * modifier;
+      return compareByName(regA, regB);
     }
 
     switch (column) {

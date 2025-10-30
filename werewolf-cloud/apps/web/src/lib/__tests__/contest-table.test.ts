@@ -177,6 +177,151 @@ describe('buildUnifiedRows - points calculation', () => {
   });
 });
 
+describe('sortUnifiedRows - attempt column tie breakers', () => {
+  it('heavier bodyweight goes first when sorting ascending', () => {
+    const heavier = createRow({
+      id: 'heavier',
+      bodyweight: 92,
+      deadliftAttempts: [
+        { attemptNumber: 1, weight: 180, status: 'Successful' },
+        { attemptNumber: 2, weight: 200, status: 'Successful' },
+      ],
+    });
+
+    const lighter = createRow({
+      id: 'lighter',
+      bodyweight: 82,
+      deadliftAttempts: [
+        { attemptNumber: 1, weight: 180, status: 'Successful' },
+        { attemptNumber: 2, weight: 200, status: 'Successful' },
+      ],
+    });
+
+    const sorted = sortUnifiedRows([lighter, heavier], 'attempt:Deadlift:1', 'asc');
+
+    expect(sorted[0]?.registration.id).toBe('heavier');
+    expect(sorted[1]?.registration.id).toBe('lighter');
+  });
+
+  it('uses earlier attempt history when bodyweight matches in ascending order', () => {
+    const earlierProgression = createRow({
+      id: 'earlier-progression',
+      bodyweight: 90,
+      deadliftAttempts: [
+        { attemptNumber: 1, weight: 190, status: 'Successful' },
+        { attemptNumber: 2, weight: 205, status: 'Successful' },
+      ],
+    });
+
+    const laterProgression = createRow({
+      id: 'later-progression',
+      bodyweight: 90,
+      deadliftAttempts: [
+        { attemptNumber: 1, weight: 195, status: 'Successful' },
+        { attemptNumber: 2, weight: 205, status: 'Successful' },
+      ],
+    });
+
+    const sorted = sortUnifiedRows(
+      [laterProgression, earlierProgression],
+      'attempt:Deadlift:2',
+      'asc'
+    );
+
+    expect(sorted[0]?.registration.id).toBe('earlier-progression');
+    expect(sorted[1]?.registration.id).toBe('later-progression');
+  });
+
+  it('prioritises lighter bodyweight before attempt history', () => {
+    const lighter = createRow({
+      id: 'lighter',
+      bodyweight: 82,
+      deadliftAttempts: [
+        { attemptNumber: 1, weight: 180, status: 'Successful' },
+        { attemptNumber: 2, weight: 200, status: 'Successful' },
+        { attemptNumber: 3, weight: 215, status: 'Successful' },
+      ],
+    });
+
+    const heavier = createRow({
+      id: 'heavier',
+      bodyweight: 88,
+      deadliftAttempts: [
+        { attemptNumber: 1, weight: 180, status: 'Successful' },
+        { attemptNumber: 2, weight: 200, status: 'Successful' },
+        { attemptNumber: 3, weight: 215, status: 'Successful' },
+      ],
+    });
+
+    const sorted = sortUnifiedRows([heavier, lighter], 'attempt:Deadlift:2', 'desc');
+
+    expect(sorted[0]?.registration.id).toBe('lighter');
+    expect(sorted[1]?.registration.id).toBe('heavier');
+  });
+
+  it('walks back through earlier attempts when weights tie', () => {
+    const strongerOpener = createRow({
+      id: 'stronger-opener',
+      bodyweight: 90,
+      deadliftAttempts: [
+        { attemptNumber: 1, weight: 205, status: 'Successful' },
+        { attemptNumber: 2, weight: 225, status: 'Successful' },
+        { attemptNumber: 3, weight: 240, status: 'Successful' },
+      ],
+    });
+
+    const lighterOpener = createRow({
+      id: 'lighter-opener',
+      bodyweight: 90,
+      deadliftAttempts: [
+        { attemptNumber: 1, weight: 195, status: 'Successful' },
+        { attemptNumber: 2, weight: 225, status: 'Successful' },
+        { attemptNumber: 3, weight: 240, status: 'Successful' },
+      ],
+    });
+
+    const sorted = sortUnifiedRows(
+      [lighterOpener, strongerOpener],
+      'attempt:Deadlift:2',
+      'desc'
+    );
+
+    expect(sorted[0]?.registration.id).toBe('stronger-opener');
+    expect(sorted[1]?.registration.id).toBe('lighter-opener');
+  });
+
+  it('considers the most recent prior attempt before older ones', () => {
+    const strongerSecondAttempt = createRow({
+      id: 'stronger-second',
+      bodyweight: 90,
+      deadliftAttempts: [
+        { attemptNumber: 1, weight: 190, status: 'Successful' },
+        { attemptNumber: 2, weight: 220, status: 'Successful' },
+        { attemptNumber: 3, weight: 235, status: 'Successful' },
+      ],
+    });
+
+    const strongerOpener = createRow({
+      id: 'stronger-opener',
+      bodyweight: 90,
+      deadliftAttempts: [
+        { attemptNumber: 1, weight: 205, status: 'Successful' },
+        { attemptNumber: 2, weight: 215, status: 'Successful' },
+        { attemptNumber: 3, weight: 235, status: 'Successful' },
+      ],
+    });
+
+    const sorted = sortUnifiedRows(
+      [strongerOpener, strongerSecondAttempt],
+      'attempt:Deadlift:3',
+      'desc'
+    );
+
+    expect(sorted[0]?.registration.id).toBe('stronger-second');
+    expect(sorted[1]?.registration.id).toBe('stronger-opener');
+  });
+});
+
 describe('sortUnifiedRows - max column tie breakers', () => {
   it('prioritises lighter bodyweight before attempt history', () => {
     const lighterBodyweight = createRow({
