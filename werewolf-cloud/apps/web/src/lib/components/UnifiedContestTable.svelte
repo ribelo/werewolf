@@ -21,6 +21,8 @@
   export let showLabelsColumn = true;
   export let showFlightColumn = true;
   export let showRackColumn = true;
+  export let showReshelColumn = true;
+  export let showMcculloughColumn = true;
   export let showAttemptGrid = true;
   export let attemptNumbers: AttemptNumber[] = [...ATTEMPT_NUMBERS];
   export let mode: 'attempts' | 'registration' = 'attempts';
@@ -344,18 +346,22 @@
           <span aria-hidden="true">{#if sortIndicatorIcon('ageClass')}<svelte:component this={sortIndicatorIcon('ageClass')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
         </div>
       </th>
-      <th class="sticky top-0 z-10 bg-element-bg px-3 py-2 cursor-pointer" rowspan="2" role="columnheader" aria-sort={ariaSort('reshel')} on:click={() => onSortChange('reshel')}>
-        <div class="flex items-center gap-1">
-          <span>{$_('contest_table.columns.reshel')}</span>
-          <span aria-hidden="true">{#if sortIndicatorIcon('reshel')}<svelte:component this={sortIndicatorIcon('reshel')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
-        </div>
-      </th>
-      <th class="sticky top-0 z-10 bg-element-bg px-3 py-2 cursor-pointer" rowspan="2" role="columnheader" aria-sort={ariaSort('mccullough')} on:click={() => onSortChange('mccullough')}>
-        <div class="flex items-center gap-1">
-          <span>{$_('contest_table.columns.mccullough')}</span>
-          <span aria-hidden="true">{#if sortIndicatorIcon('mccullough')}<svelte:component this={sortIndicatorIcon('mccullough')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
-        </div>
-      </th>
+      {#if showReshelColumn}
+        <th class="sticky top-0 z-10 bg-element-bg px-3 py-2 cursor-pointer" rowspan="2" role="columnheader" aria-sort={ariaSort('reshel')} on:click={() => onSortChange('reshel')}>
+          <div class="flex items-center gap-1">
+            <span>{$_('contest_table.columns.reshel')}</span>
+            <span aria-hidden="true">{#if sortIndicatorIcon('reshel')}<svelte:component this={sortIndicatorIcon('reshel')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
+          </div>
+        </th>
+      {/if}
+      {#if showMcculloughColumn}
+        <th class="sticky top-0 z-10 bg-element-bg px-3 py-2 cursor-pointer" rowspan="2" role="columnheader" aria-sort={ariaSort('mccullough')} on:click={() => onSortChange('mccullough')}>
+          <div class="flex items-center gap-1">
+            <span>{$_('contest_table.columns.mccullough')}</span>
+            <span aria-hidden="true">{#if sortIndicatorIcon('mccullough')}<svelte:component this={sortIndicatorIcon('mccullough')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
+          </div>
+        </th>
+      {/if}
       {#if showRackColumn && (hasSquat || hasBench)}
         <th class="sticky top-0 z-10 bg-element-bg px-3 py-2" rowspan="2">{$_('contest_table.columns.rack')}</th>
       {/if}
@@ -467,8 +473,12 @@
         <td class="px-3 py-2 text-center">
           <span class="block leading-tight">{formatAgeClass(row.registration.ageCategoryId, ageCategories) ?? row.registration.ageCategoryName ?? '—'}</span>
         </td>
-        <td class="px-3 py-2 text-center">{formatCoefficient(row.registration.reshelCoefficient)}</td>
-        <td class="px-3 py-2 text-center">{formatCoefficient(row.registration.mcculloughCoefficient)}</td>
+        {#if showReshelColumn}
+          <td class="px-3 py-2 text-center">{formatCoefficient(row.registration.reshelCoefficient)}</td>
+        {/if}
+        {#if showMcculloughColumn}
+          <td class="px-3 py-2 text-center">{formatCoefficient(row.registration.mcculloughCoefficient)}</td>
+        {/if}
         {#if showRackColumn && (hasSquat || hasBench)}
           <td class="px-3 py-2 text-center">
             <div class="flex flex-col gap-1 text-xxs uppercase tracking-[0.2em]">

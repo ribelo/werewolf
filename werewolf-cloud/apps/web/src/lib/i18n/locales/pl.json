@@ -1354,6 +1354,13 @@
       "pending": "Próby w kolejce",
       "last_update": "Ostatnia aktualizacja"
     },
+    "actions": {
+      "auto_scroll": "Autoprzewijanie",
+      "speed": "Prędkość",
+      "speed_slow": "Wolno",
+      "speed_normal": "Normalna",
+      "speed_fast": "Szybko"
+    },
     "queue": {
       "title": "Nadchodzące próby",
       "subtitle": "Kolejność według rosnącego ciężaru",

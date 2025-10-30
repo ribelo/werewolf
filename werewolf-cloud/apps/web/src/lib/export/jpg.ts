@@ -88,7 +88,7 @@ function createCell(
     cell.style.backgroundColor = background;
   }
 
-  const segments = content.split('\n');
+  const segments = content.split('\n', 2);
   segments.forEach((segment, index) => {
     if (index > 0) {
       cell.appendChild(document.createElement('br'));

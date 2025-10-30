@@ -1364,6 +1364,13 @@
       "pending": "Attempts in queue",
       "last_update": "Last update"
     },
+    "actions": {
+      "auto_scroll": "Auto-scroll",
+      "speed": "Speed",
+      "speed_slow": "Slow",
+      "speed_normal": "Normal",
+      "speed_fast": "Fast"
+    },
     "queue": {
       "title": "Upcoming attempts",
       "subtitle": "Rotation ordered by rising bar",

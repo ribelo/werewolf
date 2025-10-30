@@ -57,11 +57,15 @@ function competitorMeta(registration: Registration): string | null {
   return parts.join(' • ');
 }
 
+function formatBirthDateDisplay(value: string): string {
+  return value.replace(/-/g, '\u2011');
+}
+
 function ageDisplay(row: UnifiedRow): { birth: string; age: string } {
   const birthDate = row.birthDate ?? row.registration.birthDate ?? null;
   const age = row.age ?? null;
   return {
-    birth: birthDate ? `(${birthDate})` : '—',
+    birth: birthDate ? `(${formatBirthDateDisplay(birthDate)})` : '—',
     age: age !== null ? `${age}` : '—',
   };
 }
