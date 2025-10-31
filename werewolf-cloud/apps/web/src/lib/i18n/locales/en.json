@@ -148,7 +148,7 @@
         "first_name": "First name",
         "last_name": "Last name",
         "birth_date": "Birth date",
-        "gender": "Gender",
+        "gender": "SEX",
         "club": "Club",
         "club_placeholder": "Werewolf Club",
         "city": "City",
@@ -994,6 +994,7 @@
         "sex": "Sex",
         "age_class": "Age class",
         "weight_class": "Weight class",
+        "age": "Age",
         "bodyweight": "Bodyweight",
         "equipment": "Equipment",
         "reshel": "Reshel",
@@ -1179,6 +1180,25 @@
     "team_results": {
       "title": "Team Results",
       "subtitle": "Monitor team standings by division or category.",
+      "subtitle_with_name": "Club rankings for {contest}.",
+      "header_label": "Club standings",
+      "leaderboard_title": "Qualified clubs",
+      "metrics": {
+        "overall": "Overall",
+        "squat": "Squat",
+        "bench": "Bench",
+        "deadlift": "Deadlift"
+      },
+      "metric_descriptions": {
+        "overall": "Sum of coefficient points from the top four men and top woman registered to each club.",
+        "squat": "Top four men and one woman ranked by squat points.",
+        "bench": "Top four men and one woman ranked by bench press points.",
+        "deadlift": "Top four men and one woman ranked by deadlift points."
+      },
+      "metric_selector": {
+        "button_label": "Discipline"
+      },
+      "summary": "{count, plural, one {# qualified club} other {# qualified clubs}}",
       "entries": "{count, plural, one {# result} other {# results}}",
       "views": {
         "open": "Overall",
@@ -1189,18 +1209,18 @@
       "filters": {
         "weights_all": "All weight classes",
         "weights_female": "Female weight classes",
-      "weights_male": "Male weight classes",
-      "age": "Age categories",
-      "tags": "Tags",
-      "all": "All",
-      "open": "Open",
-      "weight_button": "Weight",
-      "weight_button_all": "All classes",
-      "age_button": "Age",
-      "age_button_all": "All categories",
-      "tags_button": "Labels",
-      "tags_button_all": "All labels",
-      "clear": "Clear filters"
+        "weights_male": "Male weight classes",
+        "age": "Age categories",
+        "tags": "Tags",
+        "all": "All",
+        "open": "Open",
+        "weight_button": "Weight",
+        "weight_button_all": "All classes",
+        "age_button": "Age",
+        "age_button_all": "All categories",
+        "tags_button": "Labels",
+        "tags_button_all": "All labels",
+        "clear": "Clear filters"
       },
       "tags": {
         "selector_label": "Tag standings",
@@ -1216,8 +1236,13 @@
       "columns": {
         "lifter": "Lifter",
         "place": "Place",
+        "team_or_lifter": "Team / Athlete",
+        "gender": "Gender",
         "age_category": "Age category",
         "weight_class": "Weight class",
+        "bodyweight": "Bodyweight",
+        "reshel": "Reshel",
+        "mcc": "McC",
         "best_squat": "Best squat",
         "best_bench": "Best bench",
         "best_deadlift": "Best deadlift",
@@ -1226,7 +1251,23 @@
         "deadlift_points": "Deadlift points",
         "total": "Total",
         "points": "Best points",
+        "team_points": "Team points",
+        "coefficient_points": "Coefficient points",
         "status": "Status"
+      },
+      "labels": {
+        "gender_female": "Female",
+        "gender_male": "Male",
+        "gender_unknown": "Other",
+        "sex_m": "M",
+        "sex_f": "F",
+        "sex_unknown": "–",
+        "slots_filled": "slots filled"
+      },
+      "placeholder": {
+        "male": "Open slot - male lifter needed",
+        "female": "Open slot - female lifter needed",
+        "generic": "Open slot"
       },
       "disqualified": "Disqualified",
       "record": "Record",

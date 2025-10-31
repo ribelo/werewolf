@@ -23,12 +23,14 @@ const timingSafeEqual = (a: string, b: string) => {
   const encoder = new TextEncoder();
   const aBytes = encoder.encode(a);
   const bBytes = encoder.encode(b);
-  const length = Math.max(aBytes.length, bBytes.length);
-  let mismatch = aBytes.length ^ bBytes.length;
+  const aLength = aBytes.length;
+  const bLength = bBytes.length;
+  const length = Math.max(aLength, bLength);
+  let mismatch = aLength ^ bLength;
 
   for (let i = 0; i < length; i++) {
-    const aByte = aBytes[i % aBytes.length];
-    const bByte = bBytes[i % bBytes.length];
+    const aByte = aLength > 0 ? aBytes[i % aLength] ?? 0 : 0;
+    const bByte = bLength > 0 ? bBytes[i % bLength] ?? 0 : 0;
     mismatch |= aByte ^ bByte;
   }
 
@@ -69,7 +71,14 @@ auth.post('/login', zValidator('json', loginSchema), async (c) => {
 
   const userAgent = c.req.header('User-Agent');
   const ip = c.req.header('CF-Connecting-IP') ?? c.req.header('X-Forwarded-For');
-  const session = await createSession(c.env, { userAgent, ip });
+  const sessionContext: { userAgent?: string; ip?: string } = {};
+  if (userAgent) {
+    sessionContext.userAgent = userAgent;
+  }
+  if (ip) {
+    sessionContext.ip = ip;
+  }
+  const session = await createSession(c.env, sessionContext);
 
   const isProduction = c.env.ENV === 'production';
   setCookie(c, SESSION_COOKIE_NAME, session.id, cookieOptions(isProduction));
@@ -130,7 +139,15 @@ auth.get('/session', async (c) => {
   const userAgent = c.req.header('User-Agent');
   const ip = c.req.header('CF-Connecting-IP') ?? c.req.header('X-Forwarded-For');
 
-  await refreshSession(c.env, session, { userAgent, ip }).catch(() => {});
+  const sessionContext: { userAgent?: string; ip?: string } = {};
+  if (userAgent) {
+    sessionContext.userAgent = userAgent;
+  }
+  if (ip) {
+    sessionContext.ip = ip;
+  }
+
+  await refreshSession(c.env, session, sessionContext).catch(() => {});
 
   const isProduction = c.env.ENV === 'production';
   setCookie(c, SESSION_COOKIE_NAME, session.id, cookieOptions(isProduction));

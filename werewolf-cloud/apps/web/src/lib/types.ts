@@ -253,11 +253,15 @@ export interface ContestRankingEntry {
   id: string;
   registrationId: string;
   contestId: string;
+  competitorId?: string;
   bestBench?: number | null;
   bestSquat?: number | null;
   bestDeadlift?: number | null;
   totalWeight?: number | null;
   coefficientPoints?: number | null;
+  squatPoints?: number | null;
+  benchPoints?: number | null;
+  deadliftPoints?: number | null;
   placeOpen?: number | null;
   placeInAgeClass?: number | null;
   placeInWeightClass?: number | null;
@@ -270,6 +274,56 @@ export interface ContestRankingEntry {
   lastName: string;
   ageCategory?: string | null;
   weightClass?: string | null;
+  gender?: string | null;
+  club?: string | null;
+  bodyweight?: number | null;
+  labels?: string[];
+}
+
+export type TeamScoreMetric = 'overall' | 'squat' | 'bench' | 'deadlift';
+
+export interface TeamResultContributor {
+  registrationId: string;
+  competitorId?: string;
+  firstName: string;
+  lastName: string;
+  gender: string;
+  bodyweight: number | null;
+  ageCategory: string | null;
+  weightClass: string | null;
+  ageYears: number | null;
+  points: number;
+  coefficientPoints: number;
+  squatPoints: number;
+  benchPoints: number;
+  deadliftPoints: number;
+  bestSquat: number;
+  bestBench: number;
+  bestDeadlift: number;
+  totalWeight: number;
+  reshelCoefficient: number | null;
+  mcculloughCoefficient: number | null;
+  isPlaceholder?: boolean;
+}
+
+export interface TeamResultRow {
+  club: string;
+  rank: number;
+  totalPoints: number;
+  overallPoints: number;
+  contributors: TeamResultContributor[];
+}
+
+export interface TeamResultsTable {
+  metric: TeamScoreMetric;
+  rows: TeamResultRow[];
+}
+
+export interface TeamResultsBundle {
+  overall: TeamResultsTable;
+  squat: TeamResultsTable;
+  bench: TeamResultsTable;
+  deadlift: TeamResultsTable;
 }
 
 export interface WeightClass {

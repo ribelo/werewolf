@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import Layout from '$lib/components/Layout.svelte';
   import CompetitorModal from '$lib/components/CompetitorModal.svelte';
   import RegistrationDetailModal from '$lib/components/RegistrationDetailModal.svelte';
   import AttemptEditorModal from '$lib/components/AttemptEditorModal.svelte';
@@ -8,6 +7,7 @@
   import ContestEditorModal from '$lib/components/ContestEditorModal.svelte';
   import FlightAssignmentModal from '$lib/components/FlightAssignmentModal.svelte';
   import UnifiedContestTable from '$lib/components/UnifiedContestTable.svelte';
+  import ContestResultsTable from '$lib/components/ContestResultsTable.svelte';
   import {
     buildUnifiedRows,
     deriveContestLifts,
@@ -44,7 +44,6 @@
     type LabelFilter
   } from '$lib/filters/registrations';
   import type { DisplayFilterSync } from '@werewolf/domain';
-  import type { PageData } from './$types';
   import type {
     Registration,
     Attempt,
@@ -62,6 +61,7 @@
     BackupSummary,
     ContestCategories,
     ContestTag,
+    ReferenceData,
   } from '$lib/types';
   import { bundleToCurrentAttempt } from '$lib/current-attempt';
   import { _, locale } from 'svelte-i18n';
@@ -72,8 +72,28 @@
   import mccData from '@werewolf/domain/data/mccullough.json';
   import { browser } from '$app/environment';
 
-export let data: PageData;
-export let params: Record<string, string> = {};
+  type ContestManagerData = {
+    contest: ContestDetail | null;
+    registrations: Registration[];
+    attempts: Attempt[];
+    currentAttempt: CurrentAttemptBundle | null;
+    referenceData: ReferenceData;
+    resultsOpen?: ContestRankingEntry[] | null;
+    resultsAge?: ContestRankingEntry[] | null;
+    resultsWeight?: ContestRankingEntry[] | null;
+    plateSets: ContestPlateSetEntry[] | null;
+    barWeights: ContestBarWeights | null | undefined;
+    backupsSummary: BackupSummary | null | undefined;
+    contestTags: ContestTag[];
+    error: string | null;
+    apiBase: string;
+    contestId: string;
+    session?: unknown;
+  };
+
+  export let data: ContestManagerData;
+  export let params: Record<string, string> = {};
+  export let view: 'desk' | 'registrations' | 'results' | 'team_results' | 'plates' = 'desk';
 
 $: void params;
   let {
@@ -194,20 +214,6 @@ $: void params;
   }
 
   $: activeContestLifts = contestLifts.length > 0 ? [...contestLifts] : [...FALLBACK_CONTEST_LIFTS];
-  $: competitionTabs = activeContestLifts
-    .map((lift) => LIFT_TAB_MAP[lift])
-    .filter((entry): entry is { id: LiftTabId; labelKey: string } => Boolean(entry));
-  $: tabs = [
-    BASE_TABS[0],
-    BASE_TABS[1],
-    ...competitionTabs,
-    BASE_TABS[2],
-    BASE_TABS[3],
-  ];
-  $: if (!tabs.some((tab) => tab.id === activeTab) && tabs.length > 0) {
-    const fallback = tabs.find((tab) => tab.id === 'registrations') ?? tabs[0];
-    activeTab = fallback.id;
-  }
   $: hasSquatResults = activeContestLifts.includes('Squat');
   $: hasBenchResults = activeContestLifts.includes('Bench');
   $: hasDeadliftResults = activeContestLifts.includes('Deadlift');
@@ -789,28 +795,10 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
     }
   }
 
-  type LiftTabId = 'squat' | 'bench' | 'deadlift';
-  type StaticTabId = 'desk' | 'registrations' | 'results' | 'team_results' | 'plates';
-  type TabId = StaticTabId | LiftTabId;
+  type TabId = 'desk' | 'registrations' | 'results' | 'team_results' | 'plates' | 'squat' | 'bench' | 'deadlift';
 
-  const BASE_TABS: ReadonlyArray<{ id: StaticTabId; labelKey: string }> = [
-    { id: 'desk', labelKey: 'contest_detail.tabs.desk' },
-    { id: 'registrations', labelKey: 'contest_detail.tabs.main_table' },
-    { id: 'results', labelKey: 'contest_detail.tabs.results' },
-    { id: 'team_results', labelKey: 'contest_detail.tabs.team_results' },
-    { id: 'plates', labelKey: 'contest_detail.tabs.plates' }
-  ] as const;
-
-  const LIFT_TAB_MAP: Record<LiftKind, { id: LiftTabId; labelKey: string }> = {
-    Squat: { id: 'squat', labelKey: 'contest_detail.tabs.squat_table' },
-    Bench: { id: 'bench', labelKey: 'contest_detail.tabs.bench_table' },
-    Deadlift: { id: 'deadlift', labelKey: 'contest_detail.tabs.deadlift_table' }
-  };
-
-  let tabs: Array<{ id: TabId; labelKey: string }> = [];
-  let competitionTabs: Array<{ id: LiftTabId; labelKey: string }> = [];
-
-  let activeTab: TabId = 'desk';
+  let activeTab: TabId = view;
+  $: activeTab = view;
 
   function setStatusLoadingFlag(id: string, value: boolean) {
     if (value) {
@@ -2616,49 +2604,8 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
 </script>
 
 <svelte:window on:click={handleWindowClick} on:keydown={handleWindowKeydown} />
-
-<svelte:head>
-  <title>{contest?.name ?? t('contest_detail.fallback_title')} • {t('app_name')}</title>
-</svelte:head>
-
-
-
-<Layout
-  title={contest?.name ?? t('contest_detail.fallback_title')}
-  subtitle={$_('contest_detail.subtitle')}
-  currentPage="contests"
-  apiBase={apiBase}
-  session={data.session}
->
-  {#if error}
-    <div class="card border-status-error">
-      <h3 class="text-h3 text-status-error">{$_('contest_detail.error.loading_title')}</h3>
-      <p class="text-body text-text-secondary mt-2">{error}</p>
-    </div>
-  {:else if !contest}
-    <div class="card">
-      <p class="text-body text-text-secondary">{$_('contest_detail.error.not_found')}</p>
-    </div>
-  {:else}
-    <div class="space-y-8">
-      <nav class="flex flex-wrap gap-3 border-b-2 border-border-color pb-3">
-        {#each tabs as tab}
-          <button
-            type="button"
-            class={`px-4 py-2 font-display text-xs uppercase tracking-[0.4em] border-2 transition ${
-              activeTab === tab.id
-                ? 'bg-primary-red text-black border-primary-red'
-                : 'border-border-color text-text-secondary hover:text-text-primary hover:border-primary-red'
-            }`}
-            on:click={() => (activeTab = tab.id)}
-          >
-            {$_(tab.labelKey)}
-          </button>
-        {/each}
-
-      </nav>
-
-      {#if activeTab === 'desk'}
+<div class="space-y-8">
+  {#if activeTab === 'desk'}
         <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div class="card">
           <h3 class="text-label text-text-secondary mb-2">{$_('contest_detail.cards.status.title')}</h3>
@@ -3410,170 +3357,21 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
             {:else if displayedResults.length === 0}
               <p class="text-body text-text-secondary">{$_('contest_detail.results.empty')}</p>
             {:else}
-              <div class="overflow-x-auto">
-                <table class="min-w-full text-left text-sm text-text-secondary">
-                  <thead class="bg-element-bg text-label">
-                    <tr>
-                      <th 
-                        class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
-                        role="columnheader"
-                        aria-sort={resultsAriaSort('place')}
-                        on:click={() => handleResultsSortChange('place')}
-                      >
-                        <div class="flex items-center gap-1">
-                          <span>{$_('contest_detail.results.columns.place')}</span>
-                          <span aria-hidden="true">{#if resultsSortIndicatorIcon('place')}<svelte:component this={resultsSortIndicatorIcon('place')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
-                        </div>
-                      </th>
-                      <th 
-                        class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
-                        role="columnheader"
-                        aria-sort={resultsAriaSort('lifter')}
-                        on:click={() => handleResultsSortChange('lifter')}
-                      >
-                        <div class="flex items-center gap-1">
-                          <span>{$_('contest_detail.results.columns.lifter')}</span>
-                          <span aria-hidden="true">{#if resultsSortIndicatorIcon('lifter')}<svelte:component this={resultsSortIndicatorIcon('lifter')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
-                        </div>
-                      </th>
-                      {#if selectedResultView !== 'open'}
-                        <th 
-                          class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
-                          role="columnheader"
-                          aria-sort={resultsAriaSort('category')}
-                          on:click={() => handleResultsSortChange('category')}
-                        >
-                          <div class="flex items-center gap-1">
-                            <span>
-                              {selectedResultView === 'age'
-                                ? $_('contest_detail.results.columns.age_category')
-                                : $_('contest_detail.results.columns.weight_class')}
-                            </span>
-                            <span aria-hidden="true">{#if resultsSortIndicatorIcon('category')}<svelte:component this={resultsSortIndicatorIcon('category')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
-                          </div>
-                        </th>
-                      {/if}
-                      {#if hasSquatResults}
-                        <th 
-                          class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
-                          role="columnheader"
-                          aria-sort={resultsAriaSort('bestSquat')}
-                          on:click={() => handleResultsSortChange('bestSquat')}
-                        >
-                          <div class="flex items-center gap-1">
-                            <span>{$_('contest_detail.results.columns.best_squat')}</span>
-                            <span aria-hidden="true">{#if resultsSortIndicatorIcon('bestSquat')}<svelte:component this={resultsSortIndicatorIcon('bestSquat')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
-                          </div>
-                        </th>
-                      {/if}
-                      {#if hasBenchResults}
-                        <th 
-                          class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
-                          role="columnheader"
-                          aria-sort={resultsAriaSort('bestBench')}
-                          on:click={() => handleResultsSortChange('bestBench')}
-                        >
-                          <div class="flex items-center gap-1">
-                            <span>{$_('contest_detail.results.columns.best_bench')}</span>
-                            <span aria-hidden="true">{#if resultsSortIndicatorIcon('bestBench')}<svelte:component this={resultsSortIndicatorIcon('bestBench')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
-                          </div>
-                        </th>
-                      {/if}
-                      {#if hasDeadliftResults}
-                        <th 
-                          class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
-                          role="columnheader"
-                          aria-sort={resultsAriaSort('bestDeadlift')}
-                          on:click={() => handleResultsSortChange('bestDeadlift')}
-                        >
-                          <div class="flex items-center gap-1">
-                            <span>{$_('contest_detail.results.columns.best_deadlift')}</span>
-                            <span aria-hidden="true">{#if resultsSortIndicatorIcon('bestDeadlift')}<svelte:component this={resultsSortIndicatorIcon('bestDeadlift')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
-                          </div>
-                        </th>
-                      {/if}
-                      {#if hasSquatResults}
-                        <th 
-                          class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
-                          role="columnheader"
-                          aria-sort={resultsAriaSort('squatPoints')}
-                          on:click={() => handleResultsSortChange('squatPoints')}
-                        >
-                          <div class="flex items-center gap-1">
-                            <span>{$_('contest_detail.results.columns.squat_points')}</span>
-                            <span aria-hidden="true">{#if resultsSortIndicatorIcon('squatPoints')}<svelte:component this={resultsSortIndicatorIcon('squatPoints')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
-                          </div>
-                        </th>
-                      {/if}
-                      {#if hasBenchResults}
-                        <th 
-                          class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
-                          role="columnheader"
-                          aria-sort={resultsAriaSort('benchPoints')}
-                          on:click={() => handleResultsSortChange('benchPoints')}
-                        >
-                          <div class="flex items-center gap-1">
-                            <span>{$_('contest_detail.results.columns.bench_points')}</span>
-                            <span aria-hidden="true">{#if resultsSortIndicatorIcon('benchPoints')}<svelte:component this={resultsSortIndicatorIcon('benchPoints')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
-                          </div>
-                        </th>
-                      {/if}
-                      {#if hasDeadliftResults}
-                        <th 
-                          class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
-                          role="columnheader"
-                          aria-sort={resultsAriaSort('deadliftPoints')}
-                          on:click={() => handleResultsSortChange('deadliftPoints')}
-                        >
-                          <div class="flex items-center gap-1">
-                            <span>{$_('contest_detail.results.columns.deadlift_points')}</span>
-                            <span aria-hidden="true">{#if resultsSortIndicatorIcon('deadliftPoints')}<svelte:component this={resultsSortIndicatorIcon('deadliftPoints')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
-                          </div>
-                        </th>
-                      {/if}
-
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {#each displayedResults as result (result.id ?? result.registrationId)}
-                      <tr class={`border-b border-border-color last:border-b-0 ${result.isDisqualified ? 'bg-status-error/20' : ''}`}>
-                        <td class="px-4 py-3 font-semibold text-text-primary">
-                          {#if getResultPlace(result, selectedResultView) !== null}
-                            {getResultPlace(result, selectedResultView)}
-                          {:else}
-                            –
-                          {/if}
-                        </td>
-                        <td class="px-4 py-3 text-text-secondary">
-                          {formatCompetitorName(result.firstName, result.lastName)}
-                        </td>
-                        {#if selectedResultView !== 'open'}
-                          <td class="px-4 py-3 text-text-secondary">{getResultCategory(result, selectedResultView)}</td>
-                        {/if}
-                        {#if hasSquatResults}
-                          <td class="px-4 py-3 text-text-secondary">{formatLift(result.bestSquat)}</td>
-                        {/if}
-                        {#if hasBenchResults}
-                          <td class="px-4 py-3 text-text-secondary">{formatLift(result.bestBench)}</td>
-                        {/if}
-                        {#if hasDeadliftResults}
-                          <td class="px-4 py-3 text-text-secondary">{formatLift(result.bestDeadlift)}</td>
-                        {/if}
-                        {#if hasSquatResults}
-                          <td class="px-4 py-3 text-text-secondary">{formatPoints(result.squatPoints)}</td>
-                        {/if}
-                        {#if hasBenchResults}
-                          <td class="px-4 py-3 text-text-secondary">{formatPoints(result.benchPoints)}</td>
-                        {/if}
-                        {#if hasDeadliftResults}
-                          <td class="px-4 py-3 text-text-secondary">{formatPoints(result.deadliftPoints)}</td>
-                        {/if}
-
-                      </tr>
-                    {/each}
-                  </tbody>
-                </table>
-              </div>
+              <ContestResultsTable
+                rows={displayedResults}
+                selectedView={selectedResultView}
+                hasSquatResults={hasSquatResults}
+                hasBenchResults={hasBenchResults}
+                hasDeadliftResults={hasDeadliftResults}
+                onSort={handleResultsSortChange}
+                getPlace={(entry) => getResultPlace(entry, selectedResultView)}
+                getCategory={(entry) => getResultCategory(entry, selectedResultView)}
+                formatLift={formatLift}
+                formatPoints={formatPoints}
+                formatName={formatCompetitorName}
+                ariaSort={resultsAriaSort}
+                indicator={resultsSortIndicatorIcon}
+              />
             {/if}
           </div>
         </section>
@@ -4996,9 +4794,3 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
         </section>
       {/if}
     </div>
-  {/if}
-
-
-
-
-</Layout>

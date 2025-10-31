@@ -13,4 +13,5 @@ export * from './constants/categories';
 export * from './services/score-engine';
 export * from './services/coefficients';
 export * from './services/lifts';
+export * from './services/team-results';
 export * from './utils';

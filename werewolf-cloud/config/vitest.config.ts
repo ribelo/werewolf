@@ -18,6 +18,7 @@ export default defineConfig({
   resolve: {
     alias: {
       $lib: path.resolve(__dirname, '../apps/web/src/lib'),
+      '@werewolf/domain': path.resolve(__dirname, '../packages/domain/src'),
     },
   },
 });

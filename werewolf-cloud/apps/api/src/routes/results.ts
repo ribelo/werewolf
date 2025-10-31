@@ -6,6 +6,7 @@ import type { WerewolfEnvironment } from '../env';
 import { executeQuery, executeQueryOne, convertKeysToCamelCase, getCurrentTimestamp } from '../utils/database';
 import { listContestTags, MANDATORY_TAG_LABEL } from '../utils/tags';
 import { calculateRegistrationResults, updateAllRankings, parseLabelText, hasTag, compareResults } from '../services/results';
+import { computeTeamResults, type TeamResultInput } from '@werewolf/domain/services/team-results';
 
 export const contestResults = new Hono<WerewolfEnvironment>();
 
@@ -81,6 +82,9 @@ contestResults.get('/rankings', zValidator('query', z.object({
       r.is_disqualified, r.disqualification_reason,
       r.broke_record, r.record_type, r.calculated_at,
       c.first_name, c.last_name,
+      c.gender,
+      c.club,
+      reg.competitor_id,
       ac.name AS age_category,
       wc.name AS weight_class,
       reg.bodyweight,
@@ -192,6 +196,130 @@ contestResults.get('/rankings', zValidator('query', z.object({
 
   return c.json({
     data,
+    error: null,
+    requestId: c.get('requestId'),
+  });
+});
+
+contestResults.get('/team', async (c) => {
+  const db = c.env.DB;
+  const contestId = c.req.param('contestId');
+
+  if (!contestId) {
+    return c.json({ data: null, error: 'Contest ID is required', requestId: c.get('requestId') }, 400);
+  }
+
+  const rows = await executeQuery(
+    db,
+    `
+    SELECT
+      r.registration_id,
+      r.best_bench,
+      r.best_squat,
+      r.best_deadlift,
+      r.total_weight,
+      r.coefficient_points,
+      r.squat_points,
+      r.bench_points,
+      r.deadlift_points,
+      r.is_disqualified,
+      reg.competitor_id,
+      reg.bodyweight,
+      reg.reshel_coefficient,
+      reg.mccullough_coefficient,
+      c.first_name,
+      c.last_name,
+      c.gender,
+      c.birth_date,
+      c.club,
+      contest.date AS contest_date,
+      ac.name AS age_category,
+      wc.name AS weight_class
+    FROM results r
+    JOIN registrations reg ON r.registration_id = reg.id
+    JOIN competitors c ON reg.competitor_id = c.id
+    JOIN contests contest ON reg.contest_id = contest.id
+    LEFT JOIN contest_age_categories ac ON reg.age_category_id = ac.id
+    LEFT JOIN contest_weight_classes wc ON reg.weight_class_id = wc.id
+    WHERE r.contest_id = ?
+    `,
+    [contestId]
+  );
+
+  const camel = convertKeysToCamelCase(rows) as Array<{
+    registrationId: string;
+    competitorId: string;
+    bestBench: number | null;
+    bestSquat: number | null;
+    bestDeadlift: number | null;
+    totalWeight: number | null;
+    coefficientPoints: number | null;
+    squatPoints: number | null;
+    benchPoints: number | null;
+    deadliftPoints: number | null;
+    isDisqualified: number | boolean | null;
+    bodyweight: number | null;
+    reshelCoefficient: number | null;
+    mcculloughCoefficient: number | null;
+    firstName: string;
+    lastName: string;
+    gender: string | null;
+    birthDate: string;
+    contestDate: string;
+    club: string | null;
+    ageCategory: string | null;
+    weightClass: string | null;
+  }>;
+
+  const inputs: TeamResultInput[] = [];
+
+  function calculateAgeOnDate(birthDate: string | null | undefined, contestDate: string | null | undefined): number | null {
+    if (!birthDate || !contestDate) return null;
+    const b = new Date(birthDate);
+    const c = new Date(contestDate);
+    if (Number.isNaN(b.getTime()) || Number.isNaN(c.getTime())) return null;
+    let age = c.getFullYear() - b.getFullYear();
+    const m = c.getMonth() - b.getMonth();
+    if (m < 0 || (m === 0 && c.getDate() < b.getDate())) {
+      age -= 1;
+    }
+    return age;
+  }
+
+  for (const row of camel) {
+    if (row.gender !== 'Male' && row.gender !== 'Female') {
+      continue;
+    }
+
+    inputs.push({
+      registrationId: row.registrationId,
+      competitorId: row.competitorId,
+      firstName: row.firstName,
+      lastName: row.lastName,
+      gender: row.gender,
+      club: row.club,
+      coefficientPoints: row.coefficientPoints,
+      squatPoints: row.squatPoints,
+      benchPoints: row.benchPoints,
+      deadliftPoints: row.deadliftPoints,
+      bestSquat: row.bestSquat,
+      bestBench: row.bestBench,
+      bestDeadlift: row.bestDeadlift,
+      totalWeight: row.totalWeight,
+      bodyweight: row.bodyweight,
+      ageCategory: row.ageCategory,
+      weightClass: row.weightClass,
+      ageYears: calculateAgeOnDate(row.birthDate, row.contestDate),
+      reshelCoefficient: row.reshelCoefficient,
+      mcculloughCoefficient: row.mcculloughCoefficient,
+      isDisqualified: Boolean(row.isDisqualified),
+    });
+  }
+
+  const teamResults = computeTeamResults(inputs);
+
+  return c.json({
+    data: teamResults,
     error: null,
     requestId: c.get('requestId'),
   });

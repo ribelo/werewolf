@@ -64,7 +64,14 @@ export const requireAuth: MiddlewareHandler<WerewolfEnvironment> = async (c, nex
 
   const userAgent = c.req.header('User-Agent');
   const ip = c.req.header('CF-Connecting-IP') ?? c.req.header('X-Forwarded-For');
-  await refreshSession(c.env, session, { userAgent, ip }).catch(() => {});
+  const sessionContext: { userAgent?: string; ip?: string } = {};
+  if (userAgent) {
+    sessionContext.userAgent = userAgent;
+  }
+  if (ip) {
+    sessionContext.ip = ip;
+  }
+  await refreshSession(c.env, session, sessionContext).catch(() => {});
 
   c.set('sessionId', session.id);
 

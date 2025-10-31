@@ -148,7 +148,7 @@
         "first_name": "Imię",
         "last_name": "Nazwisko",
         "birth_date": "Data urodzenia",
-        "gender": "Płeć",
+        "gender": "SEX",
         "club": "Klub",
         "club_placeholder": "Klub Werewolf",
         "city": "Miasto",
@@ -1169,6 +1169,25 @@
     "team_results": {
       "title": "Wyniki drużynowe",
       "subtitle": "Monitoruj klasyfikacje drużynowe według kategorii.",
+      "subtitle_with_name": "Klasyfikacja klubów dla {contest}.",
+      "header_label": "Klasyfikacja klubowa",
+      "leaderboard_title": "Zakwalifikowane kluby",
+      "metrics": {
+        "overall": "Łącznie",
+        "squat": "Przysiad",
+        "bench": "Wyciskanie",
+        "deadlift": "Martwy ciąg"
+      },
+      "metric_descriptions": {
+        "overall": "Suma punktów współczynników dla czterech najlepszych mężczyzn i najlepszej kobiety w klubie.",
+        "squat": "Czterech najlepszych mężczyzn i najlepsza kobieta według punktów za przysiad.",
+        "bench": "Czterech najlepszych mężczyzn i najlepsza kobieta według punktów za wyciskanie.",
+        "deadlift": "Czterech najlepszych mężczyzn i najlepsza kobieta według punktów za martwy ciąg."
+      },
+      "metric_selector": {
+        "button_label": "Bój"
+      },
+      "summary": "{count, plural, one {# zakwalifikowany klub} few {# zakwalifikowane kluby} many {# zakwalifikowanych klubów} other {# zakwalifikowanych klubów}}",
       "entries": "{count, plural, one {# wynik} few {# wyniki} many {# wyników} other {# wyników}}",
       "views": {
         "open": "Open",
@@ -1179,18 +1198,18 @@
       "filters": {
         "weights_all": "Wszystkie kategorie wagowe",
         "weights_female": "Kategorie wagowe kobiet",
-      "weights_male": "Kategorie wagowe mężczyzn",
-      "age": "Kategorie wiekowe",
-      "tags": "Etykiety",
-      "all": "Wszystkie",
-      "open": "Open",
-      "weight_button": "Waga",
-      "weight_button_all": "Wszystkie klasy",
-      "age_button": "Wiek",
-      "age_button_all": "Wszystkie kategorie",
-      "tags_button": "Etykiety",
-      "tags_button_all": "Wszystkie etykiety",
-      "clear": "Wyczyść filtry"
+        "weights_male": "Kategorie wagowe mężczyzn",
+        "age": "Kategorie wiekowe",
+        "tags": "Etykiety",
+        "all": "Wszystkie",
+        "open": "Open",
+        "weight_button": "Waga",
+        "weight_button_all": "Wszystkie klasy",
+        "age_button": "Wiek",
+        "age_button_all": "Wszystkie kategorie",
+        "tags_button": "Etykiety",
+        "tags_button_all": "Wszystkie etykiety",
+        "clear": "Wyczyść filtry"
       },
       "tags": {
         "selector_label": "Klasyfikacja tagów",
@@ -1206,8 +1225,14 @@
       "columns": {
         "lifter": "Zawodnik",
         "place": "Miejsce",
+        "team_or_lifter": "Klub / Zawodnik",
+        "gender": "Płeć",
         "age_category": "Kategoria wiekowa",
         "weight_class": "Kategoria wagowa",
+        "age": "Wiek",
+        "bodyweight": "Masa ciała",
+        "reshel": "Reshel",
+        "mcc": "McC",
         "best_squat": "Najlepszy przysiad",
         "best_bench": "Najlepsze wyciskanie",
         "best_deadlift": "Najlepszy martwy ciąg",
@@ -1216,7 +1241,23 @@
         "deadlift_points": "Punkty martwego ciągu",
         "total": "Suma",
         "points": "Najlepsze punkty",
+        "team_points": "Punkty drużyny",
+        "coefficient_points": "Punkty przeliczone",
         "status": "Status"
+      },
+      "labels": {
+        "gender_female": "Kobieta",
+        "gender_male": "Mężczyzna",
+        "gender_unknown": "Inna",
+        "sex_m": "M",
+        "sex_f": "K",
+        "sex_unknown": "–",
+        "slots_filled": "miejsc obsadzonych"
+      },
+      "placeholder": {
+        "male": "Wolne miejsce - potrzebny zawodnik (mężczyzna)",
+        "female": "Wolne miejsce - potrzebna zawodniczka",
+        "generic": "Wolne miejsce"
       },
       "disqualified": "Dyskwalifikacja",
       "record": "Rekord",
