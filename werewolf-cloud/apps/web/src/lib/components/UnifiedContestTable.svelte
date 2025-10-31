@@ -43,6 +43,8 @@
   export let currentAttemptId: string | null = null;
   export let currentAttemptLoading: Record<string, boolean> = {};
   export let toggleLiftLoading: Record<string, boolean> = {};
+  export let statusLoading: Record<string, boolean> = {};
+  export let attemptWeightPending: Record<string, boolean> = {};
   const NAME_COLUMN_WIDTH = 220;
   const attemptLabels: Record<number, string> = { 1: 'I', 2: 'II', 3: 'III' };
   const liftHeaderKey: Record<LiftKind, string> = {
@@ -245,10 +247,19 @@
     return Number.isFinite(value) ? value : null;
   }
 
+  function attemptCellKey(registrationId: string, cell: AttemptCell): string {
+    return cell.attempt?.id ?? `${registrationId}:${cell.liftType}:${cell.attemptNumber}`;
+  }
+
   function handleAttemptInput(row: UnifiedRow, cell: AttemptCell, event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const parsed = parseWeightInput(input.value);
     if (!Number.isFinite(parsed as number)) {
+      return;
+    }
+
+    const key = attemptCellKey(row.registration.id, cell);
+    if (attemptWeightPending[key]) {
       return;
     }
 
@@ -524,17 +535,22 @@
                     <div class="flex items-center gap-1">
                       {#if cell.attempt}
                         {@const attemptId = cell.attempt.id}
+                        {@const attemptKey = attemptCellKey(row.registration.id, cell)}
                         {@const status = resolveStatus(cell.attempt.status)}
+                        {@const statusPending = Boolean(statusLoading[attemptId])}
+                        {@const weightPending = Boolean(attemptWeightPending[attemptKey])}
                         {#if !readOnly}
                           {@const isCurrent = currentAttemptId === attemptId}
                           {@const isLoading = Boolean(currentAttemptLoading[attemptId])}
+                          {@const isButtonDisabled = isCurrent || isLoading || weightPending}
                           <button
-                            class={liveButtonClass(isCurrent, isLoading)}
+                            class={liveButtonClass(isCurrent, isLoading || weightPending)}
                             type="button"
                             aria-label={isCurrent ? $_('contest_table.actions.live_now') : $_('contest_table.actions.set_live')}
                             title={isCurrent ? $_('contest_table.actions.live_now') : $_('contest_table.actions.set_live')}
                             aria-pressed={isCurrent}
-                            disabled={isCurrent || isLoading}
+                            disabled={isButtonDisabled}
+                            aria-busy={isLoading}
                             on:click={() => onSetCurrentAttempt(cell.attempt)}
                           >
                             {#if isLoading}
@@ -553,13 +569,19 @@
                           </span>
                         {:else}
                           <button
-                            class={`${STATUS_BUTTON_BASE} ${getAttemptStatusClass(status)} hover:brightness-110`}
+                            class={`${STATUS_BUTTON_BASE} ${getAttemptStatusClass(status)} ${statusPending ? 'cursor-progress opacity-70' : 'hover:brightness-110'}`}
                             type="button"
                             aria-label={statusLabels[status]}
                             title={statusLabels[status]}
+                            disabled={statusPending}
+                            aria-busy={statusPending}
                             on:click={() => onAttemptStatusCycle(cell.attempt)}
                           >
-                            <svelte:component this={statusIconMap[status] || Clock} class="h-4 w-4" aria-hidden="true" />
+                            {#if statusPending}
+                              <Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
+                            {:else}
+                              <svelte:component this={statusIconMap[status] || Clock} class="h-4 w-4" aria-hidden="true" />
+                            {/if}
                           </button>
                         {/if}
                       {:else}
@@ -574,13 +596,17 @@
                         {attemptWeightDisplay(cell)}
                       </span>
                     {:else}
+                      {@const weightKey = attemptCellKey(row.registration.id, cell)}
+                      {@const weightInputPending = Boolean(attemptWeightPending[weightKey])}
                       <input
-                        class="h-7 w-[3.75rem] rounded border border-border-color bg-main-bg px-2 text-center text-xs"
+                        class={`h-7 w-[3.75rem] rounded border border-border-color bg-main-bg px-2 text-center text-xs ${weightInputPending ? 'cursor-progress opacity-60' : ''}`}
                         type="text"
                         inputmode="decimal"
                         autocomplete="off"
                         value={cell.attempt?.weight ?? ''}
                         placeholder="—"
+                        disabled={weightInputPending}
+                        aria-busy={weightInputPending}
                         on:change={(event) => handleAttemptInput(row, cell, event)}
                       />
                     {/if}

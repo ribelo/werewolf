@@ -890,7 +890,8 @@
       "squat_table": "Squat",
       "bench_table": "Bench",
       "deadlift_table": "Deadlift",
-      "results": "Results",
+      "results": "Individual Results",
+      "team_results": "Team Results",
       "plates": "Plate sets",
       "backups": "Backups"
     },
@@ -1139,6 +1140,68 @@
       "tags_button_all": "All labels",
       "clear": "Clear filters"
     },
+      "tags": {
+        "selector_label": "Tag standings",
+        "empty": "No custom tags configured."
+      },
+      "loading": "Loading results...",
+      "empty": "No results calculated yet.",
+      "recalculate": "Recalculate standings",
+      "recalculating": "Recalculating...",
+      "export_csv": "Export CSV",
+      "export_json": "Export JSON",
+      "exporting": "Exporting...",
+      "columns": {
+        "lifter": "Lifter",
+        "place": "Place",
+        "age_category": "Age category",
+        "weight_class": "Weight class",
+        "best_squat": "Best squat",
+        "best_bench": "Best bench",
+        "best_deadlift": "Best deadlift",
+        "squat_points": "Squat points",
+        "bench_points": "Bench points",
+        "deadlift_points": "Deadlift points",
+        "total": "Total",
+        "points": "Best points",
+        "status": "Status"
+      },
+      "disqualified": "Disqualified",
+      "record": "Record",
+      "status_ok": "Validated",
+      "unknown_category": "Unclassified",
+      "reload_failed": "Unable to refresh results.",
+      "toast_recalc_success": "Standings recalculated.",
+      "toast_recalc_error": "Could not recalculate standings.",
+      "toast_export_success": "Export generated.",
+      "toast_export_error": "Failed to export results."
+    },
+    "team_results": {
+      "title": "Team Results",
+      "subtitle": "Monitor team standings by division or category.",
+      "entries": "{count, plural, one {# result} other {# results}}",
+      "views": {
+        "open": "Overall",
+        "age": "Age classes",
+        "weight": "Weight classes",
+        "tags": "Tags"
+      },
+      "filters": {
+        "weights_all": "All weight classes",
+        "weights_female": "Female weight classes",
+      "weights_male": "Male weight classes",
+      "age": "Age categories",
+      "tags": "Tags",
+      "all": "All",
+      "open": "Open",
+      "weight_button": "Weight",
+      "weight_button_all": "All classes",
+      "age_button": "Age",
+      "age_button_all": "All categories",
+      "tags_button": "Labels",
+      "tags_button_all": "All labels",
+      "clear": "Clear filters"
+      },
       "tags": {
         "selector_label": "Tag standings",
         "empty": "No custom tags configured."

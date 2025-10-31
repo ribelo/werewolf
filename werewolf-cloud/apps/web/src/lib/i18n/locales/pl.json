@@ -879,7 +879,8 @@
       "squat_table": "Przysiad",
       "bench_table": "Wyciskanie",
       "deadlift_table": "Martwy ciąg",
-      "results": "Wyniki",
+      "results": "Wyniki indywidualne",
+      "team_results": "Wyniki drużynowe",
       "plates": "Obciążenia",
       "backups": "Kopie zapasowe"
     },
@@ -1129,6 +1130,68 @@
       "tags_button_all": "Wszystkie etykiety",
       "clear": "Wyczyść filtry"
     },
+      "tags": {
+        "selector_label": "Klasyfikacja tagów",
+        "empty": "Brak skonfigurowanych tagów."
+      },
+      "loading": "Ładowanie wyników...",
+      "empty": "Brak obliczonych wyników.",
+      "recalculate": "Przelicz wyniki",
+      "recalculating": "Przeliczanie...",
+      "export_csv": "Eksportuj CSV",
+      "export_json": "Eksportuj JSON",
+      "exporting": "Eksport...",
+      "columns": {
+        "lifter": "Zawodnik",
+        "place": "Miejsce",
+        "age_category": "Kategoria wiekowa",
+        "weight_class": "Kategoria wagowa",
+        "best_squat": "Najlepszy przysiad",
+        "best_bench": "Najlepsze wyciskanie",
+        "best_deadlift": "Najlepszy martwy ciąg",
+        "squat_points": "Punkty przysiadu",
+        "bench_points": "Punkty wyciskania",
+        "deadlift_points": "Punkty martwego ciągu",
+        "total": "Suma",
+        "points": "Najlepsze punkty",
+        "status": "Status"
+      },
+      "disqualified": "Dyskwalifikacja",
+      "record": "Rekord",
+      "status_ok": "Zatwierdzone",
+      "unknown_category": "Bez kategorii",
+      "reload_failed": "Nie udało się odświeżyć wyników.",
+      "toast_recalc_success": "Klasyfikacje przeliczone.",
+      "toast_recalc_error": "Nie udało się przeliczyć klasyfikacji.",
+      "toast_export_success": "Eksport gotowy.",
+      "toast_export_error": "Nie udało się wyeksportować wyników."
+    },
+    "team_results": {
+      "title": "Wyniki drużynowe",
+      "subtitle": "Monitoruj klasyfikacje drużynowe według kategorii.",
+      "entries": "{count, plural, one {# wynik} few {# wyniki} many {# wyników} other {# wyników}}",
+      "views": {
+        "open": "Open",
+        "age": "Kategorie wiekowe",
+        "weight": "Kategorie wagowe",
+        "tags": "Tagi"
+      },
+      "filters": {
+        "weights_all": "Wszystkie kategorie wagowe",
+        "weights_female": "Kategorie wagowe kobiet",
+      "weights_male": "Kategorie wagowe mężczyzn",
+      "age": "Kategorie wiekowe",
+      "tags": "Etykiety",
+      "all": "Wszystkie",
+      "open": "Open",
+      "weight_button": "Waga",
+      "weight_button_all": "Wszystkie klasy",
+      "age_button": "Wiek",
+      "age_button_all": "Wszystkie kategorie",
+      "tags_button": "Etykiety",
+      "tags_button_all": "Wszystkie etykiety",
+      "clear": "Wyczyść filtry"
+      },
       "tags": {
         "selector_label": "Klasyfikacja tagów",
         "empty": "Brak skonfigurowanych tagów."
