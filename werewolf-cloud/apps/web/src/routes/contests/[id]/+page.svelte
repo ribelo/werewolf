@@ -2504,19 +2504,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
             {$_(tab.labelKey)}
           </button>
         {/each}
-        <button
-          type="button"
-          class="px-4 py-2 font-display text-xs uppercase tracking-[0.4em] border-2 transition border-border-color text-text-secondary hover:text-text-primary hover:border-primary-red"
-          on:click={openContestEditor}
-        >
-          {$_('contest_detail.actions.edit_contest')}
-        </button>
-        <button type="button" class="px-4 py-2 font-display text-xs uppercase tracking-[0.4em] border-2 transition border-border-color text-text-secondary hover:text-text-primary hover:border-primary-red" on:click={openCategoryManager}>
-          {$_('contest_detail.registrations.manage_categories')}
-        </button>
-        <button type="button" class="px-4 py-2 font-display text-xs uppercase tracking-[0.4em] border-2 transition border-border-color text-text-secondary hover:text-text-primary hover:border-primary-red" on:click={openFlightManager}>
-          {$_('contest_detail.registrations.manage_flights')}
-        </button>
+
       </nav>
 
       {#if activeTab === 'desk'}
@@ -2563,9 +2551,8 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
           target="_blank"
           rel="noreferrer"
         >
-          <div class="flex items-center justify-between mb-3">
+          <div class="mb-3">
             <h3 class="text-h3 text-text-primary">{$_('contest_detail.links.announcer.title')}</h3>
-            <span class="text-h2">📊</span>
           </div>
           <p class="text-body text-text-secondary">{$_('contest_detail.links.announcer.description')}</p>
           </a>
@@ -2575,9 +2562,8 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
           target="_blank"
           rel="noreferrer"
         >
-          <div class="flex items-center justify-between mb-3">
+          <div class="mb-3">
             <h3 class="text-h3 text-text-primary">{$_('contest_detail.links.display.title')}</h3>
-            <span class="text-h2">🏋️</span>
           </div>
           <p class="text-body text-text-secondary">{$_('contest_detail.links.display.description')}</p>
           </a>
@@ -2587,12 +2573,44 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
           target="_blank"
           rel="noreferrer"
         >
-          <div class="flex items-center justify-between mb-3">
+          <div class="mb-3">
             <h3 class="text-h3 text-text-primary">{$_('contest_detail.links.shareable.title')}</h3>
-            <span class="text-h2">🔗</span>
           </div>
           <p class="text-body text-text-secondary">{$_('contest_detail.links.shareable.description')}</p>
           </a>
+        </section>
+
+        <section class="grid gap-4 md:grid-cols-3">
+          <button
+            type="button"
+            class="card transition-transform hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-primary-red focus:ring-offset-2 focus:ring-offset-main-bg text-left"
+            on:click={openContestEditor}
+          >
+            <div class="mb-3">
+              <h3 class="text-h3 text-text-primary">{$_('contest_detail.actions.edit_contest')}</h3>
+            </div>
+            <p class="text-body text-text-secondary">{$_('contest_detail.actions.edit_contest_description')}</p>
+          </button>
+          <button
+            type="button"
+            class="card transition-transform hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-primary-red focus:ring-offset-2 focus:ring-offset-main-bg text-left"
+            on:click={openCategoryManager}
+          >
+            <div class="mb-3">
+              <h3 class="text-h3 text-text-primary">{$_('contest_detail.registrations.manage_categories')}</h3>
+            </div>
+            <p class="text-body text-text-secondary">{$_('contest_detail.registrations.manage_categories_description')}</p>
+          </button>
+          <button
+            type="button"
+            class="card transition-transform hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-primary-red focus:ring-offset-2 focus:ring-offset-main-bg text-left"
+            on:click={openFlightManager}
+          >
+            <div class="mb-3">
+              <h3 class="text-h3 text-text-primary">{$_('contest_detail.registrations.manage_flights')}</h3>
+            </div>
+            <p class="text-body text-text-secondary">{$_('contest_detail.registrations.manage_flights_description')}</p>
+          </button>
         </section>
 
         <section class="grid gap-4 lg:grid-cols-2">

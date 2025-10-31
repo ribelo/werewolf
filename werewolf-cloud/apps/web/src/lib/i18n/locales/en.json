@@ -895,7 +895,8 @@
       "backups": "Backups"
     },
     "actions": {
-      "edit_contest": "Edit contest"
+      "edit_contest": "Edit contest",
+      "edit_contest_description": "Configure contest details, date, location, and settings"
     },
     "lifts": {
       "squat": "Squat",
@@ -984,6 +985,7 @@
       "total": "{count, plural, one {# lifter registered} other {# lifters registered}}",
       "unknown_competitor": "Unknown lifter",
       "manage_categories": "Manage categories",
+      "manage_categories_description": "Configure age and weight categories for this contest",
       "coefficient_notice": "Bodyweight changes automatically refresh coefficients.",
       "columns": {
         "order": "Lot #",
@@ -1020,6 +1022,7 @@
       },
       "empty": "No registrations yet.",
       "manage_flights": "Manage flights",
+      "manage_flights_description": "Assign lifters to flight groups for competition order",
       "manage_flights_title": "Assign flights",
       "auto_assign_size_label": "Athletes per flight",
       "auto_assign_action": "Distribute flights",

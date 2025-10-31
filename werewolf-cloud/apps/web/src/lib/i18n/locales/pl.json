@@ -884,7 +884,8 @@
       "backups": "Kopie zapasowe"
     },
     "actions": {
-      "edit_contest": "Edytuj zawody"
+      "edit_contest": "Edytuj zawody",
+      "edit_contest_description": "Konfiguruj szczegóły zawodów, datę, lokalizację i ustawienia"
     },
     "lifts": {
       "squat": "Przysiad",
@@ -974,6 +975,7 @@
       "total": "{count, plural, one {# zawodnik zgłoszony} few {# zawodników zgłoszonych} many {# zawodników zgłoszonych} other {# zawodników zgłoszonych}}",
       "unknown_competitor": "Nieznany zawodnik",
       "manage_categories": "Zarządzaj kategoriami",
+      "manage_categories_description": "Konfiguruj kategorie wiekowe i wagowe dla tych zawodów",
       "coefficient_notice": "Zmiana masy ciała automatycznie przelicza współczynniki.",
       "columns": {
         "order": "Losowanie",
@@ -1010,6 +1012,7 @@
       },
       "empty": "Brak rejestracji.",
       "manage_flights": "Zarządzaj flightami",
+      "manage_flights_description": "Przypisz zawodników do grup flight dla kolejności startowej",
       "manage_flights_title": "Przypisz flighty",
       "auto_assign_size_label": "Zawodnicy na flight",
       "auto_assign_action": "Podziel flighty",
