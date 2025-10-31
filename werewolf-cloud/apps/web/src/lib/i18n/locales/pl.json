@@ -902,6 +902,11 @@
       "error": "Nie udało się przygotować eksportu",
       "empty": "Brak danych do eksportu"
     },
+    "sync": {
+      "button": "Synchronizuj",
+      "success": "Ekran został zaktualizowany",
+      "error": "Nie udało się zsynchronizować ekranu: {message}"
+    },
     "cards": {
       "status": {
         "title": "Status zawodów",
@@ -1352,7 +1357,8 @@
     "metrics": {
       "lifters": "Zarejestrowani zawodnicy",
       "pending": "Próby w kolejce",
-      "last_update": "Ostatnia aktualizacja"
+      "last_update": "Ostatnia aktualizacja",
+      "last_update_relative": "{minutes, plural, =0 {przed chwilą} one {# minutę temu} few {# minuty temu} many {# minut temu} other {# minuty temu}}"
     },
     "actions": {
       "auto_scroll": "Autoprzewijanie",

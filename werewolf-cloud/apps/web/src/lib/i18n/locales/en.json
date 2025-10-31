@@ -912,6 +912,11 @@
       "error": "Failed to prepare export",
       "empty": "No rows to export"
     },
+    "sync": {
+      "button": "Sync",
+      "success": "Display updated",
+      "error": "Failed to sync display: {message}"
+    },
     "cards": {
       "status": {
         "title": "Contest status",
@@ -1362,7 +1367,8 @@
     "metrics": {
       "lifters": "Registered lifters",
       "pending": "Attempts in queue",
-      "last_update": "Last update"
+      "last_update": "Last update",
+      "last_update_relative": "{minutes, plural, =0 {just now} one {# minute ago} other {# minutes ago}}"
     },
     "actions": {
       "auto_scroll": "Auto-scroll",

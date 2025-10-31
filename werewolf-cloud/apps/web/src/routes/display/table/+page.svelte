@@ -21,6 +21,8 @@
   import { buildRisingBarQueue } from '$lib/rising-bar';
   import UnifiedContestTable from '$lib/components/UnifiedContestTable.svelte';
   import { buildUnifiedRows, deriveContestLifts, sortUnifiedRows, type UnifiedRow, type LiftKind } from '$lib/contest-table';
+  import { applyRegistrationFilters, type RegistrationFilterState } from '$lib/filters/registrations';
+  import type { DisplayFilterSync } from '@werewolf/domain';
 
   type MessageValues = Record<string, string | number | boolean | Date | null | undefined>;
   type ScrollSpeed = 'slow' | 'normal' | 'fast';
@@ -62,6 +64,8 @@
   let liveCurrentBundle: CurrentAttemptBundle | null = currentAttempt;
   let liveCurrentAttempt: CurrentAttempt | null = currentAttempt ? bundleToCurrentAttempt(currentAttempt) : null;
   let lastUpdateTime: Date | null = null;
+  let lastUpdateRelative = '—';
+  let lastUpdateTimer: ReturnType<typeof setInterval> | null = null;
 
   let sortColumn = 'order';
   let sortDirection: 'asc' | 'desc' = 'asc';
@@ -69,7 +73,13 @@
   let visibleLifts: LiftKind[] = [...contestLifts];
   let unifiedRows: UnifiedRow[] = [];
   let sortedRows: UnifiedRow[] = [];
+  let registrationFilteredRows: UnifiedRow[] = [];
   let filteredRows: UnifiedRow[] = [];
+  let syncedFilters: RegistrationFilterState = {
+    weight: 'ALL',
+    age: 'ALL',
+    label: 'ALL',
+  };
   let mensBarWeightSetting: number | null = contest?.mensBarWeight ?? null;
   let womensBarWeightSetting: number | null = contest?.womensBarWeight ?? null;
   let clampWeightSetting: number | null = contest?.clampWeight ?? 2.5;
@@ -108,6 +118,10 @@
     preferencesLoaded = true;
     checkApiStatus();
     initializeCompactLayout();
+    refreshLastUpdateRelative();
+    if (browser) {
+      lastUpdateTimer = setInterval(refreshLastUpdateRelative, 1000);
+    }
   });
 
   onDestroy(() => {
@@ -115,10 +129,26 @@
     unsubscribeEvents();
     stopAutoScroll();
     teardownCompactLayout();
+    if (lastUpdateTimer) {
+      clearInterval(lastUpdateTimer);
+      lastUpdateTimer = null;
+    }
   });
 
   function updateLastUpdateTime() {
     lastUpdateTime = new Date();
+    refreshLastUpdateRelative();
+  }
+
+  function refreshLastUpdateRelative() {
+    if (!lastUpdateTime) {
+      lastUpdateRelative = '—';
+      return;
+    }
+    const diffSeconds = Math.max(0, Math.floor((Date.now() - lastUpdateTime.getTime()) / 1000));
+    const minutes = Math.floor(diffSeconds / 60);
+    const translated = t('display_table.metrics.last_update_relative', { minutes });
+    lastUpdateRelative = translated === 'display_table.metrics.last_update_relative' ? '—' : translated;
   }
 
   function handleLiveEvent(event: LiveEvent) {
@@ -182,6 +212,12 @@
         }
         break;
       }
+      case 'display.filtersSynced': {
+        const payload = event.data as DisplayFilterSync | undefined;
+        if (!payload) break;
+        applySyncedFilters(payload);
+        break;
+      }
       default:
         break;
     }
@@ -193,6 +229,25 @@
       registrations,
       limit: 12,
     }).attempts;
+  }
+
+  function applySyncedFilters(sync: DisplayFilterSync): void {
+    const { filters, id } = sync;
+
+    sortColumn = filters.sortColumn || sortColumn;
+    sortDirection = filters.sortDirection === 'desc' ? 'desc' : 'asc';
+
+    syncedFilters = {
+      weight: filters.weight ?? 'ALL',
+      age: filters.age ?? 'ALL',
+      label: filters.label ?? 'ALL',
+    };
+
+    if (filters.lift && contestLifts.includes(filters.lift)) {
+      selectedLift = filters.lift;
+    } else if (!filters.lift && contestLifts.length > 0) {
+      selectedLift = contestLifts[0];
+    }
   }
 
   $: unifiedRows = buildUnifiedRows({
@@ -209,11 +264,11 @@
         selectedLift = contestLifts.length > 0 ? contestLifts[0] : null;
       }
   $: visibleLifts = selectedLift ? [selectedLift] : [...contestLifts];
+  $: registrationFilteredRows = applyRegistrationFilters(sortedRows, syncedFilters);
   $: filteredRows =
     selectedLift != null
-      ? sortedRows.filter((row) => row.registration.lifts?.includes(selectedLift as LiftKind))
-      : sortedRows;
-  $: lifterCount = filteredRows.length;
+      ? registrationFilteredRows.filter((row) => row.registration.lifts?.includes(selectedLift as LiftKind))
+      : registrationFilteredRows;
   $: headerTitleClass = compactLayout
     ? 'font-display text-lg sm:text-xl uppercase tracking-[0.08rem] text-white'
     : 'font-display text-xl sm:text-2xl md:text-3xl uppercase tracking-[0.1rem] sm:tracking-[0.15rem] text-white';
@@ -223,13 +278,6 @@
   $: statusDotSizeClass = compactLayout ? 'h-2 w-2' : 'h-2.5 w-2.5';
   $: mainSpacingClass = compactLayout ? 'py-1.5 sm:py-3 gap-1.5 sm:gap-3' : 'py-3 sm:py-4 gap-3 sm:gap-4';
   $: mainPaddingClass = compactLayout ? 'px-4 sm:px-6' : 'container-full';
-  $: metricsGridClass = compactLayout ? 'grid gap-2 sm:grid-cols-2' : 'grid gap-3 md:grid-cols-2';
-  $: metricLabelClass = compactLayout
-    ? 'text-xs text-text-secondary uppercase tracking-[0.25em]'
-    : 'text-label text-text-secondary uppercase tracking-[0.4em]';
-  $: metricValueClass = compactLayout
-    ? 'text-xl font-semibold text-text-primary'
-    : 'text-h2 text-text-primary';
 
   function toCurrentAttemptSummary(input: CurrentAttemptBundle | Attempt | CurrentAttempt): CurrentAttempt {
     if ('attempt' in (input as any)) {
@@ -571,6 +619,10 @@
           aria-label={t(STATUS_LABEL_KEYS[apiStatus])}
           title={t(STATUS_LABEL_KEYS[apiStatus])}
         />
+        <span class="text-text-secondary">{t('display_table.metrics.last_update')}</span>
+        <span class="text-text-primary" title={lastUpdateTime ? lastUpdateTime.toLocaleTimeString() : ''}>
+          {lastUpdateRelative}
+        </span>
       </div>
     </div>
   </header>
@@ -582,17 +634,6 @@
         <p class="text-body text-text-secondary">{error}</p>
       </div>
     {:else}
-      <section class={metricsGridClass}>
-        <div class={`card text-center ${compactLayout ? 'space-y-1.5' : 'space-y-2'}`}>
-          <p class={metricLabelClass}>{t('display_table.metrics.lifters')}</p>
-          <p class={metricValueClass}>{lifterCount}</p>
-        </div>
-        <div class={`card text-center ${compactLayout ? 'space-y-1.5' : 'space-y-2'}`}>
-          <p class={metricLabelClass}>{t('display_table.metrics.last_update')}</p>
-          <p class={metricValueClass}>{lastUpdateTime ? lastUpdateTime.toLocaleTimeString() : '—'}</p>
-        </div>
-      </section>
-
       <section class={`card flex-1 min-h-0 flex flex-col ${compactLayout ? 'gap-2' : 'gap-3'}`}>
         <div class={`flex flex-col ${compactLayout ? 'gap-2' : 'gap-3'} md:flex-row md:items-center md:justify-between`}>
           <div class={`flex flex-wrap items-center justify-center ${compactLayout ? 'gap-1.5' : 'gap-2'} md:justify-start`}>

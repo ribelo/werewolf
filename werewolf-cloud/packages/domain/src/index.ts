@@ -8,6 +8,7 @@ export * from './models/registration';
 export * from './models/result';
 export * from './models/settings';
 export * from './models/reference';
+export * from './models/display-sync';
 export * from './constants/categories';
 export * from './services/score-engine';
 export * from './services/coefficients';

@@ -13,6 +13,7 @@ import settings from './settings';
 import system from './system';
 import live from './live';
 import auth from './auth';
+import contestDisplay from './display';
 
 export const registerRoutes = (app: Hono<WerewolfEnvironment>) => {
   app.route('/contests', contests);
@@ -31,6 +32,7 @@ export const registerRoutes = (app: Hono<WerewolfEnvironment>) => {
   app.route('/contests/:contestId/platesets', plateSets);
   app.route('/contests/:contestId/categories', categories);
   app.route('/contests/:contestId/tags', tags);
+  app.route('/contests/:contestId/display', contestDisplay);
   app.route('/', live);
   app.route('/auth', auth);
 };

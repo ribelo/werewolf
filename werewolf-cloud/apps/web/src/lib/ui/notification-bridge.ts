@@ -95,6 +95,10 @@ function handleAttemptEvents() {
         // Heartbeat events don't need notifications
         break;
 
+      case 'display.filtersSynced':
+        // Manager-only sync broadcast; no user-facing notification needed here.
+        break;
+
       case 'registration.upserted':
       case 'registration.deleted':
         // Registration events currently do not trigger notifications

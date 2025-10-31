@@ -8,7 +8,15 @@
   import ContestEditorModal from '$lib/components/ContestEditorModal.svelte';
   import FlightAssignmentModal from '$lib/components/FlightAssignmentModal.svelte';
   import UnifiedContestTable from '$lib/components/UnifiedContestTable.svelte';
-  import { buildUnifiedRows, deriveContestLifts, sortUnifiedRows, LIFTS, ATTEMPT_NUMBERS, type UnifiedRow, type LiftKind } from '$lib/contest-table';
+  import {
+    buildUnifiedRows,
+    deriveContestLifts,
+    sortUnifiedRows,
+    LIFTS,
+    ATTEMPT_NUMBERS,
+    type UnifiedRow,
+    type LiftKind
+  } from '$lib/contest-table';
   import {
     buildUnifiedTableExportModel,
     createCsvBlob,
@@ -24,6 +32,18 @@
   import { setContestContext } from '$lib/ui/context-helpers';
   import { getAttemptStatusClass, getAttemptStatusLabel } from '$lib/ui/status';
   import { buildRisingBarQueue, type QueuePhase } from '$lib/rising-bar';
+  import {
+    applyRegistrationFilters,
+    LABEL_FILTER_PREFIX,
+    isFemaleGender,
+    isMaleGender,
+    normaliseLabelKey,
+    type RegistrationFilterState,
+    type WeightFilter,
+    type AgeFilter,
+    type LabelFilter
+  } from '$lib/filters/registrations';
+  import type { DisplayFilterSync } from '@werewolf/domain';
   import type { PageData } from './$types';
   import type {
     Registration,
@@ -138,11 +158,7 @@ $: void params;
     return parsed.toLocaleDateString();
   }
 
-  type WeightFilter = 'ALL' | 'FEMALE_OPEN' | 'MALE_OPEN' | string;
   type WeightFilterOption = { id: WeightFilter; label: string };
-  type AgeFilter = 'ALL' | 'UNASSIGNED' | string;
-  type LabelFilter = 'ALL' | 'UNLABELED' | `LABEL:${string}`;
-  const LABEL_FILTER_PREFIX = 'LABEL:';
 
   // Real-time data
   let connectionStatus: ConnectionStatus = 'offline';
@@ -195,6 +211,20 @@ $: void params;
   $: hasSquatResults = activeContestLifts.includes('Squat');
   $: hasBenchResults = activeContestLifts.includes('Bench');
   $: hasDeadliftResults = activeContestLifts.includes('Deadlift');
+  $: {
+    let nextLift: LiftKind | null = null;
+    if (activeTab === 'squat') {
+      nextLift = 'Squat';
+    } else if (activeTab === 'bench') {
+      nextLift = 'Bench';
+    } else if (activeTab === 'deadlift') {
+      nextLift = 'Deadlift';
+    }
+    if (nextLift && nextLift !== pendingSyncLift) {
+      pendingSyncLift = nextLift;
+      pendingSyncId = createSyncId();
+    }
+  }
 
   let statusLoading: Record<string, boolean> = {};
   let setCurrentLoading: Record<string, boolean> = {};
@@ -258,6 +288,18 @@ $: void params;
   let availableAgeFilters: Array<{ id: AgeFilter; label: string }> = [];
   let selectedLabelFilter: LabelFilter = 'ALL';
   let availableLabelFilters: Array<{ id: LabelFilter; label: string }> = [];
+  let pendingSyncId = createSyncId();
+  let lastFilterFingerprint: string | null = null;
+  let currentFilterFingerprint = '';
+  let syncBusy = false;
+  let lastSyncedLift: LiftKind | null = null; // kept for future UI, not used by color
+  let pendingSyncLift: LiftKind | null = null;
+  type LiftSyncState = { id: string; fingerprint: string } | null;
+  let syncedLiftState: Record<LiftKind, LiftSyncState> = {
+    Squat: null,
+    Bench: null,
+    Deadlift: null,
+  };
 
 
   let unifiedRows: UnifiedRow[] = [];
@@ -283,6 +325,134 @@ $: void params;
   $: if (tablePrefsLoaded && contestId && browser) {
     persistTablePrefs();
   }
+
+  function createSyncId(): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      try {
+        return crypto.randomUUID();
+      } catch {}
+    }
+    return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+
+  function buildDisplayFilterSyncPayload(lift: LiftKind): DisplayFilterSync {
+    return {
+      id: pendingSyncId,
+      filters: {
+        lift,
+        sortColumn,
+        sortDirection,
+        weight: selectedWeightFilter,
+        age: selectedAgeFilter,
+        label: selectedLabelFilter,
+      },
+    };
+  }
+
+  function computeSyncFingerprint(lift: LiftKind): string {
+    return JSON.stringify({
+      lift,
+      sortColumn,
+      sortDirection,
+      weight: selectedWeightFilter,
+      age: selectedAgeFilter,
+      label: selectedLabelFilter,
+    });
+  }
+
+  async function syncDisplay(lift: LiftKind): Promise<void> {
+    if (!contestId || syncBusy) return;
+
+    const payload = buildDisplayFilterSyncPayload(lift);
+
+    try {
+      syncBusy = true;
+      const response = await apiClient.post<{ ok: boolean; id: string }>(
+        `/contests/${contestId}/display/sync`,
+        payload
+      );
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      if (!response.data?.ok) {
+        throw new Error('SYNC_FAILED');
+      }
+
+      pendingSyncLift = lift;
+      lastSyncedLift = lift;
+      const fingerprint = computeSyncFingerprint(lift);
+      const syncId = response.data.id ?? payload.id;
+      syncedLiftState = {
+        ...syncedLiftState,
+        [lift]: { id: syncId, fingerprint },
+      };
+      toast.success(t('contest_detail.sync.success'));
+    } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : 'Unknown error';
+      console.error('[manager.sync] error', { lift, message });
+      toast.error(t('contest_detail.sync.error', { values: { message } }));
+    } finally {
+      syncBusy = false;
+    }
+  }
+
+  function isViewSynced(lift: LiftKind): boolean {
+    const state = syncedLiftState[lift];
+    if (!state) return false;
+    return state.fingerprint === computeSyncFingerprint(lift);
+  }
+
+  const baseSyncBtn = 'btn-secondary px-3 py-1 text-xxs';
+  const syncedBtn = `${baseSyncBtn} border-status-success text-green-100 bg-status-success/20 hover:bg-status-success/30 hover:border-status-success hover:text-green-100`;
+  const unsyncedBtn = `${baseSyncBtn} border-status-error text-status-error bg-status-error/20 hover:bg-status-error/30 hover:border-status-error hover:text-status-error`;
+
+  // Build current fingerprints inline so Svelte tracks dependencies
+  $: squatFpCurr = JSON.stringify({
+    lift: 'Squat',
+    sortColumn,
+    sortDirection,
+    weight: selectedWeightFilter,
+    age: selectedAgeFilter,
+    label: selectedLabelFilter,
+  });
+  $: benchFpCurr = JSON.stringify({
+    lift: 'Bench',
+    sortColumn,
+    sortDirection,
+    weight: selectedWeightFilter,
+    age: selectedAgeFilter,
+    label: selectedLabelFilter,
+  });
+  $: deadliftFpCurr = JSON.stringify({
+    lift: 'Deadlift',
+    sortColumn,
+    sortDirection,
+    weight: selectedWeightFilter,
+    age: selectedAgeFilter,
+    label: selectedLabelFilter,
+  });
+
+  $: squatState = syncedLiftState.Squat;
+  $: benchState = syncedLiftState.Bench;
+  $: deadliftState = syncedLiftState.Deadlift;
+
+  $: isSquatSynced = Boolean(squatState && squatState.id === pendingSyncId);
+  $: isBenchSynced = Boolean(benchState && benchState.id === pendingSyncId);
+  $: isDeadliftSynced = Boolean(deadliftState && deadliftState.id === pendingSyncId);
+
+  $: squatClass = isSquatSynced ? syncedBtn : unsyncedBtn;
+  $: benchClass = isBenchSynced ? syncedBtn : unsyncedBtn;
+  $: deadliftClass = isDeadliftSynced ? syncedBtn : unsyncedBtn;
+
+  // Deprecated; kept in case of accidental references
+  function syncButtonClass(_lift: LiftKind): string { return unsyncedBtn; }
 
   type ResultView = 'open' | 'age' | 'weight' | 'tag';
   let selectedResultView: ResultView = 'open';
@@ -618,10 +788,6 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
     }
   }
 
-  function normaliseLabelKey(label: string): string {
-    return label.trim().toLowerCase();
-  }
-
   type LiftTabId = 'squat' | 'bench' | 'deadlift';
   type StaticTabId = 'desk' | 'registrations' | 'results' | 'plates';
   type TabId = StaticTabId | LiftTabId;
@@ -946,16 +1112,6 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
     return (entry.name ?? entry.code ?? '').toString();
   }
 
-  function isFemaleGender(value: string | null | undefined): boolean {
-    const lowered = (value ?? '').trim().toLowerCase();
-    return lowered.startsWith('f') || lowered.startsWith('k');
-  }
-
-  function isMaleGender(value: string | null | undefined): boolean {
-    const lowered = (value ?? '').trim().toLowerCase();
-    return lowered.startsWith('m');
-  }
-
   $: weightFilterGroups = (() => {
         const female: WeightFilterOption[] = [];
         const male: WeightFilterOption[] = [];
@@ -1105,40 +1261,25 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
         resultsWeight: weightRanking,
       });
   $: sortedRows = sortUnifiedRows(unifiedRows, sortColumn, sortDirection);
-  $: filteredRows = sortedRows.filter((row) => {
-        const registration = row.registration;
-        let weightMatch = false;
-        if (selectedWeightFilter === 'ALL') {
-          weightMatch = true;
-        } else if (selectedWeightFilter === 'FEMALE_OPEN') {
-          weightMatch = isFemaleGender(registration.gender);
-        } else if (selectedWeightFilter === 'MALE_OPEN') {
-          weightMatch = isMaleGender(registration.gender);
-        } else {
-          weightMatch = registration.weightClassId === selectedWeightFilter;
-        }
-        if (!weightMatch) return false;
-
-        const ageId = registration.ageCategoryId ?? '';
-        const ageMatch =
-          selectedAgeFilter === 'ALL' ||
-          (selectedAgeFilter === 'UNASSIGNED' ? !ageId : ageId === selectedAgeFilter);
-        if (!ageMatch) return false;
-
-        const labels = Array.isArray(registration.labels) ? registration.labels : [];
-        const hasLabels = labels.length > 0;
-        if (selectedLabelFilter === 'ALL') {
-          return true;
-        }
-        if (selectedLabelFilter === 'UNLABELED') {
-          return !hasLabels;
-        }
-        const targetLabel = selectedLabelFilter.startsWith(LABEL_FILTER_PREFIX)
-          ? selectedLabelFilter.slice(LABEL_FILTER_PREFIX.length)
-          : selectedLabelFilter;
-        const targetKey = normaliseLabelKey(targetLabel);
-        return labels.some((label) => normaliseLabelKey(label) === targetKey);
+  $: registrationFilters = {
+        weight: selectedWeightFilter,
+        age: selectedAgeFilter,
+        label: selectedLabelFilter,
+      } as RegistrationFilterState;
+  $: filteredRows = applyRegistrationFilters(sortedRows, registrationFilters);
+  $: currentFilterFingerprint = JSON.stringify({
+        sortColumn,
+        sortDirection,
+        weight: selectedWeightFilter,
+        age: selectedAgeFilter,
+        label: selectedLabelFilter,
       });
+  $: if (currentFilterFingerprint !== lastFilterFingerprint) {
+        if (lastFilterFingerprint !== null) {
+          pendingSyncId = createSyncId();
+        }
+        lastFilterFingerprint = currentFilterFingerprint;
+      }
   $: squatRows = filteredRows.filter((row) => registrationIncludesLift(row.registration, 'Squat'));
   $: benchRows = filteredRows.filter((row) => registrationIncludesLift(row.registration, 'Bench'));
   $: deadliftRows = filteredRows.filter((row) => registrationIncludesLift(row.registration, 'Deadlift'));
@@ -3383,70 +3524,81 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
           <div class="card space-y-6">
             <header class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <h3 class="text-h3 text-text-primary">{$_('contest_detail.tabs.squat_table')}</h3>
-              <div class="relative" on:click|stopPropagation>
+              <div class="flex items-center gap-2 md:gap-3">
                 <button
                   type="button"
-                  class="btn-secondary px-3 py-1 text-xxs"
-                  disabled={exportingUnifiedTable || squatRows.length === 0}
-                  on:click={() => toggleExportMenu('squat')}
+                  class={squatClass}
+                  disabled={syncBusy || squatRows.length === 0}
+                  aria-busy={syncBusy}
+                  on:click={() => void syncDisplay('Squat')}
                 >
-                  {exportingUnifiedTable ? $_('contest_detail.export.exporting') : $_('contest_detail.export.menu')}
+                  {$_('contest_detail.sync.button')}
                 </button>
-                {#if openExportMenu === 'squat'}
-                  <div class="absolute right-0 top-full z-40 mt-2 w-48 rounded border border-border-color bg-element-bg shadow-lg">
-                    <button
-                      type="button"
-                      class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
-                      disabled={exportingUnifiedTable}
-                      on:click={() =>
-                        void exportUnifiedTable('csv', {
-                          id: 'squat',
-                          rows: squatRows,
-                          lifts: LIFT_SINGLETONS.Squat,
-                          showPointsColumn: true,
-                          showMaxColumn: true,
-                          title: t('contest_detail.tabs.squat_table'),
-                        })
-                      }
-                    >
-                      <span>{$_('contest_detail.export.csv')}</span>
-                    </button>
-                    <button
-                      type="button"
-                      class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
-                      disabled={exportingUnifiedTable}
-                      on:click={() =>
-                        void exportUnifiedTable('pdf', {
-                          id: 'squat',
-                          rows: squatRows,
-                          lifts: LIFT_SINGLETONS.Squat,
-                          showPointsColumn: true,
-                          showMaxColumn: true,
-                          title: t('contest_detail.tabs.squat_table'),
-                        })
-                      }
-                    >
-                      <span>{$_('contest_detail.export.pdf')}</span>
-                    </button>
-                    <button
-                      type="button"
-                      class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
-                      disabled={exportingUnifiedTable}
-                      on:click={() =>
-                        void exportUnifiedTable('jpg', {
-                          id: 'squat',
-                          rows: squatRows,
-                          lifts: LIFT_SINGLETONS.Squat,
-                          showPointsColumn: true,
-                          showMaxColumn: true,
-                          title: t('contest_detail.tabs.squat_table'),
-                        })
-                      }
-                    >
-                      <span>{$_('contest_detail.export.jpg')}</span>
-                    </button>
-                  </div>
-                {/if}
+                <div class="relative" on:click|stopPropagation>
+                  <button
+                    type="button"
+                    class="btn-secondary px-3 py-1 text-xxs"
+                    disabled={exportingUnifiedTable || squatRows.length === 0}
+                    on:click={() => toggleExportMenu('squat')}
+                  >
+                    {exportingUnifiedTable ? $_('contest_detail.export.exporting') : $_('contest_detail.export.menu')}
+                  </button>
+                  {#if openExportMenu === 'squat'}
+                    <div class="absolute right-0 top-full z-40 mt-2 w-48 rounded border border-border-color bg-element-bg shadow-lg">
+                      <button
+                        type="button"
+                        class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
+                        disabled={exportingUnifiedTable}
+                        on:click={() =>
+                          void exportUnifiedTable('csv', {
+                            id: 'squat',
+                            rows: squatRows,
+                            lifts: LIFT_SINGLETONS.Squat,
+                            showPointsColumn: true,
+                            showMaxColumn: true,
+                            title: t('contest_detail.tabs.squat_table'),
+                          })
+                        }
+                      >
+                        <span>{$_('contest_detail.export.csv')}</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
+                        disabled={exportingUnifiedTable}
+                        on:click={() =>
+                          void exportUnifiedTable('pdf', {
+                            id: 'squat',
+                            rows: squatRows,
+                            lifts: LIFT_SINGLETONS.Squat,
+                            showPointsColumn: true,
+                            showMaxColumn: true,
+                            title: t('contest_detail.tabs.squat_table'),
+                          })
+                        }
+                      >
+                        <span>{$_('contest_detail.export.pdf')}</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
+                        disabled={exportingUnifiedTable}
+                        on:click={() =>
+                          void exportUnifiedTable('jpg', {
+                            id: 'squat',
+                            rows: squatRows,
+                            lifts: LIFT_SINGLETONS.Squat,
+                            showPointsColumn: true,
+                            showMaxColumn: true,
+                            title: t('contest_detail.tabs.squat_table'),
+                          })
+                        }
+                      >
+                        <span>{$_('contest_detail.export.jpg')}</span>
+                      </button>
+                    </div>
+                  {/if}
+                </div>
               </div>
             </header>
             <div class="flex flex-wrap items-center gap-2">
@@ -3645,70 +3797,81 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
           <div class="card space-y-6">
             <header class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <h3 class="text-h3 text-text-primary">{$_('contest_detail.tabs.bench_table')}</h3>
-              <div class="relative" on:click|stopPropagation>
+              <div class="flex items-center gap-2 md:gap-3">
                 <button
                   type="button"
-                  class="btn-secondary px-3 py-1 text-xxs"
-                  disabled={exportingUnifiedTable || benchRows.length === 0}
-                  on:click={() => toggleExportMenu('bench')}
+                  class={benchClass}
+                  disabled={syncBusy || benchRows.length === 0}
+                  aria-busy={syncBusy}
+                  on:click={() => void syncDisplay('Bench')}
                 >
-                  {exportingUnifiedTable ? $_('contest_detail.export.exporting') : $_('contest_detail.export.menu')}
+                  {$_('contest_detail.sync.button')}
                 </button>
-                {#if openExportMenu === 'bench'}
-                  <div class="absolute right-0 top-full z-40 mt-2 w-48 rounded border border-border-color bg-element-bg shadow-lg">
-                    <button
-                      type="button"
-                      class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
-                      disabled={exportingUnifiedTable}
-                      on:click={() =>
-                        void exportUnifiedTable('csv', {
-                          id: 'bench',
-                          rows: benchRows,
-                          lifts: LIFT_SINGLETONS.Bench,
-                          showPointsColumn: true,
-                          showMaxColumn: true,
-                          title: t('contest_detail.tabs.bench_table'),
-                        })
-                      }
-                    >
-                      <span>{$_('contest_detail.export.csv')}</span>
-                    </button>
-                    <button
-                      type="button"
-                      class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
-                      disabled={exportingUnifiedTable}
-                      on:click={() =>
-                        void exportUnifiedTable('pdf', {
-                          id: 'bench',
-                          rows: benchRows,
-                          lifts: LIFT_SINGLETONS.Bench,
-                          showPointsColumn: true,
-                          showMaxColumn: true,
-                          title: t('contest_detail.tabs.bench_table'),
-                        })
-                      }
-                    >
-                      <span>{$_('contest_detail.export.pdf')}</span>
-                    </button>
-                    <button
-                      type="button"
-                      class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
-                      disabled={exportingUnifiedTable}
-                      on:click={() =>
-                        void exportUnifiedTable('jpg', {
-                          id: 'bench',
-                          rows: benchRows,
-                          lifts: LIFT_SINGLETONS.Bench,
-                          showPointsColumn: true,
-                          showMaxColumn: true,
-                          title: t('contest_detail.tabs.bench_table'),
-                        })
-                      }
-                    >
-                      <span>{$_('contest_detail.export.jpg')}</span>
-                    </button>
-                  </div>
-                {/if}
+                <div class="relative" on:click|stopPropagation>
+                  <button
+                    type="button"
+                    class="btn-secondary px-3 py-1 text-xxs"
+                    disabled={exportingUnifiedTable || benchRows.length === 0}
+                    on:click={() => toggleExportMenu('bench')}
+                  >
+                    {exportingUnifiedTable ? $_('contest_detail.export.exporting') : $_('contest_detail.export.menu')}
+                  </button>
+                  {#if openExportMenu === 'bench'}
+                    <div class="absolute right-0 top-full z-40 mt-2 w-48 rounded border border-border-color bg-element-bg shadow-lg">
+                      <button
+                        type="button"
+                        class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
+                        disabled={exportingUnifiedTable}
+                        on:click={() =>
+                          void exportUnifiedTable('csv', {
+                            id: 'bench',
+                            rows: benchRows,
+                            lifts: LIFT_SINGLETONS.Bench,
+                            showPointsColumn: true,
+                            showMaxColumn: true,
+                            title: t('contest_detail.tabs.bench_table'),
+                          })
+                        }
+                      >
+                        <span>{$_('contest_detail.export.csv')}</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
+                        disabled={exportingUnifiedTable}
+                        on:click={() =>
+                          void exportUnifiedTable('pdf', {
+                            id: 'bench',
+                            rows: benchRows,
+                            lifts: LIFT_SINGLETONS.Bench,
+                            showPointsColumn: true,
+                            showMaxColumn: true,
+                            title: t('contest_detail.tabs.bench_table'),
+                          })
+                        }
+                      >
+                        <span>{$_('contest_detail.export.pdf')}</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
+                        disabled={exportingUnifiedTable}
+                        on:click={() =>
+                          void exportUnifiedTable('jpg', {
+                            id: 'bench',
+                            rows: benchRows,
+                            lifts: LIFT_SINGLETONS.Bench,
+                            showPointsColumn: true,
+                            showMaxColumn: true,
+                            title: t('contest_detail.tabs.bench_table'),
+                          })
+                        }
+                      >
+                        <span>{$_('contest_detail.export.jpg')}</span>
+                      </button>
+                    </div>
+                  {/if}
+                </div>
               </div>
             </header>
             <div class="flex flex-wrap items-center gap-2">
@@ -3907,70 +4070,81 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
           <div class="card space-y-6">
             <header class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <h3 class="text-h3 text-text-primary">{$_('contest_detail.tabs.deadlift_table')}</h3>
-              <div class="relative" on:click|stopPropagation>
+              <div class="flex items-center gap-2 md:gap-3">
                 <button
                   type="button"
-                  class="btn-secondary px-3 py-1 text-xxs"
-                  disabled={exportingUnifiedTable || deadliftRows.length === 0}
-                  on:click={() => toggleExportMenu('deadlift')}
+                  class={deadliftClass}
+                  disabled={syncBusy || deadliftRows.length === 0}
+                  aria-busy={syncBusy}
+                  on:click={() => void syncDisplay('Deadlift')}
                 >
-                  {exportingUnifiedTable ? $_('contest_detail.export.exporting') : $_('contest_detail.export.menu')}
+                  {$_('contest_detail.sync.button')}
                 </button>
-                {#if openExportMenu === 'deadlift'}
-                  <div class="absolute right-0 top-full z-40 mt-2 w-48 rounded border border-border-color bg-element-bg shadow-lg">
-                    <button
-                      type="button"
-                      class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
-                      disabled={exportingUnifiedTable}
-                      on:click={() =>
-                        void exportUnifiedTable('csv', {
-                          id: 'deadlift',
-                          rows: deadliftRows,
-                          lifts: LIFT_SINGLETONS.Deadlift,
-                          showPointsColumn: true,
-                          showMaxColumn: true,
-                          title: t('contest_detail.tabs.deadlift_table'),
-                        })
-                      }
-                    >
-                      <span>{$_('contest_detail.export.csv')}</span>
-                    </button>
-                    <button
-                      type="button"
-                      class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
-                      disabled={exportingUnifiedTable}
-                      on:click={() =>
-                        void exportUnifiedTable('pdf', {
-                          id: 'deadlift',
-                          rows: deadliftRows,
-                          lifts: LIFT_SINGLETONS.Deadlift,
-                          showPointsColumn: true,
-                          showMaxColumn: true,
-                          title: t('contest_detail.tabs.deadlift_table'),
-                        })
-                      }
-                    >
-                      <span>{$_('contest_detail.export.pdf')}</span>
-                    </button>
-                    <button
-                      type="button"
-                      class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
-                      disabled={exportingUnifiedTable}
-                      on:click={() =>
-                        void exportUnifiedTable('jpg', {
-                          id: 'deadlift',
-                          rows: deadliftRows,
-                          lifts: LIFT_SINGLETONS.Deadlift,
-                          showPointsColumn: true,
-                          showMaxColumn: true,
-                          title: t('contest_detail.tabs.deadlift_table'),
-                        })
-                      }
-                    >
-                      <span>{$_('contest_detail.export.jpg')}</span>
-                    </button>
-                  </div>
-                {/if}
+                <div class="relative" on:click|stopPropagation>
+                  <button
+                    type="button"
+                    class="btn-secondary px-3 py-1 text-xxs"
+                    disabled={exportingUnifiedTable || deadliftRows.length === 0}
+                    on:click={() => toggleExportMenu('deadlift')}
+                  >
+                    {exportingUnifiedTable ? $_('contest_detail.export.exporting') : $_('contest_detail.export.menu')}
+                  </button>
+                  {#if openExportMenu === 'deadlift'}
+                    <div class="absolute right-0 top-full z-40 mt-2 w-48 rounded border border-border-color bg-element-bg shadow-lg">
+                      <button
+                        type="button"
+                        class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
+                        disabled={exportingUnifiedTable}
+                        on:click={() =>
+                          void exportUnifiedTable('csv', {
+                            id: 'deadlift',
+                            rows: deadliftRows,
+                            lifts: LIFT_SINGLETONS.Deadlift,
+                            showPointsColumn: true,
+                            showMaxColumn: true,
+                            title: t('contest_detail.tabs.deadlift_table'),
+                          })
+                        }
+                      >
+                        <span>{$_('contest_detail.export.csv')}</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
+                        disabled={exportingUnifiedTable}
+                        on:click={() =>
+                          void exportUnifiedTable('pdf', {
+                            id: 'deadlift',
+                            rows: deadliftRows,
+                            lifts: LIFT_SINGLETONS.Deadlift,
+                            showPointsColumn: true,
+                            showMaxColumn: true,
+                            title: t('contest_detail.tabs.deadlift_table'),
+                          })
+                        }
+                      >
+                        <span>{$_('contest_detail.export.pdf')}</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
+                        disabled={exportingUnifiedTable}
+                        on:click={() =>
+                          void exportUnifiedTable('jpg', {
+                            id: 'deadlift',
+                            rows: deadliftRows,
+                            lifts: LIFT_SINGLETONS.Deadlift,
+                            showPointsColumn: true,
+                            showMaxColumn: true,
+                            title: t('contest_detail.tabs.deadlift_table'),
+                          })
+                        }
+                      >
+                        <span>{$_('contest_detail.export.jpg')}</span>
+                      </button>
+                    </div>
+                  {/if}
+                </div>
               </div>
             </header>
             <div class="flex flex-wrap items-center gap-2">
