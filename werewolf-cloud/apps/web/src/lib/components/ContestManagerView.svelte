@@ -93,7 +93,7 @@
 
   export let data: ContestManagerData;
   export let params: Record<string, string> = {};
-  export let view: 'desk' | 'registrations' | 'results' | 'team_results' | 'plates' = 'desk';
+  export let view: 'desk' | 'registrations' | 'results' | 'team_results' | 'plates' | 'bench' | 'squat' | 'deadlift' = 'desk';
 
 $: void params;
   let {

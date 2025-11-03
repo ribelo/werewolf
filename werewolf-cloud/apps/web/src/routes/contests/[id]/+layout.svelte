@@ -2,22 +2,32 @@
   import { page } from '$app/stores';
   import Layout from '$lib/components/Layout.svelte';
   import { _ } from 'svelte-i18n';
+  import { deriveContestLifts, type LiftKind } from '$lib/contest-table';
 
   import type { LayoutData } from './$types';
 
   export let data: LayoutData;
 
   const basePath = `/contests/${data.contestId}`;
-  const tabs = [
-    { id: 'desk', labelKey: 'contest_detail.tabs.desk', href: `${basePath}/desk` },
-    { id: 'registrations', labelKey: 'contest_detail.tabs.main_table', href: `${basePath}/registrations` },
-    { id: 'results', labelKey: 'contest_detail.tabs.results', href: `${basePath}/results` },
-    { id: 'team_results', labelKey: 'contest_detail.tabs.team_results', href: `${basePath}/team-results` },
-    // Per-lift tables
-    { id: 'squat', labelKey: 'contest_detail.tabs.squat_table', href: `${basePath}/squat` },
-    { id: 'bench', labelKey: 'contest_detail.tabs.bench_table', href: `${basePath}/bench` },
-    { id: 'deadlift', labelKey: 'contest_detail.tabs.deadlift_table', href: `${basePath}/deadlift` },
-  ] as const;
+  $: activeContestLifts = deriveContestLifts(data.contest ?? null, data.attempts ?? []) as LiftKind[];
+  $: tabs = (
+    [
+      { id: 'desk', labelKey: 'contest_detail.tabs.desk', href: `${basePath}/desk` },
+      { id: 'registrations', labelKey: 'contest_detail.tabs.main_table', href: `${basePath}/registrations` },
+      { id: 'results', labelKey: 'contest_detail.tabs.results', href: `${basePath}/results` },
+      { id: 'team_results', labelKey: 'contest_detail.tabs.team_results', href: `${basePath}/team-results` },
+      // Conditionally include per-lift tables when enabled for the contest
+      ...(activeContestLifts.includes('Squat')
+        ? [{ id: 'squat', labelKey: 'contest_detail.tabs.squat_table', href: `${basePath}/squat` }]
+        : []),
+      ...(activeContestLifts.includes('Bench')
+        ? [{ id: 'bench', labelKey: 'contest_detail.tabs.bench_table', href: `${basePath}/bench` }]
+        : []),
+      ...(activeContestLifts.includes('Deadlift')
+        ? [{ id: 'deadlift', labelKey: 'contest_detail.tabs.deadlift_table', href: `${basePath}/deadlift` }]
+        : []),
+    ] as const
+  );
 
   $: pathname = $page.url.pathname.replace(/\/$/, '');
   $: activeTab = (() => {

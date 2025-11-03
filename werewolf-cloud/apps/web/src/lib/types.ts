@@ -320,10 +320,7 @@ export interface TeamResultsTable {
 }
 
 export interface TeamResultsBundle {
-  overall: TeamResultsTable;
-  squat: TeamResultsTable;
-  bench: TeamResultsTable;
-  deadlift: TeamResultsTable;
+  mixed: TeamResultsTable;
 }
 
 export interface WeightClass {
