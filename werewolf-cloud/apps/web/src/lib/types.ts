@@ -280,7 +280,7 @@ export interface ContestRankingEntry {
   labels?: string[];
 }
 
-export type TeamScoreMetric = 'overall' | 'squat' | 'bench' | 'deadlift';
+export type TeamScoreMetric = 'mixed';
 
 export interface TeamResultContributor {
   registrationId: string;
@@ -303,6 +303,7 @@ export interface TeamResultContributor {
   totalWeight: number;
   reshelCoefficient: number | null;
   mcculloughCoefficient: number | null;
+  selectedLift: 'squat' | 'bench' | 'deadlift' | null;
   isPlaceholder?: boolean;
 }
 
@@ -310,7 +311,6 @@ export interface TeamResultRow {
   club: string;
   rank: number;
   totalPoints: number;
-  overallPoints: number;
   contributors: TeamResultContributor[];
 }
 

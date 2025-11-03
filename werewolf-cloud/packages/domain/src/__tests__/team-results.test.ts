@@ -24,7 +24,7 @@ function createMember(
 }
 
 describe('computeTeamResults', () => {
-  it('selects the top four men and one woman per metric and sorts teams by total points', () => {
+  it('ranks clubs using the best single-lift points from four men and one woman', () => {
     const titanMembers: TeamResultInput[] = [
       createMember({
         registrationId: 'titan-m1',
@@ -257,31 +257,198 @@ describe('computeTeamResults', () => {
 
     const results = computeTeamResults([...titanMembers, ...ironMembers]);
 
-    expect(results.overall.rows).toHaveLength(2);
-    const firstOverall = results.overall.rows[0]!;
-    const secondOverall = results.overall.rows[1]!;
-    expect(firstOverall.club).toBe('Iron Club');
-    expect(firstOverall.rank).toBe(1);
-    expect(secondOverall.club).toBe('Titan Gym');
-    expect(secondOverall.rank).toBe(2);
+    const leaderboard = results.mixed.rows;
+    expect(leaderboard).toHaveLength(2);
 
-    const titanOverall = results.overall.rows.find((row) => row.club === 'Titan Gym');
-    expect(titanOverall).toBeDefined();
-    const titanOverallRow = titanOverall!;
-    expect(titanOverallRow.contributors).toHaveLength(5);
-    const titanOverallNames = titanOverallRow.contributors.map((contributor) => contributor.firstName);
-    expect([...titanOverallNames].sort()).toEqual(['Adam', 'Bartek', 'Cezary', 'Dawid', 'Karolina'].sort());
-    expect(titanOverallNames).not.toContain('Eryk');
-    expect(titanOverallRow.totalPoints).toBeCloseTo(389);
+    const firstClub = leaderboard[0]!;
+    const secondClub = leaderboard[1]!;
 
-    const titanSquat = results.squat.rows.find((row) => row.club === 'Titan Gym');
-    expect(titanSquat).toBeDefined();
-    const titanSquatRow = titanSquat!;
-    expect(titanSquatRow.contributors).toHaveLength(5);
-    const titanSquatNames = titanSquatRow.contributors.map((contributor) => contributor.firstName);
-    expect(titanSquatNames).toContain('Eryk');
-    expect(titanSquatRow.totalPoints).toBeCloseTo(154);
-    expect(titanSquatRow.overallPoints).toBeCloseTo(titanOverallRow.totalPoints);
+    expect(firstClub.club).toBe('Iron Club');
+    expect(firstClub.rank).toBe(1);
+    expect(firstClub.totalPoints).toBeCloseTo(157);
+
+    expect(secondClub.club).toBe('Titan Gym');
+    expect(secondClub.rank).toBe(2);
+    expect(secondClub.totalPoints).toBeCloseTo(154);
+
+    const titanContributors = secondClub.contributors.filter((contributor) => !contributor.isPlaceholder);
+    expect(titanContributors).toHaveLength(5);
+    const titanNames = titanContributors.map((contributor) => contributor.firstName).sort();
+    expect(titanNames).toEqual(['Adam', 'Bartek', 'Cezary', 'Eryk', 'Karolina'].sort());
+    expect(titanContributors.every((contributor) => contributor.gender === 'Male' || contributor.gender === 'Female')).toBe(true);
+  });
+
+  it('deduplicates mixed contributors by competitor and selects the highest-point lifts', () => {
+    const totalForceMembers: TeamResultInput[] = [
+      createMember({
+        registrationId: 'force-m1',
+        firstName: 'Adam',
+        lastName: 'Nowak',
+        gender: 'Male',
+        club: 'Total Force',
+        squatPoints: 105,
+        benchPoints: 100,
+        deadliftPoints: 90,
+        bestSquat: 250,
+        bestBench: 200,
+        bestDeadlift: 240,
+        totalWeight: 680,
+        bodyweight: 93,
+      }),
+      createMember({
+        registrationId: 'force-m2',
+        firstName: 'Bartek',
+        lastName: 'Kania',
+        gender: 'Male',
+        club: 'Total Force',
+        squatPoints: 102,
+        benchPoints: 99,
+        deadliftPoints: 96,
+        bestSquat: 245,
+        bestBench: 198,
+        bestDeadlift: 255,
+        totalWeight: 670,
+        bodyweight: 91,
+      }),
+      createMember({
+        registrationId: 'force-m3',
+        firstName: 'Cezary',
+        lastName: 'Lis',
+        gender: 'Male',
+        club: 'Total Force',
+        squatPoints: 101,
+        benchPoints: 97,
+        deadliftPoints: 98,
+        bestSquat: 242,
+        bestBench: 195,
+        bestDeadlift: 252,
+        totalWeight: 660,
+        bodyweight: 90,
+      }),
+      createMember({
+        registrationId: 'force-m4',
+        firstName: 'Dawid',
+        lastName: 'Urban',
+        gender: 'Male',
+        club: 'Total Force',
+        squatPoints: 95,
+        benchPoints: 94,
+        deadliftPoints: 99,
+        bestSquat: 235,
+        bestBench: 190,
+        bestDeadlift: 260,
+        totalWeight: 640,
+        bodyweight: 92,
+      }),
+      createMember({
+        registrationId: 'force-m5',
+        firstName: 'Eryk',
+        lastName: 'Wolski',
+        gender: 'Male',
+        club: 'Total Force',
+        squatPoints: 93,
+        benchPoints: 92,
+        deadliftPoints: 91,
+        bestSquat: 230,
+        bestBench: 188,
+        bestDeadlift: 250,
+        totalWeight: 630,
+        bodyweight: 95,
+      }),
+      createMember({
+        registrationId: 'force-f1',
+        firstName: 'Anna',
+        lastName: 'Mazur',
+        gender: 'Female',
+        club: 'Total Force',
+        squatPoints: 88,
+        benchPoints: 90,
+        deadliftPoints: 87,
+        bestSquat: 200,
+        bestBench: 150,
+        bestDeadlift: 210,
+        totalWeight: 560,
+        bodyweight: 68,
+      }),
+      createMember({
+        registrationId: 'force-f2',
+        firstName: 'Bella',
+        lastName: 'Nowak',
+        gender: 'Female',
+        club: 'Total Force',
+        squatPoints: 82,
+        benchPoints: 85,
+        deadliftPoints: 80,
+        bestSquat: 190,
+        bestBench: 145,
+        bestDeadlift: 205,
+        totalWeight: 540,
+        bodyweight: 70,
+      }),
+    ];
+
+    const results = computeTeamResults(totalForceMembers);
+    const mixedRow = results.mixed.rows.find((row) => row.club === 'Total Force');
+
+    expect(mixedRow).toBeDefined();
+    const teamRow = mixedRow!;
+    const activeContributors = teamRow.contributors.filter((contributor) => !contributor.isPlaceholder);
+    expect(activeContributors).toHaveLength(5);
+    const contributorNames = activeContributors.map((contributor) => contributor.firstName).sort();
+    expect(contributorNames).toEqual(['Adam', 'Anna', 'Bartek', 'Cezary', 'Dawid'].sort());
+    expect(teamRow.totalPoints).toBeCloseTo(105 + 102 + 101 + 99 + 90);
+    expect(activeContributors.filter((contributor) => contributor.firstName === 'Adam')).toHaveLength(1);
+    const annaContributor = activeContributors.find((contributor) => contributor.firstName === 'Anna');
+    expect(annaContributor?.benchPoints).toBeCloseTo(90);
+    expect(annaContributor?.bestBench).toBeCloseTo(150);
+  });
+
+  it('pads mixed results with placeholders when a club lacks enough lifters', () => {
+    const limitedTeam: TeamResultInput[] = [
+      createMember({
+        registrationId: 'limited-m1',
+        firstName: 'Olek',
+        lastName: 'Jot',
+        gender: 'Male',
+        club: 'Limited Club',
+        squatPoints: 80,
+        benchPoints: 78,
+        deadliftPoints: 0,
+        bestSquat: 220,
+        bestBench: 182,
+        bestDeadlift: 0,
+      }),
+      createMember({
+        registrationId: 'limited-m2',
+        firstName: 'Piotr',
+        lastName: 'Kas',
+        gender: 'Male',
+        club: 'Limited Club',
+        squatPoints: 0,
+        benchPoints: 75,
+        deadliftPoints: 0,
+        bestSquat: 0,
+        bestBench: 175,
+        bestDeadlift: 0,
+      }),
+    ];
+
+    const results = computeTeamResults(limitedTeam);
+    const mixedRow = results.mixed.rows.find((row) => row.club === 'Limited Club');
+
+    expect(mixedRow).toBeDefined();
+    const teamRow = mixedRow!;
+    expect(teamRow.contributors).toHaveLength(5);
+    const placeholders = teamRow.contributors.filter((contributor) => contributor.isPlaceholder);
+    expect(placeholders).toHaveLength(3);
+    const malePlaceholders = placeholders.filter((contributor) => contributor.gender === 'Male');
+    const femalePlaceholders = placeholders.filter((contributor) => contributor.gender === 'Female');
+    expect(malePlaceholders).toHaveLength(2);
+    expect(femalePlaceholders).toHaveLength(1);
+    const totalPoints = teamRow.contributors
+      .filter((contributor) => !contributor.isPlaceholder)
+      .reduce((sum, contributor) => sum + contributor.points, 0);
+    expect(teamRow.totalPoints).toBeCloseTo(totalPoints);
   });
 
   it('pads missing slots with placeholders when a club lacks enough eligible lifters', () => {
@@ -428,10 +595,10 @@ describe('computeTeamResults', () => {
 
     const results = computeTeamResults([...incompleteTeam, ...completeTeam]);
 
-    const clubs = results.overall.rows.map((row) => row.club);
+    const clubs = results.mixed.rows.map((row) => row.club);
     expect(clubs).toEqual(['Bravo Club', 'Alpha Club']);
 
-    const alphaRow = results.overall.rows.find((row) => row.club === 'Alpha Club');
+    const alphaRow = results.mixed.rows.find((row) => row.club === 'Alpha Club');
     expect(alphaRow).toBeDefined();
     expect(alphaRow?.contributors).toHaveLength(5);
     const placeholderCount = alphaRow?.contributors.filter((contributor) => contributor.isPlaceholder).length ?? 0;

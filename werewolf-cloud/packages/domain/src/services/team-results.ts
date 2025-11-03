@@ -3,7 +3,7 @@ import type { Gender } from '../models/competitor';
 const REQUIRED_MALE_COUNT = 4;
 const REQUIRED_FEMALE_COUNT = 1;
 
-export type TeamScoreMetric = 'overall' | 'squat' | 'bench' | 'deadlift';
+export type TeamScoreMetric = 'mixed';
 
 export interface TeamResultInput {
   registrationId: string;
@@ -50,6 +50,7 @@ export interface TeamResultContributor {
   totalWeight: number;
   reshelCoefficient: number | null;
   mcculloughCoefficient: number | null;
+  selectedLift: MixedLift | null;
   isPlaceholder?: boolean;
 }
 
@@ -57,7 +58,6 @@ export interface TeamResultRow {
   club: string;
   rank: number;
   totalPoints: number;
-  overallPoints: number;
   contributors: TeamResultContributor[];
 }
 
@@ -67,99 +67,33 @@ export interface TeamScoreboard {
 }
 
 export interface TeamResultsBundle {
-  overall: TeamScoreboard;
-  squat: TeamScoreboard;
-  bench: TeamScoreboard;
-  deadlift: TeamScoreboard;
+  mixed: TeamScoreboard;
 }
-
-interface ScoreConfig {
-  metric: TeamScoreMetric;
-  pointsAccessor: (member: TeamResultInput) => number;
-  totalAccessor?: (member: TeamResultInput) => number;
-  liftAccessor?: (member: TeamResultInput) => number;
-}
-
-interface SelectedClubResult {
-  totalPoints: number;
-  contributors: TeamResultContributor[];
-}
-
-const scoreConfigs: ScoreConfig[] = [
-  {
-    metric: 'overall',
-    pointsAccessor: (member) => numberOrZero(member.coefficientPoints),
-    totalAccessor: (member) => numberOrZero(member.totalWeight),
-  },
-  {
-    metric: 'squat',
-    pointsAccessor: (member) => numberOrZero(member.squatPoints),
-    liftAccessor: (member) => numberOrZero(member.bestSquat),
-  },
-  {
-    metric: 'bench',
-    pointsAccessor: (member) => numberOrZero(member.benchPoints),
-    liftAccessor: (member) => numberOrZero(member.bestBench),
-  },
-  {
-    metric: 'deadlift',
-    pointsAccessor: (member) => numberOrZero(member.deadliftPoints),
-    liftAccessor: (member) => numberOrZero(member.bestDeadlift),
-  },
-];
 
 export function computeTeamResults(inputs: TeamResultInput[]): TeamResultsBundle {
   const grouped = groupByClub(inputs);
+  const rows: TeamResultRow[] = [];
 
-  const results: Record<TeamScoreMetric, TeamScoreboard> = {
-    overall: { metric: 'overall', rows: [] },
-    squat: { metric: 'squat', rows: [] },
-    bench: { metric: 'bench', rows: [] },
-    deadlift: { metric: 'deadlift', rows: [] },
-  };
+  for (const [club, members] of grouped.entries()) {
+    const selection = selectMixedContributorsForClub(club, members);
+    if (!selection) continue;
 
-  for (const config of scoreConfigs) {
-    const rows: TeamResultRow[] = [];
-
-    for (const [club, members] of grouped.entries()) {
-      const selection = selectContributorsForClub(club, members, config);
-      if (!selection) continue;
-
-      rows.push({
-        club,
-        rank: 0,
-        totalPoints: selection.totalPoints,
-        overallPoints: 0,
-        contributors: selection.contributors,
-      });
-    }
-
-    rows.sort((a, b) => compareTeamRows(a, b));
-    assignRanks(rows);
-
-    results[config.metric] = {
-      metric: config.metric,
-      rows,
-    };
-  }
-
-  const overallLookup = new Map<string, number>();
-  for (const row of results.overall.rows) {
-    overallLookup.set(row.club, row.totalPoints);
-    row.overallPoints = row.totalPoints;
-  }
-
-  for (const scoreboard of [results.squat, results.bench, results.deadlift]) {
-    scoreboard.rows.forEach((row) => {
-      row.overallPoints = overallLookup.get(row.club) ?? row.totalPoints;
+    rows.push({
+      club,
+      rank: 0,
+      totalPoints: selection.totalPoints,
+      contributors: selection.contributors,
     });
   }
 
+  rows.sort((a, b) => compareTeamRows(a, b));
+  assignRanks(rows);
+
   return {
-    overall: results.overall,
-    squat: results.squat,
-    bench: results.bench,
-    deadlift: results.deadlift,
+    mixed: {
+      metric: 'mixed',
+      rows,
+    },
   };
 }
 
@@ -214,6 +148,142 @@ function normaliseCoefficient(value: unknown): number | null {
   return null;
 }
 
+type MixedLift = 'squat' | 'bench' | 'deadlift';
+
+interface MixedLiftConfig {
+  lift: MixedLift;
+  pointsAccessor: (member: TeamResultInput) => number;
+  bestAccessor: (member: TeamResultInput) => number;
+}
+
+interface MixedCandidate {
+  member: TeamResultInput;
+  lift: MixedLift;
+  points: number;
+  best: number;
+}
+
+const mixedLiftConfigs: MixedLiftConfig[] = [
+  {
+    lift: 'squat',
+    pointsAccessor: (member) => numberOrZero(member.squatPoints),
+    bestAccessor: (member) => numberOrZero(member.bestSquat),
+  },
+  {
+    lift: 'bench',
+    pointsAccessor: (member) => numberOrZero(member.benchPoints),
+    bestAccessor: (member) => numberOrZero(member.bestBench),
+  },
+  {
+    lift: 'deadlift',
+    pointsAccessor: (member) => numberOrZero(member.deadliftPoints),
+    bestAccessor: (member) => numberOrZero(member.bestDeadlift),
+  },
+];
+
+function createMixedCandidates(members: TeamResultInput[], gender: Gender): MixedCandidate[] {
+  const candidates: MixedCandidate[] = [];
+
+  for (const member of members) {
+    if (member.gender !== gender) continue;
+
+    for (const config of mixedLiftConfigs) {
+      const best = config.bestAccessor(member);
+      const rawPoints = config.pointsAccessor(member);
+      const reshel = normaliseCoefficient(member.reshelCoefficient) ?? 1;
+      const mccullough = normaliseCoefficient(member.mcculloughCoefficient) ?? 1;
+      const fallbackPoints = best > 0 ? best * reshel * mccullough : 0;
+      const points = rawPoints > 0 ? rawPoints : fallbackPoints;
+      if (points <= 0) continue;
+
+      candidates.push({
+        member,
+        lift: config.lift,
+        points,
+        best,
+      });
+    }
+  }
+
+  return candidates;
+}
+
+function compareMixedCandidates(a: MixedCandidate, b: MixedCandidate): number {
+  const pointsDiff = b.points - a.points;
+  if (pointsDiff !== 0) {
+    return pointsDiff;
+  }
+
+  const bestDiff = b.best - a.best;
+  if (bestDiff !== 0) {
+    return bestDiff;
+  }
+
+  const bodyweightDiff = numberOrZero(a.member.bodyweight) - numberOrZero(b.member.bodyweight);
+  if (bodyweightDiff !== 0) {
+    return bodyweightDiff;
+  }
+
+  return a.member.registrationId.localeCompare(b.member.registrationId);
+}
+
+function selectTopMixedCandidates(
+  candidates: MixedCandidate[],
+  requiredCount: number,
+  usedCompetitors: Set<string>,
+): MixedCandidate[] {
+  const selected: MixedCandidate[] = [];
+
+  for (const candidate of candidates) {
+    const competitorKey = candidate.member.competitorId ?? candidate.member.registrationId;
+    if (usedCompetitors.has(competitorKey)) {
+      continue;
+    }
+
+    selected.push(candidate);
+    usedCompetitors.add(competitorKey);
+
+    if (selected.length >= requiredCount) {
+      break;
+    }
+  }
+
+  return selected;
+}
+
+function toMixedContributor(candidate: MixedCandidate): TeamResultContributor {
+  const { member, lift, points, best } = candidate;
+
+  const contributor: TeamResultContributor = {
+    registrationId: member.registrationId,
+    firstName: member.firstName,
+    lastName: member.lastName,
+    gender: member.gender,
+    bodyweight: member.bodyweight ?? null,
+    ageCategory: member.ageCategory ?? null,
+    weightClass: member.weightClass ?? null,
+    ageYears: member.ageYears ?? null,
+    points,
+    coefficientPoints: numberOrZero(member.coefficientPoints),
+    squatPoints: lift === 'squat' ? points : 0,
+    benchPoints: lift === 'bench' ? points : 0,
+    deadliftPoints: lift === 'deadlift' ? points : 0,
+    bestSquat: lift === 'squat' ? best : 0,
+    bestBench: lift === 'bench' ? best : 0,
+    bestDeadlift: lift === 'deadlift' ? best : 0,
+    totalWeight: numberOrZero(member.totalWeight),
+    reshelCoefficient: normaliseCoefficient(member.reshelCoefficient),
+    mcculloughCoefficient: normaliseCoefficient(member.mcculloughCoefficient),
+    selectedLift: lift,
+  };
+
+  if (typeof member.competitorId === 'string' && member.competitorId.length > 0) {
+    contributor.competitorId = member.competitorId;
+  }
+
+  return contributor;
+}
+
 function createPlaceholderContributors(
   club: string,
   gender: Gender,
@@ -245,69 +315,52 @@ function createPlaceholderContributors(
     totalWeight: 0,
     reshelCoefficient: null,
     mcculloughCoefficient: null,
+    selectedLift: null,
     isPlaceholder: true,
   }));
 }
 
-function selectContributorsForClub(
+interface SelectedClubResult {
+  totalPoints: number;
+  contributors: TeamResultContributor[];
+}
+
+function selectMixedContributorsForClub(
   club: string,
   members: TeamResultInput[],
-  config: ScoreConfig,
 ): SelectedClubResult | null {
-  const maleCandidates = members.filter((member) => member.gender === 'Male');
-  const femaleCandidates = members.filter((member) => member.gender === 'Female');
+  const maleCandidates = createMixedCandidates(members, 'Male').sort(compareMixedCandidates);
+  const femaleCandidates = createMixedCandidates(members, 'Female').sort(compareMixedCandidates);
 
   if (maleCandidates.length + femaleCandidates.length === 0) {
     return null;
   }
 
-  const comparator = createMemberComparator(config);
-  maleCandidates.sort(comparator);
-  femaleCandidates.sort(comparator);
+  const usedCompetitors = new Set<string>();
 
-  const selectedMales = maleCandidates.slice(0, REQUIRED_MALE_COUNT);
-  const selectedFemales = femaleCandidates.slice(0, REQUIRED_FEMALE_COUNT);
+  const selectedMales = selectTopMixedCandidates(maleCandidates, REQUIRED_MALE_COUNT, usedCompetitors);
+  const selectedFemales = selectTopMixedCandidates(femaleCandidates, REQUIRED_FEMALE_COUNT, usedCompetitors);
 
-  const selectedMembers = [...selectedMales, ...selectedFemales].sort(comparator);
-  const contributors = selectedMembers.map((member) => toContributor(member, config));
+  const selectedContributors = [
+    ...selectedMales.map((candidate) => toMixedContributor(candidate)),
+    ...selectedFemales.map((candidate) => toMixedContributor(candidate)),
+  ];
 
-  if (contributors.length === 0) {
+  if (selectedContributors.length === 0) {
     return null;
   }
 
-  const paddedContributors = [
-    ...contributors,
-    ...createPlaceholderContributors(club, 'Male', REQUIRED_MALE_COUNT - selectedMales.length),
-    ...createPlaceholderContributors(club, 'Female', REQUIRED_FEMALE_COUNT - selectedFemales.length),
-  ];
-
-  const totalPoints = contributors.reduce((sum, contributor) => sum + contributor.points, 0);
-
-  return {
-    totalPoints,
-    contributors: paddedContributors,
-  };
-}
-
-function createMemberComparator(config: ScoreConfig) {
-  return (a: TeamResultInput, b: TeamResultInput): number => {
-    const pointsDiff = config.pointsAccessor(b) - config.pointsAccessor(a);
-    if (pointsDiff !== 0) {
-      return pointsDiff;
+  const sortedContributors = [...selectedContributors].sort((a, b) => {
+    const pointDiff = b.points - a.points;
+    if (pointDiff !== 0) {
+      return pointDiff;
     }
 
-    if (config.totalAccessor) {
-      const totalDiff = config.totalAccessor(b) - config.totalAccessor(a);
-      if (totalDiff !== 0) {
-        return totalDiff;
-      }
-    }
-
-    if (config.liftAccessor) {
-      const liftDiff = config.liftAccessor(b) - config.liftAccessor(a);
-      if (liftDiff !== 0) {
-        return liftDiff;
-      }
+    const aBest = Math.max(a.bestSquat, a.bestBench, a.bestDeadlift);
+    const bBest = Math.max(b.bestSquat, b.bestBench, b.bestDeadlift);
+    const bestDiff = bBest - aBest;
+    if (bestDiff !== 0) {
+      return bestDiff;
     }
 
     const bodyweightDiff = numberOrZero(a.bodyweight) - numberOrZero(b.bodyweight);
@@ -316,39 +369,20 @@ function createMemberComparator(config: ScoreConfig) {
     }
 
     return a.registrationId.localeCompare(b.registrationId);
+  });
+
+  const paddedContributors = [
+    ...sortedContributors,
+    ...createPlaceholderContributors(club, 'Male', REQUIRED_MALE_COUNT - selectedMales.length),
+    ...createPlaceholderContributors(club, 'Female', REQUIRED_FEMALE_COUNT - selectedFemales.length),
+  ];
+
+  const totalPoints = sortedContributors.reduce((sum, contributor) => sum + contributor.points, 0);
+
+  return {
+    totalPoints,
+    contributors: paddedContributors,
   };
-}
-
-function toContributor(member: TeamResultInput, config: ScoreConfig): TeamResultContributor {
-  const points = config.pointsAccessor(member);
-
-  const contributor: TeamResultContributor = {
-    registrationId: member.registrationId,
-    firstName: member.firstName,
-    lastName: member.lastName,
-    gender: member.gender,
-    bodyweight: member.bodyweight ?? null,
-    ageCategory: member.ageCategory ?? null,
-    weightClass: member.weightClass ?? null,
-    ageYears: member.ageYears ?? null,
-    points,
-    coefficientPoints: numberOrZero(member.coefficientPoints),
-    squatPoints: numberOrZero(member.squatPoints),
-    benchPoints: numberOrZero(member.benchPoints),
-   deadliftPoints: numberOrZero(member.deadliftPoints),
-   bestSquat: numberOrZero(member.bestSquat),
-   bestBench: numberOrZero(member.bestBench),
-   bestDeadlift: numberOrZero(member.bestDeadlift),
-    totalWeight: numberOrZero(member.totalWeight),
-    reshelCoefficient: normaliseCoefficient(member.reshelCoefficient),
-    mcculloughCoefficient: normaliseCoefficient(member.mcculloughCoefficient),
-  };
-
-  if (typeof member.competitorId === 'string' && member.competitorId.length > 0) {
-    contributor.competitorId = member.competitorId;
-  }
-
-  return contributor;
 }
 
 function compareTeamRows(a: TeamResultRow, b: TeamResultRow): number {

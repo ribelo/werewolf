@@ -1,50 +1,14 @@
 <script lang="ts">
   import { _ } from 'svelte-i18n';
-  import type {
-    TeamResultsTable,
-    TeamScoreMetric,
-    TeamResultContributor,
-    TeamResultRow,
-  } from '$lib/types';
+  import type { TeamResultsTable, TeamResultContributor, TeamResultRow } from '$lib/types';
 
   export let table: TeamResultsTable;
-  export let metric: TeamScoreMetric = 'overall';
 
   const TEAM_SLOT_COUNT = 5;
 
-  interface MetricConfig {
-    bestLabelKey: string;
-    pointsLabelKey: string;
-    bestAccessor: (contributor: TeamResultContributor) => number;
-    pointsAccessor: (contributor: TeamResultContributor) => number;
-  }
-
-  const metricConfigs: Record<TeamScoreMetric, MetricConfig> = {
-    overall: {
-      bestLabelKey: 'contest_detail.team_results.columns.total',
-      pointsLabelKey: 'contest_detail.team_results.columns.team_points',
-      bestAccessor: (contributor) => contributor.totalWeight,
-      pointsAccessor: (contributor) => contributor.coefficientPoints,
-    },
-    squat: {
-      bestLabelKey: 'contest_detail.team_results.columns.best_squat',
-      pointsLabelKey: 'contest_detail.team_results.columns.squat_points',
-      bestAccessor: (contributor) => contributor.bestSquat,
-      pointsAccessor: (contributor) => contributor.squatPoints,
-    },
-    bench: {
-      bestLabelKey: 'contest_detail.team_results.columns.best_bench',
-      pointsLabelKey: 'contest_detail.team_results.columns.bench_points',
-      bestAccessor: (contributor) => contributor.bestBench,
-      pointsAccessor: (contributor) => contributor.benchPoints,
-    },
-    deadlift: {
-      bestLabelKey: 'contest_detail.team_results.columns.best_deadlift',
-      pointsLabelKey: 'contest_detail.team_results.columns.deadlift_points',
-      bestAccessor: (contributor) => contributor.bestDeadlift,
-      pointsAccessor: (contributor) => contributor.deadliftPoints,
-    },
-  };
+  const bestLabelKey = 'contest_detail.team_results.columns.lift_weight';
+  const pointsLabelKey = 'contest_detail.team_results.columns.lift_points';
+  const liftTypeLabelKey = 'contest_detail.team_results.columns.lift_type';
 
   function formatLift(value?: number | null): string {
     const normalised = typeof value === 'number' ? value : Number(value ?? 0);
@@ -79,64 +43,37 @@
   }
 
   function formatMetricBest(contributor: TeamResultContributor): string {
-    const accessor = metricConfigs[metric]?.bestAccessor ?? metricConfigs.overall.bestAccessor;
-    return formatLift(accessor(contributor));
+    const selected = contributor.selectedLift;
+    if (selected === 'squat') return formatLift(contributor.bestSquat);
+    if (selected === 'bench') return formatLift(contributor.bestBench);
+    if (selected === 'deadlift') return formatLift(contributor.bestDeadlift);
+    return '–';
   }
 
   function formatMetricPoints(contributor: TeamResultContributor): string {
-    // use live-computed metric points to avoid stale zeros
-    return formatPoints(contributorMetricPoints(contributor));
+    return formatPoints(contributor.points);
   }
 
   function activeContributorCount(contributors: TeamResultContributor[]): number {
     return contributors.filter((contributor) => !contributor.isPlaceholder).length;
   }
 
-  function contributorMetricPoints(contributor: TeamResultContributor): number {
-    const reshel = typeof contributor.reshelCoefficient === 'number' && contributor.reshelCoefficient > 0
-      ? contributor.reshelCoefficient
-      : 1;
-    const mc = typeof contributor.mcculloughCoefficient === 'number' && contributor.mcculloughCoefficient > 0
-      ? contributor.mcculloughCoefficient
-      : 1;
+  const liftLabelKeys: Record<string, string> = {
+    squat: 'contest_detail.team_results.labels.lift_types.squat',
+    bench: 'contest_detail.team_results.labels.lift_types.bench',
+    deadlift: 'contest_detail.team_results.labels.lift_types.deadlift',
+  };
 
-    if (metric === 'squat') {
-      const fromStore = contributor.squatPoints;
-      if (Number(fromStore) > 0) return fromStore;
-      return (Number(contributor.bestSquat) || 0) * reshel * mc;
-    }
-    if (metric === 'bench') {
-      const fromStore = contributor.benchPoints;
-      if (Number(fromStore) > 0) return fromStore;
-      return (Number(contributor.bestBench) || 0) * reshel * mc;
-    }
-    if (metric === 'deadlift') {
-      const fromStore = contributor.deadliftPoints;
-      if (Number(fromStore) > 0) return fromStore;
-      return (Number(contributor.bestDeadlift) || 0) * reshel * mc;
-    }
-
-    // overall fallback
-    return contributor.coefficientPoints;
-  }
-
-  function rowMetricScore(row: TeamResultRow): number {
-    if (metric === 'overall') {
-      return row.totalPoints;
-    }
-
-    return row.contributors.reduce((sum, contributor) => sum + contributorMetricPoints(contributor), 0);
+  function getLiftKindKey(contributor: TeamResultContributor): string | null {
+    if (contributor.isPlaceholder) return null;
+    if (!contributor.selectedLift) return null;
+    return liftLabelKeys[contributor.selectedLift] ?? null;
   }
 
   function compareRows(a: TeamResultRow, b: TeamResultRow): number {
-    const metricDiff = rowMetricScore(b) - rowMetricScore(a);
+    const metricDiff = b.totalPoints - a.totalPoints;
     if (Math.abs(metricDiff) > 0.0001) {
       return metricDiff;
-    }
-
-    const overallDiff = (b.overallPoints ?? 0) - (a.overallPoints ?? 0);
-    if (Math.abs(overallDiff) > 0.0001) {
-      return overallDiff;
     }
 
     return a.club.localeCompare(b.club);
@@ -159,9 +96,6 @@
     Female: 'contest_detail.team_results.placeholder.female',
   };
 
-  $: activeMetricConfig = metricConfigs[metric] ?? metricConfigs.overall;
-  $: bestColumnLabelKey = activeMetricConfig.bestLabelKey;
-  $: metricPointsLabelKey = activeMetricConfig.pointsLabelKey;
 </script>
 
 <div class="overflow-x-auto rounded-lg border border-border-color/60 bg-element-bg">
@@ -175,10 +109,11 @@
         <th class="px-4 py-3 text-left">{$_('contest_detail.team_results.columns.weight_class')}</th>
         <th class="px-4 py-3 text-left">{$_('contest_detail.team_results.columns.age')}</th>
         <th class="px-4 py-3 text-left">{$_('contest_detail.team_results.columns.age_category')}</th>
-        <th class="px-4 py-3 text-left">{$_(bestColumnLabelKey)}</th>
+        <th class="px-4 py-3 text-left">{$_(liftTypeLabelKey)}</th>
+        <th class="px-4 py-3 text-left">{$_(bestLabelKey)}</th>
         <th class="px-4 py-3 text-left">{$_('contest_detail.team_results.columns.reshel')}</th>
         <th class="px-4 py-3 text-left">{$_('contest_detail.team_results.columns.mcc')}</th>
-        <th class="px-4 py-3 text-left">{$_(metricPointsLabelKey)}</th>
+        <th class="px-4 py-3 text-left">{$_(pointsLabelKey)}</th>
       </tr>
     </thead>
     <tbody>
@@ -198,10 +133,11 @@
           <td class="px-4 py-4 align-top text-text-secondary">–</td> <!-- Weight class -->
           <td class="px-4 py-4 align-top text-text-secondary">–</td> <!-- Age -->
           <td class="px-4 py-4 align-top text-text-secondary">–</td> <!-- Age category -->
+          <td class="px-4 py-4 align-top text-text-secondary">–</td> <!-- Lift type -->
           <td class="px-4 py-4 align-top text-text-secondary">–</td> <!-- Best -->
           <td class="px-4 py-4 align-top text-text-secondary">–</td> <!-- Reshel -->
           <td class="px-4 py-4 align-top text-text-secondary">–</td> <!-- McC -->
-          <td class="px-4 py-4 align-top font-semibold text-text-primary">{formatPoints(rowMetricScore(row))}</td>
+          <td class="px-4 py-4 align-top font-semibold text-text-primary">{formatPoints(row.totalPoints)}</td>
         </tr>
         {#each row.contributors as contributor (contributor.registrationId)}
           <tr class={`border-t border-border-color/40 ${contributor.isPlaceholder ? 'bg-main-bg/20 italic text-text-secondary' : 'text-text-primary'}`}>
@@ -224,6 +160,7 @@
             <td class="px-4 py-3 align-top">{contributor.isPlaceholder ? '–' : contributor.weightClass ?? '–'}</td>
             <td class="px-4 py-3 align-top">{contributor.isPlaceholder ? '–' : (typeof contributor.ageYears === 'number' ? String(contributor.ageYears) : '–')}</td>
             <td class="px-4 py-3 align-top">{contributor.isPlaceholder ? '–' : contributor.ageCategory ?? '–'}</td>
+            <td class="px-4 py-3 align-top">{#if contributor.isPlaceholder}–{:else}{$_(getLiftKindKey(contributor) ?? 'contest_detail.team_results.labels.lift_types.unknown')}{/if}</td>
             <td class="px-4 py-3 align-top">{contributor.isPlaceholder ? '–' : formatMetricBest(contributor)}</td>
             <td class="px-4 py-3 align-top">{contributor.isPlaceholder ? '–' : formatCoefficient(contributor.reshelCoefficient)}</td>
             <td class="px-4 py-3 align-top">{contributor.isPlaceholder ? '–' : formatCoefficient(contributor.mcculloughCoefficient)}</td>
