@@ -6,4 +6,5 @@
   export let params: Record<string, string> = {};
 </script>
 
-<ContestManagerView {data} {params} view="plates" />
+<ContestManagerView {data} {params} view="bench" />
+

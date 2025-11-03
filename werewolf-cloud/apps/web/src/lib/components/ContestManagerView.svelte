@@ -3097,6 +3097,121 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
             {/if}
           </div>
         </section>
+
+        <!-- Moved Plates management into Desk view -->
+        <section class="space-y-4">
+          <div class="card space-y-4">
+            <header class="space-y-3">
+              <div>
+                <h3 class="text-h3 text-text-primary">{$_('contest_detail.plates.title')}</h3>
+                <p class="text-body text-text-secondary">{$_('contest_detail.plates.subtitle')}</p>
+              </div>
+              {#if contestBarWeights || contest}
+                <div class="grid gap-2 md:grid-cols-2 text-caption text-text-secondary uppercase tracking-[0.35em]">
+                  <span>{$_('contest_detail.plates.bar_weight_men', { values: { weight: displayWeightValue(contestBarWeights?.mensBarWeight ?? contest?.mensBarWeight ?? null) } })}</span>
+                  <span>{$_('contest_detail.plates.bar_weight_women', { values: { weight: displayWeightValue(contestBarWeights?.womensBarWeight ?? contest?.womensBarWeight ?? null) } })}</span>
+                </div>
+              {/if}
+            </header>
+
+            <div class="space-y-4">
+              <div class="grid gap-4 md:grid-cols-3">
+                <div>
+                  <label class="input-label" for="mens-bar-weight-setting">
+                    {$_('contest_detail.plates.bar_weight_men', { values: { weight: '' } })}
+                  </label>
+                  <input id="mens-bar-weight-setting" class="input-field" type="number" step="0.25" bind:value={mensBarWeightSetting} />
+                </div>
+                <div>
+                  <label class="input-label" for="womens-bar-weight-setting">
+                    {$_('contest_detail.plates.bar_weight_women', { values: { weight: '' } })}
+                  </label>
+                  <input id="womens-bar-weight-setting" class="input-field" type="number" step="0.25" bind:value={womensBarWeightSetting} />
+                </div>
+                <div>
+                  <label class="input-label" for="clamp-weight-setting">
+                    {$_('contest_detail.plates.clamp_weight_label')}
+                  </label>
+                  <input id="clamp-weight-setting" class="input-field" type="number" step="0.25" bind:value={clampWeightSetting} />
+                  <p class="text-caption text-text-secondary mt-1">{$_('contest_detail.plates.clamp_weight_hint')}</p>
+                </div>
+                <div class="md:col-span-3">
+                  <button class="btn-primary px-3 py-1 text-xxs" disabled={barWeightsBusy} on:click|preventDefault={saveBarWeights}>
+                    {barWeightsBusy ? $_('buttons.saving') : $_('buttons.save')}
+                  </button>
+                </div>
+              </div>
+
+              <div class="overflow-x-auto">
+                <table class="min-w-full text-left text-sm text-text-secondary">
+                  <thead class="bg-element-bg text-label">
+                    <tr>
+                      <th class="px-4 py-3">{$_('contest_detail.plates.columns.weight')}</th>
+                      <th class="px-4 py-3">{$_('contest_detail.plates.columns.quantity')}</th>
+                      <th class="px-4 py-3">{$_('contest_detail.plates.columns.color')}</th>
+                      <th class="px-4 py-3 text-right">{$_('contest_table.columns.actions')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {#if contestPlateSets.length === 0}
+                      <tr>
+                        <td class="px-4 py-3 text-text-secondary" colspan="4">{$_('contest_detail.plates.empty')}</td>
+                      </tr>
+                    {/if}
+                    {#each contestPlateSets as plate, idx (plate.plateWeight ?? plate.weight ?? idx)}
+                      <tr class="border-b border-border-color last:border-b-0">
+                        <td class="px-4 py-3">
+                          <input
+                            class="input-field w-28"
+                            type="number"
+                            min="0.25"
+                            step="0.25"
+                            value={displayWeightValue(plate.plateWeight ?? plate.weight ?? null)}
+                            on:change={(event) => handlePlateWeightChange(plate.plateWeight, plate.quantity, plate.color ?? null, event)}
+                          />
+                        </td>
+                        <td class="px-4 py-3">
+                          <input
+                            class="input-field w-24"
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={plate.quantity}
+                            on:change={(event) => handlePlateQuantityChange(plate.plateWeight, event)}
+                          />
+                        </td>
+                        <td class="px-4 py-3">
+                          <div class="flex items-center gap-2">
+                            <span class="inline-block h-4 w-4 rounded border border-border-color" style={`background:${plate.color}`}></span>
+                            <span class="text-text-secondary">{plate.color}</span>
+                          </div>
+                        </td>
+                        <td class="px-4 py-3 text-right">
+                          <button class="btn-secondary px-3 py-1 text-xxs" on:click={() => deletePlate(plate.plateWeight)} disabled={platesBusy}>{$_('buttons.delete')}</button>
+                        </td>
+                      </tr>
+                    {/each}
+                    <tr>
+                      <td class="px-4 py-3">
+                        <input class="input-field w-28" type="number" step="0.25" placeholder="np. 25" bind:value={newPlateWeight} />
+                      </td>
+                      <td class="px-4 py-3">
+                        <input class="input-field w-24" type="number" min="0" step="1" placeholder="0" bind:value={newPlateQuantity} />
+                      </td>
+                      <td class="px-4 py-3">
+                        <input class="input-field w-36" type="text" placeholder="#374151" bind:value={newPlateColor} />
+                      </td>
+                      <td class="px-4 py-3 text-right">
+                        <button class="btn-primary px-3 py-1 text-xxs" on:click|preventDefault={addPlate} disabled={platesBusy}>{$_('buttons.add')}</button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
       {:else if activeTab === 'results'}
         <section class="space-y-4">
           <div class="card space-y-4">

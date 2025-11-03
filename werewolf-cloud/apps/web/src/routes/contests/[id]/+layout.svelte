@@ -13,7 +13,10 @@
     { id: 'registrations', labelKey: 'contest_detail.tabs.main_table', href: `${basePath}/registrations` },
     { id: 'results', labelKey: 'contest_detail.tabs.results', href: `${basePath}/results` },
     { id: 'team_results', labelKey: 'contest_detail.tabs.team_results', href: `${basePath}/team-results` },
-    { id: 'plates', labelKey: 'contest_detail.tabs.plates', href: `${basePath}/plates` },
+    // Per-lift tables
+    { id: 'squat', labelKey: 'contest_detail.tabs.squat_table', href: `${basePath}/squat` },
+    { id: 'bench', labelKey: 'contest_detail.tabs.bench_table', href: `${basePath}/bench` },
+    { id: 'deadlift', labelKey: 'contest_detail.tabs.deadlift_table', href: `${basePath}/deadlift` },
   ] as const;
 
   $: pathname = $page.url.pathname.replace(/\/$/, '');
