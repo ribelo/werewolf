@@ -12,7 +12,7 @@ export const load = async ({ url }) => {
       attempts: [],
       currentAttempt: null,
       referenceData: { weightClasses: [], ageCategories: [] },
-      error: 'Contest ID is required',
+      error: 'display_table.errors.contest_id_required',
       contestId: null,
       isOffline: false,
       cacheAge: null,

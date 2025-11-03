@@ -21,16 +21,19 @@
   import { buildRisingBarQueue } from '$lib/rising-bar';
   import UnifiedContestTable from '$lib/components/UnifiedContestTable.svelte';
   import { buildUnifiedRows, deriveContestLifts, sortUnifiedRows, type UnifiedRow, type LiftKind } from '$lib/contest-table';
-  import { applyRegistrationFilters, type RegistrationFilterState } from '$lib/filters/registrations';
+  import { applyRegistrationFilters, type RegistrationFilterState, type WeightFilter, type AgeFilter, type LabelFilter, normaliseLabelKey, isFemaleGender, isMaleGender } from '$lib/filters/registrations';
   import type { DisplayFilterSync } from '@werewolf/domain';
+  import { ChevronDown } from 'lucide-svelte';
 
   type MessageValues = Record<string, string | number | boolean | Date | null | undefined>;
-  type ScrollSpeed = 'slow' | 'normal' | 'fast';
+  type ScrollSpeed = 'very_slow' | 'slow' | 'normal' | 'fast';
   type ApiStatus = 'checking' | 'online' | 'degraded' | 'offline';
 
   const AUTO_SCROLL_STORAGE_KEY = 'displayTable.autoScrollEnabled';
   const AUTO_SCROLL_SPEED_STORAGE_KEY = 'displayTable.autoScrollSpeed';
+  const AUTO_SYNC_STORAGE_KEY = 'displayTable.autoSyncEnabled';
   const SPEED_PIXELS_PER_SECOND: Record<ScrollSpeed, number> = {
+    very_slow: 20,
     slow: 35,
     normal: 70,
     fast: 110,
@@ -80,6 +83,13 @@
     age: 'ALL',
     label: 'ALL',
   };
+  let localFilters: RegistrationFilterState = {
+    weight: 'ALL',
+    age: 'ALL',
+    label: 'ALL',
+  };
+  let autoSyncEnabled = true;
+  let lastSynced: DisplayFilterSync | null = null;
   let mensBarWeightSetting: number | null = contest?.mensBarWeight ?? null;
   let womensBarWeightSetting: number | null = contest?.womensBarWeight ?? null;
   let clampWeightSetting: number | null = contest?.clampWeight ?? 2.5;
@@ -94,6 +104,7 @@
   let compactLayout = false;
   let compactMediaQuery: MediaQueryList | null = null;
   let compactMediaListener: ((event: MediaQueryListEvent) => void) | null = null;
+  let openFilterDropdown: 'lift' | 'weight' | 'age' | 'labels' | null = null;
 
   const COMPACT_HEIGHT_QUERY = '(max-height: 820px)';
 
@@ -115,6 +126,8 @@
       realtimeClient.connect(contestId);
     }
     loadAutoScrollPreferences();
+    loadAutoSyncPreferences();
+    loadInitialSync();
     preferencesLoaded = true;
     checkApiStatus();
     initializeCompactLayout();
@@ -215,7 +228,10 @@
       case 'display.filtersSynced': {
         const payload = event.data as DisplayFilterSync | undefined;
         if (!payload) break;
-        applySyncedFilters(payload);
+        lastSynced = payload;
+        if (autoSyncEnabled) {
+          applySyncedFilters(payload.filters);
+        }
         break;
       }
       default:
@@ -231,22 +247,23 @@
     }).attempts;
   }
 
-  function applySyncedFilters(sync: DisplayFilterSync): void {
-    const { filters, id } = sync;
-
+  function applySyncedFilters(filters: DisplayFilterSync['filters']): void {
     sortColumn = filters.sortColumn || sortColumn;
     sortDirection = filters.sortDirection === 'desc' ? 'desc' : 'asc';
 
-    syncedFilters = {
+    const newFilters: RegistrationFilterState = {
       weight: filters.weight ?? 'ALL',
       age: filters.age ?? 'ALL',
       label: filters.label ?? 'ALL',
     };
 
+    syncedFilters = newFilters;
+    localFilters = newFilters;
+
     if (filters.lift && contestLifts.includes(filters.lift)) {
       selectedLift = filters.lift;
-    } else if (!filters.lift && contestLifts.length > 0) {
-      selectedLift = contestLifts[0];
+    } else {
+      selectedLift = null;
     }
   }
 
@@ -260,11 +277,11 @@
   $: womensBarWeightSetting = contest?.womensBarWeight ?? null;
   $: clampWeightSetting = contest?.clampWeight ?? 2.5;
   $: sortedRows = sortUnifiedRows(unifiedRows, sortColumn, sortDirection);
-  $: if (!selectedLift || !contestLifts.includes(selectedLift)) {
-        selectedLift = contestLifts.length > 0 ? contestLifts[0] : null;
+  $: if (selectedLift && !contestLifts.includes(selectedLift)) {
+        selectedLift = null;
       }
   $: visibleLifts = selectedLift ? [selectedLift] : [...contestLifts];
-  $: registrationFilteredRows = applyRegistrationFilters(sortedRows, syncedFilters);
+  $: registrationFilteredRows = applyRegistrationFilters(sortedRows, localFilters);
   $: filteredRows =
     selectedLift != null
       ? registrationFilteredRows.filter((row) => row.registration.lifts?.includes(selectedLift as LiftKind))
@@ -279,6 +296,244 @@
   $: mainSpacingClass = compactLayout ? 'py-1.5 sm:py-3 gap-1.5 sm:gap-3' : 'py-3 sm:py-4 gap-3 sm:gap-4';
   $: mainPaddingClass = compactLayout ? 'px-4 sm:px-6' : 'container-full';
 
+  // Filter options computation
+  $: weightFilterGroups = (() => {
+    const female: Array<{ id: WeightFilter; label: string }> = [];
+    const male: Array<{ id: WeightFilter; label: string }> = [];
+    const femaleSeen = new Set<string>();
+    const maleSeen = new Set<string>();
+
+    // Prefer referenceData; if empty, derive from registrations to avoid "only Open" issue
+    const hasRefWeights = (referenceData?.weightClasses?.length ?? 0) > 0;
+    console.log('[display/table] Building weight filter groups:', {
+      from: hasRefWeights ? 'referenceData' : 'registrationsFallback',
+      weightClasses: referenceData?.weightClasses,
+      count: referenceData?.weightClasses?.length ?? 0,
+    });
+
+    type WeightClassLike = { id?: string; code?: string; name?: string; gender?: string };
+    const source: WeightClassLike[] = hasRefWeights
+      ? referenceData!.weightClasses
+      : registrations
+          .filter((reg) => reg.weightClassId)
+          .map((reg) => ({
+            id: reg.weightClassId ?? undefined,
+            code: reg.weightClassId ?? undefined,
+            name: reg.weightClassName ?? reg.weightClassId ?? undefined,
+            gender: reg.gender ?? undefined,
+          }));
+
+    source.forEach((wc) => {
+      const id = (wc.id ?? wc.code ?? '').toString();
+      const label = wc.name ?? wc.code ?? id;
+      const gender = (wc.gender ?? '').toString().toLowerCase();
+
+      if (!id) return; // skip incomplete entries
+
+      if (gender.startsWith('f') || gender.startsWith('k')) {
+        if (femaleSeen.has(id)) return;
+        femaleSeen.add(id);
+        female.push({ id: id as WeightFilter, label });
+      } else if (gender.startsWith('m')) {
+        if (maleSeen.has(id)) return;
+        maleSeen.add(id);
+        male.push({ id: id as WeightFilter, label });
+      }
+    });
+
+    const groups = {
+      femaleOpen: { id: 'FEMALE_OPEN' as WeightFilter, label: t('contest_detail.registrations.filters.open') },
+      maleOpen: { id: 'MALE_OPEN' as WeightFilter, label: t('contest_detail.registrations.filters.open') },
+      female,
+      male,
+    };
+
+    console.log('[display/table] Built weight filter groups:', {
+      femaleCount: groups.female.length,
+      maleCount: groups.male.length,
+      female: groups.female,
+      male: groups.male,
+    });
+
+    return groups;
+  })();
+
+  $: availableWeightFilters = [
+    weightFilterGroups.femaleOpen,
+    weightFilterGroups.maleOpen,
+    ...weightFilterGroups.female,
+    ...weightFilterGroups.male,
+  ];
+
+  $: availableAgeFilters = (() => {
+    const entries: Array<{ id: AgeFilter; label: string }> = [
+      { id: 'ALL', label: t('contest_detail.registrations.filters.age_all') },
+    ];
+    const hasUnassigned = registrations.some((registration) => !registration.ageCategoryId);
+    if (hasUnassigned) {
+      entries.push({
+        id: 'UNASSIGNED',
+        label: t('contest_detail.registrations.filters.age_unassigned'),
+      });
+    }
+
+    const seen = new Set<string>();
+    referenceData?.ageCategories
+      ?.slice()
+      .sort((a, b) => {
+        const orderA = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
+        const orderB = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
+        if (orderA !== orderB) return orderA - orderB;
+        const labelA = a.name || (a.code ?? '').toString();
+        const labelB = b.name || (b.code ?? '').toString();
+        return labelA.localeCompare(labelB, undefined, { sensitivity: 'base' });
+      })
+      .forEach((category) => {
+        const id = (category.id ?? category.code ?? '').toString();
+        let label = category.name || id;
+        if (label.toLowerCase() === 'senior') {
+          label = t('contest_detail.registrations.filters.age_senior');
+        }
+        if (!id || !label) return;
+        if (seen.has(id)) return;
+        seen.add(id);
+        entries.push({ id: id as AgeFilter, label });
+      });
+
+    return entries;
+  })();
+
+  $: availableLabelFilters = (() => {
+    const base: Array<{ id: LabelFilter; label: string }> = [
+      { id: 'ALL', label: t('contest_detail.registrations.filters.labels_all') },
+    ];
+    let hasUnlabeled = false;
+    const labelMap = new Map<string, string>();
+
+    registrations.forEach((registration) => {
+      const labels = Array.isArray(registration.labels) ? registration.labels : [];
+      if (labels.length === 0) {
+        hasUnlabeled = true;
+        return;
+      }
+      labels.forEach((label) => {
+        const trimmed = (label ?? '').trim();
+        if (!trimmed) return;
+        const key = normaliseLabelKey(trimmed);
+        if (!labelMap.has(key)) {
+          labelMap.set(key, trimmed);
+        }
+      });
+    });
+
+    if (hasUnlabeled) {
+      base.push({
+        id: 'UNLABELED',
+        label: t('contest_detail.registrations.filters.labels_unlabeled'),
+      });
+    }
+
+    Array.from(labelMap.entries())
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .forEach(([key, label]) => {
+        base.push({ id: key as LabelFilter, label });
+      });
+
+    return base;
+  })();
+
+  // Compute filter groups for weight (female/male)
+  $: femaleWeightFilters = (() => {
+    const hasFemaleData = weightFilterGroups.female.length > 0 || registrations.some((reg) => isFemaleGender(reg.gender));
+    if (!hasFemaleData) {
+      return [] as Array<{ id: WeightFilter; label: string }>;
+    }
+    return [weightFilterGroups.femaleOpen, ...weightFilterGroups.female];
+  })();
+
+  $: maleWeightFilters = (() => {
+    const hasMaleData = weightFilterGroups.male.length > 0 || registrations.some((reg) => isMaleGender(reg.gender));
+    if (!hasMaleData) {
+      return [] as Array<{ id: WeightFilter; label: string }>;
+    }
+    return [weightFilterGroups.maleOpen, ...weightFilterGroups.male];
+  })();
+
+  // Filter button styling
+  function filterButtonClass(active: boolean): string {
+    return `px-3 py-1 text-xxs ${active ? 'btn-primary text-black' : 'btn-secondary'}`;
+  }
+
+  // Filter selection labels
+  $: weightSelectionLabel = (() => {
+    if (localFilters.weight === 'ALL') {
+      return t('contest_detail.registrations.filters.weight_button_all');
+    }
+    if (localFilters.weight === 'FEMALE_OPEN') {
+      return `${t('contest_detail.registrations.filters.sex_female')} ${t('contest_detail.registrations.filters.open')}`;
+    }
+    if (localFilters.weight === 'MALE_OPEN') {
+      return `${t('contest_detail.registrations.filters.sex_male')} ${t('contest_detail.registrations.filters.open')}`;
+    }
+    const femaleMatch = femaleWeightFilters.find((option) => option.id === localFilters.weight);
+    if (femaleMatch) {
+      return `${t('contest_detail.registrations.filters.sex_female')} ${femaleMatch.label}`;
+    }
+    const maleMatch = maleWeightFilters.find((option) => option.id === localFilters.weight);
+    if (maleMatch) {
+      return `${t('contest_detail.registrations.filters.sex_male')} ${maleMatch.label}`;
+    }
+    const fallback = availableWeightFilters.find((option) => option.id === localFilters.weight);
+    return fallback?.label ?? t('contest_detail.registrations.filters.weight_button_all');
+  })();
+
+  $: ageSelectionLabel = (() => {
+    const match = availableAgeFilters.find((option) => option.id === localFilters.age);
+    return match?.label ?? t('contest_detail.registrations.filters.age_button_all');
+  })();
+
+  $: labelSelectionLabel = (() => {
+    const match = availableLabelFilters.find((option) => option.id === localFilters.label);
+    return match?.label ?? t('contest_detail.registrations.filters.labels_button_all');
+  })();
+
+  $: liftSelectionLabel = (() => {
+    if (!selectedLift) {
+      return t('contest_detail.registrations.filters.lift_button_all');
+    }
+    return liftTabLabel(selectedLift);
+  })();
+
+  // Dropdown management
+  function toggleFilterDropdown(target: 'lift' | 'weight' | 'age' | 'labels') {
+    if (autoSyncEnabled) return; // Don't allow opening if auto-sync is enabled
+    openFilterDropdown = openFilterDropdown === target ? null : target;
+  }
+
+  function closeFilterDropdown() {
+    openFilterDropdown = null;
+  }
+
+  function selectWeightFilter(id: WeightFilter) {
+    localFilters = { ...localFilters, weight: id };
+    closeFilterDropdown();
+  }
+
+  function selectAgeFilter(id: AgeFilter) {
+    localFilters = { ...localFilters, age: id };
+    closeFilterDropdown();
+  }
+
+  function selectLabelFilter(id: LabelFilter) {
+    localFilters = { ...localFilters, label: id };
+    closeFilterDropdown();
+  }
+
+  function selectLiftFilter(lift: LiftKind | null) {
+    selectedLift = lift;
+    closeFilterDropdown();
+  }
+
   function toCurrentAttemptSummary(input: CurrentAttemptBundle | Attempt | CurrentAttempt): CurrentAttempt {
     if ('attempt' in (input as any)) {
       return bundleToCurrentAttempt(input as CurrentAttemptBundle);
@@ -292,7 +547,7 @@
     const registration = registrations.find((entry) => entry.id === attempt.registrationId);
     const competitorName = registration
       ? `${registration.lastName} ${registration.firstName}`
-      : attempt.competitorName ?? 'Unknown Competitor';
+      : attempt.competitorName ?? t('display_table.labels.unknown_competitor');
 
     return {
       id: attempt.id,
@@ -383,6 +638,44 @@
     }
   }
 
+  function loadAutoSyncPreferences() {
+    if (!browser) return;
+    const stored = localStorage.getItem(AUTO_SYNC_STORAGE_KEY);
+    if (stored !== null) {
+      autoSyncEnabled = stored === 'true';
+    }
+  }
+
+  async function loadInitialSync() {
+    if (!contestId || !browser) return;
+
+    try {
+      const response = await apiClient.get<DisplayFilterSync>(`/contests/${contestId}/display/sync`);
+      if (response.data && !response.error) {
+        lastSynced = response.data;
+        if (autoSyncEnabled) {
+          applySyncedFilters(response.data.filters);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load initial sync:', error);
+    }
+  }
+
+  async function forceSyncNow() {
+    if (!contestId || !browser) return;
+
+    try {
+      const response = await apiClient.get<DisplayFilterSync>(`/contests/${contestId}/display/sync`);
+      if (response.data && !response.error) {
+        lastSynced = response.data;
+        applySyncedFilters(response.data.filters);
+      }
+    } catch (error) {
+      console.error('Failed to force sync:', error);
+    }
+  }
+
   function parseAutoScrollFlag(value: string | null): boolean {
     if (value == null) return true;
     const normalized = value.trim().toLowerCase();
@@ -398,7 +691,7 @@
   function isScrollSpeed(value: string | null | undefined): value is ScrollSpeed {
     if (!value) return false;
     const normalized = value.toLowerCase();
-    return normalized === 'slow' || normalized === 'normal' || normalized === 'fast';
+    return normalized === 'very_slow' || normalized === 'slow' || normalized === 'normal' || normalized === 'fast';
   }
 
   function handleAutoScrollToggle(event: Event) {
@@ -486,6 +779,22 @@
     }
   }
 
+  function handleAutoSyncToggle(event: Event) {
+    const target = event.currentTarget as HTMLInputElement | null;
+    const enabled = target?.checked ?? false;
+    if (autoSyncEnabled === enabled) return;
+    autoSyncEnabled = enabled;
+
+    if (autoSyncEnabled && lastSynced) {
+      // Apply the last synced filters immediately when enabling
+      applySyncedFilters(lastSynced.filters);
+    } else if (autoSyncEnabled && !lastSynced) {
+      // Force sync if we don't have any cached data
+      forceSyncNow();
+    }
+  }
+
+
   function initializeCompactLayout() {
     if (!browser) return;
     compactMediaQuery = window.matchMedia(COMPACT_HEIGHT_QUERY);
@@ -519,6 +828,10 @@
 
   $: if (browser && preferencesLoaded) {
     localStorage.setItem(AUTO_SCROLL_SPEED_STORAGE_KEY, scrollSpeed);
+  }
+
+  $: if (browser && preferencesLoaded) {
+    localStorage.setItem(AUTO_SYNC_STORAGE_KEY, autoSyncEnabled ? 'true' : 'false');
   }
 
   $: if (browser && autoScrollEnabled) {
@@ -584,7 +897,7 @@
 
   function competitorName(registrationId: string): string {
     const competitor = getCompetitor(registrationId);
-    return competitor ? `${competitor.lastName} ${competitor.firstName}` : 'Unknown';
+    return competitor ? `${competitor.lastName} ${competitor.firstName}` : t('display_table.labels.unknown');
   }
 
   function queueLabel(attempt: Attempt): string {
@@ -635,28 +948,36 @@
       </div>
     {:else}
       <section class={`card flex-1 min-h-0 flex flex-col ${compactLayout ? 'gap-2' : 'gap-3'}`}>
-        <div class={`flex flex-col ${compactLayout ? 'gap-2' : 'gap-3'} md:flex-row md:items-center md:justify-between`}>
-          <div class={`flex flex-wrap items-center justify-center ${compactLayout ? 'gap-1.5' : 'gap-2'} md:justify-start`}>
-            {#each contestLifts as lift}
-              <button
-                type="button"
-                class={`px-2 py-1 text-xxs ${selectedLift === lift ? 'btn-primary text-black' : 'btn-secondary'}`}
-                on:click={() => selectLift(lift)}
-              >
-                {liftTabLabel(lift)}
-              </button>
-            {/each}
-          </div>
-          <div class={`flex flex-wrap items-center justify-center ${compactLayout ? 'gap-2' : 'gap-3'} md:justify-end`}>
-            <label class="flex items-center gap-2 text-xxs uppercase tracking-[0.2em] text-text-secondary">
-              <input
-                type="checkbox"
-                class={`${compactLayout ? 'h-3.5 w-3.5' : 'h-4 w-4'} accent-primary-red`}
-                checked={autoScrollEnabled}
-                on:change={handleAutoScrollToggle}
-              />
-              <span class="text-text-primary">{t('display_table.actions.auto_scroll')}</span>
-            </label>
+        <!-- Auto-sync and scroll controls -->
+        <div class={`flex flex-wrap items-center justify-center ${compactLayout ? 'gap-2' : 'gap-3'} md:justify-end`}>
+          <label class="flex items-center gap-2 text-xxs uppercase tracking-[0.2em] text-text-secondary">
+            <input
+              type="checkbox"
+              class={`${compactLayout ? 'h-3.5 w-3.5' : 'h-4 w-4'} accent-primary-red`}
+              checked={autoSyncEnabled}
+              on:change={handleAutoSyncToggle}
+            />
+            <span class="text-text-primary">{t('display_table.actions.auto_sync')}</span>
+          </label>
+          {#if autoSyncEnabled}
+            <button
+              type="button"
+              class={`px-2 py-1 text-xxs btn-secondary ${compactLayout ? 'text-[10px]' : ''}`}
+              on:click={forceSyncNow}
+            >
+              {t('display_table.actions.sync_now')}
+            </button>
+          {/if}
+          <label class="flex items-center gap-2 text-xxs uppercase tracking-[0.2em] text-text-secondary">
+            <input
+              type="checkbox"
+              class={`${compactLayout ? 'h-3.5 w-3.5' : 'h-4 w-4'} accent-primary-red`}
+              checked={autoScrollEnabled}
+              on:change={handleAutoScrollToggle}
+            />
+            <span class="text-text-primary">{t('display_table.actions.auto_scroll')}</span>
+          </label>
+          {#if autoScrollEnabled}
             <label class="flex items-center gap-2 text-xxs uppercase tracking-[0.2em] text-text-secondary">
               <span>{t('display_table.actions.speed')}</span>
               <select
@@ -664,11 +985,202 @@
                 value={scrollSpeed}
                 on:change={handleSpeedChange}
               >
+                <option value="very_slow">{t('display_table.actions.speed_very_slow')}</option>
                 <option value="slow">{t('display_table.actions.speed_slow')}</option>
                 <option value="normal">{t('display_table.actions.speed_normal')}</option>
                 <option value="fast">{t('display_table.actions.speed_fast')}</option>
               </select>
             </label>
+          {/if}
+        </div>
+
+        <!-- Lift selector and filter controls in one row -->
+        <div class={`flex flex-wrap items-center ${compactLayout ? 'gap-1.5' : 'gap-2'}`}>
+          <!-- Lift dropdown selector -->
+          {#if contestLifts.length > 1}
+            <div class="relative" on:click|stopPropagation>
+              <button
+                type="button"
+                class={`${filterButtonClass(selectedLift !== null)} flex min-w-[170px] items-center justify-between gap-3`}
+                on:click|stopPropagation={() => toggleFilterDropdown('lift')}
+                disabled={autoSyncEnabled}
+              >
+                <div class="flex flex-col text-left leading-tight">
+                  <span class="font-semibold">{t('contest_detail.registrations.filters.lift_button')}</span>
+                  <span class="text-text-secondary">{liftSelectionLabel}</span>
+                </div>
+                <ChevronDown
+                  class={`h-3.5 w-3.5 transition-transform ${openFilterDropdown === 'lift' ? 'rotate-180' : ''}`}
+                  aria-hidden="true"
+                />
+              </button>
+              {#if openFilterDropdown === 'lift'}
+                <div
+                  class="absolute left-0 top-full z-40 mt-2 w-60 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
+                  on:click|stopPropagation
+                >
+                  <div class="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      class={`${filterButtonClass(!selectedLift)} w-full`}
+                      on:click={() => selectLiftFilter(null)}
+                    >
+                      {t('contest_detail.registrations.filters.lift_button_all')}
+                    </button>
+                    {#each contestLifts as lift}
+                      <button
+                        type="button"
+                        class={`${filterButtonClass(selectedLift === lift)} w-full`}
+                        on:click={() => selectLiftFilter(lift)}
+                      >
+                        {liftTabLabel(lift)}
+                      </button>
+                    {/each}
+                  </div>
+                </div>
+              {/if}
+            </div>
+          {/if}
+
+          <!-- Weight/Age/Label filter dropdowns -->
+          {#if femaleWeightFilters.length > 0 || maleWeightFilters.length > 0}
+            <div class="relative" on:click|stopPropagation>
+              <button
+                type="button"
+                class={`${filterButtonClass(localFilters.weight !== 'ALL')} flex min-w-[190px] items-center justify-between gap-3`}
+                on:click|stopPropagation={() => toggleFilterDropdown('weight')}
+                disabled={autoSyncEnabled}
+              >
+                <div class="flex flex-col text-left leading-tight">
+                  <span class="font-semibold">{t('contest_detail.registrations.filters.weight_button')}</span>
+                  <span class="text-text-secondary">{weightSelectionLabel}</span>
+                </div>
+                <ChevronDown
+                  class={`h-3.5 w-3.5 transition-transform ${openFilterDropdown === 'weight' ? 'rotate-180' : ''}`}
+                  aria-hidden="true"
+                />
+              </button>
+              {#if openFilterDropdown === 'weight'}
+                <div
+                  class="absolute left-0 top-full z-40 mt-2 w-72 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
+                  on:click|stopPropagation
+                >
+                  <div class="space-y-4">
+                    <button
+                      type="button"
+                      class={`${filterButtonClass(localFilters.weight === 'ALL')} w-full justify-start`}
+                      on:click={() => selectWeightFilter('ALL')}
+                    >
+                      {t('contest_detail.results.filters.all')}
+                    </button>
+                    {#if femaleWeightFilters.length > 0}
+                      <div>
+                        <p class="mb-2 text-xxs uppercase tracking-[0.3em] text-text-secondary">{t('contest_detail.registrations.filters.weights_female')}</p>
+                        <div class="grid grid-cols-2 gap-2">
+                          {#each femaleWeightFilters as filter}
+                            <button
+                              type="button"
+                              class={`${filterButtonClass(localFilters.weight === filter.id)} w-full`}
+                              on:click={() => selectWeightFilter(filter.id)}
+                            >
+                              {filter.label}
+                            </button>
+                          {/each}
+                        </div>
+                      </div>
+                    {/if}
+                    {#if maleWeightFilters.length > 0}
+                      <div>
+                        <p class="mb-2 text-xxs uppercase tracking-[0.3em] text-text-secondary">{t('contest_detail.registrations.filters.weights_male')}</p>
+                        <div class="grid grid-cols-2 gap-2">
+                          {#each maleWeightFilters as filter}
+                            <button
+                              type="button"
+                              class={`${filterButtonClass(localFilters.weight === filter.id)} w-full`}
+                              on:click={() => selectWeightFilter(filter.id)}
+                            >
+                              {filter.label}
+                            </button>
+                          {/each}
+                        </div>
+                      </div>
+                    {/if}
+                  </div>
+                </div>
+              {/if}
+            </div>
+          {/if}
+
+          <div class="relative" on:click|stopPropagation>
+            <button
+              type="button"
+              class={`${filterButtonClass(localFilters.age !== 'ALL')} flex min-w-[170px] items-center justify-between gap-3`}
+              on:click|stopPropagation={() => toggleFilterDropdown('age')}
+              disabled={autoSyncEnabled}
+            >
+              <div class="flex flex-col text-left leading-tight">
+                <span class="font-semibold">{t('contest_detail.registrations.filters.age_button')}</span>
+                <span class="text-text-secondary">{ageSelectionLabel}</span>
+              </div>
+              <ChevronDown
+                class={`h-3.5 w-3.5 transition-transform ${openFilterDropdown === 'age' ? 'rotate-180' : ''}`}
+                aria-hidden="true"
+              />
+            </button>
+            {#if openFilterDropdown === 'age'}
+              <div
+                class="absolute left-0 top-full z-40 mt-2 w-60 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
+                on:click|stopPropagation
+              >
+                <div class="grid max-h-52 grid-cols-2 gap-2 overflow-y-auto pr-1">
+                  {#each availableAgeFilters as filter}
+                    <button
+                      type="button"
+                      class={`${filterButtonClass(localFilters.age === filter.id)} w-full`}
+                      on:click={() => selectAgeFilter(filter.id)}
+                    >
+                      {filter.label}
+                    </button>
+                  {/each}
+                </div>
+              </div>
+            {/if}
+          </div>
+
+          <div class="relative" on:click|stopPropagation>
+            <button
+              type="button"
+              class={`${filterButtonClass(localFilters.label !== 'ALL')} flex min-w-[170px] items-center justify-between gap-3`}
+              on:click|stopPropagation={() => toggleFilterDropdown('labels')}
+              disabled={autoSyncEnabled}
+            >
+              <div class="flex flex-col text-left leading-tight">
+                <span class="font-semibold">{t('contest_detail.registrations.filters.labels_button')}</span>
+                <span class="text-text-secondary">{labelSelectionLabel}</span>
+              </div>
+              <ChevronDown
+                class={`h-3.5 w-3.5 transition-transform ${openFilterDropdown === 'labels' ? 'rotate-180' : ''}`}
+                aria-hidden="true"
+              />
+            </button>
+            {#if openFilterDropdown === 'labels'}
+              <div
+                class="absolute left-0 top-full z-40 mt-2 w-60 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
+                on:click|stopPropagation
+              >
+                <div class="grid max-h-52 grid-cols-2 gap-2 overflow-y-auto pr-1">
+                  {#each availableLabelFilters as filter}
+                    <button
+                      type="button"
+                      class={`${filterButtonClass(localFilters.label === filter.id)} w-full`}
+                      on:click={() => selectLabelFilter(filter.id)}
+                    >
+                      {filter.label}
+                    </button>
+                  {/each}
+                </div>
+              </div>
+            {/if}
           </div>
         </div>
         {#if filteredRows.length === 0}

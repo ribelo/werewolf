@@ -82,7 +82,7 @@
   
   $: currentLiftLabelStr = liftLabel();
   
-  $: competitorInfoStr = `${currentCompetitor?.club || ''}•${weightClassLabel}•${bodyweightLabel || ''}•${ageCategoryLabel || ''}•${currentAge || ''}•${currentCity || ''}`;
+  $: competitorInfoStr = `${currentCompetitor?.club || ''}•${currentCity || ''}•${currentAge || ''}•${bodyweightLabel || ''}•${ageCategoryLabel || ''}•${weightClassLabel}`;
   
   $: attemptWeightsStr = attemptTiles.map(tile => tile.displayWeight).join('•');
   
@@ -625,19 +625,19 @@
 
             <div class="flex flex-wrap items-center gap-4 text-caption uppercase tracking-[0.3em] text-text-secondary">
               <span class="font-mono">{competitorInfoChanged ? decipherCompetitorInfo.split('•')[0] || t('display_current.hero.club_placeholder') : (currentCompetitor?.club || t('display_current.hero.club_placeholder'))}</span>
-              <span class="font-mono">• {t('display_current.info.weight_class')}: <span class="text-text-primary">{competitorInfoChanged ? decipherCompetitorInfo.split('•')[1] || weightClassLabel : weightClassLabel}</span></span>
-              {#if bodyweightLabel}
-                <span class="font-mono">• {t('display_current.meta.bodyweight')}: <span class="text-text-primary">{competitorInfoChanged ? decipherCompetitorInfo.split('•')[2] || (bodyweightLabel + (bodyweightLabel !== '—' ? ' kg' : '')) : (bodyweightLabel + (bodyweightLabel !== '—' ? ' kg' : ''))}</span></span>
-              {/if}
-              {#if ageCategoryLabel}
-                <span class="font-mono">• {t('display_current.info.age_category')}: <span class="text-text-primary">{competitorInfoChanged ? decipherCompetitorInfo.split('•')[3] || ageCategoryLabel : ageCategoryLabel}</span></span>
+              {#if currentCity}
+                <span class="font-mono">• {t('display_current.info.city')}: <span class="text-text-primary">{competitorInfoChanged ? decipherCompetitorInfo.split('•')[1] || currentCity : currentCity}</span></span>
               {/if}
               {#if currentAge !== null}
-                <span class="font-mono">• {t('display_current.meta.age')}: <span class="text-text-primary">{competitorInfoChanged ? decipherCompetitorInfo.split('•')[4] || currentAge : currentAge}</span></span>
+                <span class="font-mono">• {t('display_current.meta.age')}: <span class="text-text-primary">{competitorInfoChanged ? decipherCompetitorInfo.split('•')[2] || currentAge : currentAge}</span></span>
               {/if}
-              {#if currentCity}
-                <span class="font-mono">• {t('display_current.info.city')}: <span class="text-text-primary">{competitorInfoChanged ? decipherCompetitorInfo.split('•')[5] || currentCity : currentCity}</span></span>
+              {#if bodyweightLabel}
+                <span class="font-mono">• {t('display_current.meta.bodyweight')}: <span class="text-text-primary">{competitorInfoChanged ? decipherCompetitorInfo.split('•')[3] || (bodyweightLabel + (bodyweightLabel !== '—' ? ' kg' : '')) : (bodyweightLabel + (bodyweightLabel !== '—' ? ' kg' : ''))}</span></span>
               {/if}
+              {#if ageCategoryLabel}
+                <span class="font-mono">• {t('display_current.info.age_category')}: <span class="text-text-primary">{competitorInfoChanged ? decipherCompetitorInfo.split('•')[4] || ageCategoryLabel : ageCategoryLabel}</span></span>
+              {/if}
+              <span class="font-mono">• {t('display_current.info.weight_class')}: <span class="text-text-primary">{competitorInfoChanged ? decipherCompetitorInfo.split('•')[5] || weightClassLabel : weightClassLabel}</span></span>
             
             </div>
           </div>

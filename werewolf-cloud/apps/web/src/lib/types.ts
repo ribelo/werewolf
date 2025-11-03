@@ -435,6 +435,7 @@ export type LiveEventType =
   | 'attempt.currentCleared'
   | 'registration.upserted'
   | 'registration.deleted'
+  | 'display.filtersSynced'
   | 'heartbeat';
 
 export interface LiveEvent<T = unknown> {

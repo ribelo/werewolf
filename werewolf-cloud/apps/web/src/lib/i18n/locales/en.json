@@ -927,8 +927,28 @@
       "lifters": {
         "title": "Registered lifters",
         "hint": "Competitors entered into the meet."
-      },
-      "queue": {
+    },
+    "filters": {
+      "weight": "Weight",
+      "age": "Age",
+      "label": "Label",
+      "all": "All",
+      "open": "Open",
+      "age_all": "All Ages",
+      "age_unassigned": "Unassigned",
+      "age_senior": "Senior",
+      "labels_all": "All Labels",
+      "labels_unlabeled": "Unlabeled"
+    },
+    "summary": {
+      "viewing": "Viewing: {lift} • Sort: {sort} {direction} • Weight: {weight} • Age: {age} • Label: {label}",
+      "all_lifts": "All Lifts",
+      "sort_order": "Order",
+      "sort_name": "Name",
+      "sort_ascending": "↑",
+      "sort_descending": "↓"
+    },
+    "queue": {
         "title": "Queued attempts",
         "hint": "Attempts waiting to be loaded onto the platform."
       },
@@ -1185,12 +1205,14 @@
       "leaderboard_title": "Qualified clubs",
       "metrics": {
         "overall": "Overall",
+        "mixed": "Mixed lifts",
         "squat": "Squat",
         "bench": "Bench",
         "deadlift": "Deadlift"
       },
       "metric_descriptions": {
         "overall": "Sum of coefficient points from the top four men and top woman registered to each club.",
+        "mixed": "Top four men and one woman ranked by their single best lift points across all events.",
         "squat": "Top four men and one woman ranked by squat points.",
         "bench": "Top four men and one woman ranked by bench press points.",
         "deadlift": "Top four men and one woman ranked by deadlift points."
@@ -1246,9 +1268,13 @@
         "best_squat": "Best squat",
         "best_bench": "Best bench",
         "best_deadlift": "Best deadlift",
+        "lift_type": "Lift",
+        "best_lift": "Best lift",
+        "lift_weight": "Weight",
         "squat_points": "Squat points",
         "bench_points": "Bench points",
         "deadlift_points": "Deadlift points",
+        "lift_points": "Lift points",
         "total": "Total",
         "points": "Best points",
         "team_points": "Team points",
@@ -1262,7 +1288,13 @@
         "sex_m": "M",
         "sex_f": "F",
         "sex_unknown": "–",
-        "slots_filled": "slots filled"
+        "slots_filled": "slots filled",
+        "lift_types": {
+          "squat": "Squat",
+          "bench": "Bench",
+          "deadlift": "Deadlift",
+          "unknown": "Unknown"
+        }
       },
       "placeholder": {
         "male": "Open slot - male lifter needed",
@@ -1469,7 +1501,20 @@
       "retry": "Retry connection"
     },
     "errors": {
-      "load_failed_title": "Unable to load contest data"
+      "load_failed_title": "Unable to load contest data",
+      "contest_id_required": "Contest ID is required"
+    },
+    "labels": {
+      "unknown_competitor": "Unknown Competitor",
+      "unknown": "Unknown"
+    },
+    "summary": {
+      "viewing": "Viewing: {lift} • Sort: {sort} {direction} • Weight: {weight} • Age: {age} • Label: {label}",
+      "all_lifts": "All Lifts",
+      "sort_order": "Order",
+      "sort_name": "Name",
+      "ascending": "Ascending",
+      "descending": "Descending"
     },
     "metrics": {
       "lifters": "Registered lifters",
@@ -1479,7 +1524,10 @@
     },
     "actions": {
       "auto_scroll": "Auto-scroll",
+      "auto_sync": "Auto-sync",
+      "sync_now": "Sync Now",
       "speed": "Speed",
+      "speed_very_slow": "Very Slow",
       "speed_slow": "Slow",
       "speed_normal": "Normal",
       "speed_fast": "Fast"

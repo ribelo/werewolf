@@ -917,8 +917,28 @@
       "lifters": {
         "title": "Zarejestrowani zawodnicy",
         "hint": "Liczba startujących z aktywnym zgłoszeniem."
-      },
-      "queue": {
+    },
+    "filters": {
+      "weight": "Waga",
+      "age": "Wiek",
+      "label": "Etykieta",
+      "all": "Wszystko",
+      "open": "Open",
+      "age_all": "Wszystkie wieki",
+      "age_unassigned": "Nieprzypisany",
+      "age_senior": "Senior",
+      "labels_all": "Wszystkie etykiety",
+      "labels_unlabeled": "Bez etykiety"
+    },
+    "summary": {
+      "viewing": "Widok: {lift} • Sort: {sort} {direction} • Waga: {weight} • Wiek: {age} • Etykieta: {label}",
+      "all_lifts": "Wszystkie boje",
+      "sort_order": "Kolejność",
+      "sort_name": "Nazwa",
+      "sort_ascending": "↑",
+      "sort_descending": "↓"
+    },
+    "queue": {
         "title": "Próby w kolejce",
         "hint": "Próby oczekujące na załadowanie na pomost."
       },
@@ -1174,12 +1194,14 @@
       "leaderboard_title": "Zakwalifikowane kluby",
       "metrics": {
         "overall": "Łącznie",
+        "mixed": "Mieszane boje",
         "squat": "Przysiad",
         "bench": "Wyciskanie",
         "deadlift": "Martwy ciąg"
       },
       "metric_descriptions": {
         "overall": "Suma punktów współczynników dla czterech najlepszych mężczyzn i najlepszej kobiety w klubie.",
+        "mixed": "Czterech najlepszych mężczyzn i najlepsza kobieta według punktów za pojedynczy najlepszy bój.",
         "squat": "Czterech najlepszych mężczyzn i najlepsza kobieta według punktów za przysiad.",
         "bench": "Czterech najlepszych mężczyzn i najlepsza kobieta według punktów za wyciskanie.",
         "deadlift": "Czterech najlepszych mężczyzn i najlepsza kobieta według punktów za martwy ciąg."
@@ -1236,9 +1258,13 @@
         "best_squat": "Najlepszy przysiad",
         "best_bench": "Najlepsze wyciskanie",
         "best_deadlift": "Najlepszy martwy ciąg",
+        "lift_type": "Bój",
+        "best_lift": "Najlepszy bój",
+        "lift_weight": "Ciężar",
         "squat_points": "Punkty przysiadu",
         "bench_points": "Punkty wyciskania",
         "deadlift_points": "Punkty martwego ciągu",
+        "lift_points": "Punkty za bój",
         "total": "Suma",
         "points": "Najlepsze punkty",
         "team_points": "Punkty drużyny",
@@ -1252,7 +1278,13 @@
         "sex_m": "M",
         "sex_f": "K",
         "sex_unknown": "–",
-        "slots_filled": "miejsc obsadzonych"
+        "slots_filled": "miejsc obsadzonych",
+        "lift_types": {
+          "squat": "Przysiad",
+          "bench": "Wyciskanie",
+          "deadlift": "Martwy ciąg",
+          "unknown": "Nieznany"
+        }
       },
       "placeholder": {
         "male": "Wolne miejsce - potrzebny zawodnik (mężczyzna)",
@@ -1459,7 +1491,20 @@
       "retry": "Ponów próbę połączenia"
     },
     "errors": {
-      "load_failed_title": "Nie udało się załadować danych zawodów"
+      "load_failed_title": "Nie udało się załadować danych zawodów",
+      "contest_id_required": "Wymagane ID zawodów"
+    },
+    "labels": {
+      "unknown_competitor": "Nieznany zawodnik",
+      "unknown": "Nieznany"
+    },
+    "summary": {
+      "viewing": "Widok: {lift} • Sortowanie: {sort} {direction} • Waga: {weight} • Wiek: {age} • Etykieta: {label}",
+      "all_lifts": "Wszystkie konkurencje",
+      "sort_order": "Kolejność",
+      "sort_name": "Nazwisko",
+      "ascending": "Rosnąco",
+      "descending": "Malejąco"
     },
     "metrics": {
       "lifters": "Zarejestrowani zawodnicy",
@@ -1469,7 +1514,10 @@
     },
     "actions": {
       "auto_scroll": "Autoprzewijanie",
+      "auto_sync": "Auto-synchronizacja",
+      "sync_now": "Synchronizuj teraz",
       "speed": "Prędkość",
+      "speed_very_slow": "Bardzo wolno",
       "speed_slow": "Wolno",
       "speed_normal": "Normalna",
       "speed_fast": "Szybko"
