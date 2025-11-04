@@ -281,6 +281,13 @@ function compareTotalTieBreakers(
     return direction === 'asc' ? -bodyweightComparison : bodyweightComparison;
   }
 
+  // Tie-break: higher points wins before falling back to name
+  const pointsA = rowA.points ?? Number.NEGATIVE_INFINITY;
+  const pointsB = rowB.points ?? Number.NEGATIVE_INFINITY;
+  if (pointsA !== pointsB) {
+    return direction === 'asc' ? pointsA - pointsB : pointsB - pointsA;
+  }
+
   return compareByName(rowA.registration, rowB.registration);
 }
 
@@ -435,6 +442,13 @@ function compareMaxTieBreakers(
     return attemptAdjusted;
   }
 
+  // Tie-break: higher points wins before falling back to name
+  const pointsA = rowA.points ?? Number.NEGATIVE_INFINITY;
+  const pointsB = rowB.points ?? Number.NEGATIVE_INFINITY;
+  if (pointsA !== pointsB) {
+    return direction === 'asc' ? pointsA - pointsB : pointsB - pointsA;
+  }
+
   return compareByName(rowA.registration, rowB.registration);
 }
 
@@ -453,6 +467,13 @@ function compareLiftMaxTieBreakers(
   const attemptAdjusted = direction === 'asc' ? -attemptComparison : attemptComparison;
   if (attemptAdjusted !== 0) {
     return attemptAdjusted;
+  }
+
+  // Tie-break: higher lift-specific points win before falling back to name
+  const pointsA = rowA.pointsByLift[lift] ?? Number.NEGATIVE_INFINITY;
+  const pointsB = rowB.pointsByLift[lift] ?? Number.NEGATIVE_INFINITY;
+  if (pointsA !== pointsB) {
+    return direction === 'asc' ? pointsA - pointsB : pointsB - pointsA;
   }
 
   return compareByName(rowA.registration, rowB.registration);
@@ -480,6 +501,14 @@ function compareAttemptTieBreakers(
   );
   if (progressionComparison !== 0) {
     return direction === 'asc' ? -progressionComparison : progressionComparison;
+  }
+
+  // Tie-break: higher lift-specific points win before falling back to name
+  // Fall back to overall points if lift-specific points are null
+  const pointsA = rowA.pointsByLift[lift] ?? rowA.points ?? Number.NEGATIVE_INFINITY;
+  const pointsB = rowB.pointsByLift[lift] ?? rowB.points ?? Number.NEGATIVE_INFINITY;
+  if (pointsA !== pointsB) {
+    return direction === 'asc' ? pointsA - pointsB : pointsB - pointsA;
   }
 
   return compareByName(rowA.registration, rowB.registration);
@@ -576,7 +605,9 @@ export function sortUnifiedRows(
         return (valueA - valueB) * modifier;
       }
       case 'bodyweight': {
-        return (regA.bodyweight - regB.bodyweight) * modifier;
+        const weightA = regA.bodyweight ?? Number.POSITIVE_INFINITY;
+        const weightB = regB.bodyweight ?? Number.POSITIVE_INFINITY;
+        return (weightA - weightB) * modifier;
       }
       case 'weightClass': {
         return (regA.weightClassName ?? '').localeCompare(regB.weightClassName ?? '') * modifier;

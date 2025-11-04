@@ -56,13 +56,14 @@ function createRegistration(id: string, overrides: Partial<Registration> = {}): 
     birthDate: '1990-01-01',
     gender: 'Male',
     weightClassId: 'wc',
-  ageCategoryId: 'ac',
-  bodyweight: 90,
-  flightCode: null,
-  flightOrder: null,
-  labels: [],
-  ...overrides,
-};
+    ageCategoryId: 'ac',
+    bodyweight: 90,
+    flightCode: null,
+    flightOrder: null,
+    labels: [],
+    lifts: [],
+    ...overrides,
+  };
 }
 
 function bestSuccessfulWeight(attempts: AttemptCell[]): number {
@@ -82,6 +83,7 @@ function createRow(params: {
   squatAttempts?: AttemptSetup[];
   benchAttempts?: AttemptSetup[];
   points?: number | null;
+  pointsByLift?: Record<LiftKind, number | null>;
 }): UnifiedRow {
   const {
     id,
@@ -90,6 +92,7 @@ function createRow(params: {
     squatAttempts = [],
     benchAttempts = [],
     points = null,
+    pointsByLift = { Squat: null, Bench: null, Deadlift: null },
   } = params;
 
   const registration = createRegistration(id, { bodyweight });
@@ -115,6 +118,7 @@ function createRow(params: {
     bestDeadlift,
     total: bestSquat + bestBench + bestDeadlift,
     points,
+    pointsByLift,
     maxLift,
     placeOpen: null,
     placeAge: null,
@@ -493,5 +497,188 @@ describe('sortUnifiedRows - points column tie breakers', () => {
 
     expect(sorted[0]?.registration.id).toBe('opener-advantage');
     expect(sorted[1]?.registration.id).toBe('opener-equal');
+  });
+});
+
+describe('sortUnifiedRows - points tie-breakers in non-points columns', () => {
+  it('uses points before name when sorting by total with equal totals and bodyweight', () => {
+    const higherPoints = createRow({
+      id: 'higher-points',
+      bodyweight: 90,
+      points: 500,
+      deadliftAttempts: [
+        { attemptNumber: 1, weight: 200, status: 'Successful' },
+      ],
+    });
+
+    const lowerPoints = createRow({
+      id: 'lower-points',
+      bodyweight: 90,
+      points: 450,
+      deadliftAttempts: [
+        { attemptNumber: 1, weight: 200, status: 'Successful' },
+      ],
+    });
+
+    const sorted = sortUnifiedRows([lowerPoints, higherPoints], 'total', 'desc');
+
+    expect(sorted[0]?.registration.id).toBe('higher-points');
+    expect(sorted[1]?.registration.id).toBe('lower-points');
+  });
+
+  it('uses points before name when sorting by max with equal max and bodyweight', () => {
+    const higherPoints = createRow({
+      id: 'higher-points',
+      bodyweight: 90,
+      points: 500,
+      deadliftAttempts: [
+        { attemptNumber: 1, weight: 200, status: 'Successful' },
+      ],
+    });
+
+    const lowerPoints = createRow({
+      id: 'lower-points',
+      bodyweight: 90,
+      points: 450,
+      deadliftAttempts: [
+        { attemptNumber: 1, weight: 200, status: 'Successful' },
+      ],
+    });
+
+    const sorted = sortUnifiedRows([lowerPoints, higherPoints], 'max', 'desc');
+
+    expect(sorted[0]?.registration.id).toBe('higher-points');
+    expect(sorted[1]?.registration.id).toBe('lower-points');
+  });
+
+  it('uses lift-specific points before name when sorting by max:Deadlift with equal values', () => {
+    const higherLiftPoints = createRow({
+      id: 'higher-lift-points',
+      bodyweight: 90,
+      points: 400,
+      pointsByLift: { Squat: 100, Bench: 100, Deadlift: 200 },
+      deadliftAttempts: [
+        { attemptNumber: 1, weight: 200, status: 'Successful' },
+      ],
+    });
+
+    const lowerLiftPoints = createRow({
+      id: 'lower-lift-points',
+      bodyweight: 90,
+      points: 450,
+      pointsByLift: { Squat: 150, Bench: 150, Deadlift: 150 },
+      deadliftAttempts: [
+        { attemptNumber: 1, weight: 200, status: 'Successful' },
+      ],
+    });
+
+    const sorted = sortUnifiedRows([lowerLiftPoints, higherLiftPoints], 'max:Deadlift', 'desc');
+
+    expect(sorted[0]?.registration.id).toBe('higher-lift-points');
+    expect(sorted[1]?.registration.id).toBe('lower-lift-points');
+  });
+
+  it('uses lift-specific points before name when sorting by attempt columns with equal values', () => {
+    const higherLiftPoints = createRow({
+      id: 'higher-lift-points',
+      bodyweight: 90,
+      points: 400,
+      pointsByLift: { Squat: 100, Bench: 100, Deadlift: 200 },
+      deadliftAttempts: [
+        { attemptNumber: 1, weight: 200, status: 'Successful' },
+      ],
+    });
+
+    const lowerLiftPoints = createRow({
+      id: 'lower-lift-points',
+      bodyweight: 90,
+      points: 450,
+      pointsByLift: { Squat: 150, Bench: 150, Deadlift: 150 },
+      deadliftAttempts: [
+        { attemptNumber: 1, weight: 200, status: 'Successful' },
+      ],
+    });
+
+    const sorted = sortUnifiedRows([lowerLiftPoints, higherLiftPoints], 'attempt:Deadlift:1', 'desc');
+
+    expect(sorted[0]?.registration.id).toBe('higher-lift-points');
+    expect(sorted[1]?.registration.id).toBe('lower-lift-points');
+  });
+
+  it('falls back to overall points when lift-specific points are null in attempt tie-breakers', () => {
+    const higherOverallPoints = createRow({
+      id: 'higher-overall-points',
+      bodyweight: 90,
+      points: 500,
+      pointsByLift: { Squat: null, Bench: null, Deadlift: null },
+      deadliftAttempts: [
+        { attemptNumber: 1, weight: 200, status: 'Successful' },
+      ],
+    });
+
+    const lowerOverallPoints = createRow({
+      id: 'lower-overall-points',
+      bodyweight: 90,
+      points: 450,
+      pointsByLift: { Squat: null, Bench: null, Deadlift: null },
+      deadliftAttempts: [
+        { attemptNumber: 1, weight: 200, status: 'Successful' },
+      ],
+    });
+
+    const sorted = sortUnifiedRows([lowerOverallPoints, higherOverallPoints], 'attempt:Deadlift:1', 'desc');
+
+    expect(sorted[0]?.registration.id).toBe('higher-overall-points');
+    expect(sorted[1]?.registration.id).toBe('lower-overall-points');
+  });
+
+  it('handles null points gracefully by treating them as lowest priority', () => {
+    const withPoints = createRow({
+      id: 'with-points',
+      bodyweight: 90,
+      points: 400,
+      deadliftAttempts: [
+        { attemptNumber: 1, weight: 200, status: 'Successful' },
+      ],
+    });
+
+    const withoutPoints = createRow({
+      id: 'without-points',
+      bodyweight: 90,
+      points: null,
+      deadliftAttempts: [
+        { attemptNumber: 1, weight: 200, status: 'Successful' },
+      ],
+    });
+
+    const sorted = sortUnifiedRows([withoutPoints, withPoints], 'total', 'desc');
+
+    expect(sorted[0]?.registration.id).toBe('with-points');
+    expect(sorted[1]?.registration.id).toBe('without-points');
+  });
+
+  it('respects direction in points tie-breakers for ascending sort', () => {
+    const lowerPoints = createRow({
+      id: 'lower-points',
+      bodyweight: 90,
+      points: 400,
+      deadliftAttempts: [
+        { attemptNumber: 1, weight: 200, status: 'Successful' },
+      ],
+    });
+
+    const higherPoints = createRow({
+      id: 'higher-points',
+      bodyweight: 90,
+      points: 500,
+      deadliftAttempts: [
+        { attemptNumber: 1, weight: 200, status: 'Successful' },
+      ],
+    });
+
+    const sorted = sortUnifiedRows([higherPoints, lowerPoints], 'total', 'asc');
+
+    expect(sorted[0]?.registration.id).toBe('lower-points');
+    expect(sorted[1]?.registration.id).toBe('higher-points');
   });
 });
