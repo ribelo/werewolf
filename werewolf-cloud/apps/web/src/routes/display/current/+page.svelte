@@ -5,7 +5,9 @@
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
   import QRCode from 'qrcode';
-    import type { PageData } from './$types';
+  import FullScreenQR from '$lib/components/FullScreenQR.svelte';
+  import type { PageData } from './$types';
+  import type { DisplayQrVisibility } from '@werewolf/domain';
   import type {
     Attempt,
     CurrentAttempt,
@@ -276,6 +278,7 @@
     : '';
 
   let qrDataUrl: string | null = null;
+  let qrOpen = false;
   let lastQrUrl: string | null = null;
 
   $: currentAttemptMeta = liveCurrentAttempt
@@ -410,6 +413,12 @@
       case 'attempt.currentCleared': {
         liveCurrentBundle = null;
         liveCurrentAttempt = null;
+        break;
+      }
+      case 'display.qrVisibility': {
+        const payload = event.data as DisplayQrVisibility | undefined;
+        if (!payload || (payload.target !== 'current' && payload.target !== 'all')) break;
+        qrOpen = payload.action === 'show';
         break;
       }
       default:
@@ -701,8 +710,13 @@
             </div>
             {#if qrDataUrl}
               <div class="self-center flex items-center">
-                <img src={qrDataUrl} alt={t('display_current.sidebar.share_title')} class="w-24 h-24 border-2 border-primary-red shadow-[0_0_20px_rgba(220,20,60,0.45)]" />
+                <button type="button" class="p-0 bg-transparent" on:click={() => (qrOpen = true)} aria-label={t('display_current.sidebar.share_title')}>
+                  <img src={qrDataUrl} alt={t('display_current.sidebar.share_title')} class="w-24 h-24 border-2 border-primary-red shadow-[0_0_20px_rgba(220,20,60,0.45)]" />
+                </button>
               </div>
+              {#if qrOpen}
+                <FullScreenQR url={shareableUrl} on:close={() => (qrOpen = false)} />
+              {/if}
             {/if}
           </div>
         </section>

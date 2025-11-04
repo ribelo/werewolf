@@ -919,6 +919,11 @@
       "success": "Display updated",
       "error": "Failed to sync display: {message}"
     },
+    "qr": {
+      "broadcast_show_success": "QR overlay opened on displays",
+      "broadcast_hide_success": "QR overlay hidden on displays",
+      "broadcast_error": "Failed to control QR overlay: {message}"
+    },
     "cards": {
       "status": {
         "title": "Contest status",
@@ -1526,6 +1531,10 @@
       "auto_scroll": "Auto-scroll",
       "auto_sync": "Auto-sync",
       "sync_now": "Sync Now",
+      "show_qr": "Show QR",
+      "hide_qr": "Hide QR",
+      "qr_fullscreen": "Enter Full Screen",
+      "qr_error": "Failed to generate QR",
       "speed": "Speed",
       "speed_very_slow": "Very Slow",
       "speed_slow": "Slow",

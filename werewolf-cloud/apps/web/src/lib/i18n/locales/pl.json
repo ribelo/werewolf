@@ -909,6 +909,11 @@
       "success": "Ekran został zaktualizowany",
       "error": "Nie udało się zsynchronizować ekranu: {message}"
     },
+    "qr": {
+      "broadcast_show_success": "Kod QR został wyświetlony na ekranach",
+      "broadcast_hide_success": "Kod QR został ukryty na ekranach",
+      "broadcast_error": "Nie udało się sterować ekranem QR: {message}"
+    },
     "cards": {
       "status": {
         "title": "Status zawodów",
@@ -1516,6 +1521,10 @@
       "auto_scroll": "Autoprzewijanie",
       "auto_sync": "Auto-synchronizacja",
       "sync_now": "Synchronizuj teraz",
+      "show_qr": "Pokaż QR",
+      "hide_qr": "Ukryj QR",
+      "qr_fullscreen": "Pełny ekran",
+      "qr_error": "Nie udało się wygenerować QR",
       "speed": "Prędkość",
       "speed_very_slow": "Bardzo wolno",
       "speed_slow": "Wolno",

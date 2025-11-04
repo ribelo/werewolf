@@ -2,7 +2,12 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import type { WerewolfEnvironment } from '../env';
 import { publishEvent } from '../live/publish';
-import { displayFilterSyncSchema, type DisplayFilterSync } from '@werewolf/domain';
+import {
+  displayFilterSyncSchema,
+  displayQrVisibilitySchema,
+  type DisplayFilterSync,
+  type DisplayQrVisibility,
+} from '@werewolf/domain';
 
 export const contestDisplay = new Hono<WerewolfEnvironment>();
 
@@ -40,6 +45,35 @@ contestDisplay.post(
 
     return c.json({
       data: { ok: true, id: payload.id },
+      error: null,
+    });
+  }
+);
+
+contestDisplay.post(
+  '/qr',
+  zValidator('json', displayQrVisibilitySchema),
+  async (c) => {
+    const contestId = c.req.param('contestId');
+    if (!contestId) {
+      return c.json(
+        {
+          data: null,
+          error: 'Contest ID is required',
+        },
+        400
+      );
+    }
+
+    const payload = c.req.valid('json') as DisplayQrVisibility;
+
+    await publishEvent(c.env, contestId, {
+      type: 'display.qrVisibility',
+      payload,
+    });
+
+    return c.json({
+      data: { ok: true, action: payload.action },
       error: null,
     });
   }

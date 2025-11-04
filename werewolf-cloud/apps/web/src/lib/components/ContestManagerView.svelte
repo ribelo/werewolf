@@ -43,7 +43,7 @@
     type AgeFilter,
     type LabelFilter
   } from '$lib/filters/registrations';
-  import type { DisplayFilterSync } from '@werewolf/domain';
+  import type { DisplayFilterSync, DisplayQrVisibility } from '@werewolf/domain';
   import type {
     Registration,
     Attempt,
@@ -68,6 +68,8 @@
   import { get } from 'svelte/store';
   import { ArrowUpDown, ChevronUp, ChevronDown } from 'lucide-svelte';
   import reshelMenData from '@werewolf/domain/data/reshel-men.json';
+  import FullScreenQR from '$lib/components/FullScreenQR.svelte';
+  import QRCode from 'qrcode';
   import reshelWomenData from '@werewolf/domain/data/reshel-women.json';
   import mccData from '@werewolf/domain/data/mccullough.json';
   import { browser } from '$app/environment';
@@ -299,6 +301,11 @@ $: void params;
   let lastFilterFingerprint: string | null = null;
   let currentFilterFingerprint = '';
   let syncBusy = false;
+  let qrBroadcastBusy: Record<'show' | 'hide', boolean> = {
+    show: false,
+    hide: false,
+  };
+  let remoteQrVisible = false;
   let lastSyncedLift: LiftKind | null = null; // kept for future UI, not used by color
   let pendingSyncLift: LiftKind | null = null;
   type LiftSyncState = { id: string; fingerprint: string } | null;
@@ -407,6 +414,56 @@ $: void params;
       toast.error(t('contest_detail.sync.error', { values: { message } }));
     } finally {
       syncBusy = false;
+    }
+  }
+
+  async function broadcastDisplayQr(action: 'show' | 'hide'): Promise<void> {
+    if (!contestId || qrBroadcastBusy[action]) return;
+
+    qrBroadcastBusy = {
+      ...qrBroadcastBusy,
+      [action]: true,
+    };
+
+    try {
+      const response = await apiClient.post<{ ok: boolean; action: DisplayQrVisibility['action'] }>(
+        `/contests/${contestId}/display/qr`,
+        {
+          target: 'all',
+          action,
+        }
+      );
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      if (!response.data?.ok) {
+        throw new Error('QR_BROADCAST_FAILED');
+      }
+
+      remoteQrVisible = action === 'show';
+      toast.success(
+        t(
+          action === 'show'
+            ? 'contest_detail.qr.broadcast_show_success'
+            : 'contest_detail.qr.broadcast_hide_success'
+        )
+      );
+    } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : 'Unknown error';
+      console.error('[manager.qr] error', { action, message });
+      toast.error(t('contest_detail.qr.broadcast_error', { values: { message } }));
+    } finally {
+      qrBroadcastBusy = {
+        ...qrBroadcastBusy,
+        [action]: false,
+      };
     }
   }
 
@@ -800,6 +857,49 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
   let activeTab: TabId = view;
   $: activeTab = view;
 
+  const TAB_SLUGS: Record<TabId, string> = {
+    desk: 'desk',
+    registrations: 'registrations',
+    results: 'results',
+    team_results: 'team-results',
+    plates: 'plates',
+    squat: 'squat',
+    bench: 'bench',
+    deadlift: 'deadlift',
+  };
+
+  function tabSlug(id: TabId): string {
+    return TAB_SLUGS[id] ?? id;
+  }
+
+  // QR sharing
+  let qrOpen = false;
+  $: activeTabSlug = tabSlug(activeTab);
+  $: shareableUrl = browser && contestId ? `${window.location.origin}/contests/${contestId}/${activeTabSlug}` : '';
+  let headerQrDataUrl: string | null = null;
+  let headerLastQrUrl: string | null = null;
+
+  async function buildHeaderQr(url: string) {
+    if (!browser || !url) return;
+    const currentUrl = url; // Capture the URL being generated
+    try {
+      const qrDataUrl = await QRCode.toDataURL(url, { width: 96, margin: 1, color: { dark: '#FFFFFFFF', light: '#000000FF' } });
+      // Only assign if the URL hasn't changed since we started generating
+      if (shareableUrl === currentUrl) {
+        headerQrDataUrl = qrDataUrl;
+      }
+    } catch (err) {
+      console.error('Failed to generate header QR', err);
+      if (shareableUrl === currentUrl) {
+        headerQrDataUrl = null;
+      }
+    }
+  }
+  $: if (shareableUrl && shareableUrl !== headerLastQrUrl) {
+    headerLastQrUrl = shareableUrl;
+    buildHeaderQr(shareableUrl);
+  }
+
   function setStatusLoadingFlag(id: string, value: boolean) {
     if (value) {
       statusLoading = { ...statusLoading, [id]: true };
@@ -1092,12 +1192,30 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
   let queueAttempts: Attempt[] = [];
   let queuePhase: QueuePhase = { liftType: 'Squat', attemptNumber: 1 };
 
+  function formatContestMetaDate(rawDate?: string | null): string {
+    if (!rawDate) return '—';
+    const parsed = new Date(rawDate);
+    if (Number.isNaN(parsed.getTime())) return '—';
+    try {
+      return parsed.toLocaleDateString();
+    } catch {
+      return parsed.toISOString().split('T')[0] ?? '—';
+    }
+  }
+
+  const SUMMARY_PLACEHOLDER = '—';
+
   // Summary data
   $: liftersCount = registrations.length;
   $: attemptsQueued = Array.isArray(liveAttempts) ? liveAttempts.filter((a: Attempt) => a.status === 'Pending').length : 0;
   $: lastUpdate = liveEvent?.timestamp ? new Date(liveEvent.timestamp).toLocaleString() :
                   (contest?.updatedAt ? new Date(contest.updatedAt).toLocaleString() :
                   (contest?.date ? new Date(contest.date).toLocaleString() : new Date().toLocaleString()));
+  $: statusLocationLabel = contest?.location?.trim()
+    ? contest.location.trim()
+    : SUMMARY_PLACEHOLDER;
+  $: statusDateLabel = formatContestMetaDate(contest?.date);
+  $: contestStatusLabel = contest?.status ?? SUMMARY_PLACEHOLDER;
   $: registrationMap = new Map(registrations.map((entry) => [entry.id, entry]));
   $: ({ attempts: queueAttempts, phase: queuePhase } = buildRisingBarQueue(liveAttempts, {
         currentAttempt: liveCurrentAttempt,
@@ -2439,6 +2557,12 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
         void reloadResults();
         break;
       }
+      case 'display.qrVisibility': {
+        const payload = event.data as DisplayQrVisibility | undefined;
+        if (!payload) break;
+        remoteQrVisible = payload.action === 'show';
+        break;
+      }
       case 'heartbeat':
         break;
     }
@@ -2606,41 +2730,73 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
 <svelte:window on:click={handleWindowClick} on:keydown={handleWindowKeydown} />
 <div class="space-y-8">
   {#if activeTab === 'desk'}
-        <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <div class="card">
-          <h3 class="text-label text-text-secondary mb-2">{$_('contest_detail.cards.status.title')}</h3>
-          <div class="flex items-center justify-between">
-            <span class="text-h2 text-text-primary uppercase tracking-[0.3em]">{contest.status}</span>
-            <span class={getStatusClasses(contest.status)}>{contest.status}</span>
+    <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div class="card">
+        <div class="flex items-start justify-between gap-4">
+          <div class="space-y-2">
+            <h3 class="text-label text-text-secondary">{$_('contest_detail.cards.status.title')}</h3>
+            <p class="text-body text-text-secondary">
+              {$_('contest_detail.cards.status.meta', { values: { location: statusLocationLabel, date: statusDateLabel } })}
+            </p>
           </div>
-          <p class="text-caption text-text-secondary mt-3">
-            {$_('contest_detail.cards.status.meta', {
-              values: {
-                location: contest.location,
-                date: new Date(contest.date).toLocaleDateString()
-              }
-            })}
-          </p>
+          <div class="flex flex-col items-end gap-2 shrink-0">
+            <button
+              type="button"
+              class="btn-secondary px-3 py-1 text-xxs"
+              disabled={qrBroadcastBusy[remoteQrVisible ? 'hide' : 'show']}
+              aria-busy={qrBroadcastBusy[remoteQrVisible ? 'hide' : 'show']}
+              on:click={() => void broadcastDisplayQr(remoteQrVisible ? 'hide' : 'show')}
+            >
+              {$_(remoteQrVisible ? 'display_table.actions.hide_qr' : 'display_table.actions.show_qr')}
+            </button>
+            {#if headerQrDataUrl}
+              <button
+                type="button"
+                class="p-0 bg-transparent"
+                on:click={() => (qrOpen = true)}
+                aria-label={$_('display_table.actions.show_qr')}
+              >
+                <img
+                  src={headerQrDataUrl}
+                  alt={$_('display_table.actions.show_qr')}
+                  class="w-16 h-16 border-2 border-primary-red rounded"
+                />
+              </button>
+            {/if}
           </div>
-          <div class="card">
-          <h3 class="text-label text-text-secondary mb-2">{$_('contest_detail.cards.lifters.title')}</h3>
-          <p class="text-h1 text-text-primary">{liftersCount}</p>
-          <p class="text-caption text-text-secondary mt-3">{$_('contest_detail.cards.lifters.hint')}</p>
-          </div>
-          <div class="card">
-          <h3 class="text-label text-text-secondary mb-2">{$_('contest_detail.cards.queue.title')}</h3>
-          <p class="text-h1 text-text-primary">{attemptsQueued}</p>
-          <p class="text-caption text-text-secondary mt-3">{$_('contest_detail.cards.queue.hint')}</p>
         </div>
-        <div class="card">
-          <h3 class="text-label text-text-secondary mb-2">{$_('contest_detail.cards.last_update.title')}</h3>
-          <p class="text-h1 text-text-primary">{lastUpdate}</p>
-          <p class="text-caption text-text-secondary mt-3">
-            {$_('contest_detail.cards.last_update.connection_prefix')}
-            <span class={connectionBadge(connectionStatus)}>{connectionLabel(connectionStatus)}</span>
-          </p>
-          </div>
-        </section>
+        <div class="mt-4 flex items-center justify-between">
+          <span class="text-h2 text-text-primary uppercase tracking-[0.3em]">{contestStatusLabel}</span>
+          <span class={getStatusClasses(contestStatusLabel)}>{contestStatusLabel}</span>
+        </div>
+      </div>
+      <div class="card">
+        <h3 class="text-label text-text-secondary mb-2">{$_('contest_detail.cards.lifters.title')}</h3>
+        <div class="mt-4 flex items-baseline justify-between gap-4">
+          <span class="text-h2 text-text-primary">{liftersCount}</span>
+          <p class="text-body text-text-secondary text-right">{$_('contest_detail.cards.lifters.hint')}</p>
+        </div>
+      </div>
+      <div class="card">
+        <h3 class="text-label text-text-secondary mb-2">{$_('contest_detail.cards.queue.title')}</h3>
+        <div class="mt-4 flex items-baseline justify-between gap-4">
+          <span class="text-h2 text-text-primary">{attemptsQueued}</span>
+          <p class="text-body text-text-secondary text-right">{$_('contest_detail.cards.queue.hint')}</p>
+        </div>
+      </div>
+      <div class="card">
+        <h3 class="text-label text-text-secondary mb-2">{$_('contest_detail.cards.last_update.title')}</h3>
+        <p class="mt-4 text-body text-text-secondary">{lastUpdate}</p>
+        <p class="mt-2 text-body text-text-secondary">
+          {$_('contest_detail.cards.last_update.connection_prefix')}
+          <span class={connectionBadge(connectionStatus)}>{connectionLabel(connectionStatus)}</span>
+        </p>
+      </div>
+    </section>
+
+    {#if qrOpen}
+      <FullScreenQR url={shareableUrl} on:close={() => (qrOpen = false)} />
+    {/if}
 
         <section class="grid gap-4 md:grid-cols-3">
           <a
@@ -2833,12 +2989,12 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
               <p class="mt-3 text-caption text-text-secondary">{$_('contest_detail.current.queue_empty')}</p>
             {/if}
           </div>
-          </div>
+        </div>
 
-          <div class="card">
-          <header class="flex items-center justify-between mb-4">
+        <div class="card">
+          <header class="mb-4">
             <h3 class="text-h3 text-text-primary">{$_('contest_detail.recent.title')}</h3>
-            <span class="text-caption text-text-secondary uppercase tracking-[0.4em]">{recentAttempts.length}</span>
+            <p class="text-body text-text-secondary">{$_('contest_detail.recent.subtitle')}</p>
           </header>
           {#if recentAttempts.length > 0}
             <ul class="space-y-3">
@@ -4044,6 +4200,23 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
                 >
                   {$_('contest_detail.sync.button')}
                 </button>
+
+                <button
+                  type="button"
+                  class="btn-secondary px-3 py-1 text-xxs"
+                  disabled={qrBroadcastBusy[remoteQrVisible ? 'hide' : 'show']}
+                  aria-busy={qrBroadcastBusy[remoteQrVisible ? 'hide' : 'show']}
+                  on:click={() => void broadcastDisplayQr(remoteQrVisible ? 'hide' : 'show')}
+                >
+                  {$_(remoteQrVisible ? 'display_table.actions.hide_qr' : 'display_table.actions.show_qr')}
+                </button>
+
+                {#if headerQrDataUrl}
+                  <button type="button" class="p-0 bg-transparent" on:click={() => (qrOpen = true)} aria-label={$_('display_table.actions.show_qr')}>
+                    <img src={headerQrDataUrl} alt={$_('display_table.actions.show_qr')} class="w-24 h-24 border-2 border-primary-red rounded" />
+                  </button>
+                {/if}
+
                 <div class="relative" on:click|stopPropagation>
                   <button
                     type="button"
@@ -4319,6 +4492,23 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
                 >
                   {$_('contest_detail.sync.button')}
                 </button>
+
+                <button
+                  type="button"
+                  class="btn-secondary px-3 py-1 text-xxs"
+                  disabled={qrBroadcastBusy[remoteQrVisible ? 'hide' : 'show']}
+                  aria-busy={qrBroadcastBusy[remoteQrVisible ? 'hide' : 'show']}
+                  on:click={() => void broadcastDisplayQr(remoteQrVisible ? 'hide' : 'show')}
+                >
+                  {$_(remoteQrVisible ? 'display_table.actions.hide_qr' : 'display_table.actions.show_qr')}
+                </button>
+
+                {#if headerQrDataUrl}
+                  <button type="button" class="p-0 bg-transparent" on:click={() => (qrOpen = true)} aria-label={$_('display_table.actions.show_qr')}>
+                    <img src={headerQrDataUrl} alt={$_('display_table.actions.show_qr')} class="w-24 h-24 border-2 border-primary-red rounded" />
+                  </button>
+                {/if}
+
                 <div class="relative" on:click|stopPropagation>
                   <button
                     type="button"
@@ -4594,6 +4784,23 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
                 >
                   {$_('contest_detail.sync.button')}
                 </button>
+
+                <button
+                  type="button"
+                  class="btn-secondary px-3 py-1 text-xxs"
+                  disabled={qrBroadcastBusy[remoteQrVisible ? 'hide' : 'show']}
+                  aria-busy={qrBroadcastBusy[remoteQrVisible ? 'hide' : 'show']}
+                  on:click={() => void broadcastDisplayQr(remoteQrVisible ? 'hide' : 'show')}
+                >
+                  {$_(remoteQrVisible ? 'display_table.actions.hide_qr' : 'display_table.actions.show_qr')}
+                </button>
+
+                {#if headerQrDataUrl}
+                  <button type="button" class="p-0 bg-transparent" on:click={() => (qrOpen = true)} aria-label={$_('display_table.actions.show_qr')}>
+                    <img src={headerQrDataUrl} alt={$_('display_table.actions.show_qr')} class="w-24 h-24 border-2 border-primary-red rounded" />
+                  </button>
+                {/if}
+
                 <div class="relative" on:click|stopPropagation>
                   <button
                     type="button"

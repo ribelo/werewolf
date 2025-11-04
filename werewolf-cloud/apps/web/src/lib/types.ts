@@ -433,6 +433,7 @@ export type LiveEventType =
   | 'registration.upserted'
   | 'registration.deleted'
   | 'display.filtersSynced'
+  | 'display.qrVisibility'
   | 'heartbeat';
 
 export interface LiveEvent<T = unknown> {

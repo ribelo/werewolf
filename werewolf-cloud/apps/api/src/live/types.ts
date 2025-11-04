@@ -10,6 +10,7 @@ export type LiveEventType =
   | 'scoreboard.updated'
   | 'contest.stateChanged'
   | 'display.filtersSynced'
+  | 'display.qrVisibility'
   | 'heartbeat';
 
 export type LiveEvent<T = Record<string, unknown>> = {

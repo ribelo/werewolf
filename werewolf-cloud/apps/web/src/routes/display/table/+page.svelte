@@ -22,8 +22,10 @@
   import UnifiedContestTable from '$lib/components/UnifiedContestTable.svelte';
   import { buildUnifiedRows, deriveContestLifts, sortUnifiedRows, type UnifiedRow, type LiftKind } from '$lib/contest-table';
   import { applyRegistrationFilters, type RegistrationFilterState, type WeightFilter, type AgeFilter, type LabelFilter, normaliseLabelKey, isFemaleGender, isMaleGender } from '$lib/filters/registrations';
-  import type { DisplayFilterSync } from '@werewolf/domain';
+import type { DisplayFilterSync, DisplayQrVisibility } from '@werewolf/domain';
   import { ChevronDown } from 'lucide-svelte';
+  import FullScreenQR from '$lib/components/FullScreenQR.svelte';
+  import QRCode from 'qrcode';
 
   type MessageValues = Record<string, string | number | boolean | Date | null | undefined>;
   type ScrollSpeed = 'very_slow' | 'slow' | 'normal' | 'fast';
@@ -114,6 +116,41 @@
   $: recentAttempts = computeRecentAttempts();
 
   // Shareable link for QR code
+  let qrOpen = false;
+  $: shareableUrl = browser && contestId ? `${window.location.origin}${window.location.pathname}?contestId=${contestId}` : '';
+
+  // Small header QR
+  let headerQrDataUrl: string | null = null;
+  let headerLastQrUrl: string | null = null;
+
+  async function buildHeaderQr(url: string) {
+    if (!browser) return;
+    const currentUrl = url; // Capture the URL being generated
+    try {
+      const qrDataUrl = await QRCode.toDataURL(url, {
+        width: 96,
+        margin: 1,
+        color: {
+          dark: '#FFFFFFFF',
+          light: '#000000FF'
+        }
+      });
+      // Only assign if the URL hasn't changed since we started generating
+      if (shareableUrl === currentUrl) {
+        headerQrDataUrl = qrDataUrl;
+      }
+    } catch (err) {
+      console.error('Failed to generate header QR', err);
+      if (shareableUrl === currentUrl) {
+        headerQrDataUrl = null;
+      }
+    }
+  }
+
+  $: if (shareableUrl && shareableUrl !== headerLastQrUrl) {
+    headerLastQrUrl = shareableUrl;
+    buildHeaderQr(shareableUrl);
+  }
   const unsubscribeEvents = realtimeClient.events.subscribe((event) => {
     if (!event || event.contestId !== contestId) return;
     updateLastUpdateTime();
@@ -231,6 +268,18 @@
         lastSynced = payload;
         if (autoSyncEnabled) {
           applySyncedFilters(payload.filters);
+        }
+        break;
+      }
+      case 'display.qrVisibility': {
+        const payload = event.data as DisplayQrVisibility | undefined;
+        if (!payload || (payload.target !== 'table' && payload.target !== 'all')) break;
+        if (payload.action === 'show') {
+          if (autoSyncEnabled) {
+            qrOpen = true;
+          }
+        } else {
+          qrOpen = false;
         }
         break;
       }
@@ -922,20 +971,41 @@
 
 <div class="h-screen overflow-hidden bg-black text-white flex flex-col">
   <header class="w-full bg-black px-3 sm:px-4 py-3 sm:py-4">
-    <div class="flex flex-col items-center gap-3 sm:gap-4 text-center">
-      <h1 class={headerTitleClass} style="text-shadow: 0 0 16px rgba(220, 20, 60, 0.5), 0 0 32px rgba(220, 20, 60, 0.3);">{contest?.name ?? t('display_table.head.default_contest')}</h1>
-      <div class={statusRowClass}>
-        <span>{t('layout.api_label')}</span>
-        <span
-          class={`${statusDotSizeClass} rounded-full ${statusDotClass()}`}
-          role="status"
-          aria-label={t(STATUS_LABEL_KEYS[apiStatus])}
-          title={t(STATUS_LABEL_KEYS[apiStatus])}
-        />
-        <span class="text-text-secondary">{t('display_table.metrics.last_update')}</span>
-        <span class="text-text-primary" title={lastUpdateTime ? lastUpdateTime.toLocaleTimeString() : ''}>
-          {lastUpdateRelative}
-        </span>
+    <div class="container-full flex items-start justify-between">
+      <div class="flex-1" />
+      <div class="flex-1 flex flex-col items-center gap-3 sm:gap-4 text-center">
+        <h1 class={headerTitleClass} style="text-shadow: 0 0 16px rgba(220, 20, 60, 0.5), 0 0 32px rgba(220, 20, 60, 0.3);">{contest?.name ?? t('display_table.head.default_contest')}</h1>
+        <div class={statusRowClass}>
+          <span>{t('layout.api_label')}</span>
+          <span
+            class={`${statusDotSizeClass} rounded-full ${statusDotClass()}`}
+            role="status"
+            aria-label={t(STATUS_LABEL_KEYS[apiStatus])}
+            title={t(STATUS_LABEL_KEYS[apiStatus])}
+          />
+          <span class="text-text-secondary">{t('display_table.metrics.last_update')}</span>
+          <span class="text-text-primary" title={lastUpdateTime ? lastUpdateTime.toLocaleTimeString() : ''}>
+            {lastUpdateRelative}
+          </span>
+        </div>
+      </div>
+      <div class="flex-1 flex justify-end items-start">
+        {#if headerQrDataUrl}
+          <button
+            type="button"
+            class={`p-0 bg-transparent ${autoSyncEnabled ? '' : 'opacity-40 cursor-not-allowed'}`}
+            on:click={() => {
+              if (autoSyncEnabled) {
+                qrOpen = true;
+              }
+            }}
+            aria-label={t('display_table.actions.show_qr')}
+            aria-disabled={!autoSyncEnabled}
+            disabled={!autoSyncEnabled}
+          >
+            <img src={headerQrDataUrl} alt={t('display_table.actions.show_qr')} class="w-24 h-24 border-2 border-primary-red rounded" />
+          </button>
+        {/if}
       </div>
     </div>
   </header>
@@ -994,7 +1064,11 @@
           {/if}
         </div>
 
-        <!-- Lift selector and filter controls in one row -->
+        {#if qrOpen}
+          <FullScreenQR url={shareableUrl} on:close={() => (qrOpen = false)} />
+        {/if}
+
+         <!-- Lift selector and filter controls in one row -->
         <div class={`flex flex-wrap items-center ${compactLayout ? 'gap-1.5' : 'gap-2'}`}>
           <!-- Lift dropdown selector -->
           {#if contestLifts.length > 1}
