@@ -1,7 +1,7 @@
 import type { UnifiedTableExportModel } from './unified-table';
 
 function escapeCsvValue(value: string): string {
-  const needsQuoting = /[",\r\n]/.test(value);
+  const needsQuoting = /[;"\r\n]/.test(value);
   if (!needsQuoting) {
     return value;
   }
@@ -9,14 +9,14 @@ function escapeCsvValue(value: string): string {
 }
 
 export function serialiseCsv(model: UnifiedTableExportModel): string {
-  const headerLine = model.columns.map((column) => escapeCsvValue(column.header)).join(',');
+  const headerLine = model.columns.map((column) => escapeCsvValue(column.header)).join(';');
   const lines = model.rows.map((row) =>
     model.columns
       .map((column) => {
         const raw = row[column.key] ?? '';
         return escapeCsvValue(raw.toString());
       })
-      .join(',')
+      .join(';')
   );
 
   return [headerLine, ...lines].join('\r\n');
