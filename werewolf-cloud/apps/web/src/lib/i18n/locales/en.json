@@ -908,6 +908,7 @@
       "menu": "Export",
       "csv": "Export CSV",
       "pdf": "Export PDF",
+      "jpg": "Export JPG",
       "exporting": "Exporting...",
       "generated_at": "Generated: {timestamp}",
       "success": "Export ready",
@@ -1295,6 +1296,7 @@
         "sex_unknown": "–",
         "slots_filled": "slots filled",
         "lift_types": {
+          "_header": "Lift",
           "squat": "Squat",
           "bench": "Bench",
           "deadlift": "Deadlift",

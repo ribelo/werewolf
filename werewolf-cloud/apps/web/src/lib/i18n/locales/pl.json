@@ -1285,6 +1285,7 @@
         "sex_unknown": "–",
         "slots_filled": "miejsc obsadzonych",
         "lift_types": {
+          "_header": "Boj",
           "squat": "Przysiad",
           "bench": "Wyciskanie",
           "deadlift": "Martwy ciąg",
