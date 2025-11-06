@@ -6,6 +6,7 @@
   import { _ } from 'svelte-i18n';
   import QRCode from 'qrcode';
   import FullScreenQR from '$lib/components/FullScreenQR.svelte';
+  import PlateBar from '$lib/components/PlateBar.svelte';
   import type { PageData } from './$types';
   import type { DisplayQrVisibility } from '@werewolf/domain';
   import type {
@@ -683,6 +684,15 @@
             <div class="space-y-3">
               {#if platePlan && platePlan.plates.length > 0}
                 <div class="flex flex-col gap-4">
+                  <!-- Visual plate bar representation -->
+                  <div class="w-full lg:w-auto flex justify-center lg:justify-start">
+                    <PlateBar
+                      plates={platePlan.plates}
+                      heightPx={120}
+                      minWidthPx={6}
+                      maxWidthPx={28}
+                    />
+                  </div>
                   <div class="flex flex-wrap items-center gap-8 justify-center lg:justify-start">
                     {#each platePlan.plates as plate, index (plate.plateWeight + '-' + index)}
                       <div class="flex items-center gap-4 text-text-secondary uppercase tracking-[0.2em]">
