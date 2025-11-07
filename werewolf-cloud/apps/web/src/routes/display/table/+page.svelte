@@ -21,7 +21,7 @@
   import { buildRisingBarQueue } from '$lib/rising-bar';
   import UnifiedContestTable from '$lib/components/UnifiedContestTable.svelte';
   import { buildUnifiedRows, deriveContestLifts, sortUnifiedRows, type UnifiedRow, type LiftKind } from '$lib/contest-table';
-  import { applyRegistrationFilters, type RegistrationFilterState, type WeightFilter, type AgeFilter, type LabelFilter, normaliseLabelKey, isFemaleGender, isMaleGender } from '$lib/filters/registrations';
+  import { applyRegistrationFilters, type RegistrationFilterState, type WeightFilter, type AgeFilter, type LabelFilter, normaliseLabelKey, isFemaleGender, isMaleGender, LABEL_FILTER_PREFIX } from '$lib/filters/registrations';
 import type { DisplayFilterSync, DisplayQrVisibility } from '@werewolf/domain';
   import { ChevronDown } from 'lucide-svelte';
   import FullScreenQR from '$lib/components/FullScreenQR.svelte';
@@ -482,10 +482,11 @@ import type { DisplayFilterSync, DisplayQrVisibility } from '@werewolf/domain';
       });
     }
 
-    Array.from(labelMap.entries())
-      .sort((a, b) => a[1].localeCompare(b[1]))
-      .forEach(([key, label]) => {
-        base.push({ id: key as LabelFilter, label });
+    Array.from(labelMap.values())
+      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+      .forEach((label) => {
+        // Use the same ID shape as manager sync: LABEL:<label>
+        base.push({ id: `${LABEL_FILTER_PREFIX}${label}` as LabelFilter, label });
       });
 
     return base;
@@ -542,7 +543,15 @@ import type { DisplayFilterSync, DisplayQrVisibility } from '@werewolf/domain';
   })();
 
   $: labelSelectionLabel = (() => {
-    const match = availableLabelFilters.find((option) => option.id === localFilters.label);
+    // First try exact ID match (preferred case: LABEL:...)
+    let match = availableLabelFilters.find((option) => option.id === localFilters.label);
+    if (match) return match.label;
+
+    // Fallback: if we received a legacy/plain key, try to resolve by normalised label
+    const raw = localFilters.label ?? '';
+    const key = raw.startsWith(LABEL_FILTER_PREFIX) ? raw.slice(LABEL_FILTER_PREFIX.length) : raw;
+    const normalised = normaliseLabelKey(key);
+    match = availableLabelFilters.find((option) => normaliseLabelKey(option.label) === normalised);
     return match?.label ?? t('contest_detail.registrations.filters.labels_button_all');
   })();
 
