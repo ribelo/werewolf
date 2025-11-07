@@ -344,17 +344,9 @@ export async function updateAllRankings(db: D1Database, contestId: string) {
 
   const idList = Array.from(allIds).map((id) => `'${id}'`).join(', ');
 
-  // Execute inside a transaction for atomicity and slightly better performance
-  try {
-    await executeMutation(db, 'BEGIN TRANSACTION', []);
-    await executeMutation(
-      db,
-      `UPDATE results SET ${assignments.join(', ')} WHERE id IN (${idList})`,
-      []
-    );
-    await executeMutation(db, 'COMMIT', []);
-  } catch (err) {
-    await executeMutation(db, 'ROLLBACK', []);
-    throw err;
-  }
+  await executeMutation(
+    db,
+    `UPDATE results SET ${assignments.join(', ')} WHERE id IN (${idList})`,
+    []
+  );
 }
