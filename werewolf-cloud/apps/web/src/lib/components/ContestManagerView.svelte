@@ -2749,21 +2749,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
             >
               {$_(remoteQrVisible ? 'display_table.actions.hide_qr' : 'display_table.actions.show_qr')}
             </button>
-            {#if headerQrDataUrl}
-              <button
-                type="button"
-                class="p-0 bg-transparent"
-                on:click={() => (qrOpen = true)}
-                aria-label={$_('display_table.actions.show_qr')}
-              >
-                <img
-                  src={headerQrDataUrl}
-                  alt={$_('display_table.actions.show_qr')}
-                  class="w-16 h-16 border-2 border-primary-red rounded"
-                />
-              </button>
-            {/if}
-          </div>
+                      </div>
         </div>
         <div class="mt-4 flex items-center justify-between">
           <span class="text-h2 text-text-primary uppercase tracking-[0.3em]">{contestStatusLabel}</span>
@@ -4211,12 +4197,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
                   {$_(remoteQrVisible ? 'display_table.actions.hide_qr' : 'display_table.actions.show_qr')}
                 </button>
 
-                {#if headerQrDataUrl}
-                  <button type="button" class="p-0 bg-transparent" on:click={() => (qrOpen = true)} aria-label={$_('display_table.actions.show_qr')}>
-                    <img src={headerQrDataUrl} alt={$_('display_table.actions.show_qr')} class="w-24 h-24 border-2 border-primary-red rounded" />
-                  </button>
-                {/if}
-
+                
                 <div class="relative" on:click|stopPropagation>
                   <button
                     type="button"
@@ -4503,12 +4484,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
                   {$_(remoteQrVisible ? 'display_table.actions.hide_qr' : 'display_table.actions.show_qr')}
                 </button>
 
-                {#if headerQrDataUrl}
-                  <button type="button" class="p-0 bg-transparent" on:click={() => (qrOpen = true)} aria-label={$_('display_table.actions.show_qr')}>
-                    <img src={headerQrDataUrl} alt={$_('display_table.actions.show_qr')} class="w-24 h-24 border-2 border-primary-red rounded" />
-                  </button>
-                {/if}
-
+                
                 <div class="relative" on:click|stopPropagation>
                   <button
                     type="button"
@@ -4795,12 +4771,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
                   {$_(remoteQrVisible ? 'display_table.actions.hide_qr' : 'display_table.actions.show_qr')}
                 </button>
 
-                {#if headerQrDataUrl}
-                  <button type="button" class="p-0 bg-transparent" on:click={() => (qrOpen = true)} aria-label={$_('display_table.actions.show_qr')}>
-                    <img src={headerQrDataUrl} alt={$_('display_table.actions.show_qr')} class="w-24 h-24 border-2 border-primary-red rounded" />
-                  </button>
-                {/if}
-
+                
                 <div class="relative" on:click|stopPropagation>
                   <button
                     type="button"
