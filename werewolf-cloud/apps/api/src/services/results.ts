@@ -166,6 +166,16 @@ export async function calculateRegistrationResults(db: D1Database, registrationI
   );
 }
 
+// Helper to safely escape SQL identifiers (validates UUIDs)
+function escapeId(id: unknown): string {
+  const str = String(id);
+  // Validate UUID format to prevent SQL injection
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str)) {
+    throw new Error(`Invalid ID format: ${str}`);
+  }
+  return str;
+}
+
 export async function updateAllRankings(db: D1Database, contestId: string) {
   const rows = await executeQuery(
     db,
@@ -173,6 +183,9 @@ export async function updateAllRankings(db: D1Database, contestId: string) {
     SELECT
       r.id,
       r.registration_id,
+      r.place_open,
+      r.place_in_age_class,
+      r.place_in_weight_class,
       r.total_weight,
       r.coefficient_points,
       r.squat_points, r.bench_points, r.deadlift_points,
@@ -204,9 +217,14 @@ export async function updateAllRankings(db: D1Database, contestId: string) {
     openPlacements.set(row.id, index + 1);
   });
 
+  // Compute only-changed updates for place_open
+  const openChanges = new Map<string, number | null>();
   for (const row of enriched) {
-    const place = openPlacements.get(row.id) ?? null;
-    await executeMutation(db, 'UPDATE results SET place_open = ? WHERE id = ?', [place, row.id]);
+    const next = openPlacements.get(row.id) ?? null;
+    const prev = (row.place_open ?? null) as number | null;
+    if (prev !== next) {
+      openChanges.set(row.id, next);
+    }
   }
 
   const ageGroups = new Map<string | null, typeof enriched>();
@@ -221,6 +239,8 @@ export async function updateAllRankings(db: D1Database, contestId: string) {
   }
 
   const seenAgeIds = new Set<string>();
+  const agePlacementMap = new Map<string, number>();
+
   for (const [, group] of ageGroups.entries()) {
     const sortedGroup = [...group].sort((a, b) => compareResults(
       { coefficientPoints: a.coefficient_points, totalWeight: a.total_weight, bodyweight: a.bodyweight, registrationId: a.registration_id },
@@ -228,15 +248,18 @@ export async function updateAllRankings(db: D1Database, contestId: string) {
     ));
     let rank = 1;
     for (const row of sortedGroup) {
-      await executeMutation(db, 'UPDATE results SET place_in_age_class = ? WHERE id = ?', [rank, row.id]);
+      agePlacementMap.set(row.id, rank);
       seenAgeIds.add(row.id);
       rank += 1;
     }
   }
-
+  // Compute only-changed updates for place_in_age_class
+  const ageChanges = new Map<string, number | null>();
   for (const row of enriched) {
-    if (!seenAgeIds.has(row.id)) {
-      await executeMutation(db, 'UPDATE results SET place_in_age_class = NULL WHERE id = ?', [row.id]);
+    const next = agePlacementMap.get(row.id) ?? null;
+    const prev = (row.place_in_age_class ?? null) as number | null;
+    if (prev !== next) {
+      ageChanges.set(row.id, next);
     }
   }
 
@@ -252,6 +275,8 @@ export async function updateAllRankings(db: D1Database, contestId: string) {
   }
 
   const seenWeightIds = new Set<string>();
+  const weightPlacementMap = new Map<string, number>();
+
   for (const [, group] of weightGroups.entries()) {
     const sortedGroup = [...group].sort((a, b) => compareResults(
       { coefficientPoints: a.coefficient_points, totalWeight: a.total_weight, bodyweight: a.bodyweight, registrationId: a.registration_id },
@@ -259,15 +284,77 @@ export async function updateAllRankings(db: D1Database, contestId: string) {
     ));
     let rank = 1;
     for (const row of sortedGroup) {
-      await executeMutation(db, 'UPDATE results SET place_in_weight_class = ? WHERE id = ?', [rank, row.id]);
+      weightPlacementMap.set(row.id, rank);
       seenWeightIds.add(row.id);
       rank += 1;
     }
   }
 
+  // Compute only-changed updates for place_in_weight_class
+  const weightChanges = new Map<string, number | null>();
   for (const row of enriched) {
-    if (!seenWeightIds.has(row.id)) {
-      await executeMutation(db, 'UPDATE results SET place_in_weight_class = NULL WHERE id = ?', [row.id]);
+    const next = weightPlacementMap.get(row.id) ?? null;
+    const prev = (row.place_in_weight_class ?? null) as number | null;
+    if (prev !== next) {
+      weightChanges.set(row.id, next);
     }
+  }
+
+  // If nothing changed, skip write entirely
+  if (openChanges.size === 0 && ageChanges.size === 0 && weightChanges.size === 0) {
+    return;
+  }
+
+  // Build a single UPDATE with three CASE blocks; only include columns that changed.
+  const allIds = new Set<string>();
+  const openCases: string[] = [];
+  const ageCases: string[] = [];
+  const weightCases: string[] = [];
+
+  for (const [id, value] of openChanges) {
+    const safeId = escapeId(id);
+    allIds.add(safeId);
+    openCases.push(value === null ? `WHEN '${safeId}' THEN NULL` : `WHEN '${safeId}' THEN ${value}`);
+  }
+  for (const [id, value] of ageChanges) {
+    const safeId = escapeId(id);
+    allIds.add(safeId);
+    ageCases.push(value === null ? `WHEN '${safeId}' THEN NULL` : `WHEN '${safeId}' THEN ${value}`);
+  }
+  for (const [id, value] of weightChanges) {
+    const safeId = escapeId(id);
+    allIds.add(safeId);
+    weightCases.push(value === null ? `WHEN '${safeId}' THEN NULL` : `WHEN '${safeId}' THEN ${value}`);
+  }
+
+  const assignments: string[] = [];
+  if (openCases.length > 0) {
+    assignments.push(`place_open = CASE id ${openCases.join(' ')} ELSE place_open END`);
+  }
+  if (ageCases.length > 0) {
+    assignments.push(`place_in_age_class = CASE id ${ageCases.join(' ')} ELSE place_in_age_class END`);
+  }
+  if (weightCases.length > 0) {
+    assignments.push(`place_in_weight_class = CASE id ${weightCases.join(' ')} ELSE place_in_weight_class END`);
+  }
+
+  if (assignments.length === 0) {
+    return;
+  }
+
+  const idList = Array.from(allIds).map((id) => `'${id}'`).join(', ');
+
+  // Execute inside a transaction for atomicity and slightly better performance
+  try {
+    await executeMutation(db, 'BEGIN TRANSACTION', []);
+    await executeMutation(
+      db,
+      `UPDATE results SET ${assignments.join(', ')} WHERE id IN (${idList})`,
+      []
+    );
+    await executeMutation(db, 'COMMIT', []);
+  } catch (err) {
+    await executeMutation(db, 'ROLLBACK', []);
+    throw err;
   }
 }
