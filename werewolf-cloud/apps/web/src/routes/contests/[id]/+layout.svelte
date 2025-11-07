@@ -16,6 +16,7 @@
       { id: 'registrations', labelKey: 'contest_detail.tabs.main_table', href: `${basePath}/registrations` },
       { id: 'results', labelKey: 'contest_detail.tabs.results', href: `${basePath}/results` },
       { id: 'team_results', labelKey: 'contest_detail.tabs.team_results', href: `${basePath}/team-results` },
+      { id: 'plates', labelKey: 'contest_detail.tabs.plates', href: `${basePath}/plates` },
       // Conditionally include per-lift tables when enabled for the contest
       ...(activeContestLifts.includes('Squat')
         ? [{ id: 'squat', labelKey: 'contest_detail.tabs.squat_table', href: `${basePath}/squat` }]

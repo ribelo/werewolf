@@ -645,6 +645,26 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
   let newPlateColor: string | null = null;
   let platesBusy = false;
   let barWeightsBusy = false;
+  const DEFAULT_PLATE_COLOR = '#374151';
+  const HEX_COLOR_PATTERN = /^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
+
+  function normalisePlateColor(input: string | null | undefined): string | null {
+    if (!input) return null;
+    const trimmed = input.trim();
+    if (!HEX_COLOR_PATTERN.test(trimmed)) return null;
+    if (trimmed.length === 4) {
+      const r = trimmed[1];
+      const g = trimmed[2];
+      const b = trimmed[3];
+      return `#${r}${r}${g}${g}${b}${b}`.toUpperCase();
+    }
+    return trimmed.toUpperCase();
+  }
+
+  function currentPlateColorValue(weight: number): string {
+    const existing = contestPlateSets.find((p) => p.plateWeight === weight);
+    return existing?.color ?? DEFAULT_PLATE_COLOR;
+  }
 
   function displayWeightValue(value: number | null | undefined): string {
     if (value == null || Number.isNaN(value)) return '—';
@@ -693,6 +713,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
       toast.error(t('settings_page.plates_validation_error'));
       return;
     }
+    const nextColor = normalisePlateColor(color) ?? currentPlateColorValue(oldWeight);
 
     try {
       platesBusy = true;
@@ -700,11 +721,11 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
       await apiClient.post(`/contests/${contestId}/platesets`, {
         plateWeight: newWeight,
         quantity,
-        ...(color ? { color } : {}),
+        color: nextColor,
       });
       contestPlateSets = [
         ...contestPlateSets.filter((p) => p.plateWeight !== oldWeight),
-        { plateWeight: newWeight, quantity, color: color ?? '#374151' },
+        { plateWeight: newWeight, quantity, color: nextColor },
       ].sort((a, b) => (b.plateWeight - a.plateWeight));
     } catch (err) {
       const message = err instanceof ApiError ? err.message : t('settings_page.plates_error');
@@ -736,6 +757,44 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
     updatePlateQuantity(plateWeight, parsed);
   }
 
+  async function updatePlateColor(plateWeight: number, colorValue: string) {
+    if (!contestId) return;
+    const normalized = normalisePlateColor(colorValue);
+    if (!normalized) {
+      toast.error(t('settings_page.plates_validation_error'));
+      return;
+    }
+    try {
+      platesBusy = true;
+      await apiClient.patch(`/contests/${contestId}/platesets/${plateWeight}`, { color: normalized });
+      contestPlateSets = contestPlateSets.map((p) =>
+        (p.plateWeight === plateWeight ? { ...p, color: normalized } : p)
+      );
+      toast.success(t('settings_page.plates_saved'));
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : t('settings_page.plates_error');
+      toast.error(message);
+    } finally {
+      platesBusy = false;
+    }
+  }
+
+  function handlePlateColorChange(plateWeight: number, event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const normalized = normalisePlateColor(input.value);
+    if (!normalized) {
+      toast.error(t('settings_page.plates_validation_error'));
+      input.value = currentPlateColorValue(plateWeight);
+      return;
+    }
+    if (normalized === currentPlateColorValue(plateWeight)) {
+      input.value = normalized;
+      return;
+    }
+    input.value = normalized;
+    void updatePlateColor(plateWeight, normalized);
+  }
+
   async function deletePlate(plateWeight: number) {
     if (!contestId) return;
     try {
@@ -754,20 +813,26 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
     if (!contestId) return;
     const weight = Number(newPlateWeight);
     const qty = Number(newPlateQuantity);
+    const normalizedColor = normalisePlateColor(newPlateColor);
     if (!Number.isFinite(weight) || weight <= 0 || !Number.isFinite(qty) || qty < 0) {
       toast.error(t('settings_page.plates_validation_error'));
       return;
     }
+    if (newPlateColor && !normalizedColor) {
+      toast.error(t('settings_page.plates_validation_error'));
+      return;
+    }
+    const colorToPersist = normalizedColor ?? DEFAULT_PLATE_COLOR;
     try {
       platesBusy = true;
       await apiClient.post(`/contests/${contestId}/platesets`, {
         plateWeight: weight,
         quantity: qty,
-        ...(newPlateColor ? { color: newPlateColor } : {}),
+        color: colorToPersist,
       });
       contestPlateSets = [
         ...contestPlateSets.filter((p) => p.plateWeight !== weight),
-        { plateWeight: weight, quantity: qty, color: newPlateColor ?? '#374151' },
+        { plateWeight: weight, quantity: qty, color: colorToPersist },
       ].sort((a, b) => (b.plateWeight - a.plateWeight));
       newPlateWeight = null;
       newPlateQuantity = null;
@@ -2820,7 +2885,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
           </a>
         </section>
 
-        <section class="grid gap-4 md:grid-cols-3">
+        <section class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <button
             type="button"
             class="card transition-transform hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-primary-red focus:ring-offset-2 focus:ring-offset-main-bg text-left"
@@ -2851,6 +2916,18 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
             </div>
             <p class="text-body text-text-secondary">{$_('contest_detail.registrations.manage_flights_description')}</p>
           </button>
+          {#if contestId}
+            <a
+              class="card transition-transform hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-primary-red focus:ring-offset-2 focus:ring-offset-main-bg text-left"
+              href={`/contests/${contestId}/plates`}
+              data-sveltekit-preload-data="hover"
+            >
+              <div class="mb-3">
+                <h3 class="text-h3 text-text-primary">{$_('contest_detail.plates.title')}</h3>
+              </div>
+              <p class="text-body text-text-secondary">{$_('contest_detail.plates.manage_link')}</p>
+            </a>
+          {/if}
         </section>
 
         <section class="grid gap-4 lg:grid-cols-2">
@@ -3323,9 +3400,21 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
                           />
                         </td>
                         <td class="px-4 py-3">
-                          <div class="flex items-center gap-2">
-                            <span class="inline-block h-4 w-4 rounded border border-border-color" style={`background:${plate.color}`}></span>
-                            <span class="text-text-secondary">{plate.color}</span>
+                          <div class="flex flex-wrap items-center gap-2">
+                            <input
+                              class="h-10 w-10 cursor-pointer rounded border border-border-color bg-transparent p-0"
+                              type="color"
+                              value={plate.color ?? DEFAULT_PLATE_COLOR}
+                              aria-label={$_('contest_detail.plates.columns.color')}
+                              on:change={(event) => handlePlateColorChange(plate.plateWeight, event)}
+                            />
+                            <input
+                              class="input-field w-32 font-mono"
+                              type="text"
+                              value={plate.color ?? DEFAULT_PLATE_COLOR}
+                              placeholder={DEFAULT_PLATE_COLOR}
+                              on:change={(event) => handlePlateColorChange(plate.plateWeight, event)}
+                            />
                           </div>
                         </td>
                         <td class="px-4 py-3 text-right">
@@ -3341,7 +3430,21 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
                         <input class="input-field w-24" type="number" min="0" step="1" placeholder="0" bind:value={newPlateQuantity} />
                       </td>
                       <td class="px-4 py-3">
-                        <input class="input-field w-36" type="text" placeholder="#374151" bind:value={newPlateColor} />
+                        <div class="flex flex-wrap items-center gap-2">
+                          <input
+                            class="h-10 w-10 cursor-pointer rounded border border-border-color bg-transparent p-0"
+                            type="color"
+                            value={newPlateColor ?? DEFAULT_PLATE_COLOR}
+                            aria-label={$_('contest_detail.plates.columns.color')}
+                            on:change={(event) => (newPlateColor = event.currentTarget.value)}
+                          />
+                          <input
+                            class="input-field w-36 font-mono"
+                            type="text"
+                            placeholder={DEFAULT_PLATE_COLOR}
+                            bind:value={newPlateColor}
+                          />
+                        </div>
                       </td>
                       <td class="px-4 py-3 text-right">
                         <button class="btn-primary px-3 py-1 text-xxs" on:click|preventDefault={addPlate} disabled={platesBusy}>{$_('buttons.add')}</button>
@@ -4140,12 +4243,24 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
                               on:change={(event) => handlePlateQuantityChange(plate.plateWeight, event)}
                             />
                           </td>
-                          <td class="px-4 py-3">
-                            <div class="flex items-center gap-2">
-                              <span class="inline-block h-4 w-4 rounded border border-border-color" style={`background:${plate.color}`}></span>
-                              <span class="text-text-secondary">{plate.color}</span>
-                            </div>
-                          </td>
+                    <td class="px-4 py-3">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <input
+                          class="h-10 w-10 cursor-pointer rounded border border-border-color bg-transparent p-0"
+                          type="color"
+                          value={plate.color ?? DEFAULT_PLATE_COLOR}
+                          aria-label={$_('contest_detail.plates.columns.color')}
+                          on:change={(event) => handlePlateColorChange(plate.plateWeight, event)}
+                        />
+                        <input
+                          class="input-field w-32 font-mono"
+                          type="text"
+                          value={plate.color ?? DEFAULT_PLATE_COLOR}
+                          placeholder={DEFAULT_PLATE_COLOR}
+                          on:change={(event) => handlePlateColorChange(plate.plateWeight, event)}
+                        />
+                      </div>
+                    </td>
                           <td class="px-4 py-3 text-right">
                             <button class="btn-secondary px-3 py-1 text-xxs" on:click={() => deletePlate(plate.plateWeight)} disabled={platesBusy}>{$_('buttons.delete')}</button>
                           </td>
@@ -4158,9 +4273,23 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
                         <td class="px-4 py-3">
                           <input class="input-field w-24" type="number" min="0" step="1" placeholder="0" bind:value={newPlateQuantity} />
                         </td>
-                        <td class="px-4 py-3">
-                          <input class="input-field w-36" type="text" placeholder="#374151" bind:value={newPlateColor} />
-                        </td>
+                  <td class="px-4 py-3">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <input
+                        class="h-10 w-10 cursor-pointer rounded border border-border-color bg-transparent p-0"
+                        type="color"
+                        value={newPlateColor ?? DEFAULT_PLATE_COLOR}
+                        aria-label={$_('contest_detail.plates.columns.color')}
+                        on:change={(event) => (newPlateColor = event.currentTarget.value)}
+                      />
+                      <input
+                        class="input-field w-36 font-mono"
+                        type="text"
+                        placeholder={DEFAULT_PLATE_COLOR}
+                        bind:value={newPlateColor}
+                      />
+                    </div>
+                  </td>
                         <td class="px-4 py-3 text-right">
                           <button class="btn-primary px-3 py-1 text-xxs" on:click|preventDefault={addPlate} disabled={platesBusy}>{$_('buttons.add')}</button>
                         </td>

@@ -56,23 +56,45 @@ plateSets.get('/', async (c) => {
   });
 });
 
-// PATCH /contests/:contestId/platesets/:plateWeight - Update plate quantity
+const hexColor = /^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
+
+// PATCH /contests/:contestId/platesets/:plateWeight - Update plate quantity or color
 plateSets.patch('/:plateWeight', zValidator('json', z.object({
-  quantity: z.number().int().nonnegative(),
+  quantity: z.number().int().nonnegative().optional(),
+  color: z.string().regex(hexColor).optional(),
+}).refine((payload) => payload.quantity !== undefined || payload.color !== undefined, {
+  message: 'No fields to update',
 })), async (c) => {
   const db = c.env.DB;
   const contestId = c.req.param('contestId');
   const plateWeight = parseFloat(c.req.param('plateWeight'));
-  const { quantity } = c.req.valid('json');
+  const { quantity, color } = c.req.valid('json');
+
+  const updates: string[] = [];
+  const params: (number | string)[] = [];
+
+  if (quantity !== undefined) {
+    updates.push('quantity = ?');
+    params.push(quantity);
+  }
+
+  if (color !== undefined) {
+    updates.push('color = ?');
+    params.push(color);
+  }
+
+  if (updates.length === 0) {
+    return c.json({ data: null, error: 'No fields to update', requestId: c.get('requestId') }, 400);
+  }
 
   await executeMutation(
     db,
     `
     UPDATE plate_sets
-    SET quantity = ?
+    SET ${updates.join(', ')}
     WHERE contest_id = ? AND plate_weight = ?
     `,
-    [quantity, contestId, plateWeight]
+    [...params, contestId, plateWeight]
   );
 
   return c.json({
