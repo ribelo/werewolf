@@ -1,4 +1,11 @@
-import type { ContestDetail, Registration, Attempt, CurrentAttemptBundle, ReferenceData } from './types';
+import type {
+  ContestDetail,
+  Registration,
+  Attempt,
+  CurrentAttemptBundle,
+  ReferenceData,
+  ContestPlateSetEntry,
+} from './types';
 
 interface CacheData {
   contest: ContestDetail;
@@ -6,6 +13,7 @@ interface CacheData {
   attempts: Attempt[];
   currentAttempt: CurrentAttemptBundle | null;
   referenceData: ReferenceData;
+  plateSets?: ContestPlateSetEntry[];
   timestamp: number;
 }
 
@@ -41,6 +49,7 @@ export class OfflineCache {
     attempts: Attempt[];
     currentAttempt: CurrentAttemptBundle | null;
     referenceData: ReferenceData;
+    plateSets?: ContestPlateSetEntry[];
   }): void {
     const storage = getStorage();
     if (!storage) return;
@@ -48,6 +57,7 @@ export class OfflineCache {
     try {
       const cacheData: CacheData = {
         ...data,
+        plateSets: data.plateSets ?? [],
         timestamp: Date.now(),
       };
 
@@ -77,7 +87,10 @@ export class OfflineCache {
       }
 
       console.log('Retrieved cached data for contest:', this.contestId);
-      return cacheData;
+      return {
+        ...cacheData,
+        plateSets: cacheData.plateSets ?? [],
+      };
     } catch (error) {
       console.error('Failed to retrieve cached data:', error);
       return null;

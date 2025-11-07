@@ -1,7 +1,15 @@
 import { browser } from '$app/environment';
 import { apiClient } from '$lib/api';
 import { OfflineCache } from '$lib/cache';
-import type { ContestDetail, Registration, Attempt, CurrentAttemptBundle, ReferenceData, ContestCategories } from '$lib/types';
+import type {
+  ContestDetail,
+  Registration,
+  Attempt,
+  CurrentAttemptBundle,
+  ReferenceData,
+  ContestCategories,
+  ContestPlateSetEntry,
+} from '$lib/types';
 
 export const load = async ({ url }) => {
   const contestId = url.searchParams.get('contestId');
@@ -13,6 +21,7 @@ export const load = async ({ url }) => {
       attempts: [],
       currentAttempt: null,
       referenceData: { weightClasses: [], ageCategories: [] },
+      plateSets: [],
       error: 'Contest ID is required',
       contestId: null,
       isOffline: false,
@@ -31,6 +40,7 @@ export const load = async ({ url }) => {
     const attemptsResponse = await apiClient.get<Attempt[]>(`/contests/${contestId}/attempts`);
     const currentAttemptResponse = await apiClient.get<CurrentAttemptBundle | null>(`/contests/${contestId}/attempts/current`);
     const categoriesResponse = await apiClient.get<ContestCategories>(`/contests/${contestId}/categories`);
+    const plateSetsResponse = await apiClient.get<ContestPlateSetEntry[]>(`/contests/${contestId}/platesets`);
 
     const referenceData: ReferenceData = categoriesResponse.data ?? {
       weightClasses: [],
@@ -43,7 +53,14 @@ export const load = async ({ url }) => {
       attempts: attemptsResponse.data ?? [],
       currentAttempt: currentAttemptResponse.data,
       referenceData,
-      error: contestResponse.error || regResponse.error || attemptsResponse.error || currentAttemptResponse.error || categoriesResponse.error,
+      plateSets: plateSetsResponse.data ?? [],
+      error:
+        contestResponse.error ||
+        regResponse.error ||
+        attemptsResponse.error ||
+        currentAttemptResponse.error ||
+        categoriesResponse.error ||
+        plateSetsResponse.error,
       contestId,
       isOffline: false,
       cacheAge: null,
@@ -57,6 +74,7 @@ export const load = async ({ url }) => {
         attempts: attemptsResponse.data ?? [],
         currentAttempt: currentAttemptResponse.data,
         referenceData,
+        plateSets: plateSetsResponse.data ?? [],
       });
     }
 
@@ -76,6 +94,7 @@ export const load = async ({ url }) => {
         attempts: cachedData.attempts,
         currentAttempt: cachedData.currentAttempt,
         referenceData: cachedData.referenceData,
+        plateSets: cachedData.plateSets ?? [],
         error: null,
         contestId,
         isOffline,
@@ -91,6 +110,7 @@ export const load = async ({ url }) => {
       attempts: [],
       currentAttempt: null,
       referenceData: { weightClasses: [], ageCategories: [] },
+      plateSets: [],
       error: `${message} (no cached data available)`,
       contestId,
       isOffline: true,

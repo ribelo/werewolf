@@ -34,6 +34,7 @@
     attempts,
     currentAttempt,
     referenceData,
+    plateSets,
     error,
     contestId,
     isOffline,
@@ -93,6 +94,11 @@
     ? platePlan.plates.map(p => `${p.plateWeight} kg`).join('•')
     : '';
   
+  $: contestPlateSets = plateSets ?? [];
+  $: contestMaxPlateWeight = contestPlateSets.length > 0
+    ? Math.max(...contestPlateSets.map((plate) => plate.plateWeight ?? plate.weight ?? 0), 0)
+    : null;
+
   $: barWeightStr = platePlan ? formatWeight(platePlan.barWeight) : '';
   $: collarWeightStr = platePlan && platePlan.clampWeight > 0 ? formatWeight(platePlan.clampWeight) : '';
   
@@ -679,20 +685,22 @@
             </div>
           {/if}
 
-
-          <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div class="space-y-3">
+          <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:gap-8">
+            <!-- Visual plate bar representation -->
+            {#if platePlan && platePlan.plates.length > 0}
+              <div class="w-full lg:w-auto flex justify-center lg:justify-start">
+                <PlateBar
+                  plates={platePlan.plates}
+                  heightPx={200}
+                  minWidthPx={8}
+                  maxWidthPx={40}
+                  maxPlateWeight={contestMaxPlateWeight}
+                />
+              </div>
+            {/if}
+            <div class="space-y-3 self-center lg:self-center">
               {#if platePlan && platePlan.plates.length > 0}
                 <div class="flex flex-col gap-4">
-                  <!-- Visual plate bar representation -->
-                  <div class="w-full lg:w-auto flex justify-center lg:justify-start">
-                    <PlateBar
-                      plates={platePlan.plates}
-                      heightPx={120}
-                      minWidthPx={6}
-                      maxWidthPx={28}
-                    />
-                  </div>
                   <div class="flex flex-wrap items-center gap-8 justify-center lg:justify-start">
                     {#each platePlan.plates as plate, index (plate.plateWeight + '-' + index)}
                       <div class="flex items-center gap-4 text-text-secondary uppercase tracking-[0.2em]">
@@ -719,7 +727,7 @@
               {/if}
             </div>
             {#if qrDataUrl}
-              <div class="self-center flex items-center">
+              <div class="self-center lg:ml-auto flex items-center">
                 <button type="button" class="p-0 bg-transparent" on:click={() => (qrOpen = true)} aria-label={t('display_current.sidebar.share_title')}>
                   <img src={qrDataUrl} alt={t('display_current.sidebar.share_title')} class="w-24 h-24 border-2 border-primary-red shadow-[0_0_20px_rgba(220,20,60,0.45)]" />
                 </button>
