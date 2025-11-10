@@ -244,7 +244,17 @@
       .replace(/[^0-9.\-]/g, '')
       .replace(/(\..*?)\./g, '$1');
     const value = parseFloat(normalized);
-    return Number.isFinite(value) ? value : null;
+    if (!Number.isFinite(value)) {
+      return null;
+    }
+    return Math.round(value * 100) / 100;
+  }
+
+  function formatAttemptWeightInputValue(weight: number | null | undefined): string {
+    if (weight === null || weight === undefined || Number.isNaN(weight)) {
+      return '';
+    }
+    return weight.toFixed(2);
   }
 
   function attemptCellKey(registrationId: string, cell: AttemptCell): string {
@@ -603,7 +613,7 @@
                         type="text"
                         inputmode="decimal"
                         autocomplete="off"
-                        value={cell.attempt?.weight ?? ''}
+                        value={formatAttemptWeightInputValue(cell.attempt?.weight)}
                         placeholder="—"
                         disabled={weightInputPending}
                         aria-busy={weightInputPending}

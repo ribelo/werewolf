@@ -668,7 +668,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
 
   function displayWeightValue(value: number | null | undefined): string {
     if (value == null || Number.isNaN(value)) return '—';
-    return Number.isInteger(value) ? `${Math.trunc(value)}` : value.toFixed(1);
+    return value.toFixed(2);
   }
 
   async function saveBarWeights() {
