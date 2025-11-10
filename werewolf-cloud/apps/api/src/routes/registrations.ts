@@ -21,6 +21,7 @@ import { getReshelCoefficient, getMcCulloughCoefficient } from '../services/coef
 import { getContestAgeDescriptors, getContestWeightDescriptors, seedContestCategories } from '../utils/category-templates';
 import { publishEvent } from '../live/publish';
 import { calculateRegistrationResults, updateAllRankings } from '../services/results';
+import { invalidatePrefix, rankingsBundlePrefix } from '../utils/cache';
 
 export const contestRegistrations = new Hono<WerewolfEnvironment>();
 
@@ -661,6 +662,7 @@ registrations.patch('/:registrationId', zValidator('json', registrationUpdateSch
   const affectedContestIds = new Set<string>([existing.contest_id, nextContestId]);
   for (const contestIdentifier of affectedContestIds) {
     await updateAllRankings(db, contestIdentifier);
+    await invalidatePrefix(c.env.KV, rankingsBundlePrefix(contestIdentifier));
   }
 
   const registration = await executeQueryOne(
@@ -733,6 +735,7 @@ registrations.delete('/:registrationId', async (c) => {
     [registrationId]
   );
   await updateAllRankings(db, existing.contest_id);
+  await invalidatePrefix(c.env.KV, rankingsBundlePrefix(existing.contest_id));
 
   await publishEvent(c.env, existing.contest_id, {
     type: 'registration.deleted',

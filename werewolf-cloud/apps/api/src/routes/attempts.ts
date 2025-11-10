@@ -11,6 +11,7 @@ import { ALL_LIFTS } from '@werewolf/domain/services/lifts';
 import { getAttemptWithRelations, buildCurrentAttemptPayload } from '../services/attempts';
 import { buildPlatePlan } from '../services/plate-plan';
 import { calculateRegistrationResults, updateAllRankings } from '../services/results';
+import { invalidatePrefix, rankingsBundlePrefix } from '../utils/cache';
 
 const FLOAT_EPSILON = 1e-6;
 
@@ -205,6 +206,7 @@ registrationAttempts.post('/', zValidator('json', attemptUpsertSchema), async (c
   if (contestId) {
     await calculateRegistrationResults(db, registrationId);
     await updateAllRankings(db, contestId);
+    await invalidatePrefix(c.env.KV, rankingsBundlePrefix(contestId));
   }
 
   // Broadcast attempt upserted with full attempt payload

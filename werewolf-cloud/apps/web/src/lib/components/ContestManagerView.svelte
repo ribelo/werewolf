@@ -1029,19 +1029,25 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
     tagRankingCache = {};
     let errorMessage: string | null = null;
     try {
-      const [openResp, ageResp, weightResp] = await Promise.all([
-        apiClient.get<ContestRankingEntry[]>(`/contests/${contestId}/results/rankings?type=open`),
-        apiClient.get<ContestRankingEntry[]>(`/contests/${contestId}/results/rankings?type=age`),
-        apiClient.get<ContestRankingEntry[]>(`/contests/${contestId}/results/rankings?type=weight`),
-      ]);
-
-      openRanking = openResp.data ?? [];
-      ageRanking = ageResp.data ?? [];
-      weightRanking = weightResp.data ?? [];
-
-      const respError = openResp.error || ageResp.error || weightResp.error || null;
-      if (respError) {
-        errorMessage = respError;
+      // Try aggregated endpoint first
+      const bundle = await apiClient.get<{ open: ContestRankingEntry[]; age: ContestRankingEntry[]; weight: ContestRankingEntry[] }>(
+        `/contests/${contestId}/results/rankings/all`
+      );
+      if (!bundle.error && bundle.data) {
+        openRanking = bundle.data.open ?? [];
+        ageRanking = bundle.data.age ?? [];
+        weightRanking = bundle.data.weight ?? [];
+      } else {
+        const [openResp, ageResp, weightResp] = await Promise.all([
+          apiClient.get<ContestRankingEntry[]>(`/contests/${contestId}/results/rankings?type=open`),
+          apiClient.get<ContestRankingEntry[]>(`/contests/${contestId}/results/rankings?type=age`),
+          apiClient.get<ContestRankingEntry[]>(`/contests/${contestId}/results/rankings?type=weight`),
+        ]);
+        openRanking = openResp.data ?? [];
+        ageRanking = ageResp.data ?? [];
+        weightRanking = weightResp.data ?? [];
+        const respError = openResp.error || ageResp.error || weightResp.error || null;
+        if (respError) errorMessage = respError;
       }
     } catch (err) {
       errorMessage = err instanceof Error ? err.message : t('contest_detail.results.reload_failed');
