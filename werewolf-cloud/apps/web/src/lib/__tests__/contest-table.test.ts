@@ -9,7 +9,7 @@ import {
   buildUnifiedRows,
   sortUnifiedRows,
 } from '../contest-table';
-import type { Attempt, AttemptStatus, Registration } from '../types';
+import type { Attempt, AttemptStatus, ContestDetail, Registration } from '../types';
 
 type AttemptSetup = {
   attemptNumber: AttemptNumber;
@@ -78,7 +78,7 @@ function bestSuccessfulWeight(attempts: AttemptCell[]): number {
 
 function createRow(params: {
   id: string;
-  bodyweight: number;
+  bodyweight: number | null;
   deadliftAttempts: AttemptSetup[];
   squatAttempts?: AttemptSetup[];
   benchAttempts?: AttemptSetup[];
@@ -680,5 +680,177 @@ describe('sortUnifiedRows - points tie-breakers in non-points columns', () => {
 
     expect(sorted[0]?.registration.id).toBe('lower-points');
     expect(sorted[1]?.registration.id).toBe('higher-points');
+  });
+});
+
+function createContest(date: string): ContestDetail {
+  return {
+    id: 'contest-1',
+    name: 'Test Contest',
+    date,
+    location: 'Hall',
+    discipline: 'Powerlifting',
+    status: 'InProgress',
+    mensBarWeight: 20,
+    womensBarWeight: 20,
+    clampWeight: 2.5,
+    registrations: [],
+  };
+}
+
+function ageFor(birthDate: string, contestDate: string | null): number | null {
+  const registration = createRegistration('age-check', { birthDate });
+  const contest = contestDate === null ? null : createContest(contestDate);
+  const rows = buildUnifiedRows({ registrations: [registration], attempts: [], contest });
+
+  return rows[0]?.age ?? null;
+}
+
+describe('buildUnifiedRows - age on the contest date', () => {
+  it('uses the contest date instead of today', () => {
+    expect(ageFor('1990-05-15', '2020-05-15')).toBe(30);
+    expect(ageFor('1990-05-15', '2020-01-01')).toBe(29);
+  });
+
+  it('turns the age over exactly on the birthday', () => {
+    expect(ageFor('1990-05-15', '2020-05-14')).toBe(29);
+    expect(ageFor('1990-05-15', '2020-05-15')).toBe(30);
+    expect(ageFor('1990-05-15', '2020-05-16')).toBe(30);
+  });
+
+  it('handles February 29 birthdays around non-leap years', () => {
+    expect(ageFor('2000-02-29', '2021-02-28')).toBe(20);
+    expect(ageFor('2000-02-29', '2021-03-01')).toBe(21);
+    expect(ageFor('2000-02-29', '2024-02-29')).toBe(24);
+  });
+
+  it('returns null when either date is missing or malformed', () => {
+    expect(ageFor('1990-05-15', null)).toBeNull();
+    expect(ageFor('1990-05-15', 'not-a-date')).toBeNull();
+    expect(ageFor('1990-05-15', '2020-13-01')).toBeNull();
+    expect(ageFor('not-a-date', '2020-05-15')).toBeNull();
+    expect(ageFor('', '2020-05-15')).toBeNull();
+  });
+});
+
+describe('buildUnifiedRows - empty attempt sets', () => {
+  it('returns zeroed totals, lift bests and points for a registration without attempts', () => {
+    const registration = createRegistration('empty', {
+      reshelCoefficient: 0.9,
+      mcculloughCoefficient: 1.1,
+    });
+
+    const rows = buildUnifiedRows({
+      registrations: [registration],
+      attempts: [],
+      contest: createContest('2024-06-01'),
+    });
+
+    expect(rows).toHaveLength(1);
+    const row = rows[0]!;
+
+    expect(row.bestSquat).toBe(0);
+    expect(row.bestBench).toBe(0);
+    expect(row.bestDeadlift).toBe(0);
+    expect(row.total).toBe(0);
+    expect(row.maxLift).toBe(0);
+    expect(row.points).toBe(0);
+    expect(row.pointsByLift).toEqual({ Squat: 0, Bench: 0, Deadlift: 0 });
+    expect(row.attempts.Squat.map((cell) => cell.attempt)).toEqual([null, null, null]);
+    expect(row.attempts.Bench.map((cell) => cell.attempt)).toEqual([null, null, null]);
+    expect(row.attempts.Deadlift.map((cell) => cell.attempt)).toEqual([null, null, null]);
+  });
+
+  it('ignores attempts that belong to another registration', () => {
+    const registration = createRegistration('mine');
+    const foreignAttempts: Attempt[] = [
+      {
+        id: 'other-bench-1',
+        registrationId: 'other',
+        liftType: 'Bench',
+        attemptNumber: 1,
+        weight: 200,
+        status: 'Successful',
+        createdAt: TIMESTAMP,
+        updatedAt: TIMESTAMP,
+      },
+    ];
+
+    const rows = buildUnifiedRows({
+      registrations: [registration],
+      attempts: foreignAttempts,
+      contest: createContest('2024-06-01'),
+    });
+
+    expect(rows[0]?.bestBench).toBe(0);
+  });
+});
+
+describe('sortUnifiedRows - stable ranking and tie order', () => {
+  it('returns an empty list for empty input', () => {
+    expect(sortUnifiedRows([], 'total', 'desc')).toEqual([]);
+  });
+
+  it('does not mutate the input array and returns a new array', () => {
+    const first = createRow({
+      id: 'zulu',
+      bodyweight: 90,
+      deadliftAttempts: [{ attemptNumber: 1, weight: 200, status: 'Successful' }],
+    });
+    const second = createRow({
+      id: 'alpha',
+      bodyweight: 90,
+      deadliftAttempts: [{ attemptNumber: 1, weight: 200, status: 'Successful' }],
+    });
+    const input = [first, second];
+
+    const sorted = sortUnifiedRows(input, 'total', 'desc');
+
+    expect(input[0]).toBe(first);
+    expect(input[1]).toBe(second);
+    expect(sorted).not.toBe(input);
+    expect(sorted.map((row) => row.registration.id)).toEqual(['alpha', 'zulu']);
+  });
+
+  it('keeps tied totals in a deterministic order across repeated sorts', () => {
+    const alpha = createRow({
+      id: 'alpha',
+      bodyweight: 90,
+      deadliftAttempts: [{ attemptNumber: 1, weight: 200, status: 'Successful' }],
+    });
+    const beta = createRow({
+      id: 'beta',
+      bodyweight: 90,
+      deadliftAttempts: [{ attemptNumber: 1, weight: 200, status: 'Successful' }],
+    });
+
+    const firstPass = sortUnifiedRows([beta, alpha], 'total', 'desc').map((row) => row.registration.id);
+    const secondPass = sortUnifiedRows([beta, alpha], 'total', 'desc').map((row) => row.registration.id);
+    const resortOfSorted = sortUnifiedRows(
+      sortUnifiedRows([beta, alpha], 'total', 'desc'),
+      'total',
+      'desc',
+    ).map((row) => row.registration.id);
+
+    expect(firstPass).toEqual(['alpha', 'beta']);
+    expect(secondPass).toEqual(firstPass);
+    expect(resortOfSorted).toEqual(firstPass);
+  });
+
+  it('treats both missing bodyweights as tied and falls back to name', () => {
+    const alpha = createRow({
+      id: 'alpha',
+      bodyweight: null,
+      deadliftAttempts: [{ attemptNumber: 1, weight: 200, status: 'Successful' }],
+    });
+    const beta = createRow({
+      id: 'beta',
+      bodyweight: null,
+      deadliftAttempts: [{ attemptNumber: 1, weight: 200, status: 'Successful' }],
+    });
+
+    const sorted = sortUnifiedRows([beta, alpha], 'total', 'desc');
+
+    expect(sorted.map((row) => row.registration.id)).toEqual(['alpha', 'beta']);
   });
 });

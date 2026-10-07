@@ -2,12 +2,11 @@ import type { AgeCategory, ContestCategories, WeightClass } from '$lib/types';
 import {
   DEFAULT_CONTEST_AGE_CATEGORY_TEMPLATES,
   DEFAULT_CONTEST_WEIGHT_CLASS_TEMPLATES,
-} from '@werewolf/domain/constants/categories';
+} from '@werewolf/domain';
 
 export function createDefaultAgeCategories(): AgeCategory[] {
   return DEFAULT_CONTEST_AGE_CATEGORY_TEMPLATES.map((template) => ({
     id: template.code,
-    contestId: undefined,
     code: template.code,
     name: template.name,
     minAge: template.minAge,
@@ -20,7 +19,6 @@ export function createDefaultAgeCategories(): AgeCategory[] {
 export function createDefaultWeightClasses(): WeightClass[] {
   return DEFAULT_CONTEST_WEIGHT_CLASS_TEMPLATES.map((template) => ({
     id: template.code,
-    contestId: undefined,
     code: template.code,
     name: template.name,
     gender: template.gender,
@@ -29,13 +27,6 @@ export function createDefaultWeightClasses(): WeightClass[] {
     sortOrder: template.sortOrder,
     metadata: null,
   }));
-}
-
-export function cloneContestCategories(categories: ContestCategories): ContestCategories {
-  return {
-    ageCategories: categories.ageCategories.map((category) => ({ ...category })),
-    weightClasses: categories.weightClasses.map((weightClass) => ({ ...weightClass })),
-  };
 }
 
 const MALE_CODES = new Set(['MALE', 'M']);
@@ -171,7 +162,7 @@ export function buildCategoryPayload(ageCategories: AgeCategory[], weightClasses
     })),
     weightClasses: normalisedWeights.map(({ metadata, ...weightClass }) => ({
       ...weightClass,
-      metadata: weightClass.metadata ?? null,
+      metadata: metadata ?? null,
     })),
   };
 }
@@ -194,12 +185,12 @@ export function formatCategoryIssues(
   return issues.map((issue) => {
     switch (issue.scope) {
       case 'age': {
-        const rowValues = { index: issue.index + 1 };
         if (issue.code === 'duplicate_code') {
           return translate('contest.categories.validation.age.duplicate_code', {
             code: issue.codeValue,
           });
         }
+        const rowValues = { index: issue.index + 1 };
         if (issue.code === 'invalid_range') {
           return translate('contest.categories.validation.age.invalid_range', rowValues);
         }
@@ -209,13 +200,13 @@ export function formatCategoryIssues(
         return translate('contest.categories.validation.age.empty_code', rowValues);
       }
       case 'weight': {
-        const rowValues = { index: issue.index + 1 };
         if (issue.code === 'duplicate_code') {
           return translate('contest.categories.validation.weight.duplicate_code', {
             code: issue.codeValue,
             gender: issue.gender,
           });
         }
+        const rowValues = { index: issue.index + 1 };
         if (issue.code === 'invalid_range') {
           return translate('contest.categories.validation.weight.invalid_range', rowValues);
         }

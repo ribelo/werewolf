@@ -1,4 +1,4 @@
-import { formatAge } from '$lib/utils';
+import { ageOnDate } from '@werewolf/domain';
 import type {
   Attempt,
   ContestDetail,
@@ -157,6 +157,7 @@ export function buildUnifiedRows(params: {
   const {
     registrations,
     attempts,
+    contest,
     resultsOpen = [],
     resultsAge = [],
     resultsWeight = [],
@@ -222,7 +223,8 @@ export function buildUnifiedRows(params: {
     const weightResult = weightMap.get(registration.id) ?? null;
 
     const birthDate = registration.birthDate ?? null;
-    const age = birthDate ? formatAge(birthDate) : null;
+    const contestDate = contest?.date ?? null;
+    const age = birthDate && contestDate ? ageOnDate(birthDate, contestDate) : null;
 
     return {
       registration: {
@@ -685,11 +687,4 @@ export function sortUnifiedRows(
   });
 
   return sorted;
-}
-
-export function filterRowsByFlight(rows: UnifiedRow[], flight: string | null): UnifiedRow[] {
-  if (!flight || flight === 'ALL') {
-    return rows;
-  }
-  return rows.filter((row) => row.registration.flightCode === flight);
 }

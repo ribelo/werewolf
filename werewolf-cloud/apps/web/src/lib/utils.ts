@@ -25,29 +25,6 @@ export function getStatusClasses(status: string): string {
 }
 
 /**
- * Format attempt status for display
- */
-export function formatStatus(status: string): string {
-  const statusKey = status.toLowerCase();
-  const statusMap: Record<string, string> = {
-    successful: '✓',
-    failed: '✗',
-    pending: '○'
-  };
-
-  return statusMap[statusKey] ?? status;
-}
-
-/**
- * Format attempt weight and status
- */
-export function formatAttempt(weight: number, status: string): string {
-  const formattedWeight = formatWeight(weight);
-  const statusSymbol = formatStatus(status);
-  return statusSymbol ? `${formattedWeight}${statusSymbol}` : formattedWeight;
-}
-
-/**
  * Format competitor full name
  */
 export function formatCompetitorName(firstName: string, lastName: string): string {

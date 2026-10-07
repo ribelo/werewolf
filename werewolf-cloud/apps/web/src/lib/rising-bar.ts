@@ -65,14 +65,14 @@ function determinePhase(candidates: Attempt[], current: CurrentAttempt | null): 
     };
   }
 
-  if (candidates.length === 0) {
+  const [firstCandidate, ...remainingCandidates] = candidates;
+  if (!firstCandidate) {
     return DEFAULT_PHASE;
   }
 
-  let best = candidates[0];
+  let best = firstCandidate;
 
-  for (let index = 1; index < candidates.length; index += 1) {
-    const attempt = candidates[index];
+  for (const attempt of remainingCandidates) {
     if (isEarlierPhase(attempt, best)) {
       best = attempt;
     }
@@ -121,12 +121,13 @@ function resolveCompetitionOrder(
   attempt: Attempt,
   registrationsMap?: Map<string, Registration>
 ): number {
-  if (Number.isFinite(attempt.competitionOrder as number)) {
-    return attempt.competitionOrder as number;
+  const attemptOrder = attempt.competitionOrder;
+  if (typeof attemptOrder === 'number' && Number.isFinite(attemptOrder)) {
+    return attemptOrder;
   }
-  const registration = registrationsMap?.get(attempt.registrationId);
-  if (Number.isFinite(registration?.competitionOrder)) {
-    return registration!.competitionOrder as number;
+  const registrationOrder = registrationsMap?.get(attempt.registrationId)?.competitionOrder;
+  if (typeof registrationOrder === 'number' && Number.isFinite(registrationOrder)) {
+    return registrationOrder;
   }
   return Number.POSITIVE_INFINITY;
 }
