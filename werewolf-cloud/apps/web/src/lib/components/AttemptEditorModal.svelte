@@ -1,20 +1,29 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
+  import { _ } from 'svelte-i18n';
   import { apiClient } from '$lib/api';
   import { toast } from '$lib/ui/toast';
   import { formatCompetitorName } from '$lib/utils';
-  import type { Attempt, AttemptNumber, AttemptStatus, LiftType, Registration } from '$lib/types';
-  import { get } from 'svelte/store';
-  import { _ } from 'svelte-i18n';
+  import type { Attempt, AttemptNumber, LiftType, Registration } from '$lib/types';
+  import {
+    attemptDraftKey,
+    planAttemptSave,
+    type AttemptDraftState,
+    type AttemptDraftUpdate,
+  } from './attempt-editor-draft';
 
   export let contestId: string;
   export let registration: Registration;
   export let attempts: Attempt[] = [];
   export let onClose: () => void = () => {};
-  export let onSaved: () => void = () => {};
+  /** Attempts that reached the API; the modal shell resolves the modal with them. */
+  export let onSaved: (savedAttempts: Attempt[]) => void | Promise<void> = () => {};
   export let onOptimisticUpdate: (optimisticAttempts: Attempt[]) => void = () => {};
-  export let getSnapshot: () => Attempt[] = () => [];
+  /** Replaces the caller's attempt list, used to reconcile with the server. */
   export let restoreSnapshot: (snapshot: Attempt[]) => void = () => {};
+  /** Caller's pre-save attempt list, used when nothing was saved and the server is unreadable. */
+  export let getSnapshot: () => Attempt[] = () => [];
 
   const DEFAULT_LIFTS: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
   let availableLifts: LiftType[] = [...DEFAULT_LIFTS];
@@ -28,13 +37,7 @@
     return translate(key, values ? { values } : undefined);
   }
 
-  type FormKey = `${LiftType}-${AttemptNumber}`;
-  type AttemptFormValue = {
-    weight: string;
-    status: AttemptStatus;
-  };
-
-  let formState: Partial<Record<FormKey, AttemptFormValue>> = {};
+  let formState: AttemptDraftState = {};
   let isSaving = false;
   let lastAttemptSnapshot: Attempt[] = [];
   $: availableLifts = registration?.lifts && registration.lifts.length > 0
@@ -53,16 +56,12 @@
     return `temp-${Date.now()}-${Math.random()}-${lift}-${attemptNumber}`;
   }
 
-  function buildKey(lift: LiftType, attemptNumber: AttemptNumber): FormKey {
-    return `${lift}-${attemptNumber}` as FormKey;
-  }
-
   function initialiseForm() {
-    const draft: Partial<Record<FormKey, AttemptFormValue>> = {};
+    const draft: AttemptDraftState = {};
     for (const lift of availableLifts) {
       for (const number of ATTEMPT_NUMBERS) {
         const existing = attempts.find((attempt) => attempt.liftType === lift && attempt.attemptNumber === number);
-        draft[buildKey(lift, number)] = {
+        draft[attemptDraftKey(lift, number)] = {
           weight: existing ? String(existing.weight) : '',
           status: existing?.status ?? 'Pending',
         };
@@ -81,7 +80,7 @@
   }
 
   function updateWeight(lift: LiftType, attemptNumber: AttemptNumber, value: string) {
-    const key = buildKey(lift, attemptNumber);
+    const key = attemptDraftKey(lift, attemptNumber);
     formState = {
       ...formState,
       [key]: {
@@ -92,7 +91,7 @@
   }
 
   function adjustWeight(lift: LiftType, attemptNumber: AttemptNumber, delta: number) {
-    const key = buildKey(lift, attemptNumber);
+    const key = attemptDraftKey(lift, attemptNumber);
     const current = parseFloat(formState[key]?.weight ?? '') || 0;
     const next = Math.max(0, Math.round((current + delta) * 100) / 100);
     formState = {
@@ -113,80 +112,99 @@
     adjustWeight(lift, attemptNumber, wheel.deltaY < 0 ? QUICK_INCREMENT : -QUICK_INCREMENT);
   }
 
+  function buildOptimisticAttempt(update: AttemptDraftUpdate, now: string): Attempt {
+    const existing = attempts.find(
+      (candidate) =>
+        candidate.liftType === update.liftType && candidate.attemptNumber === update.attemptNumber
+    );
+
+    return {
+      id: existing?.id ?? createTempAttemptId(update.liftType, update.attemptNumber),
+      registrationId: registration.id,
+      liftType: update.liftType,
+      attemptNumber: update.attemptNumber,
+      weight: update.weight,
+      status: existing?.status ?? 'Pending',
+      judge1Decision: existing?.judge1Decision ?? null,
+      judge2Decision: existing?.judge2Decision ?? null,
+      judge3Decision: existing?.judge3Decision ?? null,
+      notes: existing?.notes ?? null,
+      timestamp: existing?.timestamp ?? null,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+      firstName: registration.firstName ?? '',
+      lastName: registration.lastName ?? '',
+      competitorName: formatCompetitorName(registration.firstName ?? '', registration.lastName ?? ''),
+      competitionOrder: registration.competitionOrder ?? null,
+    };
+  }
+
+  function applyOptimistically(optimistic: Attempt) {
+    const localIndex = attempts.findIndex((candidate) => candidate.id === optimistic.id || (
+      candidate.liftType === optimistic.liftType && candidate.attemptNumber === optimistic.attemptNumber
+    ));
+
+    if (localIndex >= 0) {
+      attempts = [
+        ...attempts.slice(0, localIndex),
+        optimistic,
+        ...attempts.slice(localIndex + 1),
+      ];
+    } else {
+      attempts = [...attempts, optimistic];
+    }
+  }
+
+  /**
+   * Reads the authoritative attempt list back from the API. Called after a failed
+   * save: the requests that went through are committed on the server, so a
+   * pre-save snapshot would show a state that no longer exists.
+   */
+  async function reconcileFromServer(): Promise<boolean> {
+    if (!contestId || !registration?.id) return false;
+
+    try {
+      const response = await apiClient.get<Attempt[]>(`/contests/${contestId}/attempts`);
+      if (response.error || !Array.isArray(response.data)) {
+        console.error('Failed to store attempts: could not reconcile with the server', response.error);
+        return false;
+      }
+
+      const serverAttempts = response.data;
+      restoreSnapshot(serverAttempts);
+      attempts = serverAttempts.filter((attempt) => attempt.registrationId === registration.id);
+      return true;
+    } catch (error) {
+      console.error('Failed to store attempts: could not reconcile with the server', error);
+      return false;
+    }
+  }
+
   async function saveAttempts() {
+    if (isSaving) return;
+
     if (!contestId || !registration?.id) {
       toast.error(t('attempt_editor.toast.missing_ids'));
       return;
     }
 
-    const updates: Array<{ liftType: LiftType; attemptNumber: AttemptNumber; weight: number }> = [];
+    const plan = planAttemptSave(formState, attempts, availableLifts, ATTEMPT_NUMBERS);
 
-    for (const lift of availableLifts) {
-      for (const number of ATTEMPT_NUMBERS) {
-        const key = buildKey(lift, number);
-        const value = formState[key]?.weight?.trim();
-        if (!value) continue;
-        const weight = Number(value);
-        if (!Number.isFinite(weight) || weight <= 0) {
-          toast.error(t('attempt_editor.toast.weight_invalid'));
-          return;
-        }
-        updates.push({ liftType: lift, attemptNumber: number, weight });
-      }
+    if (plan.invalid.length > 0) {
+      toast.error(t('attempt_editor.toast.weight_invalid'));
+      return;
     }
 
-    if (updates.length === 0) {
+    if (plan.updates.length === 0) {
       toast.info(t('attempt_editor.toast.nothing_to_save'));
       return;
     }
 
-    const snapshot = getSnapshot ? getSnapshot() : [];
     const previousLocal = [...attempts];
-    const optimisticAttempts: Attempt[] = [];
     const now = new Date().toISOString();
+    const optimisticAttempts = plan.updates.map((update) => buildOptimisticAttempt(update, now));
 
-    for (const update of updates) {
-      const existing = attempts.find(
-        (candidate) =>
-          candidate.liftType === update.liftType && candidate.attemptNumber === update.attemptNumber
-      );
-
-      const optimistic: Attempt = {
-        id: existing?.id ?? createTempAttemptId(update.liftType, update.attemptNumber),
-        registrationId: registration.id,
-        liftType: update.liftType,
-        attemptNumber: update.attemptNumber,
-        weight: update.weight,
-        status: existing?.status ?? 'Pending',
-        judge1Decision: existing?.judge1Decision ?? null,
-        judge2Decision: existing?.judge2Decision ?? null,
-        judge3Decision: existing?.judge3Decision ?? null,
-        notes: existing?.notes ?? null,
-        timestamp: existing?.timestamp ?? null,
-        createdAt: existing?.createdAt ?? now,
-        updatedAt: now,
-        firstName: registration.firstName ?? '',
-        lastName: registration.lastName ?? '',
-        competitorName: formatCompetitorName(registration.firstName ?? '', registration.lastName ?? ''),
-        competitionOrder: registration.competitionOrder ?? null,
-      };
-
-      optimisticAttempts.push(optimistic);
-
-      const localIndex = attempts.findIndex((candidate) => candidate.id === optimistic.id || (
-        candidate.liftType === optimistic.liftType && candidate.attemptNumber === optimistic.attemptNumber
-      ));
-
-      if (localIndex >= 0) {
-        attempts = [
-          ...attempts.slice(0, localIndex),
-          optimistic,
-          ...attempts.slice(localIndex + 1),
-        ];
-      } else {
-        attempts = [...attempts, optimistic];
-      }
-    }
+    optimisticAttempts.forEach(applyOptimistically);
 
     if (optimisticAttempts.length > 0) {
       onOptimisticUpdate(optimisticAttempts);
@@ -194,27 +212,54 @@
 
     isSaving = true;
 
-    try {
-      for (const update of updates) {
+    // The API takes one attempt per request. Writes are sequential and a failure
+    // does not undo the requests that already went through, so the editor reports
+    // what was saved instead of pretending the save was atomic.
+    const saved: AttemptDraftUpdate[] = [];
+    let failure: unknown = null;
+
+    for (const update of plan.updates) {
+      try {
         await apiClient.post(`/contests/${contestId}/registrations/${registration.id}/attempts`, {
           registrationId: registration.id,
           liftType: update.liftType,
           attemptNumber: update.attemptNumber,
           weight: update.weight,
         });
+        saved.push(update);
+      } catch (error) {
+        failure = error;
+        break;
+      }
+    }
+
+    isSaving = false;
+
+    if (!failure) {
+      toast.success(t('attempt_editor.toast.save_success'));
+      await onSaved(optimisticAttempts);
+      return;
+    }
+
+    const reconciled = await reconcileFromServer();
+
+    if (saved.length === 0) {
+      if (!reconciled) {
+        // Nothing reached the server and it cannot be read back, so the local
+        // optimism is dropped again by returning to the pre-save state.
+        restoreSnapshot(getSnapshot());
+        attempts = previousLocal;
       }
 
-      toast.success(t('attempt_editor.toast.save_success'));
-      onSaved?.();
-    } catch (error) {
-      restoreSnapshot(snapshot);
-      attempts = previousLocal;
-      initialiseForm();
-      const message = error instanceof Error ? error.message : t('attempt_editor.toast.save_error');
+      const message = failure instanceof Error ? failure.message : t('attempt_editor.toast.save_error');
       toast.error(message);
-    } finally {
-      isSaving = false;
+      return;
     }
+
+    toast.error(t('attempt_editor.toast.save_partial', {
+      saved: saved.length,
+      total: plan.updates.length,
+    }));
   }
 </script>
 
@@ -250,14 +295,14 @@
                       min="0"
                       step="0.5"
                       inputmode="decimal"
-                      value={formState[buildKey(lift, attemptNumber)]?.weight ?? ''}
-                     on:input={(event) => handleInput(lift, attemptNumber, event)}
-                     on:wheel|preventDefault={(event) => handleWheel(lift, attemptNumber, event)}
-                   />
-                   <div class="flex flex-col gap-1">
-                     <button
-                       type="button"
-                       class="btn-secondary px-2 py-1 text-xxs"
+                      value={formState[attemptDraftKey(lift, attemptNumber)]?.weight ?? ''}
+                      on:input={(event) => handleInput(lift, attemptNumber, event)}
+                      on:wheel|preventDefault={(event) => handleWheel(lift, attemptNumber, event)}
+                    />
+                    <div class="flex flex-col gap-1">
+                      <button
+                        type="button"
+                        class="btn-secondary px-2 py-1 text-xxs"
                         on:click={() => adjustWeight(lift, attemptNumber, QUICK_INCREMENT)}
                       >
                         {t('attempt_editor.controls.increase', { delta: QUICK_INCREMENT })}
@@ -281,7 +326,7 @@
   </div>
 
   <div class="flex justify-end gap-3">
-    <button type="button" class="btn-secondary" on:click={onClose} disabled={isSaving}>
+    <button type="button" class="btn-secondary" on:click={() => onClose()} disabled={isSaving}>
       {t('buttons.cancel')}
     </button>
     <button type="button" class="btn-primary" on:click={saveAttempts} disabled={isSaving}>

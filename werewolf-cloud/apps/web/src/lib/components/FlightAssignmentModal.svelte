@@ -5,12 +5,16 @@
 
   export let registrations: Registration[] = [];
   export let onClose: (result?: unknown) => void = () => {};
-  export let onSaved: (result?: unknown) => void = () => {};
+  /** Edited flight assignments; the modal shell awaits this before closing. */
+  export let onSaved: (
+    updates: Array<{ id: string; flightCode: string; flightOrder: number | null }>
+  ) => void | Promise<void> = () => {};
 
   const DEFAULT_FLIGHT_CODE = 'A';
   const FLIGHT_CODES = Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)); // A-Z
 
   let autoFlightSize = 10;
+  let isSaving = false;
   let flightDrafts: Record<string, { flightCode: string; flightOrder: number | null }> = {};
 
   type MessageValues = Record<string, string | number | boolean | Date | null | undefined>;
@@ -76,16 +80,24 @@
     }
   }
 
-  function handleSave() {
+  async function handleSave() {
+    if (isSaving) return;
+
     // Convert drafts back to registration updates
     const updates = registrations.map(reg => ({
       id: reg.id,
       flightCode: flightDrafts[reg.id]?.flightCode ?? DEFAULT_FLIGHT_CODE,
-      flightOrder: flightDrafts[reg.id]?.flightOrder,
+      flightOrder: flightDrafts[reg.id]?.flightOrder ?? null,
     }));
 
-    onSaved(updates);
-    onClose();
+    isSaving = true;
+    try {
+      // Awaited: the modal shell forwards the payload to the caller's onSaved
+      // hook (the bulk-flight request) and only closes the modal afterwards.
+      await onSaved(updates);
+    } finally {
+      isSaving = false;
+    }
   }
 
   // Initialize drafts when component mounts
@@ -189,6 +201,15 @@
         {/each}
       </tbody>
     </table>
+  </div>
+
+  <div class="flex justify-end gap-3">
+    <button type="button" class="btn-secondary" on:click={() => onClose()} disabled={isSaving}>
+      {t('buttons.cancel')}
+    </button>
+    <button type="button" class="btn-primary" on:click={handleSave} disabled={isSaving}>
+      {isSaving ? t('buttons.saving') : t('buttons.save')}
+    </button>
   </div>
 </div>
 

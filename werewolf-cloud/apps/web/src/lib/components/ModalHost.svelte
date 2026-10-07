@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { modalStore } from '$lib/ui/modal';
   import Modal from './Modal.svelte';
   import type { ActiveModal } from '$lib/ui/modal';
@@ -17,15 +18,14 @@
   }));
 
   // Cleanup subscription on destroy
-  import { onDestroy } from 'svelte';
   onDestroy(() => {
     unsubscribe();
   });
 </script>
 
 {#if modals.length > 0}
-  <!-- Render all active modals -->
-  {#each modalStack as { modal, zIndex }}
+  <!-- Render all active modals, keyed by id so each keeps its own state while the stack changes -->
+  {#each modalStack as { modal, zIndex } (modal.id)}
     <Modal {modal} {zIndex} />
   {/each}
 {/if}

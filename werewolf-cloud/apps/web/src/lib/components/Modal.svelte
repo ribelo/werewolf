@@ -1,18 +1,19 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
-  import { modalStore } from '$lib/ui/modal';
+  import { onDestroy } from 'svelte';
+  import { modalStore, lockBodyScroll, unlockBodyScroll } from '$lib/ui/modal';
   import type { ActiveModal } from '$lib/ui/modal';
 
   export let modal: ActiveModal;
-export let zIndex: number = 80;
-
-
+  export let zIndex = 80;
 
   let modalElement: HTMLElement;
   let previousFocus: HTMLElement | null = null;
   let focusableElements: HTMLElement[] = [];
   let firstFocusable: HTMLElement | null = null;
   let lastFocusable: HTMLElement | null = null;
+  let closed = false;
+  let wired = false;
+  let focusTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Default values for modal configuration
   $: config = {
@@ -26,6 +27,9 @@ export let zIndex: number = 80;
     showFooter: !modal.component, // Hide footer by default for component modals
     ...modal,
   };
+
+  // Only the modal on top of the stack reacts to Escape and traps focus.
+  $: isTopmost = $modalStore.length > 0 && $modalStore[$modalStore.length - 1]?.id === modal.id;
 
   // Size classes mapping
   $: sizeClasses = {
@@ -52,6 +56,8 @@ export let zIndex: number = 80;
   }
 
   function handleKeydown(event: KeyboardEvent) {
+    if (!isTopmost) return;
+
     if (event.key === 'Escape' && config.closable) {
       event.preventDefault();
       closeModal();
@@ -94,7 +100,45 @@ export let zIndex: number = 80;
   }
 
   function closeModal(result?: unknown) {
+    if (closed) return;
+    closed = true;
     modalStore.close(modal.id, result);
+  }
+
+  function callerSavedHandler(): ((payload?: unknown) => unknown) | null {
+    const data = modal.data;
+    if (!data || typeof data !== 'object') return null;
+
+    const candidate = (data as Record<string, unknown>)['onSaved'];
+    return typeof candidate === 'function' ? (candidate as (payload?: unknown) => unknown) : null;
+  }
+
+  function componentProps(): Record<string, unknown> {
+    const data = modal.data;
+    return data && typeof data === 'object' ? { ...(data as Record<string, unknown>) } : {};
+  }
+
+  /**
+   * Contract of the component rendered inside the modal: it reports what it
+   * saved through its `onSaved` prop, e.g. `onSaved(assignments)`. The payload
+   * is handed to the caller's hook (`data.onSaved`), which is awaited because it
+   * performs the persistence work, and the modal then resolves exactly once with
+   * that payload. A failing hook keeps the modal open so the edits are not lost.
+   */
+  async function handleComponentSaved(payload?: unknown) {
+    if (closed) return;
+
+    const handler = callerSavedHandler();
+    if (handler) {
+      try {
+        await handler(payload);
+      } catch (error) {
+        console.error('Modal onSaved handler failed', error);
+        return;
+      }
+    }
+
+    closeModal(payload);
   }
 
   function handleConfirm() {
@@ -105,36 +149,55 @@ export let zIndex: number = 80;
     closeModal(false);
   }
 
-  onMount(() => {
-    // Store the currently focused element
-    previousFocus = document.activeElement as HTMLElement;
+  function restoreFocus() {
+    const target = previousFocus;
+    if (!target || !target.isConnected || typeof target.focus !== 'function') return;
 
-    // Focus the modal when it opens
-    if (modalElement) {
-      modalElement.focus();
+    const active = document.activeElement;
+    // Do not steal focus when another modal (or a control outside this one) owns it.
+    if (active && active !== document.body && modalElement && !modalElement.contains(active)) {
+      return;
     }
 
+    target.focus();
+  }
+
+  function wireModal() {
+    // Store the currently focused element
+    previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    // Focus the modal when it opens
+    modalElement.focus();
+
     // Update focusable elements after a short delay to ensure DOM is ready
-    setTimeout(updateFocusableElements, 100);
+    focusTimer = setTimeout(updateFocusableElements, 100);
 
     // Add keyboard event listener
     document.addEventListener('keydown', handleKeydown);
 
-    // Prevent body scroll
-    document.body.style.overflow = 'hidden';
-  });
+    // Prevent body scroll while any modal is open
+    lockBodyScroll();
+  }
+
+  // Wiring is triggered by the bound element instead of by onMount: the web test
+  // runtime resolves the SSR lifecycle stubs of 'svelte', where onMount never
+  // runs, and Escape, the scroll lock and focus must work there too.
+  $: if (modalElement && !wired) {
+    wired = true;
+    wireModal();
+  }
 
   onDestroy(() => {
-    // Restore focus to the previously focused element
-    if (previousFocus && typeof previousFocus.focus === 'function') {
-      previousFocus.focus();
-    }
+    if (focusTimer !== null) clearTimeout(focusTimer);
 
     // Remove keyboard event listener
     document.removeEventListener('keydown', handleKeydown);
 
-    // Restore body scroll
-    document.body.style.overflow = '';
+    // Restore body scroll once the last modal is gone
+    unlockBodyScroll();
+
+    // Restore focus to the previously focused element
+    restoreFocus();
   });
 
   // Update focusable elements when modal content changes
@@ -150,7 +213,7 @@ export let zIndex: number = 80;
   role="dialog"
   aria-modal="true"
   aria-labelledby="modal-title-{modal.id}"
-  aria-describedby={config.content ? "modal-content-{modal.id}" : undefined}
+  aria-describedby={config.content ? `modal-content-${modal.id}` : undefined}
   bind:this={modalElement}
   tabindex="-1"
   on:click={handleBackdropClick}
@@ -204,7 +267,12 @@ export let zIndex: number = 80;
 
         <!-- Custom content slot -->
         {#if config.component}
-          <svelte:component this={config.component} {...(config.data && typeof config.data === 'object' ? config.data : {})} onClose={closeModal} onSaved={() => closeModal(true)} />
+          <svelte:component
+            this={config.component}
+            {...componentProps()}
+            onClose={closeModal}
+            onSaved={handleComponentSaved}
+          />
         {:else}
           <slot {modal} {closeModal} />
         {/if}
