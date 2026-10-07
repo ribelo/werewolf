@@ -1,158 +1,93 @@
-import { render, screen, waitFor, within } from '@testing-library/svelte';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { addMessages, init, waitLocale } from 'svelte-i18n';
+import { render, screen, within } from '@testing-library/svelte';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { addMessages, init, locale, waitLocale } from 'svelte-i18n';
 
-import Page from '../contests/[id]/+page.svelte';
+import UnifiedContestTable from '$lib/components/UnifiedContestTable.svelte';
+import { buildUnifiedRows } from '$lib/contest-table';
 import en from '$lib/i18n/locales/en.json';
-import type { ContestDetail, Registration, Attempt, ContestBarWeights, ContestRankingEntry, ContestPlateSetEntry, BackupSummary } from '$lib/types';
+import type { AgeCategory, ContestDetail, Registration, WeightClass } from '$lib/types';
 
-const { getMock } = vi.hoisted(() => ({ getMock: vi.fn() }));
-const { connectMock, disconnectMock } = vi.hoisted(() => ({
-  connectMock: vi.fn(),
-  disconnectMock: vi.fn(),
-}));
-const { modalOpenMock } = vi.hoisted(() => ({ modalOpenMock: vi.fn().mockResolvedValue(undefined) }));
-const { toastMock } = vi.hoisted(() => ({
-  toastMock: {
-    success: vi.fn(),
-    error: vi.fn(),
-    info: vi.fn(),
-    warning: vi.fn(),
-  },
-}));
+/**
+ * The registrations view of a contest is rendered by UnifiedContestTable (the
+ * registration mode ContestManagerView uses); this suite keeps an eye on the
+ * coefficient columns that view shows.
+ */
 
-vi.mock('$lib/api', () => ({
-  apiClient: {
-    baseUrl: 'http://127.0.0.1:8787',
-    get: (...args: unknown[]) => getMock(...args),
-    post: vi.fn(),
-    patch: vi.fn(),
-    put: vi.fn(),
-    delete: vi.fn(),
-  },
-}));
+const CONTEST: ContestDetail = {
+  id: 'contest-1',
+  name: 'Werewolf Open',
+  date: '2024-03-01',
+  location: 'Warsaw',
+  discipline: 'Deadlift',
+  status: 'Live',
+  mensBarWeight: 20,
+  womensBarWeight: 15,
+  clampWeight: 2.5,
+  registrations: [],
+  updatedAt: '2024-02-20T10:00:00Z',
+};
 
-vi.mock('$lib/realtime', () => {
-  const { readable } = require('svelte/store');
+const WEIGHT_CLASSES: WeightClass[] = [
+  { id: 'wc1', code: 'F_63', name: 'Up to 63 kg', gender: 'Female', minWeight: 57, maxWeight: 63 },
+];
 
+const AGE_CATEGORIES: AgeCategory[] = [
+  { id: 'ac-senior', code: 'SENIOR', name: 'Senior (24-39)', minAge: 24, maxAge: 39 },
+];
+
+function registration(): Registration {
   return {
-    realtimeClient: {
-      connectionStatus: readable('connected', () => () => {}),
-      events: readable(null, () => () => {}),
-      connect: connectMock,
-      disconnect: disconnectMock,
-    },
+    id: 'reg-1',
+    competitorId: 'comp-1',
+    firstName: 'Anna',
+    lastName: 'Nowak',
+    birthDate: '1995-01-01',
+    gender: 'Female',
+    club: 'Werewolf',
+    city: 'Warsaw',
+    weightClassId: 'wc1',
+    weightClassName: 'Up to 63 kg',
+    ageCategoryId: 'ac-senior',
+    ageCategoryName: 'Senior (24-39)',
+    bodyweight: 61.2,
+    rackHeightSquat: 42,
+    rackHeightBench: 37,
+    reshelCoefficient: 0.9453,
+    mcculloughCoefficient: 1.072,
+    competitionOrder: 5,
+    lifts: ['Deadlift'],
   };
-});
+}
 
-vi.mock('$lib/ui/modal', () => ({
-  modalStore: {
-    open: modalOpenMock,
-  },
-}));
-
-vi.mock('$lib/ui/toast', () => ({
-  toast: toastMock,
-}));
-
-describe('Contest registrations table', () => {
+describe('contest registrations table', () => {
   beforeEach(async () => {
     addMessages('en', en);
     init({ fallbackLocale: 'en', initialLocale: 'en' });
+    locale.set('en');
     await waitLocale();
-
-    getMock.mockReset();
-    getMock.mockImplementation(async (path: string) => {
-      if (path === '/system/health') {
-        return {
-          data: { status: 'ok', timestamp: new Date().toISOString() },
-          error: null,
-        };
-      }
-      return { data: null, error: null };
-    });
-
-    connectMock.mockReset();
-    disconnectMock.mockReset();
-    modalOpenMock.mockResolvedValue(undefined);
-    Object.values(toastMock).forEach(fn => fn.mockReset());
   });
 
-  it('renders Reshel and McCulloch coefficients with formatted values', async () => {
-    const contest: ContestDetail = {
-      id: 'contest-1',
-      name: 'Werewolf Open',
-      date: '2024-03-01',
-      location: 'Warsaw',
-      discipline: 'Deadlift',
-      status: 'Live',
-      mensBarWeight: 20,
-      womensBarWeight: 15,
-      registrations: [],
-      updatedAt: '2024-02-20T10:00:00Z',
-    };
-
-    const registrations: Registration[] = [
-      {
-        id: 'reg-1',
-        competitorId: 'comp-1',
-        firstName: 'Anna',
-        lastName: 'Nowak',
-        birthDate: '1995-01-01',
-        gender: 'Female',
-        club: 'Werewolf',
-        city: 'Warsaw',
-        weightClassId: 'wc1',
-        weightClassName: 'Up to 63 kg',
-        ageCategoryId: 'ac-senior',
-        ageCategoryName: 'Senior (24-39)',
-        bodyweight: 61.2,
-        rackHeightSquat: 42,
-        rackHeightBench: 37,
-        reshelCoefficient: 0.9453,
-        mcculloughCoefficient: 1.072,
-        competitionOrder: 5,
-      },
-    ];
-
-    contest.registrations = registrations;
-
-    const barWeights: ContestBarWeights = {
-      mensBarWeight: 20,
-      womensBarWeight: 15,
-      clampWeight: 2.5,
-    };
-
-    const data = {
-      contest,
-      registrations,
-      attempts: [] as Attempt[],
-      currentAttempt: null,
-      referenceData: {
-        weightClasses: [
-          { id: 'wc1', code: 'F_67_5', name: 'Up to 63 kg', gender: 'Female', minWeight: 57, maxWeight: 63 },
-        ],
-        ageCategories: [
-          { id: 'ac-senior', code: 'SENIOR', name: 'Senior (24-39)', minAge: 24, maxAge: 39 },
-        ],
-      },
-      resultsOpen: [] as ContestRankingEntry[],
-      resultsAge: [] as ContestRankingEntry[],
-      resultsWeight: [] as ContestRankingEntry[],
-      plateSets: [] as ContestPlateSetEntry[],
-      barWeights,
-      backupsSummary: null as BackupSummary | null,
-      error: null,
-      apiBase: 'http://127.0.0.1:8787',
-      contestId: contest.id,
-    };
-
-    render(Page, {
-      data,
-      params: { id: contest.id },
+  it('renders Reshel and McCulloch coefficients with formatted values', () => {
+    const rows = buildUnifiedRows({
+      registrations: [registration()],
+      attempts: [],
+      contest: CONTEST,
     });
 
-    const reshelHeader = await screen.findByRole('columnheader', { name: /Reshel/i });
+    render(UnifiedContestTable, {
+      props: {
+        rows,
+        mode: 'registration',
+        lifts: ['Deadlift'],
+        attemptNumbers: [1],
+        weightClasses: WEIGHT_CLASSES,
+        ageCategories: AGE_CATEGORIES,
+        showPointsColumn: false,
+        showMaxColumn: false,
+      },
+    });
+
+    const reshelHeader = screen.getByRole('columnheader', { name: /Reshel/i });
     const table = reshelHeader.closest('table');
     expect(table).not.toBeNull();
 

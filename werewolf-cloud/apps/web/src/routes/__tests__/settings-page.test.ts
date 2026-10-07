@@ -1,12 +1,19 @@
-import { render, fireEvent, waitFor } from '@testing-library/svelte';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { writable } from 'svelte/store';
-import { tick } from 'svelte';
-import Page from '../settings/+page.svelte';
-import { addMessages, init, waitLocale } from 'svelte-i18n';
-import en from '$lib/i18n/locales/en.json';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { get } from 'svelte/store';
+import { addMessages, init, _ as translateStore, waitLocale } from 'svelte-i18n';
 
-vi.mock('$app/environment', () => ({ browser: false }));
+import Page from '../settings/+page.svelte';
+import type { PageData } from '../settings/$types';
+import en from '$lib/i18n/locales/en.json';
+import type {
+  BackupRecord,
+  DatabaseInfo,
+  Settings,
+  SystemHealth,
+} from '$lib/types';
+
+vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 const { changeLanguageMock } = vi.hoisted(() => ({
   changeLanguageMock: vi.fn().mockResolvedValue(undefined),
@@ -18,12 +25,22 @@ vi.mock('$lib/i18n', () => ({
     { code: 'pl', label: 'Polski' },
   ],
   changeLanguage: changeLanguageMock,
-  locale: writable('en'),
 }));
 
-const patchMock = vi.fn();
-const getMock = vi.fn();
-const putMock = vi.fn();
+const { getMock, postMock, deleteMock } = vi.hoisted(() => ({
+  getMock: vi.fn(),
+  postMock: vi.fn(),
+  deleteMock: vi.fn(),
+}));
+
+vi.mock('$lib/api', () => ({
+  apiClient: {
+    baseUrl: 'http://127.0.0.1:8787',
+    get: (...args: unknown[]) => getMock(...args),
+    post: (...args: unknown[]) => postMock(...args),
+    delete: (...args: unknown[]) => deleteMock(...args),
+  },
+}));
 
 const { toastMock } = vi.hoisted(() => ({
   toastMock: {
@@ -32,110 +49,146 @@ const { toastMock } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('$lib/api', () => ({
-  apiClient: {
-    baseUrl: 'http://127.0.0.1:8787',
-    get: (...args: unknown[]) => getMock(...args),
-    patch: (...args: unknown[]) => patchMock(...args),
-    put: (...args: unknown[]) => putMock(...args),
-    post: vi.fn(),
-  },
-}));
+vi.mock('$lib/ui/toast', () => ({ toast: toastMock }));
 
-vi.mock('$lib/ui/toast', () => ({
-  toast: toastMock,
-}));
+const HEALTH_TIMESTAMP = '2026-01-01T10:00:00.000Z';
+const BACKUP_TIMESTAMP = '2026-01-01T09:00:00.000Z';
 
-describe('Settings page – optimistic rollback', () => {
-  const basePlateSet = [
-    { weight: 25, quantity: 4, color: '#DC2626' },
-    { weight: 20, quantity: 4, color: '#2563EB' },
-    { weight: 15, quantity: 4, color: '#EAB308' },
-    { weight: 10, quantity: 6, color: '#16A34A' },
-  ];
+const SETTINGS: Settings = {
+  language: 'pl',
+  ui: { theme: 'light', showWeights: true },
+  competition: { defaultBarWeight: 20, defaultPlateSet: [] },
+  database: { backupEnabled: true, autoBackupInterval: 24 },
+};
 
-  const buildData = () => ({
-    settings: {
-      language: 'pl',
-      ui: { theme: 'light', showWeights: true, showAttempts: true },
-      competition: {
-        defaultBarWeight: 20,
-        defaultPlateSet: basePlateSet.map((plate) => ({ ...plate })),
-      },
-      database: { backupEnabled: true, autoBackupInterval: 24 },
-    },
+const HEALTH: SystemHealth = { status: 'ok', timestamp: HEALTH_TIMESTAMP };
+
+const DATABASE: DatabaseInfo = {
+  status: 'ok',
+  stats: { contests: 0, competitors: 3, registrations: 4 },
+};
+
+const BACKUP: BackupRecord = {
+  id: 'backup-2026-01-01.json',
+  timestamp: BACKUP_TIMESTAMP,
+  size: 2048,
+  recordCounts: { contests: 1, competitors: 2, registrations: 3, attempts: 4, results: 0 },
+};
+
+function buildData(): PageData {
+  return {
+    session: { authenticated: false, checked: true },
+    settings: SETTINGS,
     settingsError: null,
-    health: { status: 'ok', timestamp: new Date().toISOString() },
+    health: HEALTH,
     healthError: null,
-    database: { status: 'ok', stats: { contests: 0, competitors: 0, registrations: 0 } },
+    database: DATABASE,
     databaseError: null,
-    backups: { backups: [], total: 0, timestamp: new Date().toISOString() },
+    backups: { backups: [BACKUP], total: 1, timestamp: BACKUP_TIMESTAMP },
     backupsError: null,
     apiBase: 'http://127.0.0.1:8787',
-  });
+  };
+}
 
+/** What the transport throws when the Worker cannot be reached. */
+function offlineError(): Error {
+  return Object.assign(new Error('api.offline.not_queueable'), { kind: 'offline' });
+}
+
+describe('settings page', () => {
   beforeEach(async () => {
     addMessages('en', en);
     init({ fallbackLocale: 'en', initialLocale: 'en' });
     await waitLocale();
 
-    patchMock.mockReset();
     getMock.mockReset();
-    putMock.mockReset();
-    toastMock.success.mockReset();
-    toastMock.error.mockReset();
+    postMock.mockReset();
+    deleteMock.mockReset();
     changeLanguageMock.mockReset();
     changeLanguageMock.mockResolvedValue(undefined);
+    toastMock.success.mockReset();
+    toastMock.error.mockReset();
 
-    patchMock.mockResolvedValue({ data: { success: true }, error: null });
-    getMock.mockResolvedValue({
-      data: { status: 'ok', timestamp: new Date().toISOString() },
-      error: null,
-    });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    getMock.mockResolvedValue({ data: HEALTH, error: null });
+    postMock.mockResolvedValue({ data: { success: true }, error: null });
+    deleteMock.mockResolvedValue({ data: { success: true }, error: null });
   });
 
-  function renderPage() {
-    return render(Page, {
-      data: buildData(),
-    });
-  }
-
-  it('reverts showWeights when PATCH /settings/ui fails', async () => {
-    patchMock.mockRejectedValueOnce(new Error('network failure'));
-
-    const { getByRole } = renderPage();
-
-    const checkbox = getByRole('checkbox') as HTMLInputElement;
-    expect(checkbox.checked).toBe(true);
-    expect(checkbox.disabled).toBe(false);
-
-    await fireEvent.click(checkbox);
-    await tick();
-
-    await waitFor(() => {
-      expect(patchMock).toHaveBeenCalledWith('/settings/ui', { showWeights: false });
-    });
-
-    await waitFor(() => expect(checkbox.checked).toBe(true));
-    expect(toastMock.error).toHaveBeenCalled();
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
-  it('reverts default bar weight when PATCH /settings/competition fails', async () => {
-    patchMock.mockRejectedValueOnce(new Error('db offline'));
+  it('renders language, worker, D1, backup and reset panels without weight controls', () => {
+    render(Page, { data: buildData() });
 
-    const { getByLabelText } = renderPage();
+    const languageSelect = screen.getByRole('combobox') as HTMLSelectElement;
+    expect(within(languageSelect).getByRole('option', { name: 'English' })).toBeInTheDocument();
+    expect(within(languageSelect).getByRole('option', { name: 'Polski' })).toBeInTheDocument();
 
-    const input = getByLabelText('Default bar weight (kg)') as HTMLInputElement;
-    expect(input.value).toBe('20');
+    // Worker health panel (status badge and last check) and D1 panel (statistics).
+    expect(screen.getAllByText('ok')).toHaveLength(2);
+    expect(screen.getByText(new Date(HEALTH_TIMESTAMP).toLocaleString())).toBeInTheDocument();
+    expect(screen.getByText('Contests: 0')).toBeInTheDocument();
+    expect(screen.getByText('Competitors: 3')).toBeInTheDocument();
+    expect(screen.getByText('Registrations: 4')).toBeInTheDocument();
 
-    await fireEvent.change(input, { target: { value: '25' } });
-    await tick();
+    // KV backups panel with the stored backup and its actions.
+    expect(screen.getByText('Cloudflare KV Backups')).toBeInTheDocument();
+    expect(screen.getByText('Stored backups: 1')).toBeInTheDocument();
+    expect(screen.getByText(BACKUP.id)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Restore' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Download JSON' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
 
-    await waitFor(() => {
-      expect(patchMock).toHaveBeenCalledWith('/settings/competition', { defaultBarWeight: 25 });
-    });
+    // Danger zone.
+    expect(screen.getByRole('button', { name: 'Reset Database' })).toBeInTheDocument();
 
-    await waitFor(() => expect(input.value).toBe('20'));
-    expect(toastMock.error).toHaveBeenCalled();
+    // The removed UI/competition settings must not come back.
+    expect(screen.queryByText('Show weights by default')).toBeNull();
+    expect(screen.queryByText('Default bar weight (kg)')).toBeNull();
+    expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+
+  it('changes the language through changeLanguage', async () => {
+    render(Page, { data: buildData() });
+
+    const languageSelect = screen.getByRole('combobox');
+    await fireEvent.change(languageSelect, { target: { value: 'pl' } });
+
+    await waitFor(() => expect(changeLanguageMock).toHaveBeenCalledWith('pl'));
+    await waitFor(() => expect(toastMock.success).toHaveBeenCalledWith(en.settings_page.language_updated));
+  });
+
+  it('reports an offline restore as an error and never as a success', async () => {
+    postMock.mockRejectedValue(offlineError());
+
+    render(Page, { data: buildData() });
+    await fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
+
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalled());
+    expect(window.confirm).toHaveBeenCalled();
+    expect(postMock).toHaveBeenCalledWith(`/system/backups/${BACKUP.id}/restore`);
+    // The catalog has no settings_page.offline_error entry yet, so the key itself
+    // is what the toast carries; once it is translated the assertion follows.
+    expect(toastMock.error).toHaveBeenCalledWith(get(translateStore)('settings_page.offline_error'));
+    expect(toastMock.success).not.toHaveBeenCalled();
+  });
+
+  it('reports an offline database reset as an error and never as a success', async () => {
+    postMock.mockRejectedValue(offlineError());
+
+    render(Page, { data: buildData() });
+    await fireEvent.click(screen.getByRole('button', { name: 'Reset Database' }));
+
+    await waitFor(() =>
+      expect(postMock).toHaveBeenCalledWith('/system/database/reset', {
+        confirm: 'YES_I_WANT_TO_RESET_THE_DATABASE',
+      }),
+    );
+    await waitFor(() => expect(toastMock.error).toHaveBeenCalled());
+    expect(toastMock.error).toHaveBeenCalledWith(get(translateStore)('settings_page.offline_error'));
+    expect(toastMock.success).not.toHaveBeenCalled();
   });
 });

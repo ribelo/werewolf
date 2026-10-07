@@ -1,386 +1,181 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
+import { isRedirect } from '@sveltejs/kit';
 
-// Mock the load functions
-vi.mock('../+page.ts', () => ({
-  load: vi.fn(() => Promise.resolve({
-    contests: [
-      {
-        id: '1',
-        name: 'Test Contest',
-        date: '2024-01-01',
-        location: 'Test Location',
-        discipline: 'Powerlifting',
-        status: 'active',
-        mensBarWeight: 20,
-        womensBarWeight: 15
-      }
-    ],
-    error: null,
-    apiBase: 'http://localhost:8787'
-  }))
-}));
+import { apiClient } from '$lib/api';
+import { load as loadNewContest } from '../contests/new/+page';
+import { load as loadContestPage } from '../contests/[id]/+page';
+import { load as loadSettings, type SettingsPageData } from '../settings/+page';
+import type { BackupSummary, DatabaseInfo, Settings, SystemHealth } from '$lib/types';
 
-vi.mock('../settings/+page.ts', () => ({
-  load: vi.fn(() => Promise.resolve({
-    settings: {
-      language: 'en',
-      ui: { theme: 'light', showWeights: true },
-      competition: { defaultBarWeight: 20 },
-      database: { backupEnabled: true, autoBackupInterval: 24 }
+/**
+ * Route-loader smoke tests.
+ *
+ * These exercise the real load functions with a stubbed transport. The larger
+ * loader contracts live in their own suites (dashboard-loader,
+ * contest-layout-loader, results-page-loader, login-loader); this file covers
+ * the settings page, the contest wizard entry and the contests/[id] redirect.
+ */
+
+type StubFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+
+interface Stub {
+  data: unknown;
+  error: string | null;
+  status?: number;
+}
+
+function ok(data: unknown): Stub {
+  return { data, error: null };
+}
+
+/** The API answered non-2xx with an error envelope; the client throws. */
+function httpError(error: string): Stub {
+  return { data: null, error, status: 500 };
+}
+
+function createFetch(stubs: Record<string, Stub | Error>): {
+  fetchImpl: StubFetch;
+  requested: string[];
+} {
+  const requested: string[] = [];
+  const fetchImpl: StubFetch = async (input) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    const { pathname } = new URL(url);
+    requested.push(pathname);
+
+    const stub = stubs[pathname];
+    if (stub === undefined) throw new Error(`unexpected request: ${pathname}`);
+    if (stub instanceof Error) throw stub;
+
+    return new Response(JSON.stringify({ data: stub.data, error: stub.error }), {
+      status: stub.status ?? 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  };
+  return { fetchImpl, requested };
+}
+
+type SettingsLoadEvent = Parameters<typeof loadSettings>[0];
+
+function settingsEvent(fetchImpl: StubFetch): SettingsLoadEvent {
+  return { fetch: fetchImpl } as unknown as SettingsLoadEvent;
+}
+
+function runSettingsLoad(event: SettingsLoadEvent): Promise<SettingsPageData> {
+  return loadSettings(event) as unknown as Promise<SettingsPageData>;
+}
+
+type ContestLoadEvent = Parameters<typeof loadContestPage>[0];
+
+function contestEvent(id: string): ContestLoadEvent {
+  return { params: { id } } as unknown as ContestLoadEvent;
+}
+
+const SETTINGS: Settings = {
+  language: 'pl',
+  ui: { theme: 'light', showWeights: false },
+  competition: { defaultBarWeight: 20, defaultPlateSet: [] },
+  database: { backupEnabled: true, autoBackupInterval: 24 },
+};
+
+const HEALTH: SystemHealth = { status: 'ok', timestamp: '2026-01-01T10:00:00.000Z' };
+
+const DATABASE: DatabaseInfo = {
+  status: 'ok',
+  stats: { contests: 2, competitors: 8, registrations: 11 },
+};
+
+const BACKUPS: BackupSummary = {
+  backups: [
+    {
+      id: 'backup-1.json',
+      timestamp: '2026-01-01T09:00:00.000Z',
+      size: 1024,
+      recordCounts: { contests: 2, competitors: 8, registrations: 11, attempts: 33, results: 0 },
     },
-    health: { status: 'healthy', timestamp: '2024-01-01T00:00:00Z' },
-    database: { status: 'healthy', stats: { contests: 1, competitors: 10, registrations: 5 } },
-    error: null,
-    apiBase: 'http://localhost:8787'
-  }))
-}));
+  ],
+  total: 1,
+  timestamp: '2026-01-01T09:00:00.000Z',
+};
 
-vi.mock('../contests/new/+page.ts', () => ({
-  load: vi.fn(() => Promise.resolve({
-    apiBase: 'http://localhost:8787'
-  }))
-}));
+const SETTINGS_ROUTES = {
+  '/settings': ok(SETTINGS),
+  '/system/health': ok(HEALTH),
+  '/system/database': ok(DATABASE),
+  '/system/backups': ok(BACKUPS),
+};
 
-vi.mock('../contests/[id]/+page.ts', () => ({
-  load: vi.fn(() => Promise.resolve({
-    contest: {
-      id: '1',
-      name: 'Test Contest',
-      date: '2024-01-01',
-      location: 'Test Location',
-      discipline: 'Powerlifting',
-      status: 'InProgress',
-      mensBarWeight: 20,
-      womensBarWeight: 15,
-      registrations: [
-        {
-          id: 'reg1',
-          competitorId: 'comp1',
-          firstName: 'John',
-          lastName: 'Doe',
-          birthDate: '1990-01-01',
-          gender: 'M',
-          club: 'Test Club',
-          city: 'Test City',
-          weightClassId: 'wc1',
-          weightClassName: 'Do 82.5 kg',
-          ageCategoryId: 'ac1',
-          ageCategoryName: 'Senior (24-39)',
-          bodyweight: 85.5,
-          rackHeightSquat: 45,
-          rackHeightBench: 40,
-          reshelCoefficient: 1.0,
-          mcculloughCoefficient: 1.0,
-          competitionOrder: 1
-        }
-      ]
-    },
-    registrations: [
-      {
-        id: 'reg1',
-        competitorId: 'comp1',
-        firstName: 'John',
-        lastName: 'Doe',
-        birthDate: '1990-01-01',
-        gender: 'M',
-        club: 'Test Club',
-        city: 'Test City',
-        weightClassId: 'wc1',
-        weightClassName: 'Do 82.5 kg',
-        ageCategoryId: 'ac1',
-        ageCategoryName: 'Senior (24-39)',
-        bodyweight: 85.5,
-        rackHeightSquat: 45,
-        rackHeightBench: 40,
-        reshelCoefficient: 1.0,
-        mcculloughCoefficient: 1.0,
-        competitionOrder: 1
-      }
-    ],
-    attempts: [
-      {
-        id: 'attempt1',
-        registrationId: 'reg1',
-        liftType: 'Squat',
-        attemptNumber: 1,
-        weight: 200.0,
-        status: 'Successful',
-        judge1Decision: true,
-        judge2Decision: true,
-        judge3Decision: true,
-        notes: 'Good lift',
-        firstName: 'John',
-        lastName: 'Doe',
-        competitorName: 'John Doe',
-        competitionOrder: 1,
-        timestamp: '2024-01-01T10:00:00Z',
-        createdAt: '2024-01-01T10:00:00Z',
-        updatedAt: '2024-01-01T10:00:00Z'
-      },
-      {
-        id: 'attempt2',
-        registrationId: 'reg1',
-        liftType: 'Bench',
-        attemptNumber: 1,
-        weight: 150.0,
-        status: 'Pending',
-        judge1Decision: null,
-        judge2Decision: null,
-        judge3Decision: null,
-        firstName: 'John',
-        lastName: 'Doe',
-        competitorName: 'John Doe',
-        competitionOrder: 1,
-        timestamp: '2024-01-01T10:05:00Z',
-        createdAt: '2024-01-01T10:05:00Z',
-        updatedAt: '2024-01-01T10:05:00Z'
-      }
-    ],
-    currentAttempt: {
-      contest: {
-        id: '1',
-        name: 'Test Contest',
-        date: '2024-01-01',
-        location: 'Test Location',
-        discipline: 'Powerlifting',
-        status: 'InProgress',
-        mensBarWeight: 20,
-        womensBarWeight: 15
-      },
-      attempt: {
-        id: 'attempt2',
-        registrationId: 'reg1',
-        liftType: 'Bench',
-        attemptNumber: 1,
-        weight: 150.0,
-        status: 'Pending',
-        competitionOrder: 1,
-        updatedAt: '2024-01-01T10:05:00Z'
-      },
-      registration: {
-        id: 'reg1',
-        contestId: '1',
-        bodyweight: 85.5,
-        weightClassId: 'wc1',
-        weightClassName: 'Do 82.5 kg',
-        ageCategoryId: 'ac1',
-        ageCategoryName: 'Senior (24-39)',
-        rackHeightSquat: 45,
-        rackHeightBench: 40,
-        competitionOrder: 1
-      },
-      competitor: {
-        id: 'comp1',
-        firstName: 'John',
-        lastName: 'Doe',
-        gender: 'M',
-        club: 'Test Club',
-        city: 'Test City',
-        competitionOrder: 1,
-        birthDate: '1990-01-01'
-      },
-      attemptsByLift: {
-        Squat: [
-          { id: 'attempt1', liftType: 'Squat', attemptNumber: 1, weight: 200, status: 'Successful', updatedAt: '2024-01-01T10:00:00Z' }
-        ],
-        Bench: [
-          { id: 'attempt2', liftType: 'Bench', attemptNumber: 1, weight: 150, status: 'Pending', updatedAt: '2024-01-01T10:05:00Z' }
-        ],
-        Deadlift: []
-      },
-      platePlan: {
-        plates: [],
-        exact: true,
-        total: 150,
-        increment: 2.5,
-        targetWeight: 150,
-        barWeight: 20,
-        weightToLoad: 130
-      },
-      highlight: {
-        liftType: 'Bench',
-        attemptNumber: 1
-      }
-    },
-    resultsOpen: [],
-    resultsAge: [],
-    resultsWeight: [],
-    plateSets: [],
-    barWeights: { mensBarWeight: 20, womensBarWeight: 15, clampWeight: 2.5 },
-    backupsSummary: { backups: [], total: 0, timestamp: '2024-01-01T00:00:00Z' },
-    referenceData: {
-      weightClasses: [{ id: 'wc1', name: '85kg', gender: 'M', minWeight: 82.5, maxWeight: 87.5 }],
-      ageCategories: [{ id: 'ac1', name: 'Senior (24-39)', minAge: 24, maxAge: 39 }]
-    },
-    error: null,
-    apiBase: 'http://localhost:8787',
-    contestId: '1'
-  }))
-}));
+describe('settings page loader', () => {
+  it('returns every panel when all four requests succeed', async () => {
+    const { fetchImpl, requested } = createFetch(SETTINGS_ROUTES);
 
-describe('Routes smoke test', () => {
-  it('should export load functions', async () => {
-    // This test ensures the load functions are properly exported
-    const { load: contestsLoad } = await import('../+page.ts');
-    const { load: settingsLoad } = await import('../settings/+page.ts');
-    const { load: contestDetailLoad } = await import('../contests/[id]/+page.ts');
-    const { load: contestWizardLoad } = await import('../contests/new/+page.ts');
+    const data = await runSettingsLoad(settingsEvent(fetchImpl));
 
-    expect(typeof contestsLoad).toBe('function');
-    expect(typeof settingsLoad).toBe('function');
-    expect(typeof contestDetailLoad).toBe('function');
-    expect(typeof contestWizardLoad).toBe('function');
+    expect(Object.keys(data).sort()).toEqual(
+      [
+        'apiBase',
+        'backups',
+        'backupsError',
+        'database',
+        'databaseError',
+        'health',
+        'healthError',
+        'settings',
+        'settingsError',
+      ].sort(),
+    );
+    expect(requested.sort()).toEqual(
+      ['/settings', '/system/health', '/system/database', '/system/backups'].sort(),
+    );
+
+    expect(data.settings).toEqual(SETTINGS);
+    expect(data.settingsError).toBeNull();
+    expect(data.health).toEqual(HEALTH);
+    expect(data.healthError).toBeNull();
+    expect(data.database).toEqual(DATABASE);
+    expect(data.databaseError).toBeNull();
+    expect(data.backups).toEqual(BACKUPS);
+    expect(data.backupsError).toBeNull();
+    expect(data.apiBase).toBe(apiClient.baseUrl);
   });
 
-  it('should load contest data with all required fields', async () => {
-    const { load } = await import('../contests/[id]/+page.ts');
-    const data = await load({ params: { id: '1' } } as any);
+  it('keeps the reachable panels when an auxiliary request fails', async () => {
+    const { fetchImpl } = createFetch({
+      ...SETTINGS_ROUTES,
+      '/system/health': httpError('health unavailable'),
+      '/system/database': new Error('database offline'),
+    });
 
-    // Verify contest data structure
-    expect(data.contest).toBeDefined();
-    expect(data.contest?.name).toBe('Test Contest');
-    expect(data.registrations).toBeDefined();
-    expect(Array.isArray(data.registrations)).toBe(true);
+    const data = await runSettingsLoad(settingsEvent(fetchImpl));
 
-    // Verify registration includes all API fields
-    const registration = data.registrations[0];
-    expect(registration).toBeDefined();
-    if (registration) {
-      expect(registration.rackHeightSquat).toBe(45);
-      expect(registration.rackHeightBench).toBe(40);
-      expect(registration.reshelCoefficient).toBe(1.0);
-      expect(registration.mcculloughCoefficient).toBe(1.0);
-    }
+    expect(data.settings).toEqual(SETTINGS);
+    expect(data.settingsError).toBeNull();
+    expect(data.backups).toEqual(BACKUPS);
+    expect(data.backupsError).toBeNull();
 
-    // Verify attempts data
-    expect(Array.isArray(data.attempts)).toBe(true);
-    expect(data.attempts.length).toBeGreaterThan(0);
-    const firstAttempt = data.attempts[0]!;
-    expect(firstAttempt.firstName).toBe('John');
-    expect(firstAttempt.competitorName).toBe('John Doe');
-    expect(firstAttempt.competitionOrder).toBe(1);
-
-    // Verify reference data
-    expect(data.referenceData).toBeDefined();
-    expect(data.referenceData.weightClasses).toBeDefined();
-    expect(data.referenceData.ageCategories).toBeDefined();
+    expect(data.health).toBeNull();
+    expect(data.healthError).toBe('health unavailable');
+    expect(data.database).toBeNull();
+    expect(data.databaseError).toBe('database offline');
   });
+});
 
-  it('should load settings data correctly', async () => {
-    const { load } = await import('../settings/+page.ts');
-    const data = await load({ fetch: vi.fn() } as any);
+describe('contest wizard loader', () => {
+  it('exposes the API base used by the create form', async () => {
+    const data = await loadNewContest();
 
-    // Verify settings structure
-    expect(data.settings).toBeDefined();
-    expect(data.settings?.language).toBe('en');
-    expect(data.settings?.ui).toBeDefined();
-    expect(data.settings?.competition).toBeDefined();
-    expect(data.settings?.database).toBeDefined();
-
-    // Verify health and database data
-    expect(data.health).toBeDefined();
-    expect(data.database).toBeDefined();
+    expect(data.apiBase).toBe(apiClient.baseUrl);
   });
+});
 
-  it('should load contests list correctly', async () => {
-    const { load } = await import('../+page.ts');
-    const data = await load({ fetch: vi.fn() } as any);
+describe('contests/[id] page loader', () => {
+  it('redirects to the desk tab of the contest', async () => {
+    const thrown: unknown = await Promise.resolve(loadContestPage(contestEvent('contest-42'))).then(
+      () => null,
+      (error: unknown) => error,
+    );
 
-    // Verify contests structure
-    expect(Array.isArray(data.contests)).toBe(true);
-    expect(data.contests.length).toBeGreaterThan(0);
-
-    // Verify contest has required fields
-    const contest = data.contests[0];
-    expect(contest).toBeDefined();
-    if (contest) {
-      expect(contest.id).toBeDefined();
-      expect(contest.name).toBeDefined();
-      expect(contest.date).toBeDefined();
-      expect(contest.status).toBeDefined();
-    }
-  });
-
-  it('should load attempts data with proper structure', async () => {
-    const { load } = await import('../contests/[id]/+page.ts');
-    const data = await load({ params: { id: '1' } } as any);
-
-    // Verify attempts data structure
-    expect(Array.isArray(data.attempts)).toBe(true);
-    expect(data.attempts.length).toBe(2);
-
-    // Verify attempt has required fields
-    const attempt = data.attempts[0];
-    expect(attempt).toBeDefined();
-    if (attempt) {
-      expect(attempt.id).toBeDefined();
-      expect(attempt.registrationId).toBeDefined();
-      expect(['Squat', 'Bench', 'Deadlift']).toContain(attempt.liftType);
-      expect([1, 2, 3]).toContain(attempt.attemptNumber);
-      expect(typeof attempt.weight).toBe('number');
-      expect(['Pending', 'Successful', 'Failed']).toContain(attempt.status);
-      expect(attempt.createdAt).toBeDefined();
-      expect(attempt.updatedAt).toBeDefined();
-    }
-
-    // Verify current attempt structure
-    expect(data.currentAttempt).toBeDefined();
-    if (data.currentAttempt) {
-      expect(data.currentAttempt.attempt.id).toBeDefined();
-      expect(data.currentAttempt.competitor.firstName).toBeDefined();
-      expect(data.currentAttempt.highlight.liftType).toBeDefined();
-      expect(data.currentAttempt.highlight.attemptNumber).toBeDefined();
-      expect(typeof data.currentAttempt.attempt.weight).toBe('number');
-      expect(data.currentAttempt.attempt.status).toBeDefined();
-    }
-  });
-
-  it('should handle empty attempts data gracefully', async () => {
-    // Test that empty attempts array is handled properly
-    const { load } = await import('../contests/[id]/+page.ts');
-
-    // Create a version with empty attempts
-    const mockLoad = vi.fn(() => Promise.resolve({
-      contest: {
-        id: '1',
-        name: 'Test Contest',
-        date: '2024-01-01',
-        location: 'Test Location',
-        discipline: 'Powerlifting',
-        status: 'InProgress',
-        mensBarWeight: 20,
-        womensBarWeight: 15,
-        registrations: []
-      },
-      registrations: [],
-      attempts: [],
-      currentAttempt: null,
-      resultsOpen: [],
-      resultsAge: [],
-      resultsWeight: [],
-      plateSets: [],
-    barWeights: { mensBarWeight: 20, womensBarWeight: 15, clampWeight: 2.5 },
-      backupsSummary: { backups: [], total: 0, timestamp: '2024-01-01T00:00:00Z' },
-      referenceData: {
-        weightClasses: [],
-        ageCategories: []
-      },
-      error: null,
-      apiBase: 'http://localhost:8787',
-      contestId: '1'
-    }));
-
-    vi.mocked(load).mockImplementation(mockLoad);
-
-    const data = await load({ params: { id: '1' } } as any);
-
-    expect(Array.isArray(data.attempts)).toBe(true);
-    expect(data.attempts.length).toBe(0);
-    expect(data.currentAttempt).toBeNull();
-  });
-
-  it('should have proper route structure', () => {
-    // Test that the route files exist and are properly structured
-    expect(true).toBe(true); // Placeholder - would check file structure in a real test
+    expect(isRedirect(thrown)).toBe(true);
+    expect(thrown).toMatchObject({ status: 307, location: '/contests/contest-42/desk' });
   });
 });

@@ -32,6 +32,7 @@ describe('RegistrationDetailModal', () => {
   reshelCoefficient: 0.945,
   mcculloughCoefficient: 1.0,
   competitionOrder: 7,
+  lifts: ['Squat', 'Bench', 'Deadlift'],
   };
 
   const weightClasses: WeightClass[] = [
@@ -56,7 +57,8 @@ describe('RegistrationDetailModal', () => {
     });
 
     expect(screen.getByText('Profile')).toBeInTheDocument();
-    expect(screen.getByText('Alex Strong')).toBeInTheDocument();
+    // The app renders competitors last-name-first (formatCompetitorName).
+    expect(screen.getByText('Strong Alex')).toBeInTheDocument();
     expect(screen.getByText('Do 100 kg')).toBeInTheDocument();
     expect(screen.getByText('Senior (24-39)')).toBeInTheDocument();
     expect(screen.getByText('0.945')).toBeInTheDocument();
