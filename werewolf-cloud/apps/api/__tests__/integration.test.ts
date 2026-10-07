@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { Miniflare } from 'miniflare';
 import type { D1Database, KVNamespace } from '@cloudflare/workers-types';
 import { createApp } from '../src/app';
 import type { WerewolfEnvironment } from '../src/env';
@@ -8,6 +7,8 @@ import reshelMenData from '../../../packages/domain/src/data/reshel-men.json';
 import reshelWomenData from '../../../packages/domain/src/data/reshel-women.json';
 import mccData from '../../../packages/domain/src/data/mccullough.json';
 import { resetCoefficientCaches } from '../src/services/coefficients';
+import { createTestEnv, wipeDatabase, type TestEnvironment } from './helpers/d1';
+import type { LiveRecorder } from './helpers/live';
 
 
 const DEFAULT_SETTINGS = {
@@ -28,51 +29,30 @@ const DEFAULT_SETTINGS = {
 };
 
 describe('Werewolf API – integration (Miniflare + D1)', () => {
-  let mf: Miniflare;
+  let testEnv: TestEnvironment;
   let db: D1Database;
   let kv: KVNamespace;
   let app: ReturnType<typeof createApp>;
   let env: WerewolfEnvironment;
+  let live: LiveRecorder;
 
   beforeAll(async () => {
-    mf = new Miniflare({
-      modules: true,
-      compatibilityDate: '2024-01-01',
-      script: 'export default { async fetch() { return new Response("ok") } }',
-      d1Databases: { DB: ':memory:' },
-      kvNamespaces: ['KV'],
-    });
-
-    db = await mf.getD1Database('DB');
-    kv = await mf.getKVNamespace('KV');
-
-    await applyMigrations(db);
-
-    app = createApp();
-    env = {
-      DB: db,
-      KV: kv,
-      ENV: 'test',
-      ADMIN_PASSWORD: 'test-password',
-    } as WerewolfEnvironment;
-
-    (env as any)['werewolf-contest-room'] = {
-      idFromName: () => ({
-        name: 'test-room',
-      }),
-      get: () => ({
-        fetch: async () => new Response(null, { status: 204 }),
-      }),
-    };
+    testEnv = await createTestEnv();
+    db = testEnv.db;
+    kv = testEnv.kv;
+    app = testEnv.app;
+    env = testEnv.env;
+    live = testEnv.live;
   });
 
   afterAll(async () => {
-    await mf.dispose();
+    await testEnv.dispose();
   });
 
   beforeEach(async () => {
     await resetDatabase(db);
     await clearKv(kv);
+    live.reset();
     resetCoefficientCaches();
   });
 
@@ -214,6 +194,55 @@ describe('Werewolf API – integration (Miniflare + D1)', () => {
       mensBarWeight: 20,
       womensBarWeight: 15,
     });
+  });
+
+  it('records published live events against the contest room', async () => {
+    const contestRes = await createContest(app, env, {
+      name: 'Live Recording Meet',
+      date: '2025-06-01',
+      location: 'Gdańsk',
+      discipline: 'Powerlifting',
+    });
+    const contestId = (await contestRes.json()).data.id as string;
+
+    const competitorRes = await app.request('http://localhost/competitors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        firstName: 'Live',
+        lastName: 'Recorder',
+        birthDate: '1990-05-05',
+        gender: 'Male',
+      }),
+    }, env);
+    expect(competitorRes.status).toBe(201);
+    const competitorId = (await competitorRes.json()).data.id as string;
+
+    const registrationRes = await app.request(`http://localhost/contests/${contestId}/registrations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contestId,
+        competitorId,
+        bodyweight: 88.0,
+      }),
+    }, env);
+    expect(registrationRes.status).toBe(201);
+    const registrationId = (await registrationRes.json()).data.id as string;
+
+    const event = live
+      .eventsFor(contestId)
+      .find((entry) => entry.type === 'registration.upserted');
+
+    expect(event).toMatchObject({
+      roomId: contestId,
+      contestId,
+      type: 'registration.upserted',
+      pathname: '/broadcast',
+      payload: { id: registrationId, contestId },
+    });
+    expect(Date.parse(event?.timestamp ?? '')).not.toBeNaN();
+    expect(live.eventsFor('some-other-contest')).toHaveLength(0);
   });
 
   it('auto-classifies registrations based on competitor data', async () => {
@@ -414,7 +443,7 @@ describe('Werewolf API – integration (Miniflare + D1)', () => {
     expect(attemptsRes.status).toBe(200);
     const attemptsBody = await attemptsRes.json();
     expect(Array.isArray(attemptsBody.data)).toBe(true);
-    expect(attemptsBody.data.every((attempt: any) => attempt.liftType !== 'Squat')).toBe(true);
+    expect(attemptsBody.data.every((attempt: { liftType: string }) => attempt.liftType !== 'Squat')).toBe(true);
 
     const squatAfterUpdate = await app.request(`http://localhost/contests/${contestId}/registrations/${registrationId}/attempts`, {
       method: 'POST',
@@ -745,8 +774,116 @@ describe('Werewolf API – integration (Miniflare + D1)', () => {
 
     const contestRegistrationsRes = await app.request(`http://localhost/contests/${contestId}/registrations`, {}, env);
     const contestRegistrationsJson = await contestRegistrationsRes.json();
-    const entry = contestRegistrationsJson.data.find((row: any) => row.id === registrationId);
+    const entry = contestRegistrationsJson.data.find((row: { id: string }) => row.id === registrationId);
     expect(entry.labels).toEqual(['uniformed', 'vip']);
+  });
+
+  // Regression: dropping a tag must also drop it from the labels of every
+  // registration in the contest, without writing a registrations.updated_at
+  // column (the real schema has none, so such a write fails with a D1 error).
+  it('DELETE /contests/:id/tags/:tagId also drops the tag from registration labels', async () => {
+    const contestRes = await createContest(app, env, {
+      name: 'Tag Removal Meet',
+      date: '2025-08-08',
+      location: 'Lublin',
+      discipline: 'Powerlifting',
+    });
+    const contestId = (await contestRes.json()).data.id as string;
+
+    const tagRes = await app.request(`http://localhost/contests/${contestId}/tags`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label: 'vip' }),
+    }, env);
+    expect(tagRes.status).toBe(201);
+    const tagId = (await tagRes.json()).data.id as string;
+
+    const competitorRes = await app.request('http://localhost/competitors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        firstName: 'Halina',
+        lastName: 'Tag',
+        birthDate: '1988-04-04',
+        gender: 'Female',
+      }),
+    }, env);
+    expect(competitorRes.status).toBe(201);
+    const competitorId = (await competitorRes.json()).data.id as string;
+
+    const registrationRes = await app.request(`http://localhost/contests/${contestId}/registrations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contestId, competitorId, bodyweight: 66.0 }),
+    }, env);
+    expect(registrationRes.status).toBe(201);
+    const registrationId = (await registrationRes.json()).data.id as string;
+
+    const labelRes = await app.request(`http://localhost/registrations/${registrationId}/labels`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ labels: ['vip'] }),
+    }, env);
+    expect(labelRes.status).toBe(200);
+
+    const deleteRes = await app.request(`http://localhost/contests/${contestId}/tags/${tagId}`, {
+      method: 'DELETE',
+    }, env);
+    expect(deleteRes.status).toBe(200);
+
+    const registrationRes2 = await app.request(`http://localhost/registrations/${registrationId}`, {}, env);
+    expect((await registrationRes2.json()).data.labels).toEqual([]);
+  });
+
+  // Regression: narrowing a contest to bench-only clears the now-stale squat
+  // rack height, without writing the nonexistent registrations.updated_at column.
+  it('PATCH /contests/:id clears squat rack heights when the squat is dropped', async () => {
+    const contestRes = await createContest(app, env, {
+      name: 'Lift Sync Meet',
+      date: '2025-08-09',
+      location: 'Gdynia',
+      discipline: 'Powerlifting',
+    });
+    const contestId = (await contestRes.json()).data.id as string;
+
+    const competitorRes = await app.request('http://localhost/competitors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        firstName: 'Sylwia',
+        lastName: 'Squat',
+        birthDate: '1991-01-15',
+        gender: 'Female',
+      }),
+    }, env);
+    expect(competitorRes.status).toBe(201);
+    const competitorId = (await competitorRes.json()).data.id as string;
+
+    const registrationRes = await app.request(`http://localhost/contests/${contestId}/registrations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contestId,
+        competitorId,
+        bodyweight: 68.0,
+        rackHeightSquat: 7,
+      }),
+    }, env);
+    expect(registrationRes.status).toBe(201);
+    const registrationId = (await registrationRes.json()).data.id as string;
+
+    const patchRes = await app.request(`http://localhost/contests/${contestId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ competitionType: 'Bench' }),
+    }, env);
+    expect(patchRes.status).toBe(200);
+
+    const registrationRow = await db
+      .prepare('SELECT rack_height_squat FROM registrations WHERE id = ?')
+      .bind(registrationId)
+      .first();
+    expect(registrationRow?.rack_height_squat).toBeNull();
   });
 
   it('includes clamp weight when calculating plate plans', async () => {
@@ -880,8 +1017,8 @@ describe('Werewolf API – integration (Miniflare + D1)', () => {
     expect(initialBody.data.ageCategories.length).toBeGreaterThan(0);
     expect(initialBody.data.weightClasses.length).toBeGreaterThan(0);
 
-    const t16 = initialBody.data.ageCategories.find((entry: any) => entry.code === 'T16');
-    const female52 = initialBody.data.weightClasses.find((entry: any) => entry.gender === 'Female' && entry.code === 'F_52');
+    const t16 = initialBody.data.ageCategories.find((entry: { code: string }) => entry.code === 'T16');
+    const female52 = initialBody.data.weightClasses.find((entry: { gender: string; code: string }) => entry.gender === 'Female' && entry.code === 'F_52');
 
     expect(t16).toBeTruthy();
     expect(female52).toBeTruthy();
@@ -936,9 +1073,9 @@ describe('Werewolf API – integration (Miniflare + D1)', () => {
 
     expect(updateBody.data.ageCategories).toHaveLength(2);
     expect(updateBody.data.weightClasses).toHaveLength(2);
-    const legends = updateBody.data.ageCategories.find((entry: any) => entry.code === 'LEGENDS');
+    const legends = updateBody.data.ageCategories.find((entry: { code: string }) => entry.code === 'LEGENDS');
     expect(legends).toMatchObject({ name: 'Legends 60+', minAge: 60, maxAge: null });
-    const superMale = updateBody.data.weightClasses.find((entry: any) => entry.code === 'M_SUPER');
+    const superMale = updateBody.data.weightClasses.find((entry: { code: string }) => entry.code === 'M_SUPER');
     expect(superMale).toMatchObject({ minWeight: 140, maxWeight: null, gender: 'Male' });
   });
 
@@ -1326,230 +1463,8 @@ async function createContest(
   }, env);
 }
 
-const TEST_SCHEMA = `
-CREATE TABLE contests (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    date TEXT NOT NULL,
-    location TEXT NOT NULL,
-    discipline TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'Setup',
-    federation_rules TEXT,
-    competition_type TEXT,
-    organizer TEXT,
-    notes TEXT,
-    is_archived BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    mens_bar_weight REAL NOT NULL DEFAULT 20,
-    womens_bar_weight REAL NOT NULL DEFAULT 15,
-    clamp_weight REAL NOT NULL DEFAULT 2.5,
-    active_flight TEXT
-);
-
-CREATE TABLE contest_tags (
-    id TEXT PRIMARY KEY,
-    contest_id TEXT NOT NULL,
-    label TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE UNIQUE INDEX contest_tags_contest_label_idx
-    ON contest_tags (contest_id, label);
-
-CREATE TABLE competitors (
-    id TEXT PRIMARY KEY,
-    first_name TEXT NOT NULL,
-    last_name TEXT NOT NULL,
-    birth_date TEXT NOT NULL,
-    gender TEXT NOT NULL,
-    club TEXT,
-    city TEXT,
-    notes TEXT,
-    photo_data BLOB,
-    photo_format TEXT,
-    photo_metadata TEXT,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE registrations (
-    id TEXT PRIMARY KEY,
-    contest_id TEXT NOT NULL,
-    competitor_id TEXT NOT NULL,
-    age_category_id TEXT NOT NULL,
-    weight_class_id TEXT,
-    bodyweight REAL,
-    reshel_coefficient REAL,
-    mccullough_coefficient REAL,
-    rack_height_squat INTEGER,
-    rack_height_bench INTEGER,
-    flight_code TEXT,
-    flight_order INTEGER,
-    labels TEXT NOT NULL DEFAULT '[]',
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE registration_lifts (
-    registration_id TEXT NOT NULL,
-    lift_type TEXT NOT NULL CHECK(lift_type IN ('Squat','Bench','Deadlift')),
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (registration_id, lift_type),
-    FOREIGN KEY (registration_id) REFERENCES registrations(id) ON DELETE CASCADE
-);
-
-CREATE TABLE attempts (
-    id TEXT PRIMARY KEY,
-    registration_id TEXT NOT NULL,
-    lift_type TEXT NOT NULL,
-    attempt_number INTEGER NOT NULL,
-    weight REAL NOT NULL,
-    status TEXT NOT NULL DEFAULT 'Pending',
-    timestamp TEXT,
-    judge1_decision BOOLEAN,
-    judge2_decision BOOLEAN,
-    judge3_decision BOOLEAN,
-    notes TEXT,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE results (
-    id TEXT PRIMARY KEY,
-    registration_id TEXT NOT NULL,
-    contest_id TEXT NOT NULL,
-    best_bench REAL DEFAULT 0,
-    best_squat REAL DEFAULT 0,
-    best_deadlift REAL DEFAULT 0,
-    total_weight REAL NOT NULL DEFAULT 0,
-    coefficient_points REAL NOT NULL DEFAULT 0,
-    squat_points REAL NOT NULL DEFAULT 0,
-    bench_points REAL NOT NULL DEFAULT 0,
-    deadlift_points REAL NOT NULL DEFAULT 0,
-    place_open INTEGER,
-    place_in_age_class INTEGER,
-    place_in_weight_class INTEGER,
-    is_disqualified BOOLEAN NOT NULL DEFAULT FALSE,
-    disqualification_reason TEXT,
-    broke_record BOOLEAN NOT NULL DEFAULT FALSE,
-    record_type TEXT,
-    calculated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE current_lifts (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
-    contest_id TEXT NOT NULL,
-    registration_id TEXT NOT NULL,
-    lift_type TEXT NOT NULL,
-    attempt_number INTEGER NOT NULL,
-    weight REAL NOT NULL,
-    timer_start TEXT,
-    timer_duration INTEGER NOT NULL DEFAULT 60,
-    rack_height INTEGER,
-    is_active BOOLEAN NOT NULL DEFAULT FALSE,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE contest_states (
-    contest_id TEXT PRIMARY KEY,
-    status TEXT NOT NULL DEFAULT 'Setup',
-    current_lift TEXT,
-    current_round INTEGER NOT NULL DEFAULT 1,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE plate_sets (
-    contest_id TEXT NOT NULL,
-    plate_weight REAL NOT NULL,
-    quantity INTEGER NOT NULL,
-    color TEXT,
-    PRIMARY KEY (contest_id, plate_weight)
-);
-
-CREATE TABLE reshel_coefficients (
-    gender TEXT NOT NULL,
-    bodyweight_kg REAL NOT NULL,
-    coefficient REAL NOT NULL,
-    source TEXT NOT NULL,
-    retrieved_at TEXT NOT NULL,
-    notes TEXT,
-    PRIMARY KEY (gender, bodyweight_kg)
-);
-
-CREATE TABLE mccullough_coefficients (
-    age INTEGER PRIMARY KEY,
-    coefficient REAL NOT NULL,
-    source TEXT NOT NULL,
-    retrieved_at TEXT NOT NULL,
-    notes TEXT
-);
-
-CREATE TABLE contest_age_categories (
-    id TEXT PRIMARY KEY,
-    contest_id TEXT NOT NULL,
-    code TEXT NOT NULL,
-    name TEXT NOT NULL,
-    min_age INTEGER,
-    max_age INTEGER,
-    sort_order INTEGER NOT NULL DEFAULT 0,
-    metadata TEXT
-);
-
-CREATE TABLE contest_weight_classes (
-    id TEXT PRIMARY KEY,
-    contest_id TEXT NOT NULL,
-    gender TEXT NOT NULL,
-    code TEXT NOT NULL,
-    name TEXT NOT NULL,
-    min_weight REAL,
-    max_weight REAL,
-    sort_order INTEGER NOT NULL DEFAULT 0,
-    metadata TEXT
-);
-
-CREATE TABLE settings (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
-    data TEXT NOT NULL DEFAULT '{}',
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-`;
-
-async function applyMigrations(db: D1Database) {
-  const statements = TEST_SCHEMA
-    .split(/;\s*(?:\n|$)/)
-    .map((stmt) => stmt.trim())
-    .filter((stmt) => stmt.length > 0);
-
-  for (const sql of statements) {
-    await db.prepare(sql).run();
-  }
-}
-
 async function resetDatabase(db: D1Database) {
-  const tables = [
-    'results',
-    'attempts',
-    'registration_lifts',
-    'current_lifts',
-    'registrations',
-    'contest_states',
-    'plate_sets',
-    'reshel_coefficients',
-    'mccullough_coefficients',
-    'contest_weight_classes',
-    'contest_age_categories',
-    'contest_tags',
-    'competitors',
-    'contests',
-    'settings'
-  ];
-
-  for (const table of tables) {
-    await db.prepare(`DELETE FROM ${table}`).run();
-  }
+  await wipeDatabase(db);
 
   await db.prepare(
     `INSERT INTO settings (id, data, created_at, updated_at)
