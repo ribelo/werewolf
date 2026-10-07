@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 const sortOrderSchema = z.number().int().min(0).max(999).default(0);
-const optionalJsonSchema = z.record(z.any()).nullable().optional();
+const optionalJsonSchema = z.record(z.unknown()).nullable().optional();
 
 const ageCategoryCoreFields = {
   code: z.string().trim().min(1).max(32),

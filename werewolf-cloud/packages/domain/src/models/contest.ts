@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { dateOnlySchema } from '../utils/date';
 
 export const contestStatusSchema = z.enum(['Setup', 'InProgress', 'Paused', 'Completed']);
 export type ContestStatus = z.infer<typeof contestStatusSchema>;
@@ -9,7 +10,7 @@ export type Discipline = z.infer<typeof disciplineSchema>;
 export const contestSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1),
-  date: z.string().regex(/\d{4}-\d{2}-\d{2}/, 'date must be YYYY-MM-DD'),
+  date: dateOnlySchema('date must be YYYY-MM-DD'),
   location: z.string().min(1),
   discipline: disciplineSchema,
   status: contestStatusSchema.default('Setup'),

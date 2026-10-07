@@ -7,6 +7,7 @@ import {
   DEFAULT_CONTEST_AGE_CATEGORY_TEMPLATES,
   DEFAULT_CONTEST_WEIGHT_CLASS_TEMPLATES,
 } from '../constants/categories';
+import { ageOnDate } from '../utils/date';
 
 type Gender = 'male' | 'female';
 
@@ -142,26 +143,6 @@ export function resolveReshelCoefficient(
   return match?.coefficient ?? 1.0;
 }
 
-function calculateAge(birthDate: string, contestDate: string): number | null {
-  try {
-    const birth = new Date(birthDate);
-    const contest = new Date(contestDate);
-
-    if (Number.isNaN(birth.getTime()) || Number.isNaN(contest.getTime())) {
-      return null;
-    }
-
-    const yearDiff = contest.getFullYear() - birth.getFullYear();
-    const monthDiff = contest.getMonth() - birth.getMonth();
-    const isBeforeBirthday = monthDiff < 0 || (monthDiff === 0 && contest.getDate() < birth.getDate());
-
-    return isBeforeBirthday ? yearDiff - 1 : yearDiff;
-  } catch (error) {
-    console.warn('Failed to calculate age:', error);
-    return null;
-  }
-}
-
 export function resolveMcCulloughCoefficient(
   age: number,
   entries: McCulloughEntry[] = DEFAULT_MCCULLOUGH_ENTRIES,
@@ -209,7 +190,7 @@ export function determineAgeCategory(
     ?? 'SENIOR';
 
   try {
-    const age = calculateAge(birthDate, contestDate);
+    const age = ageOnDate(birthDate, contestDate);
     if (age === null) {
       return fallback;
     }
@@ -276,7 +257,7 @@ export function calculateReshelCoefficient(bodyweight: number, gender: string): 
  * Calculate McCullough coefficient based on age (WUAP masters table for 40+, 1.0 below 40).
  */
 export function calculateMcCulloughCoefficient(birthDate: string, contestDate: string): number {
-  const age = calculateAge(birthDate, contestDate);
+  const age = ageOnDate(birthDate, contestDate);
   if (age === null) {
     return 1.0;
   }

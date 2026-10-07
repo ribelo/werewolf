@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { dateOnlySchema } from '../utils/date';
 
 export const genderSchema = z.enum(['Male', 'Female']);
 export type Gender = z.infer<typeof genderSchema>;
@@ -7,7 +8,7 @@ export const competitorSchema = z.object({
   id: z.string().uuid(),
   firstName: z.string().min(1),
   lastName: z.string().min(1),
-  birthDate: z.string().regex(/\d{4}-\d{2}-\d{2}/, 'birthDate must be YYYY-MM-DD'),
+  birthDate: dateOnlySchema('birthDate must be YYYY-MM-DD'),
   gender: genderSchema,
   club: z.string().nullable().optional(),
   city: z.string().nullable().optional(),

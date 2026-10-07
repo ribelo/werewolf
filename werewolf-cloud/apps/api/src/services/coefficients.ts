@@ -1,10 +1,9 @@
 import type { D1Database } from '@cloudflare/workers-types';
+import { ageOnDate } from '@werewolf/domain/utils';
 import {
   type ReshelEntry,
   type ReshelTables,
   type McCulloughEntry,
-  calculateMcCulloughCoefficient as calculateMcCulloughFromDefaults,
-  calculateReshelCoefficient as calculateReshelFromDefaults,
   getDefaultMcCulloughEntries,
   getDefaultReshelTables,
   resolveMcCulloughCoefficient,
@@ -118,25 +117,14 @@ export async function getMcCulloughCoefficient(
     await loadMcCulloughEntries(db);
   }
 
-  const age = calculateAge(birthDate, contestDate);
+  const age = ageOnDate(birthDate, contestDate);
 
   if (age === null) {
-    return calculateMcCulloughFromDefaults(birthDate, contestDate);
+    // The Masters table only applies to real calendar dates.
+    return 1.0;
   }
 
   return resolveMcCulloughCoefficient(age, mccCache.entries);
-}
-
-function calculateAge(birthDate: string, contestDate: string): number | null {
-  const birth = new Date(birthDate);
-  const contest = new Date(contestDate);
-  if (Number.isNaN(birth.getTime()) || Number.isNaN(contest.getTime())) {
-    return null;
-  }
-  const yearDiff = contest.getFullYear() - birth.getFullYear();
-  const monthDiff = contest.getMonth() - birth.getMonth();
-  const isBeforeBirthday = monthDiff < 0 || (monthDiff === 0 && contest.getDate() < birth.getDate());
-  return isBeforeBirthday ? yearDiff - 1 : yearDiff;
 }
 
 export function resetCoefficientCaches(): void {
@@ -144,12 +132,4 @@ export function resetCoefficientCaches(): void {
   reshelCache.tables = defaultReshel;
   mccCache.loaded = false;
   mccCache.entries = defaultMcc;
-}
-
-export function fallbackReshelCoefficient(bodyweight: number, gender: string): number {
-  return calculateReshelFromDefaults(bodyweight, gender);
-}
-
-export function fallbackMcCulloughCoefficient(birthDate: string, contestDate: string): number {
-  return calculateMcCulloughFromDefaults(birthDate, contestDate);
 }
