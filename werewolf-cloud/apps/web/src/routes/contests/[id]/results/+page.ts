@@ -2,12 +2,33 @@ import type { PageLoad } from './$types';
 import { apiClient } from '$lib/api';
 import type { ContestRankingEntry } from '$lib/types';
 
+type ContestRankings = {
+  open: ContestRankingEntry[];
+  age: ContestRankingEntry[];
+  weight: ContestRankingEntry[];
+};
+
+/** One shape for every outcome, so the page data always has the same keys. */
+type ResultsPageData = {
+  resultsOpen: ContestRankingEntry[];
+  resultsAge: ContestRankingEntry[];
+  resultsWeight: ContestRankingEntry[];
+  error: string | null;
+};
+
 export const load: PageLoad = async ({ params, fetch }) => {
   const contestId = params.id;
 
+  const unavailable = (error: string | null): ResultsPageData => ({
+    resultsOpen: [],
+    resultsAge: [],
+    resultsWeight: [],
+    error,
+  });
+
   try {
     // Prefer new aggregated endpoint; fall back to three requests if unavailable
-    const bundle = await apiClient.get<{ open: ContestRankingEntry[]; age: ContestRankingEntry[]; weight: ContestRankingEntry[] }>(
+    const bundle = await apiClient.get<ContestRankings>(
       `/contests/${contestId}/results/rankings/all`,
       fetch,
     );
@@ -17,6 +38,7 @@ export const load: PageLoad = async ({ params, fetch }) => {
         resultsOpen: bundle.data.open ?? [],
         resultsAge: bundle.data.age ?? [],
         resultsWeight: bundle.data.weight ?? [],
+        error: null,
       };
     }
 
@@ -28,20 +50,17 @@ export const load: PageLoad = async ({ params, fetch }) => {
     ]);
 
     const error = openRes.error || ageRes.error || weightRes.error || null;
-    if (error) throw new Error(error);
+    if (error) {
+      return unavailable(error);
+    }
 
     return {
       resultsOpen: openRes.data ?? [],
       resultsAge: ageRes.data ?? [],
       resultsWeight: weightRes.data ?? [],
+      error: null,
     };
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return {
-      resultsOpen: [],
-      resultsAge: [],
-      resultsWeight: [],
-      error: message,
-    };
+    return unavailable(err instanceof Error ? err.message : 'Unknown error');
   }
 };

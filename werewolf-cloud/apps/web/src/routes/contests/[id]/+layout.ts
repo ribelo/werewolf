@@ -1,6 +1,5 @@
 import type { LayoutLoad } from './$types';
-import { apiClient } from '$lib/api';
-import type { ApiResponse } from '$lib/api';
+import { apiClient, type ApiResponse } from '$lib/api';
 import type {
   ContestDetail,
   Registration,
@@ -14,97 +13,112 @@ import type {
   ContestTag,
 } from '$lib/types';
 
+/**
+ * The complete data contract for every contest tab. Both the happy path and
+ * every failure path return this exact shape, so child pages never have to
+ * deal with missing keys.
+ */
+type ContestLayoutData = {
+  contest: ContestDetail | null;
+  registrations: Registration[];
+  attempts: Attempt[];
+  currentAttempt: CurrentAttemptBundle | null;
+  referenceData: ReferenceData;
+  contestTags: ContestTag[];
+  plateSets: ContestPlateSetEntry[];
+  barWeights: ContestBarWeights | null;
+  backupsSummary: BackupSummary | null;
+  error: string | null;
+  apiBase: string;
+  contestId: string;
+};
+
+type Settled<T> = { value: T | null; error: string | null };
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : 'Unknown error';
+}
+
+function emptyReferenceData(): ReferenceData {
+  return { weightClasses: [], ageCategories: [] };
+}
+
+/**
+ * Turns one request into a value-or-unavailable pair and never rejects, so a
+ * failing side request (plate sets, bar weights, backups summary, ...) cannot
+ * take the whole contest desk down with it.
+ */
+async function settle<T>(request: Promise<ApiResponse<T>>): Promise<Settled<T>> {
+  try {
+    const response = await request;
+    return { value: response.data ?? null, error: response.error ?? null };
+  } catch (error) {
+    return { value: null, error: errorMessage(error) };
+  }
+}
+
 export const load: LayoutLoad = async ({ params, fetch }) => {
   const contestId = params.id;
 
+  const unavailable = (error: string | null): ContestLayoutData => ({
+    contest: null,
+    registrations: [],
+    attempts: [],
+    currentAttempt: null,
+    referenceData: emptyReferenceData(),
+    contestTags: [],
+    plateSets: [],
+    barWeights: null,
+    backupsSummary: null,
+    error,
+    apiBase: apiClient.baseUrl,
+    contestId,
+  });
+
   try {
-    const results = await Promise.allSettled([
-      apiClient.get<ContestDetail>(`/contests/${contestId}`, fetch),
-      apiClient.get<Registration[]>(`/contests/${contestId}/registrations`, fetch),
-      apiClient.get<Attempt[]>(`/contests/${contestId}/attempts`, fetch),
-      apiClient.get<CurrentAttemptBundle | null>(`/contests/${contestId}/attempts/current`, fetch),
-      apiClient.get<ContestCategories>(`/contests/${contestId}/categories`, fetch),
-      apiClient.get<ContestTag[]>(`/contests/${contestId}/tags`, fetch),
-      apiClient.get<ContestPlateSetEntry[]>(`/contests/${contestId}/platesets`, fetch),
-      apiClient.get<ContestBarWeights>(`/contests/${contestId}/platesets/barweights`, fetch),
-      apiClient.get<BackupSummary>(`/system/backups`, fetch),
-    ]) as [
-      PromiseSettledResult<ApiResponse<ContestDetail>>,
-      PromiseSettledResult<ApiResponse<Registration[]>>,
-      PromiseSettledResult<ApiResponse<Attempt[]>>,
-      PromiseSettledResult<ApiResponse<CurrentAttemptBundle | null>>,
-      PromiseSettledResult<ApiResponse<ContestCategories>>,
-      PromiseSettledResult<ApiResponse<ContestTag[]>>,
-      PromiseSettledResult<ApiResponse<ContestPlateSetEntry[]>>,
-      PromiseSettledResult<ApiResponse<ContestBarWeights>>,
-      PromiseSettledResult<ApiResponse<BackupSummary>>,
-    ];
+    const [
+      contest,
+      registrations,
+      attempts,
+      currentAttempt,
+      categories,
+      tags,
+      plateSets,
+      barWeights,
+      backups,
+    ] = await Promise.all([
+      settle(apiClient.get<ContestDetail>(`/contests/${contestId}`, fetch)),
+      settle(apiClient.get<Registration[]>(`/contests/${contestId}/registrations`, fetch)),
+      settle(apiClient.get<Attempt[]>(`/contests/${contestId}/attempts`, fetch)),
+      settle(apiClient.get<CurrentAttemptBundle | null>(`/contests/${contestId}/attempts/current`, fetch)),
+      settle(apiClient.get<ContestCategories>(`/contests/${contestId}/categories`, fetch)),
+      settle(apiClient.get<ContestTag[]>(`/contests/${contestId}/tags`, fetch)),
+      settle(apiClient.get<ContestPlateSetEntry[]>(`/contests/${contestId}/platesets`, fetch)),
+      settle(apiClient.get<ContestBarWeights>(`/contests/${contestId}/platesets/barweights`, fetch)),
+      settle(apiClient.get<BackupSummary>(`/system/backups`, fetch)),
+    ]);
 
-    const unwrap = <T>(result: PromiseSettledResult<ApiResponse<T>>) => {
-      if (result.status === 'fulfilled') {
-        return {
-          data: result.value.data ?? null,
-          error: result.value.error,
-        };
-      }
-      return {
-        data: null,
-        error: result.reason instanceof Error ? result.reason.message : 'Unknown error',
-      };
-    };
-
-    const contestResponse = unwrap(results[0]);
-    const regResponse = unwrap(results[1]);
-    const attemptsResponse = unwrap(results[2]);
-    const currentAttemptResponse = unwrap(results[3]);
-    const categoriesResponse = unwrap(results[4]);
-    const tagsResponse = unwrap(results[5]);
-    const plateSetsResponse = unwrap(results[6]);
-    const barWeightsResponse = unwrap(results[7]);
-    const backupsResponse = unwrap(results[8]);
-
-    const referenceData: ReferenceData = categoriesResponse.data ?? {
-      weightClasses: [],
-      ageCategories: [],
-    };
-
-    const combinedError = contestResponse.error
-      || regResponse.error
-      || attemptsResponse.error
-      || currentAttemptResponse.error
-      || categoriesResponse.error
-      || tagsResponse.error
-      || plateSetsResponse.error
-      || barWeightsResponse.error
-      || backupsResponse.error
-      || null;
+    // Only the contest itself can make the tab an error page; every auxiliary
+    // request degrades to its unavailable value instead.
+    if (contest.error || !contest.value) {
+      return unavailable(contest.error);
+    }
 
     return {
-      contest: contestResponse.data,
-      registrations: regResponse.data ?? [],
-      attempts: attemptsResponse.data ?? [],
-      currentAttempt: currentAttemptResponse.data,
-      referenceData,
-      contestTags: tagsResponse.data ?? [],
-      plateSets: plateSetsResponse.data ?? [],
-      barWeights: barWeightsResponse.data,
-      backupsSummary: backupsResponse.data,
-      error: combinedError,
+      contest: contest.value,
+      registrations: registrations.value ?? [],
+      attempts: attempts.value ?? [],
+      currentAttempt: currentAttempt.value,
+      referenceData: categories.value ?? emptyReferenceData(),
+      contestTags: tags.value ?? [],
+      plateSets: plateSets.value ?? [],
+      barWeights: barWeights.value,
+      backupsSummary: backups.value,
+      error: null,
       apiBase: apiClient.baseUrl,
       contestId,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return {
-      contest: null,
-      registrations: [],
-      attempts: [],
-      currentAttempt: null,
-      referenceData: { weightClasses: [], ageCategories: [] },
-      contestTags: [],
-      error: message,
-      apiBase: apiClient.baseUrl,
-      contestId,
-    };
+    return unavailable(errorMessage(error));
   }
 };

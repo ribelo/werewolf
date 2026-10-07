@@ -8,7 +8,10 @@
 
   export let data: LayoutData;
 
-  const basePath = `/contests/${data.contestId}`;
+  // The layout instance is reused when the contest id changes, so the base
+  // path - and with it every tab link - must be recomputed from the new data.
+  let basePath = '';
+  $: basePath = `/contests/${data.contestId}`;
   $: activeContestLifts = deriveContestLifts(data.contest ?? null, data.attempts ?? []) as LiftKind[];
   $: tabs = (
     [

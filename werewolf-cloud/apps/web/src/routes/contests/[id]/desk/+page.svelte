@@ -6,4 +6,7 @@
   export let params: Record<string, string> = {};
 </script>
 
-<ContestManagerView {data} {params} view="desk" />
+<!-- ContestManagerView captures its data once: remount it when the contest changes. -->
+{#key data.contestId}
+  <ContestManagerView {data} {params} view="desk" />
+{/key}
