@@ -3,14 +3,14 @@
 ## Project Structure & Module Organization
 - `werewolf-cloud/` is the active codebase: Cloudflare Worker API in `apps/api`, web client in `apps/web`, shared domain logic in `packages/domain`, and workspace configs inside `config/`.
 - Legacy Tauri app under `src/` and `src-tauri/` is historical reference only; do not treat it as a constraint for new design.
-- Shared docs, RFCs, and roadmaps live in `docs/`, `REQUIREMENTS_AND_ROADMAP.md`, and `JULES_DEVELOPMENT_PLAN.md`.
-- Utility scripts (`check.sh`, `dev.sh`, `scripts/`) support reproducing issues in the legacy Tauri bundle.
+- Docs live in `werewolf-cloud/docs/` (architecture, API, deployment, SPEC, BACKLOG); `docs/` holds the user guide and FAQ.
+- Root `check.sh`/`dev.sh` belong to the legacy Tauri bundle; cloud scripts live in `werewolf-cloud/scripts/`.
 
 ## Build, Test, and Development Commands
 - `cd werewolf-cloud && bun install` – install/upgrade workspace dependencies.
 - `cd werewolf-cloud && bun run dev` – launch Cloudflare Workers dev server (wrangler + Miniflare state).
 - `cd werewolf-cloud/apps/web && bun run dev` – run the SvelteKit UI against the local API.
-- `cd werewolf-cloud && bun run check` – typecheck (`tsc`), lint (`oxlint`), and execute Vitest suites.
+- `cd werewolf-cloud && bun run check` – the single gate (CI runs exactly this): `tsc --build`, oxlint (no explicit `any`), root Vitest (domain, API, scripts), then web `svelte-check` and web Vitest.
 - Legacy maintenance: `bun install && bun run tauri dev` plus `./check.sh` reproduce desktop regressions when needed.
 
 ## Coding Style & Naming Conventions
@@ -33,8 +33,8 @@
 - Live operations stay simple: finish all complex setup before the meet; give operators one obvious flow during competition with minimal clicks.
 
 ## Testing Guidelines
-- `bun run test` (or `bunx vitest --config config/vitest.config.ts`) runs the authoritative suite with coverage.
-- UI specs live in `apps/web/src/routes/__tests__`; reset IndexedDB mocks in `beforeEach` to avoid cross-test bleed.
+- `bun run test` runs domain/API/scripts tests (root config); web tests run with `cd apps/web && bun run test:run` (jsdom, SvelteKit stubs in `src/test/stubs`). API tests build D1 from the real migrations via `apps/api/__tests__/helpers/d1.ts`.
+- UI specs live in `apps/web/src/routes/__tests__` or next to modules; reset IndexedDB mocks in `beforeEach` to avoid cross-test bleed.
 - Only run `cargo test` inside `src-tauri` for legacy patches; new feature coverage belongs in the cloud workspace.
 
 ## Commit & Pull Request Guidelines

@@ -20,9 +20,10 @@ werewolf/
 ├── werewolf-cloud/
 │   ├── apps/api/        # Cloudflare Worker (Hono)
 │   ├── apps/web/        # SvelteKit frontend
+│   ├── packages/domain/ # Shared pure domain logic
 │   ├── migrations/      # D1 SQL migrations
-│   └── docs/            # Cloud-specific docs (lives in root docs/)
-├── docs/                # Combined documentation set
+│   └── docs/            # Architecture, API, deployment, SPEC, BACKLOG
+├── docs/                # User guide and FAQ
 ├── src/, src-tauri/     # Legacy Tauri desktop app (read-only reference)
 └── …
 ```
@@ -38,14 +39,14 @@ Do not modify the legacy Tauri project unless explicitly asked. All active work 
 - **Frontend Dev**: `PUBLIC_API_BASE=http://127.0.0.1:8787 bun run dev` from `werewolf-cloud/apps/web`
 - **Migrations**: `bunx wrangler d1 migrations apply werewolf-d1-dev --local --config wrangler.dev.toml`
 
-Always run `bun run check`, `bun run test`, and `bun run test:run` before committing. Use the Nix flake (`nix develop`) when you need a hermetic shell with Wrangler pre-installed.
+Always run `bun run check` (from `werewolf-cloud/`) before committing; it covers typecheck, lint, API/domain/scripts tests and web svelte-check + tests. Use the Nix flake (`nix develop`) when you need a hermetic shell with Wrangler pre-installed.
 
 ## Coding Standards
 
 1. **Type Safety**
    - Prefer explicit generics to suppressing types.
    - No `any`. Use `unknown` + narrowing if necessary.
-   - Keep shared types in `apps/web/src/lib/types.ts` and `apps/api/src/types/` aligned.
+   - Keep web types in `apps/web/src/lib/types.ts` aligned with API payloads; shared models live in `packages/domain`.
 
 2. **Internationalisation**
    - All user-facing copy must use `$_('key', { values })` (templates) or `t('key')` (scripts).
@@ -58,9 +59,9 @@ Always run `bun run check`, `bun run test`, and `bun run test:run` before commit
    - Use Zod schemas in `apps/api` for validation.
 
 4. **Realtime**
-   - Publish events with `publishAttemptEvent` helpers.
-   - Update `apps/web/src/lib/ui/contest-store.ts` reducers when new event types are introduced.
-   - In dev, expect WebSocket disconnects; maintain polling fallback.
+   - Publish events with `publishEvent` (`apps/api/src/live/publish.ts`); payloads are typed per event in `live/types.ts`.
+   - Add new event types to the web union in `apps/web/src/lib/types.ts` and handle them in consumers.
+   - On reconnect and while polling, clients fetch a full `snapshot`; there is no event replay.
 
 5. **Testing**
    - API changes require Vitest coverage in `apps/api/__tests__`.
@@ -68,8 +69,8 @@ Always run `bun run check`, `bun run test`, and `bun run test:run` before commit
    - Include Playwright scripts when debugging complex UI flows (manual invocation only).
 
 6. **Docs**
-   - Update relevant documentation (`docs/post-migration-action-plan.md`, `docs/ARCHITECTURE.md`, etc.) as part of each change.
-   - Record outstanding work in `docs/OPEN-ISSUES.md` if not resolved immediately.
+   - Update relevant documentation (`werewolf-cloud/docs/architecture.md`, `api-endpoints.md`) as part of each change.
+   - Record outstanding work in `werewolf-cloud/docs/BACKLOG.md` if not resolved immediately.
 
 ## Common Workflows
 
@@ -81,18 +82,17 @@ Always run `bun run check`, `bun run test`, and `bun run test:run` before commit
 ### Applying Migrations
 ```bash
 # Local
-bunx wrangler@latest d1 migrations apply werewolf-d1-dev --local --config wrangler.dev.toml
+bunx wrangler d1 migrations apply werewolf-d1-dev --local --config wrangler.dev.toml
 
 # Remote prod
-bunx wrangler@latest d1 migrations apply werewolf-d1 --remote --env production --config wrangler.toml
+bunx wrangler d1 migrations apply werewolf-d1 --remote --env production --config wrangler.worker.toml
 ```
 
 ### Deploying
 ```bash
-bunx wrangler@latest deploy --env production --config wrangler.toml
-# Pages frontend
-cd werewolf-cloud/apps/web && bun run build
-# Upload via Cloudflare Pages UI or API
+cd werewolf-cloud
+bun run deploy:api   # Worker, wrangler.worker.toml
+bun run deploy:web   # Pages frontend
 ```
 
 ## Legacy Notes
@@ -102,5 +102,5 @@ cd werewolf-cloud/apps/web && bun run build
 
 ## Contact
 
-If instructions conflict, defer to `docs/post-migration-action-plan.md` and ping the maintainers. Keep change logs concise and always note verification steps.
+If instructions conflict, defer to `werewolf-cloud/docs/SPEC.md` and ping the maintainers. Keep change logs concise and always note verification steps.
 

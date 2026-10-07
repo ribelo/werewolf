@@ -3,8 +3,8 @@
 ## Internationalization setup
 - Default UI language is Polish (`pl`). English (`en`) is configured as the fallback locale.
 - Translation bundles live in `apps/web/src/lib/i18n/locales/`. Every user-facing string must have entries in **both** `en.json` and `pl.json`. Keep keys alphabetised where practical.
-- `setupI18n()` registers locales and must be awaited before rendering. The root load function (`apps/web/src/routes/+layout.ts`) already awaits it during SSR; client code should keep calling `setupI18n()` when switching users/locales.
-- To change the active language at runtime call `changeLanguage(code)`. This updates `svelte-i18n`, persists the preference in `localStorage`, and PATCHes `/settings/language` so the backend remembers it. Wrap calls in try/catch and surface failures via the toast system.
+- `setupI18n()` registers locales and must be awaited before rendering. The root load function (`apps/web/src/routes/+layout.js`, SSR disabled) already awaits it; client code should keep calling `setupI18n()` when switching users/locales.
+- To change the active language at runtime call `changeLanguage(code)`. This updates `svelte-i18n`, persists the preference in `localStorage`, and PUTs `/settings/language` so the backend remembers it. Wrap calls in try/catch and surface failures via the toast system.
 - When adding a new locale:
   1. Drop a `xx.json` file next to the existing bundles.
   2. Add `{ code: 'xx', label: '…' }` to `availableLocales` in `apps/web/src/lib/i18n/index.ts`.
@@ -14,13 +14,11 @@
 ## Rendering guidelines
 - Use `$format` (`$_('key', { values: { … } })`) from `svelte-i18n` for interpolated strings.
 - Server builds now suppress missing-key crashes by returning an empty string—still, ensure every key exists to keep the UI readable.
-- Keep the root layout exports (`params`, `errors`, etc.) intact; they prevent Svelte compiler warnings under strict mode.
-- **Do not remove or rename the `params` export** on any `+page.svelte` / `+layout.svelte`. SvelteKit passes it automatically and will throw runtime warnings if the prop is missing. Declare it via `export let params = {}` (or the specific type) and add `$: void params;` if unused. This applies to child pages as well (competitors, contest detail, contest wizard, settings, dashboard).
+- `src/lib/i18n/__tests__/catalog.test.ts` fails when a literal key is missing from either catalog or the catalogs drift apart.
 
 ## Verification checklist after i18n changes
-- `cd werewolf-cloud/apps/web && bun run check`
-- `bun run test:run`
-- Run the dev stack (`bun run dev` in repo root, `PUBLIC_API_BASE=http://127.0.0.1:8787 bun run dev` in `apps/web`) and confirm `/settings` renders without console errors.
+- `cd werewolf-cloud && bun run check`
+- Run the dev stack (`bun run dev` in `werewolf-cloud/`, `PUBLIC_API_BASE=http://127.0.0.1:8787 bun run dev` in `apps/web`) and confirm `/settings` renders without console errors.
 
 Keep this file current when flows change so the next agent can jump in without re-discovering these conventions.
 
