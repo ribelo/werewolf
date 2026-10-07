@@ -58,9 +58,10 @@ function buildSql(
 const USAGE = `Usage: bun run scripts/seed-coefficients.ts (--local | --remote) [options]
 
   --local            seed the local wrangler D1 state (wrangler.dev.toml)
-  --remote           seed the deployed D1 database (wrangler.worker.toml)
+  --remote           seed the deployed D1 database, looked up by name (needs Cloudflare
+                     credentials for wrangler, e.g. CLOUDFLARE_API_TOKEN)
   --database <name>  D1 database name (default: werewolf-d1-dev)
-  --config <path>    wrangler config file (default depends on --local/--remote)
+  --config <path>    wrangler config file (default: wrangler.dev.toml for --local, none for --remote)
   --env <name>       wrangler environment, --remote only`;
 
 /** Reads the value following a flag (for example `--database <name>`) or reports the flag as incomplete. */
@@ -152,7 +153,7 @@ async function main() {
   }
 
   const mode = options.mode;
-  const config = options.config ?? (mode === 'local' ? 'wrangler.dev.toml' : 'wrangler.worker.toml');
+  const config = options.config ?? (mode === 'local' ? 'wrangler.dev.toml' : undefined);
 
   const reshelMen = await loadJson<ReshelDataset>('packages/domain/src/data/reshel-men.json');
   const reshelWomen = await loadJson<ReshelDataset>('packages/domain/src/data/reshel-women.json');
@@ -169,8 +170,7 @@ async function main() {
       'd1',
       'execute',
       options.database,
-      '--config',
-      config,
+      ...(config === undefined ? [] : ['--config', config]),
       '--file',
       sqlPath,
       `--${mode}`,

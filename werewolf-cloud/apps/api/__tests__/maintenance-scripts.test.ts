@@ -205,7 +205,7 @@ describe.skipIf(bunPath.length === 0)('repository maintenance scripts', () => {
 
     const invocation = readFileSync(sandbox.logPath, 'utf8').trim();
     expect(invocation).toContain('d1 execute werewolf-d1');
-    expect(invocation).toContain('--config wrangler.worker.toml');
+    expect(invocation).not.toContain('--config');
     expect(invocation).toContain('--remote');
     expect(invocation).toContain('--env production');
     expect(invocation).not.toContain('--local');
@@ -227,18 +227,5 @@ describe.skipIf(bunPath.length === 0)('repository maintenance scripts', () => {
 
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('wrangler was not found on PATH');
-  });
-});
-
-describe('deploy.sh', () => {
-  it('uses the pinned workspace wrangler', () => {
-    const deploy = readFileSync(join(scriptsDir, 'deploy.sh'), 'utf8');
-
-    expect(deploy).not.toContain('wrangler@latest');
-    expect(deploy).not.toContain('npx ');
-    expect(deploy).toContain('bunx wrangler d1 migrations apply');
-    expect(deploy).toContain('bunx wrangler deploy');
-    expect(deploy).toContain('bunx wrangler pages secret put');
-    expect(deploy).toContain('bunx wrangler pages deploy');
   });
 });

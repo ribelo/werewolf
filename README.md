@@ -34,10 +34,13 @@ cd werewolf-cloud/apps/web && bun run check && bun run test:run   # svelte-check
 
 ```bash
 cd werewolf-cloud
-bun run deploy:api   # API Worker  (wrangler.worker.toml)
-bun run deploy:web   # Web UI      (Cloudflare Pages, wrangler.toml)
+bun run cloudflare-login   # one time: Alchemy profile 'werewolf' → Cloudflare OAuth (no API tokens)
+bun run plan               # preview
+bun run deploy             # build web, then Alchemy deploys D1 migrations, Worker and Pages
 ```
 
+Infrastructure is declared with Alchemy in `werewolf-cloud/alchemy.run.ts` and `werewolf-cloud/infra/stack.ts`;
+see [werewolf-cloud/docs/deployment.md](werewolf-cloud/docs/deployment.md).
 Cloudflare accounts, database/namespace IDs and credentials:
 [werewolf-cloud/docs/cloudflare-environments.md](werewolf-cloud/docs/cloudflare-environments.md).
 

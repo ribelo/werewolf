@@ -129,8 +129,7 @@ Client policy (`apps/web/src/lib/realtime.ts`):
 | Config | Purpose | D1 | KV |
 |--------|---------|----|----|
 | `wrangler.dev.toml` | local Worker (`bun run dev`) | `werewolf-d1-dev` | dev namespace |
-| `wrangler.worker.toml` | deployed API Worker (`env.production`) | `werewolf-d1` | production namespace |
-| `wrangler.toml` | Pages frontend, points at the Worker via `script_name = "werewolf"` | production | production |
+| `alchemy.run.ts` + `infra/stack.ts` | production (Alchemy stage `prod`): Worker `werewolf`, Pages project `werewolf` | `werewolf-d1` | `werewolf-kv` |
 
 ```bash
 cd werewolf-cloud
@@ -139,7 +138,7 @@ bun run dev                                    # worker + local D1/KV on :8787 (
 cd apps/web && PUBLIC_API_BASE=http://127.0.0.1:8787 bun run dev   # SvelteKit on :5173
 ```
 
-Deployment is `bun run deploy` (migrations → Worker → Pages); see [deployment.md](./deployment.md).
+Deployment is `bun run deploy` (Alchemy: migrations → Worker → Pages); see [deployment.md](./deployment.md).
 Provisioned ids and environments are documented in
 [cloudflare-environments.md](./cloudflare-environments.md).
 
@@ -151,7 +150,7 @@ Provisioned ids and environments are documented in
   `PATH`). It wipes the affected ranges and re-inserts:
   ```bash
   bun run scripts/seed-coefficients.ts --local                      # werewolf-d1-dev via wrangler.dev.toml
-  bun run scripts/seed-coefficients.ts --remote --database werewolf-d1 --env production
+  bun run scripts/seed-coefficients.ts --remote --database werewolf-d1   # needs wrangler credentials (see deployment.md)
   ```
 - After a reseed, call `POST /system/maintenance/recalculate-coefficients` and spot-check a few
   registrations with `GET /registrations/:id`.

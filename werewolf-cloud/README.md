@@ -12,12 +12,12 @@ werewolf-cloud/
 ├── apps/web/         # SvelteKit UI (organizer desk, displays, results)
 ├── packages/domain/  # shared pure domain logic and Zod models
 ├── config/           # workspace TypeScript/Vitest configuration
-├── migrations/       # D1 SQL migrations (applied by Wrangler)
-├── scripts/          # deploy, seed and import utilities
+├── migrations/       # D1 SQL migrations (local: Wrangler; production: Alchemy on deploy)
+├── scripts/          # seed and import utilities
 ├── docs/             # architecture, API, deployment, SPEC, BACKLOG
-├── wrangler.dev.toml     # local Worker (bun run dev)
-├── wrangler.worker.toml  # deployed API Worker
-└── wrangler.toml         # Pages frontend
+├── infra/            # Alchemy declaration of the production Cloudflare resources
+├── alchemy.run.ts    # Alchemy entry point (bun run plan / deploy)
+└── wrangler.dev.toml # local Worker (bun run dev)
 ```
 
 ## Getting started
@@ -51,14 +51,14 @@ PUBLIC_API_BASE=http://127.0.0.1:8787 bun run dev   # SvelteKit on http://127.0.
 | `bun run lint` | oxlint (the enforced rule is no explicit `any`). |
 | `bun run test` | Vitest with `config/vitest.config.ts` (domain, API and `scripts/**` tests). |
 | `bun run check` | Everything CI runs: `tsc --build`, oxlint, the root Vitest suites (domain, API, scripts), then `apps/web` svelte-check and its Vitest suite. |
-| `bun run deploy` | `scripts/deploy.sh`: remote migrations, then Worker and Pages. |
-| `bun run deploy:api` | Deploy only the Worker via `wrangler.worker.toml --env production`. |
-| `bun run deploy:web` | Build the SvelteKit bundle and deploy it to Cloudflare Pages. |
+| `bun run cloudflare-login` | One-time: connect the Alchemy profile `werewolf` to Cloudflare via OAuth (no API tokens). |
+| `bun run plan` | Preview the production deploy (`alchemy plan --stage prod`). |
+| `bun run deploy` | Build the web app, then `alchemy deploy --stage prod`: D1 migrations, Worker, Pages. See [docs/deployment.md](docs/deployment.md). |
 
 ## Authentication
 
 - `POST /auth/login` accepts the organizer password and sets an HttpOnly `werewolf_session` cookie.
-- Configure the password with `wrangler secret put ADMIN_PASSWORD` (repeat per environment).
+- Configure the password in `.dev.vars` locally and as `ADMIN_PASSWORD` in `werewolf-cloud/.env` for production (sent on every `bun run deploy`).
 - Sessions live in the `KV` binding for 14 days and are refreshed on use.
 - `POST /auth/logout` clears the cookie; `GET /auth/session` probes the session for the web client.
 - All GET routes (including displays) are public; every non-GET route requires the session.

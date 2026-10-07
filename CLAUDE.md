@@ -84,16 +84,18 @@ Always run `bun run check` (from `werewolf-cloud/`) before committing; it covers
 # Local
 bunx wrangler d1 migrations apply werewolf-d1-dev --local --config wrangler.dev.toml
 
-# Remote prod
-bunx wrangler d1 migrations apply werewolf-d1 --remote --env production --config wrangler.worker.toml
+# Production: applied automatically by `bun run deploy` (Alchemy, table __alchemy_migrations).
+# Do not apply production migrations with wrangler.
 ```
 
 ### Deploying
 ```bash
 cd werewolf-cloud
-bun run deploy:api   # Worker, wrangler.worker.toml
-bun run deploy:web   # Pages frontend
+bun run cloudflare-login   # one time: Alchemy profile 'werewolf' → Cloudflare OAuth (no API tokens)
+bun run plan               # preview the production changes
+bun run deploy             # build web, then Alchemy: D1 migrations, Worker, Pages
 ```
+Production is declared in `werewolf-cloud/alchemy.run.ts` + `werewolf-cloud/infra/stack.ts`; see `werewolf-cloud/docs/deployment.md`.
 
 ## Legacy Notes
 

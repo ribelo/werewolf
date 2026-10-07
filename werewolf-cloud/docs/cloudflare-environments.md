@@ -7,14 +7,17 @@ All commands are run from `werewolf-cloud/` unless noted.
 - **Worker name:** `werewolf`
 - **workers.dev URL:** `https://werewolf.r-krzywaznia-2c4.workers.dev`
 - **Entry file:** `apps/api/src/index.ts`
-- **Worker config:** `wrangler.worker.toml` (API Worker, D1 migrations, Durable Objects)
-- **Pages config:** `wrangler.toml` (web app, `pages_build_output_dir = ".svelte-kit/cloudflare"`)
+- **Production infrastructure:** Alchemy stack `Werewolf`, stage `prod` — `alchemy.run.ts` + `infra/stack.ts`
+  (Worker, D1 + migrations, KV, Durable Object, Pages project + upload)
+- **Pages project:** `werewolf` (production branch `master`, `https://werewolf.pages.dev`)
+- **Alchemy profile:** `werewolf` in `~/.alchemy-werewolf` (Cloudflare OAuth; account `2c42f4960f9c28a9235cac01483bd626`)
 - **Local dev config:** `wrangler.dev.toml`
 
 ## Data Stores
 - **D1 (production):** `werewolf-d1`
   - **Database ID:** `4e260168-4bc5-455a-a1e8-b9aa43844004`
-  - **Migrated via:** `werewolf-cloud/migrations`
+  - **Migrated via:** `werewolf-cloud/migrations`, applied by `bun run deploy` (Alchemy table `__alchemy_migrations`;
+    Wrangler's `d1_migrations` holds the frozen pre-Alchemy history 0001–0026)
 - **D1 (development):** `werewolf-d1-dev`
   - **Database ID:** `952d9b14-6236-4e59-8fc8-66b2df9128b7`
 - **KV Namespace (production):** `werewolf-kv`
@@ -31,22 +34,16 @@ bun run dev
 # Typecheck, lint and tests
 bun run check
 
-# Typecheck the workspace
-bun run typecheck
+# One-time: connect the Alchemy profile to Cloudflare (OAuth, opens the browser)
+bun run cloudflare-login
 
-# List and apply migrations in production (API Worker config, remote D1)
-bunx wrangler d1 migrations list werewolf-d1 --env production --remote --config wrangler.worker.toml
-bunx wrangler d1 migrations apply werewolf-d1 --env production --remote --config wrangler.worker.toml
-
-# Publish the Worker API
-bunx wrangler deploy --config wrangler.worker.toml --env production
-
-# Build and publish the web app to Cloudflare Pages (uses wrangler.toml)
-bun run deploy:web
+# Preview, then deploy production (D1 migrations, Worker, Pages)
+bun run plan
+bun run deploy
 ```
 
 Never edit a migration that has already been applied — add a new file to
-`werewolf-cloud/migrations/` instead.
+`werewolf-cloud/migrations/` instead. See [deployment.md](./deployment.md).
 
 ## Data Migration
 
@@ -105,16 +102,11 @@ sqlite3 ~/.local/share/werewolf/werewolf.db "SELECT COUNT(*) FROM contests;"
 
 > Keep this file up to date if new environments (staging, preview) or additional bindings (R2, Durable Objects) are created.
 
-## API Tokens & Environment Variables
+## Credentials & Environment Variables
 
-- Generate a Cloudflare API token with **Workers KV:Edit**, **D1:Edit**, **Workers R2:Edit**, and **Cloudflare Pages:Edit** on the `r-krzywaznia-2c4` account. Store it alongside the account ID in a local `.env` file (already gitignored), for example:
-  ```bash
-  # werewolf-cloud/.env — placeholders, fill in your own values
-  CLOUDFLARE_ACCOUNT_ID=your_account_id
-  CLOUDFLARE_API_TOKEN=your_api_token
-  ```
-- Load the credentials before running `wrangler` (either `source .env` or `dotenv -f .env -- wrangler <command>`):
-  ```bash
-  source .env
-  ```
-- Frontend env: supply `PUBLIC_API_BASE` (e.g. `PUBLIC_API_BASE=http://127.0.0.1:8787 bun run dev`). Set the same variable in Cloudflare Pages → Settings → Environment Variables, pointing to `https://werewolf.r-krzywaznia-2c4.workers.dev` (and staging values if needed).
+- Cloudflare access for deploys is the OAuth session of the Alchemy profile `werewolf` (`bun run cloudflare-login`).
+  There are no Cloudflare API tokens.
+- `werewolf-cloud/.env` (gitignored) holds `CLOUDFLARE_ACCOUNT_ID` and `ADMIN_PASSWORD` (the organizer password,
+  sent to the Worker on every deploy).
+- Frontend env: supply `PUBLIC_API_BASE` for local dev (e.g. `PUBLIC_API_BASE=http://127.0.0.1:8787 bun run dev`).
+  The production build falls back to `https://werewolf.r-krzywaznia-2c4.workers.dev` (`apps/web/src/lib/config.ts`).
