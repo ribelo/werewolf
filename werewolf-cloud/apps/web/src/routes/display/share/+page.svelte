@@ -6,7 +6,7 @@
   import { realtimeClient } from '$lib/realtime';
   import UnifiedContestTable from '$lib/components/UnifiedContestTable.svelte';
   import { buildUnifiedRows, sortUnifiedRows, deriveContestLifts, type UnifiedRow, type LiftKind } from '$lib/contest-table';
-  import type { Attempt, Registration, LiveEvent } from '$lib/types';
+  import type { Attempt, Registration, LiveEvent, RealtimeSnapshot } from '$lib/types';
   import { ChevronDown } from 'lucide-svelte';
 
   export let data: PageData;
@@ -151,6 +151,12 @@
         if (liveRegistrations.length !== before) {
           liveAttempts = liveAttempts.filter((attempt) => attempt.registrationId !== registrationId);
         }
+        break;
+      }
+      case 'snapshot': {
+        const snapshot = event.data as RealtimeSnapshot | undefined;
+        if (!snapshot || !Array.isArray(snapshot.attempts)) break;
+        liveAttempts = [...snapshot.attempts];
         break;
       }
       default:

@@ -17,6 +17,19 @@ interface CacheData {
   timestamp: number;
 }
 
+/**
+ * Partial cache write. Omitted fields keep their previously cached value;
+ * explicitly passing `null` clears a nullable field.
+ */
+export interface OfflineCacheWrite {
+  contest?: ContestDetail;
+  registrations?: Registration[];
+  attempts?: Attempt[];
+  currentAttempt?: CurrentAttemptBundle | null;
+  referenceData?: ReferenceData;
+  plateSets?: ContestPlateSetEntry[];
+}
+
 const CACHE_KEY_PREFIX = 'werewolf_cache_';
 const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
@@ -42,24 +55,29 @@ export class OfflineCache {
     return `${CACHE_KEY_PREFIX}${this.contestId}`;
   }
 
-  // Store data in localStorage
-  set(data: {
-    contest: ContestDetail;
-    registrations: Registration[];
-    attempts: Attempt[];
-    currentAttempt: CurrentAttemptBundle | null;
-    referenceData: ReferenceData;
-    plateSets?: ContestPlateSetEntry[];
-  }): void {
+  /**
+   * Merges data into the cache for this contest. Fields left out of `data`
+   * keep their previously cached value, so a screen that only fetches part of
+   * the contest state (for example the table screen, which never loads plate
+   * sets) cannot erase the rest of the cached snapshot. Pass `null`
+   * explicitly to clear a nullable field such as `currentAttempt`.
+   */
+  set(data: OfflineCacheWrite): void {
     const storage = getStorage();
     if (!storage) return;
 
     try {
-      const cacheData: CacheData = {
-        ...data,
-        plateSets: data.plateSets ?? [],
-        timestamp: Date.now(),
-      };
+      const previous = this.get();
+      const cacheData: Record<string, unknown> = { ...previous };
+
+      for (const [key, value] of Object.entries(data)) {
+        if (value !== undefined) {
+          cacheData[key] = value;
+        }
+      }
+
+      cacheData['plateSets'] = cacheData['plateSets'] ?? [];
+      cacheData['timestamp'] = Date.now();
 
       storage.setItem(this.getCacheKey(), JSON.stringify(cacheData));
       console.log('Data cached for contest:', this.contestId);

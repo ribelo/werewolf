@@ -8,20 +8,15 @@
     Attempt,
     LiveEvent,
     Registration,
-    CurrentAttempt,
-    CurrentAttemptBundle,
-    AttemptStatus,
-    AttemptNumber,
     SystemHealth,
   } from '$lib/types';
-  import { bundleToCurrentAttempt } from '$lib/current-attempt';
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
-  import { getAttemptStatusLabel, getAttemptStatusClass } from '$lib/ui/status';
-  import { buildRisingBarQueue } from '$lib/rising-bar';
   import UnifiedContestTable from '$lib/components/UnifiedContestTable.svelte';
-  import { buildUnifiedRows, deriveContestLifts, sortUnifiedRows, type UnifiedRow, type LiftKind } from '$lib/contest-table';
-  import { applyRegistrationFilters, type RegistrationFilterState, type WeightFilter, type AgeFilter, type LabelFilter, normaliseLabelKey, isFemaleGender, isMaleGender, LABEL_FILTER_PREFIX } from '$lib/filters/registrations';
+  import { deriveContestLifts, type LiftKind, type UnifiedRow } from '$lib/contest-table';
+  import { type RegistrationFilterState, type WeightFilter, type AgeFilter, type LabelFilter, normaliseLabelKey, isFemaleGender, isMaleGender, LABEL_FILTER_PREFIX } from '$lib/filters/registrations';
+  import { createTableLiveState, reduceTableLiveEvent, type TableLiveState } from './live-events';
+  import { buildDisplayTableRows } from './table-rows';
 import type { DisplayFilterSync, DisplayQrVisibility } from '@werewolf/domain';
   import { ChevronDown } from 'lucide-svelte';
   import FullScreenQR from '$lib/components/FullScreenQR.svelte';
@@ -64,10 +59,12 @@ import type { DisplayFilterSync, DisplayQrVisibility } from '@werewolf/domain';
   } = data;
 
   // Real-time state
-  let liveAttempts: Attempt[] = [...attempts];
-  let contestLifts: LiftKind[] = deriveContestLifts(contest, liveAttempts);
-  let liveCurrentBundle: CurrentAttemptBundle | null = currentAttempt;
-  let liveCurrentAttempt: CurrentAttempt | null = currentAttempt ? bundleToCurrentAttempt(currentAttempt) : null;
+  let liveState: TableLiveState = createTableLiveState(attempts, registrations, currentAttempt);
+  let contestLifts: LiftKind[] = deriveContestLifts(contest, liveState.attempts);
+  $: liveAttempts = liveState.attempts;
+  $: registrations = liveState.registrations;
+  $: liveCurrentBundle = liveState.currentBundle;
+  $: liveCurrentAttempt = liveState.currentAttempt;
   let lastUpdateTime: Date | null = null;
   let lastUpdateRelative = '—';
   let lastUpdateTimer: ReturnType<typeof setInterval> | null = null;
@@ -76,9 +73,6 @@ import type { DisplayFilterSync, DisplayQrVisibility } from '@werewolf/domain';
   let sortDirection: 'asc' | 'desc' = 'asc';
   let selectedLift: LiftKind | null = null;
   let visibleLifts: LiftKind[] = [...contestLifts];
-  let unifiedRows: UnifiedRow[] = [];
-  let sortedRows: UnifiedRow[] = [];
-  let registrationFilteredRows: UnifiedRow[] = [];
   let filteredRows: UnifiedRow[] = [];
   let syncedFilters: RegistrationFilterState = {
     weight: 'ALL',
@@ -109,11 +103,6 @@ import type { DisplayFilterSync, DisplayQrVisibility } from '@werewolf/domain';
   let openFilterDropdown: 'lift' | 'weight' | 'age' | 'labels' | null = null;
 
   const COMPACT_HEIGHT_QUERY = '(max-height: 820px)';
-
-  // Derived metrics
-  $: pendingAttempts = computePendingAttempts();
-  $: pendingCount = pendingAttempts.length;
-  $: recentAttempts = computeRecentAttempts();
 
   // Shareable link for QR code
   let qrOpen = false;
@@ -203,65 +192,6 @@ import type { DisplayFilterSync, DisplayQrVisibility } from '@werewolf/domain';
 
   function handleLiveEvent(event: LiveEvent) {
     switch (event.type) {
-      case 'attempt.upserted': {
-        const payload = event.data as Attempt | undefined;
-        if (!payload) break;
-        const index = liveAttempts.findIndex((item) => item.id === payload.id);
-        if (index >= 0) {
-          liveAttempts[index] = payload;
-        } else {
-          liveAttempts = [...liveAttempts, payload];
-        }
-        liveAttempts = [...liveAttempts];
-        break;
-      }
-      case 'attempt.resultUpdated': {
-        const payload = event.data as Attempt | undefined;
-        if (!payload) break;
-        const index = liveAttempts.findIndex((item) => item.id === payload.id);
-        if (index >= 0) {
-          liveAttempts[index] = { ...liveAttempts[index], ...payload };
-          liveAttempts = [...liveAttempts];
-        }
-        break;
-      }
-      case 'attempt.currentSet': {
-        const payload = event.data as CurrentAttemptBundle | Attempt | CurrentAttempt | undefined;
-        if (payload) {
-          liveCurrentBundle = 'attempt' in (payload as any) ? (payload as CurrentAttemptBundle) : liveCurrentBundle;
-          liveCurrentAttempt = toCurrentAttemptSummary(payload);
-        }
-        break;
-      }
-      case 'attempt.currentCleared': {
-        liveCurrentAttempt = null;
-        liveCurrentBundle = null;
-        break;
-      }
-      case 'registration.upserted': {
-        const payload = event.data as Registration | undefined;
-        if (!payload) break;
-        const index = registrations.findIndex((item) => item.id === payload.id);
-        if (index >= 0) {
-          const next = [...registrations];
-          next[index] = { ...next[index], ...payload };
-          registrations = next;
-        } else {
-          registrations = [...registrations, payload];
-        }
-        break;
-      }
-      case 'registration.deleted': {
-        const payload = event.data as { registrationId?: string } | undefined;
-        const registrationId = payload?.registrationId;
-        if (!registrationId) break;
-        const before = registrations.length;
-        registrations = registrations.filter((entry) => entry.id !== registrationId);
-        if (registrations.length !== before) {
-          liveAttempts = liveAttempts.filter((attempt) => attempt.registrationId !== registrationId);
-        }
-        break;
-      }
       case 'display.filtersSynced': {
         const payload = event.data as DisplayFilterSync | undefined;
         if (!payload) break;
@@ -284,16 +214,11 @@ import type { DisplayFilterSync, DisplayQrVisibility } from '@werewolf/domain';
         break;
       }
       default:
+        liveState = reduceTableLiveEvent(liveState, event, {
+          unknownCompetitorLabel: t('display_table.labels.unknown_competitor'),
+        });
         break;
     }
-  }
-
-  function computePendingAttempts(): Attempt[] {
-    return buildRisingBarQueue(liveAttempts, {
-      currentAttempt: liveCurrentAttempt,
-      registrations,
-      limit: 12,
-    }).attempts;
   }
 
   function applySyncedFilters(filters: DisplayFilterSync['filters']): void {
@@ -316,25 +241,23 @@ import type { DisplayFilterSync, DisplayQrVisibility } from '@werewolf/domain';
     }
   }
 
-  $: unifiedRows = buildUnifiedRows({
-        registrations,
-        attempts: liveAttempts,
-        contest,
-      });
   $: contestLifts = deriveContestLifts(contest, liveAttempts);
   $: mensBarWeightSetting = contest?.mensBarWeight ?? null;
   $: womensBarWeightSetting = contest?.womensBarWeight ?? null;
   $: clampWeightSetting = contest?.clampWeight ?? 2.5;
-  $: sortedRows = sortUnifiedRows(unifiedRows, sortColumn, sortDirection);
   $: if (selectedLift && !contestLifts.includes(selectedLift)) {
         selectedLift = null;
       }
   $: visibleLifts = selectedLift ? [selectedLift] : [...contestLifts];
-  $: registrationFilteredRows = applyRegistrationFilters(sortedRows, localFilters);
-  $: filteredRows =
-    selectedLift != null
-      ? registrationFilteredRows.filter((row) => row.registration.lifts?.includes(selectedLift as LiftKind))
-      : registrationFilteredRows;
+  $: filteredRows = buildDisplayTableRows({
+        registrations,
+        attempts: liveAttempts,
+        contest,
+        sortColumn,
+        sortDirection,
+        filters: localFilters,
+        selectedLift,
+      });
   $: headerTitleClass = compactLayout
     ? 'font-display text-lg sm:text-xl uppercase tracking-[0.08rem] text-white'
     : 'font-display text-xl sm:text-2xl md:text-3xl uppercase tracking-[0.1rem] sm:tracking-[0.15rem] text-white';
@@ -360,7 +283,12 @@ import type { DisplayFilterSync, DisplayQrVisibility } from '@werewolf/domain';
       count: referenceData?.weightClasses?.length ?? 0,
     });
 
-    type WeightClassLike = { id?: string; code?: string; name?: string; gender?: string };
+    type WeightClassLike = {
+      id?: string | undefined;
+      code?: string | undefined;
+      name?: string | undefined;
+      gender?: string | undefined;
+    };
     const source: WeightClassLike[] = hasRefWeights
       ? referenceData!.weightClasses
       : registrations
@@ -602,42 +530,7 @@ import type { DisplayFilterSync, DisplayQrVisibility } from '@werewolf/domain';
     closeFilterDropdown();
   }
 
-  function toCurrentAttemptSummary(input: CurrentAttemptBundle | Attempt | CurrentAttempt): CurrentAttempt {
-    if ('attempt' in (input as any)) {
-      return bundleToCurrentAttempt(input as CurrentAttemptBundle);
-    }
-
-    if ('competitorName' in (input as any) && (input as CurrentAttempt).competitorName) {
-      return input as CurrentAttempt;
-    }
-
-    const attempt = input as Attempt;
-    const registration = registrations.find((entry) => entry.id === attempt.registrationId);
-    const competitorName = registration
-      ? `${registration.lastName} ${registration.firstName}`
-      : attempt.competitorName ?? t('display_table.labels.unknown_competitor');
-
-    return {
-      id: attempt.id,
-      registrationId: attempt.registrationId,
-      competitorName,
-      liftType: attempt.liftType,
-      attemptNumber: attempt.attemptNumber as AttemptNumber,
-      weight: attempt.weight,
-      status: attempt.status as AttemptStatus,
-      competitionOrder: registration?.competitionOrder ?? null,
-      updatedAt: attempt.updatedAt ?? null,
-    };
-  }
-
   $: livePlatePlan = liveCurrentBundle?.platePlan ?? null;
-
-  function computeRecentAttempts(): Attempt[] {
-    return liveAttempts
-      .filter((attempt) => attempt.status !== 'Pending')
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-      .slice(0, 16);
-  }
 
   function handleSortChange(column: string) {
     if (sortColumn === column) {

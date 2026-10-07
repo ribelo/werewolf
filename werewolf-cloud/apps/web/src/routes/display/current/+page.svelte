@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { realtimeClient } from '$lib/realtime';
-  import { bundleToCurrentAttempt } from '$lib/current-attempt';
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
   import QRCode from 'qrcode';
@@ -9,15 +8,14 @@
   import PlateBar from '$lib/components/PlateBar.svelte';
   import type { PageData } from './$types';
   import type { DisplayQrVisibility } from '@werewolf/domain';
-  import type {
-    Attempt,
-    CurrentAttempt,
-    CurrentAttemptBundle,
-    LiveEvent,
-    Registration,
-    AttemptStatus,
-  } from '$lib/types';
+  import type { LiveEvent, AttemptStatus } from '$lib/types';
   import { formatAge } from '$lib/utils';
+  import {
+    createCurrentAttemptLiveState,
+    reduceCurrentAttemptEvent,
+    type CurrentAttemptLiveState,
+  } from './live-events';
+  import { DecipherAnimation } from './decipher';
 
   export let data: PageData;
 
@@ -41,9 +39,10 @@
     cacheAge,
   } = data;
 
-  let liveAttempts: Attempt[] = [...attempts];
-  let liveCurrentBundle: CurrentAttemptBundle | null = currentAttempt;
-  let liveCurrentAttempt: CurrentAttempt | null = currentAttempt ? bundleToCurrentAttempt(currentAttempt) : null;
+  let liveState: CurrentAttemptLiveState = createCurrentAttemptLiveState(attempts, currentAttempt);
+  $: liveAttempts = liveState.attempts;
+  $: liveCurrentBundle = liveState.bundle;
+  $: liveCurrentAttempt = liveState.currentAttempt;
 
   // Derived competitor data
   $: hasCompletedAttempts = liveAttempts.some((attempt) =>
@@ -102,126 +101,86 @@
   $: barWeightStr = platePlan ? formatWeight(platePlan.barWeight) : '';
   $: collarWeightStr = platePlan && platePlan.clampWeight > 0 ? formatWeight(platePlan.clampWeight) : '';
   
-  // Generic decipher animation function
-  function createDecipherAnimation(
-    targetText: string,
-    previousText: string,
-    onChanged: (changed: boolean) => void,
-    onDecipherChange: (text: string) => void,
-    onComplete: () => void
-  ) {
-    if (targetText !== previousText) {
-      onChanged(true);
-      let decipherText = previousText || '';
-      const targetLength = targetText.length;
-      let currentStep = 0;
-      
-      const decipherInterval = setInterval(() => {
-        if (currentStep >= targetLength + 3) {
-          onDecipherChange(targetText);
-          clearInterval(decipherInterval);
-          setTimeout(() => {
-            onChanged(false);
-            onComplete();
-          }, 500);
-          return;
-        }
-        
-        decipherText = targetText.split('').map((char, index) => {
-          if (index < currentStep) {
-            return char;
-          } else if (char === ' ' || char === '•' || char === ':' || char === '.' || char === ',') {
-            return char;
-          } else {
-            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()';
-            return chars[Math.floor(Math.random() * chars.length)];
-          }
-        }).join('');
-        
-        onDecipherChange(decipherText);
-        currentStep++;
-      }, 30);
-      
-      return decipherText;
-    }
-    return targetText;
-  }
+  // One animation instance per animated field, so a superseded animation can
+  // be cancelled instead of writing stale text over a newer value.
+  const competitorNameDecipher = new DecipherAnimation();
+  const liftLabelDecipher = new DecipherAnimation();
+  const competitorInfoDecipher = new DecipherAnimation();
+  const attemptWeightsDecipher = new DecipherAnimation();
+  const barWeightDecipher = new DecipherAnimation();
+  const collarWeightDecipher = new DecipherAnimation();
+  const platesDecipher = new DecipherAnimation();
+  const decipherAnimations: DecipherAnimation[] = [
+    competitorNameDecipher,
+    liftLabelDecipher,
+    competitorInfoDecipher,
+    attemptWeightsDecipher,
+    barWeightDecipher,
+    collarWeightDecipher,
+    platesDecipher,
+  ];
   
   // Competitor name decipher
   $: if (sanitizedName && sanitizedName !== previousCompetitorName) {
-    decipherText = createDecipherAnimation(
-      sanitizedName,
-      previousCompetitorName,
-      (changed) => competitorNameChanged = changed,
-      (text) => decipherText = text,
-      () => previousCompetitorName = sanitizedName
-    );
+    decipherText = competitorNameDecipher.start(sanitizedName, previousCompetitorName, {
+      onChanged: (changed) => competitorNameChanged = changed,
+      onText: (text) => decipherText = text,
+      onComplete: () => previousCompetitorName = sanitizedName,
+    });
   }
   
   // Lift label decipher
   $: if (currentLiftLabelStr && currentLiftLabelStr !== previousLiftLabel) {
-    decipherLiftLabel = createDecipherAnimation(
-      currentLiftLabelStr,
-      previousLiftLabel,
-      (changed) => liftLabelChanged = changed,
-      (text) => decipherLiftLabel = text,
-      () => previousLiftLabel = currentLiftLabelStr
-    );
+    decipherLiftLabel = liftLabelDecipher.start(currentLiftLabelStr, previousLiftLabel, {
+      onChanged: (changed) => liftLabelChanged = changed,
+      onText: (text) => decipherLiftLabel = text,
+      onComplete: () => previousLiftLabel = currentLiftLabelStr,
+    });
   }
   
   // Competitor info decipher
   $: if (competitorInfoStr && competitorInfoStr !== previousCompetitorInfo) {
-    decipherCompetitorInfo = createDecipherAnimation(
-      competitorInfoStr,
-      previousCompetitorInfo,
-      (changed) => competitorInfoChanged = changed,
-      (text) => decipherCompetitorInfo = text,
-      () => previousCompetitorInfo = competitorInfoStr
-    );
+    decipherCompetitorInfo = competitorInfoDecipher.start(competitorInfoStr, previousCompetitorInfo, {
+      onChanged: (changed) => competitorInfoChanged = changed,
+      onText: (text) => decipherCompetitorInfo = text,
+      onComplete: () => previousCompetitorInfo = competitorInfoStr,
+    });
   }
   
   // Attempt weights decipher (unified string)
   $: if (attemptWeightsStr && attemptWeightsStr !== previousAttemptWeights) {
-    decipherAttemptWeights = createDecipherAnimation(
-      attemptWeightsStr,
-      previousAttemptWeights,
-      (changed) => attemptWeightsChanged = changed,
-      (text) => decipherAttemptWeights = text,
-      () => previousAttemptWeights = attemptWeightsStr
-    );
+    decipherAttemptWeights = attemptWeightsDecipher.start(attemptWeightsStr, previousAttemptWeights, {
+      onChanged: (changed) => attemptWeightsChanged = changed,
+      onText: (text) => decipherAttemptWeights = text,
+      onComplete: () => previousAttemptWeights = attemptWeightsStr,
+    });
   }
   
   // Bar weight decipher
   $: if (barWeightStr && barWeightStr !== previousBarWeight) {
-    decipherBarWeight = createDecipherAnimation(
-      barWeightStr,
-      previousBarWeight,
-      (changed) => barWeightChanged = changed,
-      (text) => decipherBarWeight = text,
-      () => previousBarWeight = barWeightStr
-    );
+    decipherBarWeight = barWeightDecipher.start(barWeightStr, previousBarWeight, {
+      onChanged: (changed) => barWeightChanged = changed,
+      onText: (text) => decipherBarWeight = text,
+      onComplete: () => previousBarWeight = barWeightStr,
+    });
   }
   
   // Collar weight decipher
   $: if (collarWeightStr && collarWeightStr !== previousCollarWeight) {
-    decipherCollarWeight = createDecipherAnimation(
-      collarWeightStr,
-      previousCollarWeight,
-      (changed) => collarWeightChanged = changed,
-      (text) => decipherCollarWeight = text,
-      () => previousCollarWeight = collarWeightStr
-    );
+    decipherCollarWeight = collarWeightDecipher.start(collarWeightStr, previousCollarWeight, {
+      onChanged: (changed) => collarWeightChanged = changed,
+      onText: (text) => decipherCollarWeight = text,
+      onComplete: () => previousCollarWeight = collarWeightStr,
+    });
   }
   
   // Plates decipher (unified string)
   $: if (platesStr && platesStr !== previousPlates) {
-    decipherPlates = createDecipherAnimation(
-      platesStr,
-      previousPlates,
-      (changed) => platesChanged = changed,
-      (text) => decipherPlates = text,
-      () => previousPlates = platesStr
-    );
+    decipherPlates = platesDecipher.start(platesStr, previousPlates, {
+      onChanged: (changed) => platesChanged = changed,
+      onText: (text) => decipherPlates = text,
+      onComplete: () => previousPlates = platesStr,
+    });
   }
 
   $: attemptsByLift = liveCurrentBundle?.attemptsByLift ?? { Squat: [], Bench: [], Deadlift: [] };
@@ -336,101 +295,19 @@
   onDestroy(() => {
     realtimeClient.disconnect();
     unsubscribeEvents();
+    decipherAnimations.forEach((animation) => animation.cancel());
   });
 
   function handleLiveEvent(event: LiveEvent) {
-    switch (event.type) {
-      case 'attempt.upserted': {
-        const payload = event.data as Attempt;
-        if (!payload) break;
-        const index = liveAttempts.findIndex((item) => item.id === payload.id);
-        if (index >= 0) {
-          liveAttempts[index] = payload;
-        } else {
-          liveAttempts = [...liveAttempts, payload];
-        }
-        liveAttempts = [...liveAttempts];
-        
-        // Update current bundle if this attempt belongs to current lifter
-        if (liveCurrentBundle && payload.registrationId === liveCurrentBundle.registration?.id) {
-          const liftType = payload.liftType as keyof typeof liveCurrentBundle.attemptsByLift;
-          if (liveCurrentBundle.attemptsByLift[liftType]) {
-            const attemptIndex = liveCurrentBundle.attemptsByLift[liftType].findIndex(
-              a => a.attemptNumber === payload.attemptNumber
-            );
-            if (attemptIndex >= 0) {
-              // Update specific fields of existing attempt
-              const existingAttempt = liveCurrentBundle.attemptsByLift[liftType][attemptIndex];
-              liveCurrentBundle.attemptsByLift[liftType][attemptIndex] = {
-                ...existingAttempt,
-                weight: payload.weight,
-                status: payload.status,
-                updatedAt: payload.updatedAt,
-                id: payload.id,
-                liftType: payload.liftType,
-                attemptNumber: payload.attemptNumber
-              };
-              // Trigger reactive update
-              liveCurrentBundle = {...liveCurrentBundle};
-              liveCurrentAttempt = bundleToCurrentAttempt(liveCurrentBundle);
-            }
-          }
-        }
-        break;
-      }
-      case 'attempt.resultUpdated': {
-        const payload = event.data as Attempt;
-        if (!payload) break;
-        const index = liveAttempts.findIndex((item) => item.id === payload.id);
-        if (index >= 0) {
-          liveAttempts[index] = { ...liveAttempts[index], ...payload };
-          liveAttempts = [...liveAttempts];
-        }
-        if (liveCurrentBundle && payload.registrationId === liveCurrentBundle.registration?.id) {
-          const liftType = payload.liftType as keyof typeof liveCurrentBundle.attemptsByLift;
-          const attemptsForLift = liveCurrentBundle.attemptsByLift[liftType];
-          if (attemptsForLift) {
-            const attemptIndex = attemptsForLift.findIndex(
-              (attempt) => attempt.attemptNumber === payload.attemptNumber
-            );
-            if (attemptIndex >= 0) {
-              const existing = attemptsForLift[attemptIndex];
-              if (!existing) break;
-              attemptsForLift[attemptIndex] = {
-                ...existing,
-                status: payload.status,
-                weight: payload.weight,
-                updatedAt: payload.updatedAt ?? existing.updatedAt,
-              };
-              liveCurrentBundle = { ...liveCurrentBundle };
-              liveCurrentAttempt = bundleToCurrentAttempt(liveCurrentBundle);
-            }
-          }
-        }
-        break;
-      }
-      case 'attempt.currentSet': {
-        const bundle = event.data as CurrentAttemptBundle | null;
-        if (bundle) {
-          liveCurrentBundle = bundle;
-          liveCurrentAttempt = bundleToCurrentAttempt(bundle);
-        }
-        break;
-      }
-      case 'attempt.currentCleared': {
-        liveCurrentBundle = null;
-        liveCurrentAttempt = null;
-        break;
-      }
-      case 'display.qrVisibility': {
-        const payload = event.data as DisplayQrVisibility | undefined;
-        if (!payload || (payload.target !== 'current' && payload.target !== 'all')) break;
+    if (event.type === 'display.qrVisibility') {
+      const payload = event.data as DisplayQrVisibility | undefined;
+      if (payload && (payload.target === 'current' || payload.target === 'all')) {
         qrOpen = payload.action === 'show';
-        break;
       }
-      default:
-        break;
+      return;
     }
+
+    liveState = reduceCurrentAttemptEvent(liveState, event);
   }
 
   function truncate(value: string, length: number): string {
@@ -663,7 +540,7 @@
 
           <div class="flex flex-col gap-4 lg:flex-row lg:items-stretch flex-1">
             {#each attemptTiles as tile}
-              <div class={`attempt-tile flex-1 min-w-[120px] sm:min-w-[140px] md:min-w-[160px] px-3 sm:px-4 md:px-6 py-4 sm:py-5 md:py-6 flex flex-col tracking-[0.2em] sm:tracking-[0.3em] uppercase text-center shadow-inner transform ${attemptBackgroundClass(tile.status)} ${tile.isHighlighted ? `border-2 border-white ${glowClass(tile.status)} scale-105` : 'hover:scale-102'}`} class:animate-status-success={tile.statusChanged && tile.status === 'successful'} class:animate-status-failed={tile.statusChanged && tile.status === 'failed'}>
+              <div class={`attempt-tile flex-1 min-w-[120px] sm:min-w-[140px] md:min-w-[160px] px-3 sm:px-4 md:px-6 py-4 sm:py-5 md:py-6 flex flex-col tracking-[0.2em] sm:tracking-[0.3em] uppercase text-center shadow-inner transform ${attemptBackgroundClass(tile.status)} ${tile.isHighlighted ? `border-2 border-white ${glowClass(tile.status)} scale-105` : 'hover:scale-102'}`} class:animate-status-success={tile.statusChanged && tile.status.toLowerCase() === 'successful'} class:animate-status-failed={tile.statusChanged && tile.status.toLowerCase() === 'failed'}>
                 <p class="text-h3 text-text-secondary">
                   {t('display_current.tiles.attempt', { number: tile.number })}
                 </p>
