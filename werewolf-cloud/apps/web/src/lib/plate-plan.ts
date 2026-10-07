@@ -1,9 +1,5 @@
-// The web tsconfig path mapping for '@werewolf/domain/*' points at a non-existent
-// directory and the package subpath exports are extensionless, which the TypeScript
-// bundler resolver rejects, so the shared solver is imported straight from the
-// workspace package. svelte-check rejects '@werewolf/domain/services/plate-plan'.
-import { solvePlatePlan } from '../../../../packages/domain/src/services/plate-plan';
-import type { PlateInventoryEntry } from '../../../../packages/domain/src/services/plate-plan';
+import { solvePlatePlan } from '@werewolf/domain/services/plate-plan';
+import type { PlateInventoryEntry } from '@werewolf/domain/services/plate-plan';
 
 const LOAD_TOLERANCE = 0.01;
 

@@ -9,13 +9,13 @@
  * Uses Bun's built-in SQLite bindings for proper SQL parsing.
  */
 
-import { Database } from 'bun:sqlite';
+import { Database, type SQLQueryBindings } from 'bun:sqlite';
 import { readFileSync } from 'fs';
 
 // Configuration
-const D1_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
-const D1_DATABASE_ID = process.env.CLOUDFLARE_D1_DATABASE_ID;
-const D1_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
+const D1_ACCOUNT_ID = process.env['CLOUDFLARE_ACCOUNT_ID'];
+const D1_DATABASE_ID = process.env['CLOUDFLARE_D1_DATABASE_ID'];
+const D1_API_TOKEN = process.env['CLOUDFLARE_API_TOKEN'];
 
 const SQL_FILE_PATH = '../werewolf_full_export.sql';
 
@@ -31,13 +31,28 @@ function getArgValue(flag: string): string | null {
     console.error(`❌ Missing value for ${flag}`);
     process.exit(1);
   }
-  return args[index + 1];
+  return args[index + 1] ?? null;
 }
 
 const localPath = getArgValue('--local-path');
 
+/** One row as read back from SQLite: columns are only known at runtime. */
+type TableRow = Record<string, unknown>;
+
 interface TableData {
-  [tableName: string]: any[];
+  [tableName: string]: TableRow[];
+}
+
+interface D1Error {
+  code?: number;
+  message?: string;
+}
+
+interface D1QueryResponse {
+  errors?: D1Error[];
+  messages?: string[];
+  result?: unknown;
+  success?: boolean;
 }
 
 const IMPORT_ORDER = [
@@ -136,10 +151,7 @@ function extractTableData(db: Database): TableData {
     const rows = db.query(`SELECT * FROM ${tableName}`).all();
     
     // Transform rows to plain objects
-    tables[tableName] = rows.map((row) => {
-      const rawRow = row as Record<string, unknown>;
-      return { ...rawRow };
-    });
+    tables[tableName] = rows.map((row) => ({ ...(row as TableRow) }));
   }
   
   return tables;
@@ -247,31 +259,31 @@ function resetLocalDatabase(db: Database) {
   tx();
 }
 
-function transformRecord(tableName: string, record: any): any {
+function transformRecord(tableName: string, record: TableRow): TableRow {
   // Apply transformations based on table
   switch (tableName) {
     case 'contests':
       // Map legacy bar_weight column into gender-specific values
-      if (record.bar_weight !== undefined) {
-        record.mens_bar_weight = record.bar_weight || 20.0;
-        record.womens_bar_weight = record.bar_weight || 15.0;
-        delete record.bar_weight;
+      if (record['bar_weight'] !== undefined) {
+        record['mens_bar_weight'] = record['bar_weight'] || 20.0;
+        record['womens_bar_weight'] = record['bar_weight'] || 15.0;
+        delete record['bar_weight'];
       }
       break;
     case 'competitors':
       // Remove fields not in D1 schema
-      delete record.email;
-      delete record.phone;
-      delete record.license_number;
+      delete record['email'];
+      delete record['phone'];
+      delete record['license_number'];
       break;
     case 'attempts':
       // Map result to status if needed
-      if (record.result && !record.status) {
-        record.status = record.result;
+      if (record['result'] && !record['status']) {
+        record['status'] = record['result'];
       }
       // Map judge_notes to notes
-      if (record.judge_notes && !record.notes) {
-        record.notes = record.judge_notes;
+      if (record['judge_notes'] && !record['notes']) {
+        record['notes'] = record['judge_notes'];
       }
       break;
   }
@@ -279,15 +291,16 @@ function transformRecord(tableName: string, record: any): any {
   return record;
 }
 
-async function insertBatch(tableName: string, records: any[]) {
-  if (records.length === 0) return;
+async function insertBatch(tableName: string, records: TableRow[]) {
+  const first = records[0];
+  if (first === undefined) return;
 
   // Get column names from first record
-  const columns = Object.keys(records[0]);
+  const columns = Object.keys(first);
   const placeholders = records.map(() => `(${columns.map(() => '?').join(',')})`).join(',');
   const sql = `INSERT OR REPLACE INTO ${tableName} (${columns.join(',')}) VALUES ${placeholders}`;
 
-  const params: any[] = [];
+  const params: unknown[] = [];
   for (const record of records) {
     for (const column of columns) {
       params.push(record[column] ?? null);
@@ -297,7 +310,7 @@ async function insertBatch(tableName: string, records: any[]) {
   await executeD1Query(sql, params);
 }
 
-async function executeD1Query(sql: string, params: any[] = []) {
+async function executeD1Query(sql: string, params: unknown[] = []): Promise<D1QueryResponse> {
   const url = `https://api.cloudflare.com/client/v4/accounts/${D1_ACCOUNT_ID}/d1/database/${D1_DATABASE_ID}/query`;
 
   const response = await fetch(url, {
@@ -317,7 +330,7 @@ async function executeD1Query(sql: string, params: any[] = []) {
     throw new Error(`D1 API error: ${response.status} ${error}`);
   }
 
-  const result = await response.json();
+  const result = (await response.json()) as D1QueryResponse;
   if (result.errors && result.errors.length > 0) {
     throw new Error(`D1 query error: ${JSON.stringify(result.errors)}`);
   }
@@ -325,16 +338,19 @@ async function executeD1Query(sql: string, params: any[] = []) {
   return result;
 }
 
-function insertBatchLocal(db: Database, tableName: string, records: any[]) {
-  if (records.length === 0) return;
+function insertBatchLocal(db: Database, tableName: string, records: TableRow[]) {
+  const first = records[0];
+  if (first === undefined) return;
 
-  const columns = Object.keys(records[0]);
+  const columns = Object.keys(first);
   const placeholders = columns.map(() => '?').join(',');
-  const statement = db.prepare(`INSERT OR REPLACE INTO ${tableName} (${columns.join(',')}) VALUES (${placeholders})`);
+  const statement = db.prepare<unknown, SQLQueryBindings[]>(
+    `INSERT OR REPLACE INTO ${tableName} (${columns.join(',')}) VALUES (${placeholders})`,
+  );
 
-  const insertMany = db.transaction((rows: any[]) => {
+  const insertMany = db.transaction((rows: TableRow[]) => {
     for (const row of rows) {
-      const values = columns.map((column) => row[column] ?? null);
+      const values = columns.map((column) => row[column] ?? null) as SQLQueryBindings[];
       statement.run(...values);
     }
   });

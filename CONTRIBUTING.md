@@ -34,15 +34,18 @@ and `/auth/*` are always open.
 
 ## Checks before you push
 
-Run these inside `werewolf-cloud/`:
+`bun run check` inside `werewolf-cloud/` is the whole gate, and CI (`.github/workflows/build.yml`)
+runs exactly it: `tsc --build` typecheck, oxlint, the root Vitest suites (`packages/**`, `apps/api/**`,
+`scripts/**` via `config/vitest.config.ts`), then `apps/web`'s `svelte-kit sync` + `svelte-check` and its
+jsdom Vitest suite.
 
 ```bash
+bun run check                        # everything below, in order
 bun run typecheck                    # tsc --build
 bun run lint                         # oxlint; no explicit any is the rule that matters
-bun run test                         # Vitest with config/vitest.config.ts (API + domain + lib tests)
-bun run check                        # all three
-cd apps/web && bunx vitest run       # jsdom route/component tests (apps/web/vitest.config.ts)
+bun run test                         # Vitest with config/vitest.config.ts (domain + API + scripts)
 cd apps/web && bun run check         # svelte-kit sync + svelte-check
+cd apps/web && bun run test:run      # jsdom route/component tests (apps/web/vitest.config.ts)
 ```
 
 The API integration suite is the slow one (~100 s); run a single file with

@@ -160,10 +160,11 @@ Provisioned ids and environments are documented in
 
 ## 9. Testing
 
-- `bun run typecheck`, `bun run lint` (oxlint, `no-explicit-any`) and `bun run test` run the workspace
-  checks from `werewolf-cloud/`.
+- `bun run check` (from `werewolf-cloud/`) is the single entry point, and CI runs exactly it
+  (`.github/workflows/build.yml`): `tsc --build` typecheck, oxlint (`no-explicit-any`), the root Vitest
+  suites, then `apps/web`'s `svelte-kit sync` + `svelte-check` and its own Vitest suite.
 - `config/vitest.config.ts` discovers `packages/**/*.test.ts`, `apps/api/**/*.test.ts` and
-  `apps/web/src/lib/__tests__/**`. The Miniflare-backed API suite lives in `apps/api/__tests__/`.
+  `scripts/**/*.test.ts`. The Miniflare-backed API suite lives in `apps/api/__tests__/` (~100 s).
 - Web route/component tests use `apps/web/vitest.config.ts` (jsdom) and run from `apps/web`.
 
 ## 10. Known gaps

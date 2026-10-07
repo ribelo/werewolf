@@ -49,8 +49,8 @@ PUBLIC_API_BASE=http://127.0.0.1:8787 bun run dev   # SvelteKit on http://127.0.
 | `bun run dev` | Apply local migrations, then start Wrangler with `wrangler.dev.toml`. |
 | `bun run typecheck` | `tsc --build` across the workspace. |
 | `bun run lint` | oxlint (the enforced rule is no explicit `any`). |
-| `bun run test` | Vitest with `config/vitest.config.ts` (API, domain and `src/lib` tests). |
-| `bun run check` | typecheck + lint + tests. |
+| `bun run test` | Vitest with `config/vitest.config.ts` (domain, API and `scripts/**` tests). |
+| `bun run check` | Everything CI runs: `tsc --build`, oxlint, the root Vitest suites (domain, API, scripts), then `apps/web` svelte-check and its Vitest suite. |
 | `bun run deploy` | `scripts/deploy.sh`: remote migrations, then Worker and Pages. |
 | `bun run deploy:api` | Deploy only the Worker via `wrangler.worker.toml --env production`. |
 | `bun run deploy:web` | Build the SvelteKit bundle and deploy it to Cloudflare Pages. |

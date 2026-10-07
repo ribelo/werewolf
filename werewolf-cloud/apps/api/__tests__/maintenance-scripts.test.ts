@@ -116,7 +116,8 @@ afterEach(() => {
 });
 
 describe.skipIf(bunPath.length === 0)('repository maintenance scripts', () => {
-  it('setup-local-d1 only builds a fresh database and rebuilds it with --reset', () => {
+  // Three bun subprocesses, each applying migrations to a scratch D1 database.
+  it('setup-local-d1 only builds a fresh database and rebuilds it with --reset', { timeout: 60_000 }, () => {
     const sandbox = createSandbox();
     const workDir = fixtureDir(sandbox);
     const script = join(scriptsDir, 'setup-local-d1.ts');
@@ -163,6 +164,15 @@ describe.skipIf(bunPath.length === 0)('repository maintenance scripts', () => {
 
     expect(result.status).not.toBe(0);
     expect(result.stderr).toContain('--local or --remote is required');
+    expect(existsSync(sandbox.logPath)).toBe(false);
+  });
+
+  it('seed-coefficients rejects a flag without its value', () => {
+    const sandbox = createSandbox();
+    const result = runSeed(sandbox, ['--local', '--database']);
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('Missing value for --database');
     expect(existsSync(sandbox.logPath)).toBe(false);
   });
 

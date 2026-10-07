@@ -14,11 +14,9 @@ werewolf-cloud/ is the product and ships through Wrangler/Pages (see werewolf-cl
 
 Runs on every push to the main branches and on pull requests.
 
-**Job cloud** — `cd werewolf-cloud && bun install --frozen-lockfile && bun run check` (typecheck, oxlint and Vitest across apps/api, apps/web lib tests and packages/domain; the API integration suite takes ~100s).
+**Job cloud** — `cd werewolf-cloud && bun install --frozen-lockfile && bun run check`. That one command is the whole check: typecheck (`tsc --build`), oxlint, the root Vitest suites (packages/domain, apps/api and scripts) and, inside apps/web, `svelte-kit sync` + `svelte-check` followed by the jsdom Vitest suite. The API integration suite takes ~100s. There is no separate web job.
 
-**Job web** — from werewolf-cloud/apps/web: `bunx svelte-kit sync`, then `bunx svelte-check --tsconfig ./tsconfig.json`, then `bunx vitest run`.
-
-Both jobs use Bun 1.2.x. No secrets, tokens or certificates are needed.
+The job uses Bun 1.2.x. No secrets, tokens or certificates are needed.
 
 ---
 

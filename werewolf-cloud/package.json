@@ -20,7 +20,7 @@
     "dev": "bun run dev:prep && bunx wrangler dev --local --config wrangler.dev.toml --port 8787 --persist-to .wrangler/state",
     "typecheck": "tsc --build",
     "lint": "bun run lint:oxlint",
-    "lint:oxlint": "oxlint --allow all --deny typescript/no-explicit-any --ignore-pattern scripts/import-sqlite.ts apps/api/src packages/domain/src scripts apps/web/src",
+    "lint:oxlint": "oxlint --allow all --deny typescript/no-explicit-any apps/api/src packages/domain/src scripts apps/web/src",
     "test": "vitest --run --watch=false --config config/vitest.config.ts",
     "check:web": "cd apps/web && bun run check && bun run test:run",
     "check": "bun run typecheck && bun run lint && bun run test && bun run check:web",

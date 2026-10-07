@@ -63,6 +63,17 @@ const USAGE = `Usage: bun run scripts/seed-coefficients.ts (--local | --remote) 
   --config <path>    wrangler config file (default depends on --local/--remote)
   --env <name>       wrangler environment, --remote only`;
 
+/** Reads the value following a flag (for example `--database <name>`) or reports the flag as incomplete. */
+function requireArgValue(args: string[], index: number, flag: string): string {
+  const value = args[index];
+
+  if (value === undefined) {
+    throw new Error(`Missing value for ${flag}\n\n${USAGE}`);
+  }
+
+  return value;
+}
+
 const describeSpawnError = (error: unknown): Error => {
   const message = error instanceof Error ? error.message : String(error);
 
@@ -110,13 +121,13 @@ async function main() {
     const arg = args[i];
     switch (arg) {
       case '--database':
-        options.database = args[++i];
+        options.database = requireArgValue(args, ++i, '--database');
         break;
       case '--config':
-        options.config = args[++i];
+        options.config = requireArgValue(args, ++i, '--config');
         break;
       case '--env':
-        options.env = args[++i];
+        options.env = requireArgValue(args, ++i, '--env');
         break;
       case '--local':
       case '--remote': {
