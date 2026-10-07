@@ -9,14 +9,6 @@
   import type { ContestSummary } from '$lib/types';
 
   export let data: PageData;
-  export let params: Record<string, string> = {};
-  export let form: unknown = undefined;
-  export let errors: unknown = undefined;
-
-  $: void params;
-  $: void form;
-  $: void errors;
-
 
   const { contests, error, database, databaseError, apiBase } = data;
 

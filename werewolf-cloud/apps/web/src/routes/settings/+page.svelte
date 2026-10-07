@@ -1,37 +1,16 @@
 <script lang="ts">
   import Layout from '$lib/components/Layout.svelte';
-  import { apiClient } from '$lib/api';
   import { getStatusClasses } from '$lib/utils';
   import { availableLocales, changeLanguage } from '$lib/i18n';
   import { _, locale } from 'svelte-i18n';
-  import { get } from 'svelte/store';
   import type { PageData } from './$types';
-  import type { BackupSummary, BackupRecord, BackupCreateResult, BackupSnapshot } from '$lib/types';
+  import type { BackupRecord } from '$lib/types';
   import { toast } from '$lib/ui/toast';
-
-  type MessageValues = Record<string, string | number | boolean | Date | null | undefined>;
-
-
+  import { createBackupController, formatMessage } from './backup-workflows';
 
   export let data: PageData;
-  export let params: Record<string, string> = {};
-  export let form: unknown = undefined;
-  export let errors: unknown = undefined;
 
-  $: void params;
-  $: void form;
-  $: void errors;
-
-
-  let settings = data.settings
-    ? {
-        ...data.settings,
-        ui: { ...data.settings.ui },
-        competition: { ...data.settings.competition },
-        database: { ...data.settings.database },
-      }
-    : null;
-
+  const settings = data.settings;
   const settingsError = data.settingsError;
   const health = data.health;
   const healthError = data.healthError;
@@ -39,21 +18,16 @@
   const databaseError = data.databaseError;
   const apiBase = data.apiBase;
 
-  let backups: BackupSummary | null = data.backups ?? null;
-  let backupsError = data.backupsError;
-  let backupsLoading = false;
-  let backupsBusy = false;
-  let restoringBackupId: string | null = null;
-  let downloadingBackupId: string | null = null;
-  let deletingBackupId: string | null = null;
-  let importingBackup = false;
+  const controller = createBackupController({
+    summary: data.backups,
+    error: data.backupsError,
+  });
+  const backupState = controller.state;
+
   let backupFileInput: HTMLInputElement | null = null;
+  let currentLocale: string | null | undefined = undefined;
 
-let busy = false;
-
-$: currentLocale = $locale;
-
-
+  $: currentLocale = $locale;
 
   async function handleLanguageChange(event: Event) {
     const value = (event.currentTarget as HTMLSelectElement).value;
@@ -66,135 +40,12 @@ $: currentLocale = $locale;
     }
   }
 
-  async function updateSetting(section: 'ui' | 'competition' | 'database', key: string, value: unknown) {
-    busy = true;
-    try {
-      const response = await apiClient.patch(`/settings/${section}`, { [key]: value });
-      if (response.error) {
-        throw new Error(response.error);
-      }
-      toast.success($_('settings_page.toast_saved'));
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : $_('settings_page.toast_error'));
-      throw err;
-    } finally {
-      busy = false;
-    }
-  }
-
-
-
-
-
-  async function refreshBackups() {
-    backupsLoading = true;
-    try {
-      const response = await apiClient.get<BackupSummary>('/system/backups');
-      if (response.error) {
-        throw new Error(response.error);
-      }
-      backups = response.data ?? null;
-      backupsError = response.error;
-    } catch (err) {
-      backupsError = err instanceof Error ? err.message : $_('settings_page.toast_error');
-    } finally {
-      backupsLoading = false;
-    }
-  }
-
-  async function createBackup() {
-    backupsBusy = true;
-    try {
-      const response = await apiClient.post<BackupCreateResult>('/system/backups');
-      if (response.error) {
-        throw new Error(response.error);
-      }
-      const backupId = response.data?.backupId ?? '';
-      toast.success(formatMessage('settings_page.backup_created', { id: backupId }));
-      await refreshBackups();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : $_('settings_page.toast_error');
-      toast.error(message);
-    } finally {
-      backupsBusy = false;
-    }
-  }
-
-  async function downloadBackup(backup: BackupRecord) {
-    if (typeof window === 'undefined') {
-      toast.error($_('settings_page.download_error'));
-      return;
-    }
-
-    downloadingBackupId = backup.id;
-    try {
-      const response = await apiClient.get<BackupSnapshot>(`/system/backups/${backup.id}`);
-      if (response.error) {
-        throw new Error(response.error);
-      }
-      const snapshot = response.data;
-      if (!snapshot) {
-        throw new Error($_('settings_page.download_error'));
-      }
-
-      const json = JSON.stringify(snapshot, null, 2);
-      const blob = new Blob([json], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = backup.id.endsWith('.json') ? backup.id : `${backup.id}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      toast.success($_('settings_page.download_success'));
-    } catch (err) {
-      const message = err instanceof Error ? err.message : $_('settings_page.download_error');
-      toast.error(message);
-    } finally {
-      downloadingBackupId = null;
-    }
-  }
-
-  async function restoreBackup(backup: BackupRecord) {
-    const confirmTitle = $_('backup.confirm_restore_title');
-    const confirmWarning = $_('backup.confirm_restore_warning');
-    const confirmBackupLabel = $_('backup.confirm_restore_backup');
-    const safetyNote = $_('backup.confirm_restore_safety');
-    const confirmationMessage = `${confirmTitle}\n\n${confirmWarning}\n${confirmBackupLabel} ${backup.id}\n${safetyNote}`;
-
-    if (typeof window !== 'undefined') {
-      const confirmed = window.confirm(confirmationMessage);
-      if (!confirmed) {
-        return;
-      }
-    }
-
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      toast.error($_('settings_page.restore_error'));
-      return;
-    }
-
-    backupsBusy = true;
-    restoringBackupId = backup.id;
-
-    try {
-      const response = await apiClient.post<{ success: boolean; message?: string }>(
-        `/system/backups/${backup.id}/restore`,
-      );
-      if (response.error) {
-        throw new Error(response.error);
-      }
-      toast.success(response.data?.message ?? $_('settings_page.restore_success'));
-      await refreshBackups();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : $_('settings_page.restore_error');
-      toast.error(message);
-    } finally {
-      restoringBackupId = null;
-      backupsBusy = false;
-    }
-  }
+  const handleRefresh = () => void controller.refresh();
+  const handleCreateBackup = () => void controller.create();
+  const handleResetDatabase = () => void controller.resetDatabase();
+  const handleDeleteBackup = (backup: BackupRecord) => void controller.remove(backup);
+  const handleDownloadBackup = (backup: BackupRecord) => void controller.download(backup);
+  const handleRestoreBackup = (backup: BackupRecord) => void controller.restore(backup);
 
   function openImportDialog() {
     if (backupFileInput) {
@@ -208,82 +59,12 @@ $: currentLocale = $locale;
     const file = input?.files?.[0];
     if (!file) return;
 
-    backupsBusy = true;
-    importingBackup = true;
-
     try {
-      const text = await file.text();
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(text);
-      } catch (error) {
-        throw new Error($_('settings_page.import_error'));
-      }
-
-      const response = await apiClient.post<{ success: boolean; backupId: string }>(
-        '/system/backups/import',
-        parsed,
-      );
-      if (response.error) {
-        throw new Error(response.error);
-      }
-      toast.success($_('settings_page.import_success'));
-      await refreshBackups();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : $_('settings_page.import_error');
-      toast.error(message);
+      await controller.importFile(file);
     } finally {
-      importingBackup = false;
-      backupsBusy = false;
       if (input) {
         input.value = '';
       }
-    }
-  }
-
-  async function deleteBackup(backup: BackupRecord) {
-    if (typeof window !== 'undefined') {
-      const confirmed = window.confirm($_('settings_page.delete_backup_confirm'));
-      if (!confirmed) {
-        return;
-      }
-    }
-
-    backupsBusy = true;
-    deletingBackupId = backup.id;
-    try {
-      const response = await apiClient.delete<{ success: boolean }>(`/system/backups/${backup.id}`);
-      if (response.error) {
-        throw new Error(response.error);
-      }
-      toast.success($_('settings_page.delete_success'));
-      await refreshBackups();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : $_('settings_page.delete_error');
-      toast.error(message);
-    } finally {
-      deletingBackupId = null;
-      backupsBusy = false;
-    }
-  }
-
-  async function triggerReset() {
-    const confirmed = confirm($_('settings.reset_database_warning'));
-    if (!confirmed) return;
-
-    busy = true;
-    try {
-      const response = await apiClient.post<{ success: boolean; message?: string }>('/system/database/reset', {
-        confirm: 'YES_I_WANT_TO_RESET_THE_DATABASE',
-      });
-      if (response.error) {
-        throw new Error(response.error);
-      }
-      toast.success(response.data?.message ?? $_('settings_page.reset_success'));
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : $_('settings_page.reset_error'));
-    } finally {
-      busy = false;
     }
   }
 
@@ -311,21 +92,6 @@ $: currentLocale = $locale;
       competitors: recordCounts.competitors,
       registrations: recordCounts.registrations,
     });
-  }
-
-  const formatMessage = (key: string, vars?: MessageValues) => {
-    try {
-      const translate = get(_);
-      const result = translate(key, vars ? { values: vars } : undefined);
-      return typeof result === 'string' ? result : String(result);
-    } catch (error) {
-      console.debug('[settings] formatMessage fallback', key, error);
-      return key;
-    }
-  };
-
-  if (typeof window !== 'undefined') {
-    (window as Window & { __werewolfFormat?: typeof formatMessage }).__werewolfFormat = formatMessage;
   }
 </script>
 
@@ -367,8 +133,6 @@ $: currentLocale = $locale;
       </div>
     </section>
 
-
-
     <section class="card">
       <header class="card-header">
         <h2 class="text-h3 text-text-primary">{$_('settings.database_title')}</h2>
@@ -376,7 +140,7 @@ $: currentLocale = $locale;
       </header>
       <div class="grid gap-4 md:grid-cols-3">
         <div class="border border-border-color p-4 bg-element-bg">
-          <h3 class="text-label text-text-secondary">API Worker</h3>
+          <h3 class="text-label text-text-secondary">{$_('settings_page.worker_title')}</h3>
           {#if healthError}
             <p class="text-caption text-status-error">{healthError}</p>
           {:else if health}
@@ -387,7 +151,7 @@ $: currentLocale = $locale;
           {/if}
         </div>
         <div class="border border-border-color p-4 bg-element-bg">
-          <h3 class="text-label text-text-secondary">D1 Database</h3>
+          <h3 class="text-label text-text-secondary">{$_('settings_page.d1_title')}</h3>
           {#if databaseError}
             <p class="text-caption text-status-error">{databaseError}</p>
           {:else if database}
@@ -411,26 +175,26 @@ $: currentLocale = $locale;
               <button
                 type="button"
                 class="btn-secondary px-3 py-1"
-                on:click={refreshBackups}
-                disabled={backupsLoading || backupsBusy}
+                on:click={handleRefresh}
+                disabled={$backupState.loading || $backupState.busy}
               >
                 {$_('settings_page.refresh')}
               </button>
               <button
                 type="button"
                 class="btn-secondary px-3 py-1"
-                on:click={createBackup}
-                disabled={backupsBusy}
+                on:click={handleCreateBackup}
+                disabled={$backupState.busy}
               >
-                {backupsBusy ? $_('settings_page.creating_backup') : $_('settings_page.create_backup')}
+                {$backupState.busy ? $_('settings_page.creating_backup') : $_('settings_page.create_backup')}
               </button>
               <button
                 type="button"
                 class="btn-secondary px-3 py-1"
                 on:click={openImportDialog}
-                disabled={backupsBusy}
+                disabled={$backupState.busy}
               >
-                {importingBackup ? $_('settings_page.importing_backup') : $_('settings_page.import_backup')}
+                {$backupState.importing ? $_('settings_page.importing_backup') : $_('settings_page.import_backup')}
               </button>
             </div>
           </div>
@@ -442,17 +206,17 @@ $: currentLocale = $locale;
             on:change={handleBackupImport}
           />
 
-          {#if backupsLoading}
+          {#if $backupState.loading}
             <p class="text-caption text-text-secondary">{$_('settings_page.loading')}</p>
-          {:else if backupsError}
-            <p class="text-caption text-status-error">{backupsError}</p>
-          {:else if backups}
+          {:else if $backupState.error}
+            <p class="text-caption text-status-error">{$backupState.error}</p>
+          {:else if $backupState.summary}
             <p class="text-caption text-text-secondary">
-              {formatMessage('settings_page.kv_total', { count: backups.total })}
+              {formatMessage('settings_page.kv_total', { count: $backupState.summary.total })}
             </p>
-            {#if backups.backups.length > 0}
+            {#if $backupState.summary.backups.length > 0}
               <ul class="space-y-2 text-caption text-text-secondary">
-                {#each backups.backups.slice(0, 5) as backup}
+                {#each $backupState.summary.backups.slice(0, 5) as backup}
                   <li class="border border-border-color/50 px-3 py-2 bg-black/20">
                     <div class="flex flex-col gap-2">
                       <div class="flex justify-between items-start gap-2">
@@ -468,30 +232,30 @@ $: currentLocale = $locale;
                         <button
                           type="button"
                           class="btn-secondary px-3 py-1 text-xxs border border-status-error text-status-error hover:border-primary-red hover:text-primary-red"
-                          disabled={backupsBusy || deletingBackupId === backup.id}
-                          on:click={() => deleteBackup(backup)}
+                          disabled={$backupState.busy || $backupState.deletingId === backup.id}
+                          on:click={() => handleDeleteBackup(backup)}
                         >
-                          {deletingBackupId === backup.id
+                          {$backupState.deletingId === backup.id
                             ? $_('settings_page.deleting_backup')
                             : $_('settings_page.delete_backup')}
                         </button>
                         <button
                           type="button"
                           class="btn-secondary px-3 py-1 text-xxs"
-                          disabled={backupsBusy || downloadingBackupId === backup.id}
-                          on:click={() => downloadBackup(backup)}
+                          disabled={$backupState.busy || $backupState.downloadingId === backup.id}
+                          on:click={() => handleDownloadBackup(backup)}
                         >
-                          {downloadingBackupId === backup.id
+                          {$backupState.downloadingId === backup.id
                             ? $_('settings_page.downloading_backup')
                             : $_('settings_page.download_backup')}
                         </button>
                         <button
                           type="button"
                           class="btn-primary px-3 py-1 text-xxs"
-                          disabled={backupsBusy || restoringBackupId === backup.id}
-                          on:click={() => restoreBackup(backup)}
+                          disabled={$backupState.busy || $backupState.restoringId === backup.id}
+                          on:click={() => handleRestoreBackup(backup)}
                         >
-                          {restoringBackupId === backup.id
+                          {$backupState.restoringId === backup.id
                             ? $_('settings_page.restoring_backup')
                             : $_('settings_page.restore_backup')}
                         </button>
@@ -500,7 +264,7 @@ $: currentLocale = $locale;
                   </li>
                 {/each}
               </ul>
-              <p class="text-caption text-text-secondary">{formatMessage('settings_page.kv_last_run', { timestamp: formatBackupTimestamp(backups.timestamp) })}</p>
+              <p class="text-caption text-text-secondary">{formatMessage('settings_page.kv_last_run', { timestamp: formatBackupTimestamp($backupState.summary.timestamp) })}</p>
             {:else}
               <p class="text-caption text-text-secondary">{$_('settings_page.kv_empty')}</p>
             {/if}
@@ -518,7 +282,7 @@ $: currentLocale = $locale;
       </header>
       <div class="flex flex-col gap-3">
         <p class="text-caption text-text-secondary">{$_('settings.reset_database_backup_recommendation')}</p>
-        <button type="button" class="btn-secondary px-4 py-2" on:click={triggerReset} disabled={busy}>
+        <button type="button" class="btn-secondary px-4 py-2" on:click={handleResetDatabase} disabled={$backupState.resetting}>
           {$_('settings.reset_database_title')}
         </button>
       </div>
