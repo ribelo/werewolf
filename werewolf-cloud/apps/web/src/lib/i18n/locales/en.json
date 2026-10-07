@@ -4,6 +4,7 @@
     "subtitle": "Powerlifting Contest Management",
     "name": "Werewolf Powerlifting"
   },
+  "app_name": "Werewolf Powerlifting",
   "menu": {
     "settings": "Settings",
     "settings_description": "Configure application",
@@ -131,7 +132,9 @@
       "messages": {
         "events_hint": "Discipline is derived automatically from the selected events.",
         "success": "Contest created successfully.",
-        "error": "Failed to create contest."
+        "error": "Failed to create contest.",
+        "partial": "The contest was created but not all data was saved. Fix the errors and try again — items already created will not be recreated.",
+        "draft_failed": "{name}: {message}"
       },
       "validation": {
         "warning": "Please complete the required fields before continuing.",
@@ -202,6 +205,27 @@
         "actions": {
           "reset_defaults": "Reset to Defaults"
         }
+      },
+      "toast": {
+        "sample_generated": "Sample data generated."
+      }
+    },
+    "categories": {
+      "validation": {
+        "age": {
+          "duplicate_code": "Age category: the code \"{code}\" is already used.",
+          "invalid_range": "Age category in row {index}: the minimum age cannot be greater than the maximum age.",
+          "empty_name": "Age category in row {index}: enter a name.",
+          "empty_code": "Age category in row {index}: enter a code."
+        },
+        "weight": {
+          "duplicate_code": "Weight class: the code \"{code}\" is already used.",
+          "invalid_range": "Weight class in row {index}: the lower bound cannot be greater than the upper bound.",
+          "invalid_gender": "Weight class in row {index}: select a gender.",
+          "empty_name": "Weight class in row {index}: enter a name.",
+          "empty_code": "Weight class in row {index}: enter a code."
+        },
+        "unknown": "Fix the category configuration."
       }
     }
   },
@@ -272,17 +296,6 @@
       "squat": "Squat",
       "bench": "Bench press",
       "deadlift": "Deadlift"
-    },
-    "export": {
-      "menu": "Export",
-      "csv": "Export CSV",
-      "pdf": "Export PDF",
-      "jpg": "Export JPG",
-      "exporting": "Exporting...",
-      "generated_at": "Generated: {timestamp}",
-      "success": "Export ready",
-      "error": "Failed to prepare export",
-      "empty": "No rows to export"
     },
     "lifts_short": {
       "squat": "SQ",
@@ -700,7 +713,10 @@
         "completed": "Completed",
         "draft": "Draft",
         "setup": "Setup"
-      }
+      },
+      "delete_confirm": "Delete the contest \"{name}\"? This cannot be undone.",
+      "delete_success": "Contest \"{name}\" was deleted.",
+      "delete_error": "Could not delete the contest."
     }
   },
   "competitors_page": {
@@ -747,7 +763,9 @@
         "lifts_required": "Select at least one lift for this competitor."
       },
       "error_delete": "Could not delete competitor.",
-      "error_opening_attempt": "Could not save the opening attempt."
+      "error_opening_attempt": "Could not save the opening attempt.",
+      "error_competitor_saved_registration_failed": "Competitor data was saved, but the registration could not be saved: {message}",
+      "error_registration_saved_attempts_failed": "Registration was saved, but the opening attempt could not be saved: {message}"
     },
     "fields": {
       "first_name": "First name",
@@ -874,7 +892,10 @@
     "backup_counts": "Contests: {contests} • Competitors: {competitors} • Registrations: {registrations}",
     "contests_count": "Contests: {count}",
     "competitors_count": "Competitors: {count}",
-    "registrations_count": "Registrations: {count}"
+    "registrations_count": "Registrations: {count}",
+    "worker_title": "API Worker",
+    "d1_title": "D1 Database",
+    "offline_error": "You are offline. This action needs a connection and cannot be queued."
   },
   "contest_detail": {
     "fallback_title": "Contest",
@@ -907,6 +928,7 @@
     "export": {
       "menu": "Export",
       "csv": "Export CSV",
+      "json": "Export JSON",
       "pdf": "Export PDF",
       "jpg": "Export JPG",
       "exporting": "Exporting...",
@@ -933,23 +955,23 @@
       "lifters": {
         "title": "Registered lifters",
         "hint": "Competitors entered into the meet."
+      },
+      "queue": {
+        "title": "Queued attempts",
+        "hint": "Attempts waiting to be loaded onto the platform."
+      },
+      "last_update": {
+        "title": "Last update",
+        "connection_prefix": "Connection: "
+      },
+      "summary": {
+        "viewing": "Viewing: {lift} • Sort: {sort} {direction} • Weight: {weight} • Age: {age} • Label: {label}",
+        "all_lifts": "All Lifts",
+        "sort_order": "Order",
+        "sort_name": "Name",
+        "sort_ascending": "↑",
+        "sort_descending": "↓"
       }
-    },
-    "summary": {
-      "viewing": "Viewing: {lift} • Sort: {sort} {direction} • Weight: {weight} • Age: {age} • Label: {label}",
-      "all_lifts": "All Lifts",
-      "sort_order": "Order",
-      "sort_name": "Name",
-      "sort_ascending": "↑",
-      "sort_descending": "↓"
-    },
-    "queue": {
-      "title": "Queued attempts",
-      "hint": "Attempts waiting to be loaded onto the platform."
-    },
-    "last_update": {
-      "title": "Last update",
-      "connection_prefix": "Connection: "
     },
     "links": {
       "announcer": {
@@ -995,6 +1017,7 @@
     },
     "recent": {
       "title": "Recent attempts",
+      "subtitle": "Recently saved attempts.",
       "meta": "{lift} • Attempt {number} • {weight} kg",
       "time": "Updated {time}"
     },
@@ -1006,18 +1029,6 @@
       "manage_categories": "Manage categories",
       "manage_categories_description": "Configure age and weight categories for this contest",
       "coefficient_notice": "Bodyweight changes automatically refresh coefficients.",
-      "filters": {
-        "weight": "Weight",
-        "age": "Age",
-        "label": "Label",
-        "all": "All",
-        "open": "Open",
-        "age_all": "All Ages",
-        "age_unassigned": "Unassigned",
-        "age_senior": "Senior",
-        "labels_all": "All Labels",
-        "labels_unlabeled": "Unlabeled"
-      },
       "columns": {
         "order": "Lot #",
         "lifter": "Lifter",
@@ -1034,7 +1045,6 @@
         "place": "Place",
         "flight": "Flight",
         "flight_order": "Flight order",
-        "age": "Age",
         "total": "Total",
         "points": "Points",
         "max": "Max lift",
@@ -1071,7 +1081,6 @@
         "weights_female": "Female weight classes",
         "weights_male": "Male weight classes",
         "sex": "Sex",
-        "age": "Age categories",
         "labels": "Labels",
         "all": "All",
         "unassigned": "Unassigned",
@@ -1275,6 +1284,7 @@
         "gender": "Gender",
         "age_category": "Age category",
         "weight_class": "Weight class",
+        "age": "Age",
         "bodyweight": "Bodyweight",
         "reshel": "Reshel",
         "mcc": "McC",
@@ -1675,6 +1685,91 @@
         "csv": "Export as CSV",
         "json": "Export as JSON"
       }
+    }
+  },
+  "api": {
+    "offline": {
+      "not_queueable": "This action needs a connection and cannot be queued for later."
+    },
+    "error": {
+      "malformed_response": "The server returned a malformed response.",
+      "network": "Unable to reach the server."
+    }
+  },
+  "attempt_editor": {
+    "table": {
+      "lift": "Lift",
+      "attempt": "Attempt {number}"
+    },
+    "controls": {
+      "increase": "+{delta} kg",
+      "decrease": "-{delta} kg"
+    },
+    "buttons": {
+      "save": "Save attempts"
+    },
+    "toast": {
+      "missing_ids": "Cannot save attempts — the contest or competitor id is missing.",
+      "weight_invalid": "Fix the attempt weights — each one must be a non-negative number.",
+      "nothing_to_save": "Nothing to save.",
+      "save_success": "Attempts saved.",
+      "save_error": "Could not save the attempts.",
+      "save_partial": "Saved {saved} of {total} attempts — the rest could not be saved"
+    }
+  },
+  "login": {
+    "page_title": "Login | Werewolf Cloud",
+    "eyebrow": "Organizer Access",
+    "title": "Werewolf Cloud",
+    "subtitle": "Sign in with the organizer password to unlock contest management, results entry, and settings.",
+    "password_label": "Admin password",
+    "password_placeholder": "Enter organizer password",
+    "submit": "Enter Control Room",
+    "submitting": "Signing in…",
+    "error": {
+      "password_required": "Enter the admin password.",
+      "invalid_password": "Invalid password.",
+      "failed": "Login failed.",
+      "generic": "Unable to login."
+    }
+  },
+  "queue": {
+    "error": {
+      "unsupported": "This browser does not support the offline queue."
+    },
+    "toast": {
+      "saved": "Saved to the offline queue — it will be sent once the connection returns.",
+      "discarded": "Discarded the pending change.",
+      "synced_single": "Synced the pending change.",
+      "synced_multi": "Synced {count} pending changes.",
+      "failed": "Failed to sync a change: {endpoint}"
+    },
+    "modal": {
+      "title": "Offline mutation queue"
+    },
+    "empty": "The queue is empty.",
+    "summary": {
+      "pending": "Pending: {count}",
+      "in_flight": "In flight: {count}",
+      "failed": "Failed: {count}"
+    },
+    "sections": {
+      "pending": "Pending",
+      "failed": "Failed"
+    },
+    "columns": {
+      "endpoint": "Endpoint",
+      "method": "Method",
+      "age": "Created",
+      "error": "Error",
+      "actions": "Actions"
+    },
+    "labels": {
+      "unknown_error": "Unknown error"
+    },
+    "actions": {
+      "retry": "Retry",
+      "discard": "Discard"
     }
   }
 }

@@ -4,6 +4,7 @@
     "subtitle": "Zarządzanie zawodami trójboju",
     "name": "Werewolf Powerlifting"
   },
+  "app_name": "Werewolf Powerlifting",
   "menu": {
     "settings": "Ustawienia",
     "settings_description": "Konfiguruj aplikację",
@@ -131,7 +132,9 @@
       "messages": {
         "events_hint": "Dyscyplina jest ustalana automatycznie na podstawie wybranych prób.",
         "success": "Zawody zostały utworzone.",
-        "error": "Nie udało się utworzyć zawodów."
+        "error": "Nie udało się utworzyć zawodów.",
+        "partial": "Zawody zostały utworzone, ale nie wszystkie dane zostały zapisane. Popraw błędy i spróbuj ponownie — elementy już utworzone nie zostaną dodane ponownie.",
+        "draft_failed": "{name}: {message}"
       },
       "validation": {
         "warning": "Uzupełnij wymagane pola przed kontynuacją.",
@@ -202,6 +205,27 @@
         "actions": {
           "reset_defaults": "Resetuj do domyślnych"
         }
+      },
+      "toast": {
+        "sample_generated": "Wygenerowano przykładowe dane."
+      }
+    },
+    "categories": {
+      "validation": {
+        "age": {
+          "duplicate_code": "Kategoria wiekowa: kod „{code}” jest już używany.",
+          "invalid_range": "Kategoria wiekowa w wierszu {index}: wiek „od” nie może być większy niż wiek „do”.",
+          "empty_name": "Kategoria wiekowa w wierszu {index}: podaj nazwę.",
+          "empty_code": "Kategoria wiekowa w wierszu {index}: podaj kod."
+        },
+        "weight": {
+          "duplicate_code": "Klasa wagowa: kod „{code}” jest już używany.",
+          "invalid_range": "Klasa wagowa w wierszu {index}: dolna granica nie może być większa niż górna.",
+          "invalid_gender": "Klasa wagowa w wierszu {index}: wybierz płeć.",
+          "empty_name": "Klasa wagowa w wierszu {index}: podaj nazwę.",
+          "empty_code": "Klasa wagowa w wierszu {index}: podaj kod."
+        },
+        "unknown": "Popraw konfigurację kategorii."
       }
     }
   },
@@ -689,7 +713,10 @@
         "completed": "Zakończone",
         "draft": "Szkic",
         "setup": "Setup"
-      }
+      },
+      "delete_confirm": "Usunąć zawody „{name}”? Tej operacji nie można cofnąć.",
+      "delete_success": "Zawody „{name}” zostały usunięte.",
+      "delete_error": "Nie udało się usunąć zawodów."
     }
   },
   "competitors_page": {
@@ -736,7 +763,9 @@
         "lifts_required": "Wybierz co najmniej jeden bój dla zawodnika."
       },
       "error_delete": "Nie udało się usunąć zawodnika.",
-      "error_opening_attempt": "Nie udało się zapisać pierwszego podejścia."
+      "error_opening_attempt": "Nie udało się zapisać pierwszego podejścia.",
+      "error_competitor_saved_registration_failed": "Dane zawodnika zostały zapisane, ale zgłoszenie nie zostało zapisane: {message}",
+      "error_registration_saved_attempts_failed": "Zgłoszenie zostało zapisane, ale nie udało się zapisać pierwszego podejścia: {message}"
     },
     "fields": {
       "first_name": "Imię",
@@ -863,7 +892,10 @@
     "backup_counts": "Zawody: {contests} • Zawodnicy: {competitors} • Rejestracje: {registrations}",
     "contests_count": "Zawody: {count}",
     "competitors_count": "Zawodnicy: {count}",
-    "registrations_count": "Rejestracje: {count}"
+    "registrations_count": "Rejestracje: {count}",
+    "worker_title": "Worker API",
+    "d1_title": "Baza danych D1",
+    "offline_error": "Brak połączenia. Ta operacja wymaga internetu i nie zostanie zakolejkowana."
   },
   "contest_detail": {
     "fallback_title": "Zawody",
@@ -896,6 +928,7 @@
     "export": {
       "menu": "Eksportuj",
       "csv": "Eksport CSV",
+      "json": "Eksport JSON",
       "pdf": "Eksport PDF",
       "jpg": "Eksport JPG",
       "exporting": "Eksportowanie...",
@@ -984,6 +1017,7 @@
     },
     "recent": {
       "title": "Ostatnie próby",
+      "subtitle": "Ostatnio zapisane próby.",
       "meta": "{lift} • Podejście {number} • {weight} kg",
       "time": "Aktualizacja {time}"
     },
@@ -995,18 +1029,6 @@
       "manage_categories": "Zarządzaj kategoriami",
       "manage_categories_description": "Konfiguruj kategorie wiekowe i wagowe dla tych zawodów",
       "coefficient_notice": "Zmiana masy ciała automatycznie przelicza współczynniki.",
-      "filters": {
-        "weight": "Waga",
-        "age": "Kategorie wiekowe",
-        "label": "Etykieta",
-        "all": "Wszystkie",
-        "open": "Open",
-        "age_all": "Wszystkie wieki",
-        "age_unassigned": "Nieprzypisany",
-        "age_senior": "Senior",
-        "labels_all": "Wszystkie etykiety",
-        "labels_unlabeled": "Bez etykiety"
-      },
       "columns": {
         "order": "Losowanie",
         "lifter": "Zawodnik",
@@ -1075,7 +1097,6 @@
         "weight": "Waga",
         "weight_button": "Waga",
         "weight_button_all": "Wszystkie klasy",
-        "age": "Kategorie wiekowe",
         "age_button": "Wiek",
         "age_button_all": "Wszystkie kategorie",
         "label": "Etykieta",
@@ -1664,6 +1685,91 @@
         "csv": "Eksportuj jako CSV",
         "json": "Eksportuj jako JSON"
       }
+    }
+  },
+  "api": {
+    "offline": {
+      "not_queueable": "Ta operacja wymaga połączenia z internetem — nie można jej zakolejkować."
+    },
+    "error": {
+      "malformed_response": "Serwer zwrócił nieprawidłową odpowiedź.",
+      "network": "Brak połączenia z serwerem."
+    }
+  },
+  "attempt_editor": {
+    "table": {
+      "lift": "Bój",
+      "attempt": "Podejście {number}"
+    },
+    "controls": {
+      "increase": "+{delta} kg",
+      "decrease": "-{delta} kg"
+    },
+    "buttons": {
+      "save": "Zapisz podejścia"
+    },
+    "toast": {
+      "missing_ids": "Nie można zapisać podejść — brakuje identyfikatora zawodów lub zawodnika.",
+      "weight_invalid": "Popraw wagi podejść — każda musi być liczbą nieujemną.",
+      "nothing_to_save": "Brak zmian do zapisania.",
+      "save_success": "Podejścia zapisane.",
+      "save_error": "Nie udało się zapisać podejść.",
+      "save_partial": "Zapisano {saved} z {total} prób — pozostałych nie udało się zapisać"
+    }
+  },
+  "login": {
+    "page_title": "Logowanie | Werewolf Cloud",
+    "eyebrow": "Dostęp organizatora",
+    "title": "Werewolf Cloud",
+    "subtitle": "Zaloguj się hasłem organizatora, aby zarządzać zawodami, wpisywać wyniki i zmieniać ustawienia.",
+    "password_label": "Hasło administratora",
+    "password_placeholder": "Podaj hasło organizatora",
+    "submit": "Wejdź do pokoju sterowania",
+    "submitting": "Logowanie…",
+    "error": {
+      "password_required": "Podaj hasło administratora.",
+      "invalid_password": "Nieprawidłowe hasło.",
+      "failed": "Logowanie nie powiodło się.",
+      "generic": "Nie udało się zalogować."
+    }
+  },
+  "queue": {
+    "error": {
+      "unsupported": "Ta przeglądarka nie obsługuje kolejki offline."
+    },
+    "toast": {
+      "saved": "Zapisano w kolejce — zmiana zostanie wysłana po odzyskaniu połączenia.",
+      "discarded": "Odrzucono oczekującą zmianę.",
+      "synced_single": "Zsynchronizowano oczekującą zmianę.",
+      "synced_multi": "Zsynchronizowano {count} oczekujących zmian.",
+      "failed": "Nie udało się zsynchronizować zmiany: {endpoint}"
+    },
+    "modal": {
+      "title": "Kolejka zmian offline"
+    },
+    "empty": "Kolejka jest pusta.",
+    "summary": {
+      "pending": "Oczekujące: {count}",
+      "in_flight": "W toku: {count}",
+      "failed": "Nieudane: {count}"
+    },
+    "sections": {
+      "pending": "Oczekujące",
+      "failed": "Nieudane"
+    },
+    "columns": {
+      "endpoint": "Adres",
+      "method": "Metoda",
+      "age": "Utworzono",
+      "error": "Błąd",
+      "actions": "Akcje"
+    },
+    "labels": {
+      "unknown_error": "Nieznany błąd"
+    },
+    "actions": {
+      "retry": "Ponów",
+      "discard": "Odrzuć"
     }
   }
 }

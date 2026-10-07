@@ -33,7 +33,7 @@ export function setupI18n(initialLocale?: string) {
   const targetLocale = resolveInitialLocale(initialLocale);
 
   if (!initialized) {
-    const config: any = {
+    const config: Parameters<typeof init>[0] = {
       fallbackLocale: FALLBACK_LOCALE,
       initialLocale: targetLocale,
     };
