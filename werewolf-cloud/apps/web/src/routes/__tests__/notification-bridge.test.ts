@@ -141,4 +141,102 @@ describe('notification-bridge', () => {
 
     cleanup();
   });
+
+  it('notifies for a current attempt bundle event', async () => {
+    let eventsCallback: (event: LiveEvent | null) => void = () => {};
+    eventsSubscribe.mockImplementation((cb) => {
+      eventsCallback = cb;
+      return unsubscribeFn;
+    });
+
+    contestSubscribe.mockImplementation((cb) => {
+      cb({ contest: { id: 'contest-1' } });
+      return unsubscribeFn;
+    });
+
+    const { initializeNotificationBridge } = await loadBridge();
+    const cleanup = initializeNotificationBridge();
+
+    const bundle = {
+      contest: {
+        id: 'contest-1', name: 'Cup', date: '2026-01-01', location: 'Gym',
+        discipline: 'powerlifting', status: 'live',
+      },
+      attempt: {
+        id: 'attempt-1', registrationId: 'registration-1', liftType: 'Squat',
+        attemptNumber: 1, weight: 100, status: 'Pending',
+        createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+      registration: {
+        id: 'registration-1', contestId: 'contest-1', bodyweight: 80,
+        weightClassId: null, lifts: ['Squat'],
+      },
+      competitor: {
+        id: 'competitor-1', firstName: 'Jane', lastName: 'Doe',
+        birthDate: '1990-01-01', gender: 'F',
+      },
+      attemptsByLift: { Squat: [], Bench: [], Deadlift: [] },
+      platePlan: {
+        plates: [], exact: true, total: 100, increment: 2.5, targetWeight: 100,
+        barWeight: 20, weightToLoad: 80, clampWeight: 0,
+      },
+      highlight: { liftType: 'Squat', attemptNumber: 1 },
+    };
+
+    eventsCallback({
+      type: 'attempt.currentSet',
+      contestId: 'contest-1',
+      timestamp: new Date().toISOString(),
+      data: bundle,
+    });
+
+    expect(toastMock.info).toHaveBeenCalledWith('Next: Doe Jane - Squat 1 (100kg)', { duration: 5000 });
+
+    cleanup();
+  });
+
+  it('stays silent for snapshot and deletion events', async () => {
+    let eventsCallback: (event: LiveEvent | null) => void = () => {};
+    eventsSubscribe.mockImplementation((cb) => {
+      eventsCallback = cb;
+      return unsubscribeFn;
+    });
+
+    contestSubscribe.mockImplementation((cb) => {
+      cb({ contest: { id: 'contest-1' } });
+      return unsubscribeFn;
+    });
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { initializeNotificationBridge } = await loadBridge();
+    const cleanup = initializeNotificationBridge();
+
+    eventsCallback({
+      type: 'snapshot',
+      contestId: 'contest-1',
+      timestamp: new Date().toISOString(),
+      data: {
+        contestId: 'contest-1',
+        attempts: [],
+        currentAttempt: null,
+        fetchedAt: new Date().toISOString(),
+      },
+    });
+
+    eventsCallback({
+      type: 'attempt.deleted',
+      contestId: 'contest-1',
+      timestamp: new Date().toISOString(),
+      data: { attemptId: 'attempt-1' },
+    });
+
+    expect(toastMock.success).not.toHaveBeenCalled();
+    expect(toastMock.info).not.toHaveBeenCalled();
+    expect(toastMock.warning).not.toHaveBeenCalled();
+    expect(toastMock.error).not.toHaveBeenCalled();
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    warnSpy.mockRestore();
+    cleanup();
+  });
 });

@@ -79,6 +79,10 @@ function handleAttemptEvents() {
         handleAttemptUpserted(event as LiveEvent<Attempt>);
         break;
 
+      case 'attempt.deleted':
+        // Attempt removals are reflected by the contest stores, not by a toast.
+        break;
+
       case 'attempt.resultUpdated':
         handleAttemptResultUpdated(event as LiveEvent<Attempt>);
         break;
@@ -102,6 +106,10 @@ function handleAttemptEvents() {
       case 'registration.upserted':
       case 'registration.deleted':
         // Registration events currently do not trigger notifications
+        break;
+
+      case 'snapshot':
+        // Full state replacements are applied by the contest stores, not by a toast.
         break;
 
       default:
@@ -165,18 +173,28 @@ function handleAttemptResultUpdated(event: LiveEvent<Attempt>) {
   handleAttemptUpserted(event);
 }
 
-function handleCurrentAttemptSet(event: LiveEvent<CurrentAttemptBundle | CurrentAttempt | Attempt>) {
-  const payload = event.data as (CurrentAttemptBundle | CurrentAttempt | Attempt | undefined);
+type CurrentAttemptPayload = CurrentAttemptBundle | CurrentAttempt | Attempt;
+
+function isCurrentAttemptBundle(payload: CurrentAttemptPayload): payload is CurrentAttemptBundle {
+  return 'attempt' in payload && 'attemptsByLift' in payload;
+}
+
+function hasCompetitorName(payload: CurrentAttemptPayload): payload is CurrentAttempt {
+  return 'competitorName' in payload && typeof payload.competitorName === 'string';
+}
+
+function handleCurrentAttemptSet(event: LiveEvent<CurrentAttemptPayload>) {
+  const payload = event.data;
   if (!payload) return;
 
   let currentAttempt: CurrentAttempt;
 
-  if ('attempt' in (payload as any)) {
-    currentAttempt = bundleToCurrentAttempt(payload as CurrentAttemptBundle);
-  } else if ('competitorName' in (payload as any) && (payload as CurrentAttempt).competitorName) {
-    currentAttempt = payload as CurrentAttempt;
+  if (isCurrentAttemptBundle(payload)) {
+    currentAttempt = bundleToCurrentAttempt(payload);
+  } else if (hasCompetitorName(payload)) {
+    currentAttempt = payload;
   } else {
-    const attempt = payload as Attempt;
+    const attempt = payload;
     const competitorName = attempt.competitorName
       || `${attempt.lastName ?? ''} ${attempt.firstName ?? ''}`.trim()
       || 'Unknown Competitor';
@@ -185,7 +203,7 @@ function handleCurrentAttemptSet(event: LiveEvent<CurrentAttemptBundle | Current
       registrationId: attempt.registrationId,
       competitorName,
       liftType: attempt.liftType,
-      attemptNumber: attempt.attemptNumber as CurrentAttempt['attemptNumber'],
+      attemptNumber: attempt.attemptNumber,
       weight: attempt.weight,
       status: attempt.status,
       competitionOrder: attempt.competitionOrder ?? null,
@@ -253,21 +271,4 @@ export function initializeNotificationBridge(): () => void {
     clearInterval(cleanupInterval);
     isInitialized = false;
   };
-}
-
-// Export for manual control if needed
-export function showConnectionError(message: string) {
-  if (shouldShowNotification('connection-error')) {
-    toast.error(`Connection Error: ${message}`, {
-      duration: 7000,
-    });
-  }
-}
-
-export function showAttemptError(message: string) {
-  if (shouldShowNotification('attempt-error')) {
-    toast.error(`Attempt Error: ${message}`, {
-      duration: 5000,
-    });
-  }
 }

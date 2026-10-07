@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { cleanup } from '@testing-library/svelte';
-import { toast } from '$lib/ui/toast';
+import { toast, type Toast } from '$lib/ui/toast';
 
 // Ensure deterministic ids
 Object.defineProperty(global, 'crypto', {
@@ -21,7 +21,7 @@ describe('toast system', () => {
 
   it('adds toast with correct level and message', () => {
     const id = toast.warning('Heads up');
-    let items = [] as unknown[];
+    let items: Toast[] = [];
     const unsubscribe = toast.subscribe((value) => (items = value));
 
     expect(items).toHaveLength(1);
@@ -36,11 +36,11 @@ describe('toast system', () => {
 
     toast.remove(id1);
 
-    let items = [] as unknown[];
+    let items: Toast[] = [];
     const unsubscribe = toast.subscribe((value) => (items = value));
 
     expect(items).toHaveLength(1);
-    expect((items[0] as any).id).toBe(id2);
+    expect(items[0]?.id).toBe(id2);
 
     unsubscribe();
   });
@@ -48,7 +48,7 @@ describe('toast system', () => {
   it('auto-dismisses toast after duration', () => {
     toast.warning('Auto dismiss', { duration: 2000 });
 
-    let items = [] as unknown[];
+    let items: Toast[] = [];
     const unsubscribe = toast.subscribe((value) => (items = value));
     expect(items).toHaveLength(1);
 
@@ -62,7 +62,7 @@ describe('toast system', () => {
     toast.success('All good');
     toast.info('FYI');
 
-    let items = [] as unknown[];
+    let items: Toast[] = [];
     const unsubscribe = toast.subscribe((value) => (items = value));
 
     expect(items).toHaveLength(0);

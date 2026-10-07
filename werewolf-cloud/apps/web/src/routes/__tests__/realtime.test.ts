@@ -1,76 +1,152 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { Attempt, ConnectionStatus, LiveEvent, RealtimeSnapshot } from '$lib/types';
 
 // Mock getApiBase at module scope before importing realtime
 vi.mock('$lib/config', () => ({
   getApiBase: vi.fn(() => 'http://127.0.0.1:8787'),
 }));
 
+import { getApiBase } from '$lib/config';
 import { realtimeClient } from '$lib/realtime';
-import type { LiveEvent, ConnectionStatus } from '$lib/types';
 
-// Mock WebSocket constructor with required readyState constants
-const WebSocketCtor = vi.fn();
-(WebSocketCtor as unknown as { OPEN: number; CLOSED: number; CLOSING: number; CONNECTING: number }).OPEN = 1;
-(WebSocketCtor as unknown as { OPEN: number; CLOSED: number; CLOSING: number; CONNECTING: number }).CLOSED = 3;
-(WebSocketCtor as unknown as { OPEN: number; CLOSED: number; CLOSING: number; CONNECTING: number }).CLOSING = 2;
-(WebSocketCtor as unknown as { OPEN: number; CLOSED: number; CLOSING: number; CONNECTING: number }).CONNECTING = 0;
+const DEV_API_BASE = 'http://127.0.0.1:8787';
 
-let mockWebSocket: {
-  readyState: number;
-  send: ReturnType<typeof vi.fn>;
-  close: ReturnType<typeof vi.fn>;
-  onopen: () => void;
-  onmessage: (event: { data: string }) => void;
-  onclose: (event: { code: number; reason?: string }) => void;
-  onerror: (error: unknown) => void;
-};
+class MockWebSocket {
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSING = 2;
+  static readonly CLOSED = 3;
+  static instances: MockWebSocket[] = [];
 
-// Assign mocked constructor to global WebSocket
-(globalThis as any).WebSocket = WebSocketCtor as unknown as typeof WebSocket;
+  readyState: number = MockWebSocket.CONNECTING;
+  readonly sent: string[] = [];
+  closed = false;
 
-// Mock localStorage
-const localStorageMock = {
-  getItem: vi.fn(),
-  setItem: vi.fn(),
-  removeItem: vi.fn(),
-  clear: vi.fn(),
-};
-(globalThis as any).localStorage = localStorageMock as any;
+  onopen: ((event: Event) => void) | null = null;
+  onmessage: ((event: MessageEvent) => void) | null = null;
+  onclose: ((event: CloseEvent) => void) | null = null;
+  onerror: ((event: Event) => void) | null = null;
+
+  constructor(readonly url: string) {
+    MockWebSocket.instances.push(this);
+  }
+
+  send(data: string): void {
+    this.sent.push(data);
+  }
+
+  close(): void {
+    this.closed = true;
+    this.readyState = MockWebSocket.CLOSED;
+  }
+
+  open(): void {
+    this.readyState = MockWebSocket.OPEN;
+    this.onopen?.(new Event('open'));
+  }
+
+  message(payload: unknown): void {
+    this.onmessage?.({ data: JSON.stringify(payload) } as unknown as MessageEvent);
+  }
+
+  serverClose(code = 1006, reason = 'connection lost'): void {
+    this.readyState = MockWebSocket.CLOSED;
+    this.onclose?.({ code, reason } as unknown as CloseEvent);
+  }
+
+  fail(): void {
+    this.onerror?.(new Event('error'));
+  }
+}
+
+(globalThis as unknown as { WebSocket: typeof WebSocket }).WebSocket =
+  MockWebSocket as unknown as typeof WebSocket;
+
+interface FetchStubResponses {
+  attempts?: Attempt[];
+  current?: unknown;
+}
+
+function stubFetch(responses: FetchStubResponses = {}) {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = typeof input === 'string'
+      ? input
+      : input instanceof URL
+        ? input.toString()
+        : input.url;
+    const data = url.includes('/attempts/current')
+      ? responses.current ?? null
+      : responses.attempts ?? null;
+
+    const body = { data, error: null, requestId: 'test-request' };
+    const bodyText = JSON.stringify(body);
+
+    // Shaped like a real Response: the api client may read text() or json().
+    return {
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      headers: new Headers({ 'content-type': 'application/json' }),
+      text: async () => bodyText,
+      json: async () => body,
+    } as unknown as Response;
+  });
+
+  globalThis.fetch = fetchMock as unknown as typeof fetch;
+  return fetchMock;
+}
+
+function collectEvents(): LiveEvent[] {
+  const events: LiveEvent[] = [];
+  realtimeClient.events.subscribe((event) => {
+    if (event) events.push(event);
+  });
+  return events;
+}
+
+function snapshotEvents(events: LiveEvent[]): LiveEvent<RealtimeSnapshot>[] {
+  return events.filter((event): event is LiveEvent<RealtimeSnapshot> => event.type === 'snapshot');
+}
+
+function attemptFixture(id: string, overrides: Partial<Attempt> = {}): Attempt {
+  return {
+    id,
+    registrationId: 'registration-1',
+    liftType: 'Squat',
+    attemptNumber: 1,
+    weight: 100,
+    status: 'Pending',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    // Deliberately old: a snapshot must include attempts that were not updated recently.
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function lastSocket(): MockWebSocket {
+  const socket = MockWebSocket.instances[MockWebSocket.instances.length - 1];
+  if (!socket) throw new Error('No WebSocket instance was created');
+  return socket;
+}
+
+async function flushAsyncWork(): Promise<void> {
+  await vi.advanceTimersByTimeAsync(0);
+  // Let the stubbed fetch/json promise chain settle.
+  for (let tick = 0; tick < 20; tick++) {
+    await Promise.resolve();
+  }
+}
 
 describe('RealtimeClient', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    MockWebSocket.instances = [];
+    vi.mocked(getApiBase).mockReturnValue(DEV_API_BASE);
+    stubFetch();
 
-    mockWebSocket = {
-      readyState: (WebSocket as any).OPEN ?? 1,
-      send: vi.fn(),
-      close: vi.fn(),
-      onopen: () => undefined,
-      onmessage: () => undefined,
-      onclose: () => undefined,
-      onerror: () => undefined,
-    };
-
-    WebSocketCtor.mockClear();
-    WebSocketCtor.mockImplementation(() => mockWebSocket);
-
-    localStorageMock.getItem.mockReset();
-    localStorageMock.setItem.mockReset();
-    localStorageMock.removeItem.mockReset();
-    localStorageMock.clear.mockReset();
-
-    vi.clearAllMocks();
-
-    // Provide default fetch stub (tests can override)
-    (globalThis as any).fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ data: null }),
-    });
-
-    // Reset client state
     realtimeClient.disconnect();
-    (realtimeClient as any).__setEventForTests?.(null);
-    (realtimeClient as any).__setConnectionStatusForTests?.('offline');
+    realtimeClient.__setEventForTests(null);
+    realtimeClient.__setConnectionStatusForTests('offline');
   });
 
   afterEach(() => {
@@ -78,192 +154,322 @@ describe('RealtimeClient', () => {
     vi.runOnlyPendingTimers();
     vi.clearAllTimers();
     vi.useRealTimers();
-    delete (globalThis as any).fetch;
   });
 
   describe('Connection Management', () => {
-    it('should connect to WebSocket with correct URL for dev environment', () => {
+    it('derives the WebSocket URL from the configured API base', () => {
       realtimeClient.connect('test-contest-id');
 
-      expect(global.WebSocket).toHaveBeenCalledWith(
-        'ws://127.0.0.1:8787/ws/contests/test-contest-id'
-      );
+      expect(MockWebSocket.instances.map(socket => socket.url)).toEqual([
+        'ws://127.0.0.1:8787/ws/contests/test-contest-id',
+      ]);
     });
 
-    it('should connect to WebSocket with correct URL for prod environment', async () => {
-      // Mock prod environment for this test
-      const { getApiBase } = await import('$lib/config');
+    it('uses wss and the configured host for https API bases', () => {
       vi.mocked(getApiBase).mockReturnValue('https://api.example.com');
 
       realtimeClient.connect('test-contest-id');
 
-      expect(global.WebSocket).toHaveBeenCalledWith(
-        'wss://werewolf.r-krzywaznia-2c4.workers.dev/ws/contests/test-contest-id'
-      );
+      expect(MockWebSocket.instances.map(socket => socket.url)).toEqual([
+        'wss://api.example.com/ws/contests/test-contest-id',
+      ]);
     });
 
-    it('should update connection status to connected when WebSocket opens', () => {
-      let currentStatus: ConnectionStatus = 'offline';
-      const unsubscribe = realtimeClient.connectionStatus.subscribe(status => {
-        currentStatus = status;
+    it('keeps a base path and drops a trailing slash when building the URL', () => {
+      vi.mocked(getApiBase).mockReturnValue('https://api.example.com/base/');
+
+      realtimeClient.connect('test-contest-id');
+
+      expect(MockWebSocket.instances.map(socket => socket.url)).toEqual([
+        'wss://api.example.com/base/ws/contests/test-contest-id',
+      ]);
+    });
+
+    it('connects once per contest and reports connecting then connected', async () => {
+      const statuses: ConnectionStatus[] = [];
+      realtimeClient.connectionStatus.subscribe(status => statuses.push(status));
+
+      realtimeClient.connect('test-contest-id');
+      realtimeClient.connect('test-contest-id');
+
+      expect(MockWebSocket.instances).toHaveLength(1);
+      expect(statuses).toContain('connecting');
+
+      lastSocket().open();
+      await flushAsyncWork();
+
+      expect(statuses[statuses.length - 1]).toBe('connected');
+    });
+
+    it('disconnects and cleans up resources', () => {
+      realtimeClient.connect('test-contest-id');
+      const socket = lastSocket();
+
+      realtimeClient.disconnect();
+
+      expect(socket.closed).toBe(true);
+      expect(lastSocket().url).toContain('/ws/contests/test-contest-id');
+    });
+  });
+
+  describe('Snapshot reconciliation', () => {
+    it('fetches a full snapshot when the socket opens', async () => {
+      const events = collectEvents();
+      const fetchMock = stubFetch({ attempts: [attemptFixture('attempt-1')], current: null });
+
+      realtimeClient.connect('test-contest-id');
+      lastSocket().open();
+      await flushAsyncWork();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/contests/test-contest-id/attempts/current'),
+        expect.any(Object)
+      );
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/contests/test-contest-id/attempts'),
+        expect.any(Object)
+      );
+
+      const snapshots = snapshotEvents(events);
+      expect(snapshots).toHaveLength(1);
+      expect(snapshots[0]?.contestId).toBe('test-contest-id');
+      expect(snapshots[0]?.data.attempts.map(attempt => attempt.id)).toEqual(['attempt-1']);
+      expect(snapshots[0]?.data.currentAttempt).toBeNull();
+    });
+
+    it('stops polling and reconciles with a snapshot when the socket reopens', async () => {
+      const events = collectEvents();
+      const fetchMock = stubFetch();
+
+      realtimeClient.connect('test-contest-id');
+      lastSocket().serverClose(1006);
+
+      await vi.advanceTimersByTimeAsync(2000);
+      const callsWhilePolling = fetchMock.mock.calls.length;
+      expect(callsWhilePolling).toBeGreaterThan(0);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      lastSocket().open();
+      await flushAsyncWork();
+
+      expect(fetchMock.mock.calls.length).toBeGreaterThan(callsWhilePolling);
+      expect(snapshotEvents(events).length).toBeGreaterThan(0);
+
+      const callsAfterReconnect = fetchMock.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(10000);
+
+      expect(fetchMock.mock.calls.length).toBe(callsAfterReconnect);
+    });
+
+    it('recovers deletions and clears through full snapshots while polling', async () => {
+      const events = collectEvents();
+      stubFetch({
+        attempts: [attemptFixture('attempt-stays'), attemptFixture('attempt-deleted')],
+        current: { attempt: attemptFixture('attempt-deleted') },
       });
 
       realtimeClient.connect('test-contest-id');
+      lastSocket().serverClose(1006);
+      await flushAsyncWork();
 
-      // Simulate WebSocket open
-      mockWebSocket.onopen();
+      expect(snapshotEvents(events)[0]?.data.attempts.map(attempt => attempt.id))
+        .toEqual(['attempt-stays', 'attempt-deleted']);
+      expect(snapshotEvents(events)[0]?.data.currentAttempt).not.toBeNull();
 
-      expect(currentStatus).toBe('connected');
+      // Server-side deletion and current-attempt clear, with no recently updated attempt.
+      stubFetch({ attempts: [attemptFixture('attempt-stays')], current: null });
+      await vi.advanceTimersByTimeAsync(2000);
 
-      unsubscribe();
+      const snapshots = snapshotEvents(events);
+      expect(snapshots).toHaveLength(2);
+      expect(snapshots[1]?.data.attempts.map(attempt => attempt.id)).toEqual(['attempt-stays']);
+      expect(snapshots[1]?.data.currentAttempt).toBeNull();
     });
 
-    it('should disconnect and clean up resources', () => {
+    it('emits a snapshot even when the current attempt and attempts are empty', async () => {
+      const events = collectEvents();
+      stubFetch({ attempts: [], current: null });
+
       realtimeClient.connect('test-contest-id');
+      lastSocket().serverClose(1006);
+      await flushAsyncWork();
+
+      const snapshots = snapshotEvents(events);
+      expect(snapshots).toHaveLength(1);
+      expect(snapshots[0]?.data.attempts).toEqual([]);
+      expect(snapshots[0]?.data.currentAttempt).toBeNull();
+    });
+  });
+
+  describe('Reconnection and stale sockets', () => {
+    it('ignores the close of an old socket after switching contests', async () => {
+      const statuses: ConnectionStatus[] = [];
+      realtimeClient.connectionStatus.subscribe(status => statuses.push(status));
+      const fetchMock = stubFetch();
+
+      realtimeClient.connect('contest-a');
+      const firstSocket = lastSocket();
+
+      realtimeClient.connect('contest-b');
+      const secondSocket = lastSocket();
+
+      expect(firstSocket).not.toBe(secondSocket);
+      expect(firstSocket.closed).toBe(true);
+
+      secondSocket.open();
+      await flushAsyncWork();
+      const callsWhileConnected = fetchMock.mock.calls.length;
+
+      firstSocket.serverClose(1006, 'late close from contest-a');
+
+      expect(statuses[statuses.length - 1]).toBe('connected');
+      await vi.advanceTimersByTimeAsync(60000);
+
+      expect(MockWebSocket.instances).toHaveLength(2);
+      expect(fetchMock.mock.calls.length).toBe(callsWhileConnected);
+    });
+
+    it('ignores messages from a socket that belongs to a previous contest', async () => {
+      const events = collectEvents();
+
+      realtimeClient.connect('contest-a');
+      const firstSocket = lastSocket();
+
+      realtimeClient.connect('contest-b');
+
+      firstSocket.message({
+        type: 'attempt.upserted',
+        contestId: 'contest-a',
+        timestamp: new Date().toISOString(),
+        payload: { id: 'stale-attempt' },
+      });
+
+      expect(events).toHaveLength(0);
+    });
+
+    it('does not reconnect or poll after disconnecting during a retry', async () => {
+      const events = collectEvents();
+      const fetchMock = stubFetch();
+
+      realtimeClient.connect('test-contest-id');
+      lastSocket().serverClose(1006);
+
+      const callsBeforeDisconnect = fetchMock.mock.calls.length;
       realtimeClient.disconnect();
 
-      expect(mockWebSocket.close).toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(60000);
+      await flushAsyncWork();
+
+      expect(MockWebSocket.instances).toHaveLength(1);
+      expect(fetchMock.mock.calls.length).toBe(callsBeforeDisconnect);
+      expect(snapshotEvents(events)).toHaveLength(0);
+    });
+
+    it('retries with exponential backoff and then falls back to polling', async () => {
+      const fetchMock = stubFetch();
+
+      realtimeClient.connect('test-contest-id');
+
+      for (let attempt = 0; attempt < 6; attempt++) {
+        lastSocket().serverClose(1006, 'Connection lost');
+        await vi.advanceTimersByTimeAsync(1000 * 2 ** attempt);
+      }
+
+      // Original socket + 5 reconnection attempts, no sixth retry.
+      expect(MockWebSocket.instances).toHaveLength(6);
+      expect(fetchMock.mock.calls.length).toBeGreaterThan(0);
+    });
+
+    it('starts polling when the socket errors', async () => {
+      const fetchMock = stubFetch();
+
+      realtimeClient.connect('test-contest-id');
+      lastSocket().fail();
+      await flushAsyncWork();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/contests/test-contest-id/attempts/current'),
+        expect.any(Object)
+      );
     });
   });
 
   describe('Event Handling', () => {
-    it('should emit events when receiving WebSocket messages', () => {
-      let receivedEvent: LiveEvent | null = null;
-      const unsubscribe = realtimeClient.events.subscribe(event => {
-        receivedEvent = event;
-      });
+    it('emits WebSocket events and normalises payload to data', async () => {
+      const events = collectEvents();
 
       realtimeClient.connect('test-contest-id');
+      lastSocket().open();
+      await flushAsyncWork();
 
-      const testEvent: LiveEvent = {
+      const testEvent = {
         type: 'attempt.upserted',
         contestId: 'test-contest-id',
         timestamp: new Date().toISOString(),
-        data: { id: 'test-attempt', weight: 100 },
+        payload: { id: 'test-attempt', weight: 100 },
       };
 
-      // Simulate WebSocket message
-      mockWebSocket.onmessage({ data: JSON.stringify(testEvent) });
+      lastSocket().message(testEvent);
 
-      expect(receivedEvent).toEqual(testEvent);
-
-      unsubscribe();
+      const received = events[events.length - 1];
+      expect(received?.type).toBe('attempt.upserted');
+      expect(received?.contestId).toBe('test-contest-id');
+      expect(received?.data).toEqual({ id: 'test-attempt', weight: 100 });
     });
 
-    it('should ignore events for other contests', () => {
-      const received: LiveEvent[] = [];
-      const unsubscribe = realtimeClient.events.subscribe((event) => {
-        if (event) received.push(event);
-      });
+    it('ignores events for other contests', async () => {
+      const events = collectEvents();
 
       realtimeClient.connect('contest-a');
+      lastSocket().open();
+      await flushAsyncWork();
 
-      const foreignEvent: LiveEvent = {
+      lastSocket().message({
         type: 'attempt.upserted',
         contestId: 'contest-b',
         timestamp: new Date().toISOString(),
-        data: { id: 'foreign', weight: 100 },
-      };
+        payload: { id: 'foreign' },
+      });
+      expect(events.filter(event => event.type === 'attempt.upserted')).toHaveLength(0);
 
-      mockWebSocket.onmessage({ data: JSON.stringify(foreignEvent) });
-      expect(received).toHaveLength(0);
-
-      const localEvent: LiveEvent = {
+      lastSocket().message({
         type: 'attempt.upserted',
         contestId: 'contest-a',
         timestamp: new Date().toISOString(),
-        data: { id: 'local', weight: 120 },
-      };
-
-      mockWebSocket.onmessage({ data: JSON.stringify(localEvent) });
-      expect(received).toHaveLength(1);
-      expect(received[0]?.data).toMatchObject({ id: 'local' });
-
-      unsubscribe();
-    });
-  });
-
-  describe('Reconnection Logic', () => {
-    it('should attempt reconnection on WebSocket close with exponential backoff', () => {
-      realtimeClient.connect('test-contest-id');
-
-      // Simulate WebSocket close
-      mockWebSocket.onclose({ code: 1006, reason: 'Connection lost' });
-
-      // Fast-forward time for first reconnection attempt
-      vi.advanceTimersByTime(1000);
-
-      expect(global.WebSocket).toHaveBeenCalledTimes(2); // Original + 1 reconnection
-    });
-
-    it('should stop reconnection attempts after max attempts', () => {
-      realtimeClient.connect('test-contest-id');
-
-      // Simulate multiple connection failures
-      for (let i = 0; i < 6; i++) {
-        mockWebSocket.onclose({ code: 1006, reason: 'Connection lost' });
-        vi.advanceTimersByTime(1000 * Math.pow(2, i)); // Exponential backoff
-      }
-
-      // Should have stopped after 5 attempts (maxReconnectAttempts)
-      expect(global.WebSocket).toHaveBeenCalledTimes(6); // Original + 5 reconnection attempts
-    });
-  });
-
-  describe('Polling Fallback', () => {
-    it('should start polling when WebSocket connection fails', () => {
-      // Mock fetch for polling
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ data: null }),
+        payload: { id: 'local' },
       });
 
-      realtimeClient.connect('test-contest-id');
-
-      // Simulate WebSocket error
-      mockWebSocket.onerror(new Error('Connection failed'));
-
-      // Fast-forward time for polling interval
-      vi.advanceTimersByTime(2000);
-
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/contests/test-contest-id/attempts/current'),
-        expect.any(Object)
-      );
+      const localEvents = events.filter(event => event.type === 'attempt.upserted');
+      expect(localEvents).toHaveLength(1);
+      expect(localEvents[0]?.data).toMatchObject({ id: 'local' });
     });
 
-    it('should start polling when connection fails', () => {
-      // Mock fetch for polling
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ data: null }),
-      });
+    it('ignores malformed WebSocket messages', async () => {
+      const events = collectEvents();
 
       realtimeClient.connect('test-contest-id');
+      lastSocket().open();
+      await flushAsyncWork();
+      const callsBefore = events.length;
 
-      // Simulate WebSocket close to trigger polling
-      mockWebSocket.onclose({ code: 1006, reason: 'Connection lost' } as any);
+      lastSocket().onmessage?.({ data: 'not json' } as unknown as MessageEvent);
+      lastSocket().onmessage?.({ data: JSON.stringify({ missing: 'type' }) } as unknown as MessageEvent);
 
-      // Fast-forward time for polling
-      vi.advanceTimersByTime(2000);
-
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/contests/test-contest-id/attempts/current'),
-        expect.any(Object)
-      );
+      expect(events).toHaveLength(callsBefore);
     });
   });
 
   describe('Heartbeat', () => {
-    it('should send heartbeat ping while connected', () => {
+    it('sends heartbeat ping while connected', async () => {
       realtimeClient.connect('contest-heartbeat');
-      mockWebSocket.onopen();
+      lastSocket().open();
+      await flushAsyncWork();
 
-      vi.advanceTimersByTime(30000);
-      expect(mockWebSocket.send).toHaveBeenCalledWith(JSON.stringify({ type: 'ping' }));
+      await vi.advanceTimersByTimeAsync(30000);
+      expect(lastSocket().sent).toContain(JSON.stringify({ type: 'ping' }));
 
-      vi.advanceTimersByTime(30000);
-      expect(mockWebSocket.send).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(30000);
+      expect(lastSocket().sent.filter(message => message === JSON.stringify({ type: 'ping' }))).toHaveLength(2);
     });
   });
 });

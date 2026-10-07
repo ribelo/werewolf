@@ -1,11 +1,5 @@
 import type { Readable } from 'svelte/store';
 
-export interface ApiResponse<T> {
-  data: T;
-  error: string | null;
-  requestId?: string;
-}
-
 export interface ContestSummary {
   id: string;
   name: string;
@@ -435,16 +429,10 @@ export interface ContestCategories {
 
 export type ReferenceData = ContestCategories;
 
-export class ApiError extends Error {
-  constructor(public override message: string, public status: number) {
-    super(message);
-    this.name = 'ApiError';
-  }
-}
-
 // Real-time WebSocket types
 export type LiveEventType =
   | 'attempt.upserted'
+  | 'attempt.deleted'
   | 'attempt.resultUpdated'
   | 'attempt.currentSet'
   | 'attempt.currentCleared'
@@ -452,7 +440,8 @@ export type LiveEventType =
   | 'registration.deleted'
   | 'display.filtersSynced'
   | 'display.qrVisibility'
-  | 'heartbeat';
+  | 'heartbeat'
+  | 'snapshot';
 
 export interface LiveEvent<T = unknown> {
   type: LiveEventType;
@@ -460,6 +449,18 @@ export interface LiveEvent<T = unknown> {
   timestamp: string;
   data: T;
   payload?: T;
+}
+
+/**
+ * Full state of a contest as fetched over HTTP. Emitted as a `snapshot` event
+ * when the realtime client connects (or reconnects) and on every polling cycle,
+ * so consumers can replace their state instead of replaying individual events.
+ */
+export interface RealtimeSnapshot {
+  contestId: string;
+  attempts: Attempt[];
+  currentAttempt: CurrentAttemptBundle | null;
+  fetchedAt: string;
 }
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'offline';

@@ -132,8 +132,5 @@ export const contestStore = createContestStore();
 
 // Derived stores for convenience
 export const currentContest = derived(contestStore, $state => $state.contest);
-export const currentRegistrations = derived(contestStore, $state => $state.registrations);
-export const currentAttempts = derived(contestStore, $state => $state.attempts);
-export const lastContestUpdate = derived(contestStore, $state => $state.lastUpdated);
 export const currentAgeCategories = derived(contestStore, $state => $state.ageCategories);
 export const currentWeightClasses = derived(contestStore, $state => $state.weightClasses);

@@ -39,7 +39,7 @@ const MAX_TOASTS = 5;
 const DEFAULT_DURATION = 5000;
 
 function createToastStore(): ToastStore {
-  const { subscribe, set, update } = writable<Toast[]>([]);
+  const { subscribe, update } = writable<Toast[]>([]);
 
   function addToast(config: ToastConfig): string {
     const id = config.id || crypto.randomUUID();
