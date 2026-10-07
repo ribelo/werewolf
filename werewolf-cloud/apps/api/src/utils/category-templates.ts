@@ -295,3 +295,17 @@ export async function replaceContestWeightClasses(
     );
   }
 }
+
+/**
+ * Drop every category of a contest and re-seed the bundled defaults. Both
+ * deletes share one batch so a contest cannot keep age categories without
+ * weight classes (or the reverse) when the second statement fails.
+ */
+export async function resetContestCategories(db: Database, contestId: string): Promise<void> {
+  await db.batch([
+    db.prepare('DELETE FROM contest_age_categories WHERE contest_id = ?').bind(contestId),
+    db.prepare('DELETE FROM contest_weight_classes WHERE contest_id = ?').bind(contestId),
+  ]);
+
+  await seedContestCategories(db, contestId);
+}

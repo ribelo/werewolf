@@ -5,9 +5,13 @@ import type { LiftType } from '@werewolf/domain';
 import type { WerewolfEnvironment, WerewolfBindings } from '../env';
 import { executeQuery, executeQueryOne, executeMutation, generateId, getCurrentTimestamp, convertKeysToCamelCase } from '../utils/database';
 import { DEFAULT_PLATE_SET, getPlateColor } from '../utils/settings-helpers';
-import { seedContestCategories } from '../utils/category-templates';
+import { getContestAgeDescriptors, seedContestCategories } from '../utils/category-templates';
 import { seedContestTags } from '../utils/tags';
 import { publishEvent } from '../live/publish';
+import { determineAgeCategory } from '@werewolf/domain/services/coefficients';
+import { getMcCulloughCoefficient } from '../services/coefficients';
+import { calculateRegistrationResults, updateAllRankings } from '../services/results';
+import { invalidateResultsCache } from '../utils/cache';
 import {
   contestLiftsFromRow,
   ensureLiftsForContest,
@@ -17,7 +21,7 @@ import {
   removeAttemptsForInactiveLifts,
 } from '../utils/lifts';
 import { mapRegistrationRow } from '../utils/registration-map';
-import { contestSchema, contestCreateSchema, contestUpdateSchema, contestStatusSchema } from '@werewolf/domain/models/contest';
+import { contestCreateSchema, contestUpdateSchema, contestStatusSchema } from '@werewolf/domain/models/contest';
 
 const activeFlightSchema = z.object({
   activeFlight: z.string().min(1).nullable().optional(),
@@ -194,7 +198,7 @@ contests.patch('/:contestId', zValidator('json', contestUpdateSchema), async (c)
 
   // Build dynamic update query
   const updates: string[] = [];
-  const params: any[] = [];
+  const params: unknown[] = [];
 
   if (input.name !== undefined) {
     updates.push('name = ?');
@@ -292,6 +296,10 @@ contests.patch('/:contestId', zValidator('json', contestUpdateSchema), async (c)
     await syncContestRegistrationsForLifts(c.env, db, contestId, nextLifts as LiftType[]);
   }
 
+  if (existingContest.date !== contest.date) {
+    await reclassifyRegistrationsForContestDate(c.env, db, contestId, contest.date);
+  }
+
   return c.json({
     data: convertKeysToCamelCase(contest),
     error: null,
@@ -326,6 +334,12 @@ contests.patch('/:contestId/active-flight', zValidator('json', activeFlightSchem
     `,
     [contestId]
   );
+
+  await publishEvent(c.env, contestId, {
+    type: 'queue.updated',
+    payload: { flight: contest?.active_flight ?? null },
+  });
+  await invalidateResultsCache(c.env.KV, contestId);
 
   return c.json({
     data: convertKeysToCamelCase(contest),
@@ -431,7 +445,7 @@ contests.put('/:contestId/state', zValidator('json', z.object({
   } else {
     // Update existing state
     const updates: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
 
     if (input.status !== undefined) {
       updates.push('status = ?');
@@ -456,7 +470,12 @@ contests.put('/:contestId/state', zValidator('json', z.object({
     }
   }
 
-  const state = await executeQueryOne(
+  const state = await executeQueryOne<{
+    contest_id: string;
+    status: string;
+    current_lift: string | null;
+    current_round: number | null;
+  }>(
     db,
     `
     SELECT
@@ -469,6 +488,18 @@ contests.put('/:contestId/state', zValidator('json', z.object({
     `,
     [contestId]
   );
+
+  if (state) {
+    await publishEvent(c.env, contestId, {
+      type: 'contest.stateChanged',
+      payload: {
+        status: state.status,
+        currentLift: state.current_lift,
+        currentRound: state.current_round ?? 1,
+      },
+    });
+    await invalidateResultsCache(c.env.KV, contestId);
+  }
 
   return c.json({
     data: convertKeysToCamelCase(state),
@@ -499,6 +530,8 @@ async function syncContestRegistrationsForLifts(
     return;
   }
 
+  let resultsChanged = false;
+
   for (const registration of registrations) {
     const currentLiftRows = await executeQuery<{ lift_type: LiftType }>(
       db,
@@ -511,7 +544,6 @@ async function syncContestRegistrationsForLifts(
     const liftsChanged = !liftsEqual(currentLifts, nextLifts);
 
     const rackUpdates: string[] = [];
-    const rackParams: any[] = [];
 
     if (!nextLifts.includes('Squat') && registration.rack_height_squat !== null) {
       rackUpdates.push('rack_height_squat = NULL');
@@ -525,18 +557,19 @@ async function syncContestRegistrationsForLifts(
     }
 
     if (rackUpdates.length > 0) {
-      rackUpdates.push('updated_at = ?');
-      rackParams.push(getCurrentTimestamp());
-      rackParams.push(registration.id);
       await executeMutation(
         db,
         `UPDATE registrations SET ${rackUpdates.join(', ')} WHERE id = ?`,
-        rackParams
+        [registration.id]
       );
     }
 
     if (liftsChanged || rackUpdates.length > 0) {
       await removeAttemptsForInactiveLifts(env, contestId, db, registration.id, nextLifts);
+      // Removing attempts changes the persisted totals even when the attempt
+      // deletion itself could not infer that, so rebuild this registration.
+      await calculateRegistrationResults(db, registration.id);
+      resultsChanged = true;
 
       const refreshed = await executeQueryOne(
         db,
@@ -568,6 +601,79 @@ async function syncContestRegistrationsForLifts(
       }
     }
   }
+
+  if (resultsChanged) {
+    await updateAllRankings(db, contestId);
+    await invalidateResultsCache(env.KV, contestId);
+  }
+}
+
+/**
+ * A contest date change moves every registration across age categories and
+ * changes the McCullough coefficient its results were computed with.
+ */
+async function reclassifyRegistrationsForContestDate(
+  env: WerewolfBindings,
+  db: D1Database,
+  contestId: string,
+  contestDate: string,
+): Promise<void> {
+  const registrations = await executeQuery<{
+    id: string;
+    age_category_id: string | null;
+    mccullough_coefficient: number | null;
+    birth_date: string;
+  }>(
+    db,
+    `
+    SELECT r.id, r.age_category_id, r.mccullough_coefficient, c.birth_date
+    FROM registrations r
+    JOIN competitors c ON r.competitor_id = c.id
+    WHERE r.contest_id = ?
+    `,
+    [contestId]
+  );
+
+  if (registrations.length === 0) {
+    return;
+  }
+
+  const ageDescriptors = await getContestAgeDescriptors(db, contestId);
+  let resultsChanged = false;
+
+  for (const registration of registrations) {
+    const resolvedCode = determineAgeCategory(registration.birth_date, contestDate, ageDescriptors);
+    const ageCategory = ageDescriptors.find((descriptor) => descriptor.code === resolvedCode);
+    const mccullough = await getMcCulloughCoefficient(db, registration.birth_date, contestDate);
+
+    const updates: string[] = [];
+    const params: unknown[] = [];
+
+    if (ageCategory && ageCategory.id !== registration.age_category_id) {
+      updates.push('age_category_id = ?');
+      params.push(ageCategory.id);
+    }
+    if (registration.mccullough_coefficient !== mccullough) {
+      updates.push('mccullough_coefficient = ?');
+      params.push(mccullough);
+    }
+
+    if (updates.length === 0) {
+      continue;
+    }
+
+    params.push(registration.id);
+    await executeMutation(db, `UPDATE registrations SET ${updates.join(', ')} WHERE id = ?`, params);
+    await calculateRegistrationResults(db, registration.id);
+    resultsChanged = true;
+  }
+
+  if (!resultsChanged) {
+    return;
+  }
+
+  await updateAllRankings(db, contestId);
+  await invalidateResultsCache(env.KV, contestId);
 }
 
 // Helper function to create default plate sets

@@ -12,9 +12,10 @@ import {
   listContestWeightClasses,
   replaceContestAgeCategories,
   replaceContestWeightClasses,
+  resetContestCategories,
   seedContestCategories,
 } from '../utils/category-templates';
-import { executeMutation, executeQueryOne, convertKeysToCamelCase, type Database } from '../utils/database';
+import { executeQueryOne, convertKeysToCamelCase, type Database } from '../utils/database';
 
 const categories = new Hono<WerewolfEnvironment>();
 
@@ -171,9 +172,7 @@ categories.post('/defaults', async (c) => {
     return c.json({ data: null, error: 'CONTEST_HAS_REGISTRATIONS', requestId: c.get('requestId') }, 409);
   }
 
-  await executeMutation(db, 'DELETE FROM contest_age_categories WHERE contest_id = ?', [contestId]);
-  await executeMutation(db, 'DELETE FROM contest_weight_classes WHERE contest_id = ?', [contestId]);
-  await seedContestCategories(db, contestId);
+  await resetContestCategories(db, contestId);
 
   const [ageCategories, weightClasses] = await Promise.all([
     listContestAgeCategories(db, contestId),

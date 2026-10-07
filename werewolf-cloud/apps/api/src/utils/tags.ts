@@ -12,6 +12,11 @@ export interface ContestTagRow {
   updated_at: string;
 }
 
+interface RegistrationLabelRow {
+  id: string;
+  labels: string | null;
+}
+
 export async function seedContestTags(db: Database, contestId: string): Promise<void> {
   const existing = await executeQueryOne<{ id: string }>(
     db,
@@ -67,37 +72,58 @@ export async function assertContestTags(db: Database, contestId: string, labels:
   }
 }
 
+async function listRegistrationLabels(db: Database, contestId: string): Promise<RegistrationLabelRow[]> {
+  return executeQuery<RegistrationLabelRow>(
+    db,
+    'SELECT id, labels FROM registrations WHERE contest_id = ?',
+    [contestId]
+  );
+}
+
+/**
+ * Build the label rewrites for a contest. `rewrite` returns the next label
+ * array, or null when the row must stay untouched.
+ */
+function rewriteLabelStatements(
+  db: Database,
+  registrations: readonly RegistrationLabelRow[],
+  rewrite: (labels: string[]) => string[] | null,
+): D1PreparedStatement[] {
+  const statements: D1PreparedStatement[] = [];
+
+  for (const registration of registrations) {
+    const labels = parseLabels(registration.labels);
+    const next = rewrite(labels);
+    if (next === null) {
+      continue;
+    }
+
+    statements.push(
+      db
+        .prepare('UPDATE registrations SET labels = ? WHERE id = ?')
+        .bind(JSON.stringify(next), registration.id)
+    );
+  }
+
+  return statements;
+}
+
 export async function removeContestTag(
   db: Database,
   contestId: string,
   tagId: string,
   label: string,
 ): Promise<void> {
-  const timestamp = getCurrentTimestamp();
+  const registrations = await listRegistrationLabels(db, contestId);
 
-  await executeMutation(
-    db,
-    'DELETE FROM contest_tags WHERE contest_id = ? AND id = ?',
-    [contestId, tagId]
-  );
-
-  const registrations = await executeQuery<{ id: string; labels: string | null }>(
-    db,
-    'SELECT id, labels FROM registrations WHERE contest_id = ?',
-    [contestId]
-  );
-
-  for (const registration of registrations) {
-    const labels = parseLabels(registration.labels);
-    const filtered = labels.filter((item) => item !== label);
-    if (filtered.length !== labels.length) {
-      await executeMutation(
-        db,
-        'UPDATE registrations SET labels = ?, updated_at = ? WHERE id = ?',
-        [JSON.stringify(filtered), timestamp, registration.id]
-      );
-    }
-  }
+  // One batch keeps the tag row and every label array in step: D1 rolls the
+  // whole batch back when any statement fails.
+  await db.batch([
+    db.prepare('DELETE FROM contest_tags WHERE contest_id = ? AND id = ?').bind(contestId, tagId),
+    ...rewriteLabelStatements(db, registrations, (labels) =>
+      labels.includes(label) ? labels.filter((item) => item !== label) : null
+    ),
+  ]);
 }
 
 export async function renameContestTag(
@@ -107,29 +133,17 @@ export async function renameContestTag(
   previousLabel: string,
   nextLabel: string,
 ): Promise<void> {
+  const registrations = await listRegistrationLabels(db, contestId);
   const timestamp = getCurrentTimestamp();
 
-  await executeMutation(
-    db,
-    'UPDATE contest_tags SET label = ?, updated_at = ? WHERE contest_id = ? AND id = ?',
-    [nextLabel, timestamp, contestId, tagId]
-  );
-
-  const registrations = await executeQuery<{ id: string; labels: string | null }>(
-    db,
-    'SELECT id, labels FROM registrations WHERE contest_id = ?',
-    [contestId]
-  );
-
-  for (const registration of registrations) {
-    const labels = parseLabels(registration.labels);
-    if (labels.includes(previousLabel)) {
-      const updated = labels.map((item) => (item === previousLabel ? nextLabel : item));
-      await executeMutation(
-        db,
-        'UPDATE registrations SET labels = ?, updated_at = ? WHERE id = ?',
-        [JSON.stringify(updated), timestamp, registration.id]
-      );
-    }
-  }
+  await db.batch([
+    db
+      .prepare('UPDATE contest_tags SET label = ?, updated_at = ? WHERE contest_id = ? AND id = ?')
+      .bind(nextLabel, timestamp, contestId, tagId),
+    ...rewriteLabelStatements(db, registrations, (labels) =>
+      labels.includes(previousLabel)
+        ? labels.map((item) => (item === previousLabel ? nextLabel : item))
+        : null
+    ),
+  ]);
 }
