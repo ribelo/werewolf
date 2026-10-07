@@ -16,6 +16,25 @@
   import { _ } from 'svelte-i18n';
   import { determineAgeCategory, determineWeightClass } from '@werewolf/domain';
   import { currentContest } from '$lib/ui/contest-store';
+  import {
+    buildCompetitorPayload,
+    buildRegistrationPayload,
+    competitorDraftFromDetail,
+    createEmptyCompetitorDraft,
+    createOpeningAttempts,
+    createRegistrationDraft,
+    openingAttemptsFromAttempts,
+    parseFloatInput,
+    parseIntInput,
+    toAgeCategoryDescriptors,
+    toWeightClassDescriptors,
+    type CompetitorDraft,
+    type CompetitorModalResult,
+    type OpeningAttempts,
+    type OpeningAttemptPayload,
+    type RegistrationCreatePayload,
+    type RegistrationDraft,
+  } from '$lib/components/competitor-modal-model';
 
   export let competitor: CompetitorSummary | null = null;
   export let registration: Registration | null = null;
@@ -25,8 +44,8 @@
   export let contestId: string | null = null;
   export let contestTags: ContestTag[] = [];
   export let lifts: LiftType[] = ['Squat', 'Bench', 'Deadlift'];
-  export let onClose: (result?: unknown) => void = () => {};
-  export let onSaved: (result?: unknown) => void = () => {};
+  export let onClose: (result?: CompetitorModalResult) => void = () => {};
+  export let onSaved: (result?: CompetitorModalResult) => void = () => {};
 
   const genderOptions = ['Male', 'Female'] as const;
   type GenderOption = (typeof genderOptions)[number];
@@ -152,7 +171,7 @@
     error = null;
     try {
       await apiClient.delete<{ success: boolean }>(`/competitors/${competitor.id}`);
-      const payload: { deletedCompetitorId: string; deletedRegistrationId?: string } = {
+      const payload: CompetitorModalResult = {
         deletedCompetitorId: competitor.id,
       };
       if (registration?.id) {
@@ -177,47 +196,23 @@
   let isSaving = false;
   let error: string | null = null;
   let success: string | null = null;
-  let openingAttemptByLift: Record<LiftType, string> = { Squat: '', Bench: '', Deadlift: '' };
-  let liveAgeCategoryName: string | null = registration?.ageCategoryName ?? null;
-
-  $: contestDate = (get(currentContest)?.date ?? '').toString();
   let isDeleting = false;
+
+  let competitorDraft: CompetitorDraft = createEmptyCompetitorDraft();
+  if (competitor?.gender) {
+    competitorDraft = { ...competitorDraft, gender: competitor.gender };
+  }
+
+  let registrationDraft: RegistrationDraft = createRegistrationDraft(registration);
+  let openingAttempts: OpeningAttempts = createOpeningAttempts();
+
+  let contestDate = '';
+  $: contestDate = $currentContest?.date ?? '';
+
+  let liveAgeCategoryName: string | null = registration?.ageCategoryName ?? null;
 
   // competition order removed
 
-  let form = {
-    firstName: '',
-    lastName: '',
-    birthDate: '',
-    gender: 'Male',
-    club: '',
-    city: '',
-    notes: '',
-  };
-
-  if (competitor?.gender) {
-    form.gender = competitor.gender;
-  }
-
-  type RegistrationFormState = {
-    bodyweight: string;
-    rackHeightSquat: string;
-    rackHeightBench: string;
-    weightClassId: string;
-    ageCategoryId: string;
-  };
-
-  function createRegistrationForm(source: Registration | null): RegistrationFormState {
-    return {
-      bodyweight: source?.bodyweight != null ? String(source.bodyweight) : '',
-      rackHeightSquat: source?.rackHeightSquat != null ? String(source.rackHeightSquat) : '',
-      rackHeightBench: source?.rackHeightBench != null ? String(source.rackHeightBench) : '',
-      weightClassId: source?.weightClassId ?? '',
-      ageCategoryId: source?.ageCategoryId ?? '',
-    };
-  }
-
-  let registrationForm: RegistrationFormState = createRegistrationForm(registration);
   type SelectOption = { id: string; label: string };
   let weightClassOptions: SelectOption[] = [];
   let ageCategoryOptions: SelectOption[] = [];
@@ -272,8 +267,8 @@
     : Boolean(contestId);
 
   $: weightClassDisplay = (() => {
-    if (registrationForm.weightClassId) {
-      const option = weightClassOptions.find((item) => item.id === registrationForm.weightClassId);
+    if (registrationDraft.weightClassId) {
+      const option = weightClassOptions.find((item) => item.id === registrationDraft.weightClassId);
       if (option) {
         return option.label;
       }
@@ -294,8 +289,8 @@
   })();
 
   $: ageCategoryDisplay = (() => {
-    if (registrationForm.ageCategoryId) {
-      const option = ageCategoryOptions.find((item) => item.id === registrationForm.ageCategoryId);
+    if (registrationDraft.ageCategoryId) {
+      const option = ageCategoryOptions.find((item) => item.id === registrationDraft.ageCategoryId);
       if (option) return option.label;
       if (liveAgeCategoryName) return liveAgeCategoryName;
     }
@@ -317,16 +312,20 @@
   $: if (showRegistrationSection && ageCategories.length > 0) {
     autoAssignAgeCategory();
   }
-  $: if (registration && contestId) {
-    loadOpeningAttempts();
+
+  // Opening attempts are loaded once per registration: this reactive block is the
+  // only trigger, so mounting the modal never fires the request twice.
+  let openingAttemptsRequest = 0;
+  let openingAttemptsLoadedFor: string | null = null;
+
+  $: if (registration?.id && contestId && openingAttemptsLoadedFor !== registration.id) {
+    openingAttemptsLoadedFor = registration.id;
+    void loadOpeningAttempts(registration.id);
   }
 
   onMount(async () => {
     if (mode === 'edit' && competitor) {
       await loadCompetitor(competitor.id);
-    }
-    if (registration) {
-      await loadOpeningAttempts();
     }
   });
 
@@ -338,15 +337,7 @@
 
       if (detailResp.data) {
         detail = detailResp.data;
-        form = {
-          firstName: detailResp.data.firstName ?? '',
-          lastName: detailResp.data.lastName ?? '',
-          birthDate: detailResp.data.birthDate ?? '',
-          gender: detailResp.data.gender ?? 'Male',
-          club: detailResp.data.club ?? '',
-          city: detailResp.data.city ?? '',
-          notes: detailResp.data.notes ?? '',
-        };
+        competitorDraft = competitorDraftFromDetail(detailResp.data);
         // competition order removed
       } else if (detailResp.error) {
         error = detailResp.error;
@@ -358,24 +349,24 @@
     }
   }
 
-  async function loadOpeningAttempts() {
-    if (!registration || !contestId) return;
-    
+  async function loadOpeningAttempts(registrationId: string) {
+    if (!contestId) return;
+
+    const request = ++openingAttemptsRequest;
     try {
-      const attemptsResp = await apiClient.get<Attempt[]>(`/contests/${contestId}/registrations/${registration.id}/attempts`);
-      if (attemptsResp.data) {
-        const attempts = attemptsResp.data;
-        const updatedOpeningAttempts: Record<LiftType, string> = { Squat: '', Bench: '', Deadlift: '' };
-        
-        for (const attempt of attempts) {
-          if (attempt.attemptNumber === 1 && selectedLifts.includes(attempt.liftType as LiftType)) {
-            updatedOpeningAttempts[attempt.liftType as LiftType] = String(attempt.weight);
-          }
-        }
-        
-        openingAttemptByLift = updatedOpeningAttempts;
+      const attemptsResp = await apiClient.get<Attempt[]>(
+        `/contests/${contestId}/registrations/${registrationId}/attempts`,
+      );
+      // A response that arrives after the modal switched to another registration
+      // must not overwrite the attempts the operator is looking at.
+      if (request !== openingAttemptsRequest || registration?.id !== registrationId) {
+        return;
       }
+      openingAttempts = openingAttemptsFromAttempts(attemptsResp.data ?? [], selectedLifts);
     } catch (err) {
+      if (request !== openingAttemptsRequest) {
+        return;
+      }
       // Silently fail - opening attempts will remain empty
       console.warn('Failed to load opening attempts:', err);
     }
@@ -383,15 +374,7 @@
 
   function resetState() {
     if (competitor && detail) {
-      form = {
-        firstName: detail.firstName,
-        lastName: detail.lastName,
-        birthDate: detail.birthDate,
-        gender: detail.gender,
-        club: detail.club ?? '',
-        city: detail.city ?? '',
-        notes: detail.notes ?? '',
-      };
+      competitorDraft = competitorDraftFromDetail(detail);
       // competition order removed
       success = null;
       error = null;
@@ -400,30 +383,14 @@
   }
 
   function resetRegistrationState() {
-    registrationForm = createRegistrationForm(registration);
-    openingAttemptByLift = { Squat: '', Bench: '', Deadlift: '' };
+    registrationDraft = createRegistrationDraft(registration);
+    openingAttempts = createOpeningAttempts();
     liveWeightClassName = registration?.weightClassName ?? null;
     liveAgeCategoryName = registration?.ageCategoryName ?? null;
   }
 
-  function parseFloatInput(value: string): number | null {
-    if (value === undefined || value === null) return null;
-    const trimmed = value.toString().trim();
-    if (trimmed === '') return null;
-    const parsed = Number.parseFloat(trimmed.replace(',', '.'));
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  function parseIntInput(value: string): number | null {
-    if (value === undefined || value === null) return null;
-    const trimmed = value.toString().trim();
-    if (trimmed === '') return null;
-    const parsed = Number.parseInt(trimmed, 10);
-    return Number.isNaN(parsed) ? null : parsed;
-  }
-
   function resolveGenderForClassification(): string | null {
-    const candidates = [form.gender, registration?.gender, competitor?.gender];
+    const candidates = [competitorDraft.gender, registration?.gender, competitor?.gender];
     for (const candidate of candidates) {
       if (!candidate) continue;
       const trimmed = candidate.toString().trim();
@@ -436,40 +403,27 @@
   }
 
   function autoAssignWeightClass() {
-  if (!showRegistrationSection) return;
-  if (!Array.isArray(weightClasses) || weightClasses.length === 0) return;
+    if (!showRegistrationSection) return;
 
-  const weight = parseFloatInput(registrationForm.bodyweight);
-  if (weight === null || weight <= 0) {
+    const weight = parseFloatInput(registrationDraft.bodyweight);
+    if (weight === null || weight <= 0) {
       return;
     }
 
     const gender = resolveGenderForClassification();
     if (!gender) return;
 
-    const descriptors = weightClasses
-      .filter((cls) => cls && (cls.id || cls.code))
-      .map((cls) => ({
-        id: cls.id ?? cls.code,
-        code: cls.code,
-        gender: cls.gender,
-        minWeight: cls.minWeight,
-        maxWeight: cls.maxWeight,
-        sortOrder: cls.sortOrder ?? undefined,
-      }));
-
+    const descriptors = toWeightClassDescriptors(weightClasses);
     if (descriptors.length === 0) {
       return;
     }
 
     try {
-      const fixedDescriptors = descriptors.map(d => ({ ...d, sortOrder: d.sortOrder ?? null }));
-      const resolvedCode = determineWeightClass(weight, gender, fixedDescriptors);
+      const resolvedCode = determineWeightClass(weight, gender, descriptors);
       const normalisedGender = gender.toLowerCase().startsWith('f') ? 'female' : 'male';
 
       const match =
         weightClasses.find((cls) => {
-          if (!cls) return false;
           const sameCode = cls.code === resolvedCode || cls.id === resolvedCode;
           if (!sameCode) return false;
           const clsGender = (cls.gender ?? '').toLowerCase();
@@ -486,9 +440,9 @@
       const nextId = match.id ?? match.code;
       const nextName = match.name ?? match.code;
 
-      if (nextId && registrationForm.weightClassId !== nextId) {
-        registrationForm = {
-          ...registrationForm,
+      if (nextId && registrationDraft.weightClassId !== nextId) {
+        registrationDraft = {
+          ...registrationDraft,
           weightClassId: nextId,
         };
       }
@@ -518,14 +472,14 @@
     }
 
     if (!selectedLifts.includes('Squat')) {
-      registrationForm = { ...registrationForm, rackHeightSquat: '' };
+      registrationDraft = { ...registrationDraft, rackHeightSquat: '' };
     }
     if (!selectedLifts.includes('Bench')) {
-      registrationForm = { ...registrationForm, rackHeightBench: '' };
+      registrationDraft = { ...registrationDraft, rackHeightBench: '' };
     }
 
     if (!selectedLifts.includes(lift)) {
-      openingAttemptByLift = { ...openingAttemptByLift, [lift]: '' };
+      openingAttempts = { ...openingAttempts, [lift]: '' };
     }
   }
 
@@ -539,31 +493,21 @@
 
   function autoAssignAgeCategory() {
     if (!showRegistrationSection) return;
-    if (!Array.isArray(ageCategories) || ageCategories.length === 0) return;
-    const birth = (form.birthDate ?? '').toString().trim();
-    const cDate = (contestDate ?? '').toString().trim();
+    const birth = competitorDraft.birthDate.trim();
+    const cDate = contestDate.trim();
     if (!birth || !cDate) return;
 
-    const descriptors = ageCategories
-      .filter((cat) => cat && (cat.id || cat.code))
-      .map((cat) => ({
-        id: cat.id ?? cat.code,
-        code: cat.code,
-        minAge: cat.minAge,
-        maxAge: cat.maxAge,
-        sortOrder: cat.sortOrder ?? undefined,
-      }));
+    const descriptors = toAgeCategoryDescriptors(ageCategories);
     if (descriptors.length === 0) return;
 
     try {
-      const fixedDescriptors = descriptors.map(d => ({ ...d, sortOrder: d.sortOrder ?? null }));
-      const resolvedCode = determineAgeCategory(birth, cDate, fixedDescriptors);
+      const resolvedCode = determineAgeCategory(birth, cDate, descriptors);
       const match = ageCategories.find((cat) => cat.code === resolvedCode || cat.id === resolvedCode);
       if (!match) return;
       const nextId = match.id ?? match.code;
       const nextName = match.name ?? match.code;
-      if (nextId && registrationForm.ageCategoryId !== nextId) {
-        registrationForm = { ...registrationForm, ageCategoryId: nextId };
+      if (nextId && registrationDraft.ageCategoryId !== nextId) {
+        registrationDraft = { ...registrationDraft, ageCategoryId: nextId };
       }
       if (nextName && liveAgeCategoryName !== nextName) {
         liveAgeCategoryName = nextName;
@@ -574,19 +518,19 @@
   }
 
   function validateForm(): boolean {
-    if (!form.firstName.trim() || !form.lastName.trim()) {
+    if (!competitorDraft.firstName.trim() || !competitorDraft.lastName.trim()) {
       error = t('competitor_modal.status.validation.name_required');
       return false;
     }
-    if (!form.birthDate) {
+    if (!competitorDraft.birthDate) {
       error = t('competitor_modal.status.validation.birth_required');
       return false;
     }
-    if (form.gender !== 'Male' && form.gender !== 'Female') {
+    if (competitorDraft.gender !== 'Male' && competitorDraft.gender !== 'Female') {
       error = t('competitor_modal.status.validation.gender_invalid');
       return false;
     }
-    const parsedBodyweight = parseFloatInput(registrationForm.bodyweight);
+    const parsedBodyweight = parseFloatInput(registrationDraft.bodyweight);
     if (parsedBodyweight !== null && parsedBodyweight <= 0) {
       error = t('competitor_modal.status.validation.bodyweight_positive');
       return false;
@@ -596,12 +540,13 @@
 
   async function upsertOpeningAttempt(registrationId: string, liftType: LiftType, weight: number) {
     if (!contestId) return;
-    await apiClient.post(`/contests/${contestId}/registrations/${registrationId}/attempts`, {
+    const payload: OpeningAttemptPayload = {
       registrationId,
       liftType,
       attemptNumber: 1,
       weight,
-    });
+    };
+    await apiClient.post(`/contests/${contestId}/registrations/${registrationId}/attempts`, payload);
   }
 
   async function handleSubmit() {
@@ -618,16 +563,9 @@
     }
 
     isSaving = true;
+    let competitorSaved = false;
     try {
-      const payload = {
-        firstName: form.firstName.trim(),
-        lastName: form.lastName.trim(),
-        birthDate: form.birthDate,
-        gender: form.gender,
-        club: form.club.trim() || null,
-        city: form.city.trim() || null,
-        notes: form.notes.trim() || null,
-      };
+      const payload = buildCompetitorPayload(competitorDraft);
 
       let targetId = competitor?.id ?? null;
 
@@ -637,11 +575,13 @@
           throw new Error(response.error ?? 'Failed to create competitor');
         }
         targetId = response.data.id;
+        competitorSaved = true;
       } else if (mode === 'edit' && competitor) {
         const response = await apiClient.patch(`/competitors/${competitor.id}`, payload);
         if (response.error) {
           throw new Error(response.error);
         }
+        competitorSaved = true;
       }
 
       // competition order removed
@@ -649,18 +589,16 @@
       let updatedRegistration: Registration | null = registration;
 
       if (registration && mode === 'edit') {
-        const bodyweightValue = parseFloatInput(registrationForm.bodyweight);
+        const bodyweightValue = parseFloatInput(registrationDraft.bodyweight);
         if (bodyweightValue !== null && bodyweightValue <= 0) {
           throw new Error(t('competitor_modal.status.validation.bodyweight_positive'));
         }
 
-        const registrationPayload: Record<string, unknown> = {
-          bodyweight: bodyweightValue ?? null,
-          rackHeightSquat: parseIntInput(registrationForm.rackHeightSquat),
-          rackHeightBench: parseIntInput(registrationForm.rackHeightBench),
-        };
-        registrationPayload.lifts = [...selectedLifts];
-        registrationPayload.labels = [...selectedTags];
+        const registrationPayload = buildRegistrationPayload(
+          registrationDraft,
+          selectedLifts,
+          selectedTags,
+        );
 
         const response = await apiClient.patch<Registration>(
           `/registrations/${registration.id}`,
@@ -678,16 +616,10 @@
       }
 
       if (!registration && mode === 'create' && contestId && targetId) {
-        const bodyweightValue = parseFloatInput(registrationForm.bodyweight);
-
-        const registrationPayload: Record<string, unknown> = {
+        const registrationPayload: RegistrationCreatePayload = {
           competitorId: targetId,
-          bodyweight: bodyweightValue ?? null,
-          rackHeightSquat: parseIntInput(registrationForm.rackHeightSquat),
-          rackHeightBench: parseIntInput(registrationForm.rackHeightBench),
+          ...buildRegistrationPayload(registrationDraft, selectedLifts, selectedTags),
         };
-        registrationPayload.lifts = [...selectedLifts];
-        registrationPayload.labels = [...selectedTags];
 
         const response = await apiClient.post<Registration>(
           `/contests/${contestId}/registrations`,
@@ -698,14 +630,26 @@
         }
 
         if (response.data) {
-          const next = { ...response.data } as Registration;
-          next.firstName = form.firstName || '';
-          next.lastName = form.lastName || '';
-          next.gender = form.gender;
-          next.club = form.club?.trim() || null;
-          next.city = form.city?.trim() || null;
-          next.lifts = next.lifts?.length ? next.lifts : [...selectedLifts];
-          next.labels = response.data.labels ?? [...selectedTags];
+          const club = competitorDraft.club.trim();
+          const city = competitorDraft.city.trim();
+          const next: Registration = {
+            ...response.data,
+            firstName: competitorDraft.firstName,
+            lastName: competitorDraft.lastName,
+            gender: competitorDraft.gender,
+            lifts: response.data.lifts?.length ? response.data.lifts : [...selectedLifts],
+            labels: response.data.labels ?? [...selectedTags],
+          };
+          if (club) {
+            next.club = club;
+          } else {
+            delete next.club;
+          }
+          if (city) {
+            next.city = city;
+          } else {
+            delete next.city;
+          }
 
           updatedRegistration = next;
           selectedTags = [...(next.labels ?? selectedTags)];
@@ -715,14 +659,16 @@
       if (contestId && updatedRegistration) {
         try {
           for (const lift of selectedLifts) {
-            const raw = openingAttemptByLift[lift as LiftType] ?? '';
-            const weight = parseFloatInput(raw);
+            const weight = parseFloatInput(openingAttempts[lift]);
             if (weight !== null && weight > 0) {
-              await upsertOpeningAttempt(updatedRegistration.id, lift as LiftType, weight);
+              await upsertOpeningAttempt(updatedRegistration.id, lift, weight);
             }
           }
         } catch (err) {
-          error = err instanceof Error ? err.message : t('competitor_modal.status.error_opening_attempt');
+          const detail = err instanceof Error ? err.message : t('competitor_modal.status.error_opening_attempt');
+          error = t('competitor_modal.status.error_registration_saved_attempts_failed', {
+            message: detail,
+          });
           isSaving = false;
           return;
         }
@@ -744,7 +690,10 @@
 
       onClose(resultPayload);
     } catch (err) {
-      error = err instanceof Error ? err.message : t('competitor_modal.status.error_save');
+      const message = err instanceof Error ? err.message : t('competitor_modal.status.error_save');
+      error = competitorSaved
+        ? t('competitor_modal.status.error_competitor_saved_registration_failed', { message })
+        : message;
     } finally {
       isSaving = false;
     }
@@ -784,7 +733,7 @@
           <span class="input-label">{t('competitor_modal.fields.first_name')} *</span>
           <input
             class="input-field"
-            bind:value={form.firstName}
+            bind:value={competitorDraft.firstName}
             autocomplete="given-name"
             required
           />
@@ -793,7 +742,7 @@
           <span class="input-label">{t('competitor_modal.fields.last_name')} *</span>
           <input
             class="input-field"
-            bind:value={form.lastName}
+            bind:value={competitorDraft.lastName}
             autocomplete="family-name"
             required
           />
@@ -803,14 +752,14 @@
           <input
             class="input-field"
             type="date"
-            bind:value={form.birthDate}
+            bind:value={competitorDraft.birthDate}
             on:input={autoAssignAgeCategory}
             required
           />
         </label>
         <label class="flex flex-col gap-2">
           <span class="input-label">{t('competitor_modal.fields.gender')} *</span>
-          <select class="input-field" bind:value={form.gender} on:change={handleGenderChange}>
+          <select class="input-field" bind:value={competitorDraft.gender} on:change={handleGenderChange}>
             {#each genderOptions as option}
               <option value={option}>{genderLabel(option)}</option>
             {/each}
@@ -818,17 +767,17 @@
         </label>
         <label class="flex flex-col gap-2">
           <span class="input-label">{t('competitor_modal.fields.club')}</span>
-          <input class="input-field" bind:value={form.club} placeholder={t('competitor_modal.placeholders.club')} />
+          <input class="input-field" bind:value={competitorDraft.club} placeholder={t('competitor_modal.placeholders.club')} />
         </label>
         <label class="flex flex-col gap-2">
           <span class="input-label">{t('competitor_modal.fields.city')}</span>
-          <input class="input-field" bind:value={form.city} placeholder={t('competitor_modal.placeholders.city')} />
+          <input class="input-field" bind:value={competitorDraft.city} placeholder={t('competitor_modal.placeholders.city')} />
         </label>
       </div>
 
       <label class="flex flex-col gap-2">
         <span class="input-label">{t('competitor_modal.fields.notes')}</span>
-        <textarea class="input-field" rows={3} bind:value={form.notes}></textarea>
+        <textarea class="input-field" rows={3} bind:value={competitorDraft.notes}></textarea>
       </label>
 
       {#if showRegistrationSection}
@@ -846,7 +795,7 @@
                 type="number"
                 step="0.1"
                 min="0"
-                bind:value={registrationForm.bodyweight}
+                bind:value={registrationDraft.bodyweight}
                 on:input={handleBodyweightInput}
               />
             </label>
@@ -923,7 +872,7 @@
                   type="number"
                   step="1"
                   min="0"
-                  bind:value={registrationForm.rackHeightSquat}
+                  bind:value={registrationDraft.rackHeightSquat}
                   disabled={!selectedLifts.includes('Squat')}
                 />
               </label>
@@ -935,7 +884,7 @@
                 type="number"
                 step="1"
                 min="0"
-                bind:value={registrationForm.rackHeightBench}
+                bind:value={registrationDraft.rackHeightBench}
                 disabled={!selectedLifts.includes('Bench')}
               />
             </label>
@@ -949,7 +898,7 @@
                       type="number"
                       step="0.5"
                       min="0"
-                      bind:value={openingAttemptByLift[lift]}
+                      bind:value={openingAttempts[lift]}
                     />
                   </label>
                 {/each}
@@ -992,7 +941,7 @@
           >
             {mode === 'edit' ? t('competitor_modal.actions.reset') : t('competitor_modal.actions.cancel')}
           </button>
-          <button type="button" class="btn-secondary px-4 py-2" on:click={onClose} disabled={isSaving || isDeleting}>
+          <button type="button" class="btn-secondary px-4 py-2" on:click={() => onClose()} disabled={isSaving || isDeleting}>
             {t('competitor_modal.actions.close')}
           </button>
         </div>

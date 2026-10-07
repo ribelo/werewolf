@@ -1,21 +1,15 @@
+<script context="module" lang="ts">
+  export type { ContestTagRowView } from './contest-tags-form.types';
+</script>
+
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-
-  export type ContestTagRowView = {
-    id: string;
-    label: string;
-    isMandatory: boolean;
-    error?: string | null;
-    inputDisabled?: boolean;
-    showReset?: boolean;
-    showSave?: boolean;
-    showDelete?: boolean;
-    resetDisabled?: boolean;
-    saveDisabled?: boolean;
-    deleteDisabled?: boolean;
-    saving?: boolean;
-    deleting?: boolean;
-  };
+  import type {
+    ContestTagNewLabelDetail,
+    ContestTagRowActionDetail,
+    ContestTagRowChangeDetail,
+    ContestTagRowView,
+  } from './contest-tags-form.types';
 
   export let title = '';
   export let description = '';
@@ -56,22 +50,24 @@
   export let showNewTagForm = true;
 
   const dispatch = createEventDispatcher<{
-    rowChange: { id: string; value: string };
-    reset: { id: string };
-    save: { id: string };
-    delete: { id: string };
+    rowChange: ContestTagRowChangeDetail;
+    reset: ContestTagRowActionDetail;
+    save: ContestTagRowActionDetail;
+    delete: ContestTagRowActionDetail;
     add: void;
-    newTagInput: { value: string };
+    newTagInput: ContestTagNewLabelDetail;
   }>();
 
+  function readInputValue(event: Event): string {
+    return event.currentTarget instanceof HTMLInputElement ? event.currentTarget.value : '';
+  }
+
   function handleInput(id: string, event: Event) {
-    const input = event.currentTarget as HTMLInputElement | null;
-    dispatch('rowChange', { id, value: input?.value ?? '' });
+    dispatch('rowChange', { id, value: readInputValue(event) });
   }
 
   function handleNewTagInput(event: Event) {
-    const input = event.currentTarget as HTMLInputElement | null;
-    dispatch('newTagInput', { value: input?.value ?? '' });
+    dispatch('newTagInput', { value: readInputValue(event) });
   }
 </script>
 

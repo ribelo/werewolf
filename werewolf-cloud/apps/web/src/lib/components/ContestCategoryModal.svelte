@@ -3,7 +3,7 @@
   import { _ } from 'svelte-i18n';
   import { apiClient, ApiError } from '$lib/api';
   import { toast } from '$lib/ui/toast';
-  import type { AgeCategory, ContestCategories, WeightClass } from '$lib/types';
+  import type { ContestCategories } from '$lib/types';
   import {
     buildCategoryPayload,
     createDefaultAgeCategories,
@@ -11,6 +11,21 @@
     formatCategoryIssues,
     validateCategories,
   } from '$lib/categories';
+  import {
+    createAgeCategoryDraft,
+    createWeightClassDraft,
+    toAgeCategory,
+    toAgeCategoryDraft,
+    toContestCategories,
+    toWeightClass,
+    toWeightClassDraft,
+    withAgeCategoryInput,
+    withWeightClassInput,
+    type AgeCategoryDraft,
+    type AgeCategoryEditableField,
+    type WeightClassDraft,
+    type WeightClassEditableField,
+  } from '$lib/components/contest-category-model';
 
   export let contestId: string;
   export let initialCategories: ContestCategories;
@@ -24,43 +39,49 @@
     return translate(key, values ? { values } : undefined);
   };
 
-  let ageCategories: AgeCategory[] = initialCategories.ageCategories.map((category) => ({ ...category }));
-  let weightClasses: WeightClass[] = initialCategories.weightClasses.map((weightClass) => ({ ...weightClass }));
+  /**
+   * Bridges `formatCategoryIssues`, which hands over `Record<string, unknown>`,
+   * to svelte-i18n interpolation values (it only formats primitives).
+   */
+  function toMessageValues(values?: Record<string, unknown>): MessageValues {
+    if (!values) {
+      return {};
+    }
+    const result: MessageValues = {};
+    for (const [key, value] of Object.entries(values)) {
+      if (
+        value === null ||
+        value === undefined ||
+        typeof value === 'string' ||
+        typeof value === 'number' ||
+        typeof value === 'boolean' ||
+        value instanceof Date
+      ) {
+        result[key] = value;
+      }
+    }
+    return result;
+  }
+
+  let ageCategories: AgeCategoryDraft[] = initialCategories.ageCategories.map(toAgeCategoryDraft);
+  let weightClasses: WeightClassDraft[] = initialCategories.weightClasses.map(toWeightClassDraft);
   let validationErrors: string[] = [];
   let resetError: string | null = null;
   let isSaving = false;
   let isResetting = false;
 
   function addAgeCategory() {
-    ageCategories = [
-      ...ageCategories,
-      {
-        id: undefined,
-        contestId,
-        code: '',
-        name: '',
-        minAge: null,
-        maxAge: null,
-        sortOrder: (ageCategories.length + 1) * 10,
-        metadata: null,
-      },
-    ];
+    ageCategories = [...ageCategories, createAgeCategoryDraft(contestId, (ageCategories.length + 1) * 10)];
   }
 
   function addWeightClass() {
     weightClasses = [
       ...weightClasses,
-      {
-        id: undefined,
+      createWeightClassDraft(
         contestId,
-        code: '',
-        name: '',
-        gender: weightClasses.length % 2 === 0 ? 'Female' : 'Male',
-        minWeight: null,
-        maxWeight: null,
-        sortOrder: (weightClasses.length + 1) * 10,
-        metadata: null,
-      },
+        (weightClasses.length + 1) * 10,
+        weightClasses.length % 2 === 0 ? 'Female' : 'Male',
+      ),
     ];
   }
 
@@ -72,73 +93,68 @@
     weightClasses = weightClasses.filter((_, idx) => idx !== index);
   }
 
-  function updateAgeCategory(index: number, field: keyof AgeCategory, value: string) {
-    const updated = [...ageCategories];
-    const target = { ...updated[index] };
-    if (field === 'code') {
-      target.code = value.trim().toUpperCase();
-    } else if (field === 'name') {
-      target.name = value;
-    } else if (field === 'minAge' || field === 'maxAge' || field === 'sortOrder') {
-      const parsed = value.trim() === '' ? null : Number(value);
-      target[field] = Number.isFinite(parsed) ? (parsed as number) : null;
+  function updateAgeCategory(index: number, field: AgeCategoryEditableField, value: string) {
+    const current = ageCategories[index];
+    if (!current) {
+      return;
     }
-    updated[index] = target;
-    ageCategories = updated;
+    ageCategories = ageCategories.map((draft, idx) =>
+      idx === index ? withAgeCategoryInput(current, field, value) : draft,
+    );
     validationErrors = [];
   }
 
-  function handleAgeCategoryInput(index: number, field: keyof AgeCategory) {
+  function handleAgeCategoryInput(index: number, field: AgeCategoryEditableField) {
     return (event: Event) => {
-      const input = event.currentTarget as HTMLInputElement | null;
-      updateAgeCategory(index, field, input?.value ?? '');
+      if (!(event.currentTarget instanceof HTMLInputElement)) {
+        return;
+      }
+      updateAgeCategory(index, field, event.currentTarget.value);
     };
   }
 
-  function updateWeightClass(index: number, field: keyof WeightClass, value: string) {
-    const updated = [...weightClasses];
-    const target = { ...updated[index] };
-    if (field === 'code') {
-      target.code = value.trim().toUpperCase();
-    } else if (field === 'name') {
-      target.name = value;
-    } else if (field === 'gender') {
-      const upper = value.trim().toUpperCase();
-      target.gender = upper.startsWith('F') ? 'Female' : 'Male';
-    } else if (field === 'minWeight' || field === 'maxWeight' || field === 'sortOrder') {
-      const parsed = value.trim() === '' ? null : Number(value);
-      target[field] = Number.isFinite(parsed) ? (parsed as number) : null;
+  function updateWeightClass(index: number, field: WeightClassEditableField, value: string) {
+    const current = weightClasses[index];
+    if (!current) {
+      return;
     }
-    updated[index] = target;
-    weightClasses = updated;
+    weightClasses = weightClasses.map((draft, idx) =>
+      idx === index ? withWeightClassInput(current, field, value) : draft,
+    );
     validationErrors = [];
   }
 
-  function handleWeightClassInput(index: number, field: keyof WeightClass) {
+  function handleWeightClassInput(index: number, field: WeightClassEditableField) {
     return (event: Event) => {
-      const input = event.currentTarget as HTMLInputElement | null;
-      updateWeightClass(index, field, input?.value ?? '');
+      if (!(event.currentTarget instanceof HTMLInputElement)) {
+        return;
+      }
+      updateWeightClass(index, field, event.currentTarget.value);
     };
   }
 
   function handleWeightClassSelect(index: number) {
     return (event: Event) => {
-      const select = event.currentTarget as HTMLSelectElement | null;
-      updateWeightClass(index, 'gender', select?.value ?? '');
+      if (!(event.currentTarget instanceof HTMLSelectElement)) {
+        return;
+      }
+      updateWeightClass(index, 'gender', event.currentTarget.value);
     };
   }
 
   function resetLocalState(categories: ContestCategories) {
-    ageCategories = categories.ageCategories.map((category) => ({ ...category }));
-    weightClasses = categories.weightClasses.map((weightClass) => ({ ...weightClass }));
+    ageCategories = categories.ageCategories.map(toAgeCategoryDraft);
+    weightClasses = categories.weightClasses.map(toWeightClassDraft);
     validationErrors = [];
     resetError = null;
   }
 
   async function handleSave() {
-    const issues = validateCategories(ageCategories, weightClasses);
+    const issues = validateCategories(ageCategories.map(toAgeCategory), weightClasses.map(toWeightClass));
     if (issues.length > 0) {
-      validationErrors = formatCategoryIssues(issues, (key, params) => t(key, params));
+      validationErrors = formatCategoryIssues(issues, (key, params) =>
+        t(key, toMessageValues(params)),
+      );
       return;
     }
 
@@ -147,15 +163,15 @@
     resetError = null;
 
     try {
-      const payload = buildCategoryPayload(ageCategories, weightClasses);
+      const payload = buildCategoryPayload(
+        ageCategories.map(toAgeCategory),
+        weightClasses.map(toWeightClass),
+      );
       const response = await apiClient.put<ContestCategories>(`/contests/${contestId}/categories`, payload);
       if (response.error) {
         throw new Error(response.error);
       }
-      const data = response.data ?? {
-        ageCategories: payload.ageCategories as AgeCategory[],
-        weightClasses: payload.weightClasses as WeightClass[],
-      };
+      const data: ContestCategories = response.data ?? toContestCategories(ageCategories, weightClasses);
 
       toast.success(t('contest_detail.categories.toast_saved'));
       onClose(data);

@@ -5,7 +5,19 @@
   import { toast } from '$lib/ui/toast';
   import type { ContestDetail, ContestTag } from '$lib/types';
   import type { LiftKind } from '$lib/contest-table';
-  import ContestTagsForm, { type ContestTagRowView } from '$lib/components/ContestTagsForm.svelte';
+  import ContestTagsForm from '$lib/components/ContestTagsForm.svelte';
+  import type {
+    ContestTagNewLabelDetail,
+    ContestTagRowActionDetail,
+    ContestTagRowChangeDetail,
+    ContestTagRowView,
+  } from '$lib/components/contest-tags-form.types';
+  import {
+    createTagRows,
+    patchTagRow,
+    toTagRowView,
+    type TagRow,
+  } from '$lib/components/contest-editor-model';
 
   const translateStore = _;
   type MessageValues = Record<string, string | number | boolean | Date | null | undefined>;
@@ -14,14 +26,29 @@
     return translate(key, values ? { values } : undefined);
   };
 
+  function describeError(error: unknown, fallback: string): string {
+    if (error instanceof ApiError) {
+      return error.message;
+    }
+    if (error instanceof Error) {
+      return error.message;
+    }
+    return fallback;
+  }
+
   const AVAILABLE_EVENTS: LiftKind[] = ['Squat', 'Bench', 'Deadlift'];
   const EVENT_LABEL_KEYS: Record<LiftKind, string> = {
     Squat: 'contest.wizard.events.squat',
     Bench: 'contest.wizard.events.bench',
     Deadlift: 'contest.wizard.events.deadlift',
   };
-  const MANDATORY_TAG_LABEL = 'Open';
 
+  type ContestFormErrors = {
+    name?: string;
+    date?: string;
+    location?: string;
+    events?: string;
+  };
 
   export let contest: ContestDetail;
   export let initialEvents: LiftKind[] = [...AVAILABLE_EVENTS];
@@ -38,20 +65,10 @@
   };
 
   let selectedEvents: LiftKind[] = deriveInitialEvents(initialEvents);
-  let errors: Record<string, string> = {};
+  let errors: ContestFormErrors = {};
   let isSaving = false;
   let statusMessage: string | null = null;
   let tagRowsInitialised = false;
-
-  type TagRow = {
-    id: string;
-    label: string;
-    originalLabel: string;
-    isMandatory: boolean;
-    saving: boolean;
-    deleting: boolean;
-    error: string | null;
-  };
 
   let tagRows: TagRow[] = [];
   let tagsLoading = false;
@@ -95,20 +112,8 @@
     return events.join(', ');
   }
 
-  function mapTagToRow(tag: ContestTag): TagRow {
-    return {
-      id: tag.id,
-      label: tag.label,
-      originalLabel: tag.label,
-      isMandatory: tag.label === MANDATORY_TAG_LABEL,
-      saving: false,
-      deleting: false,
-      error: null,
-    };
-  }
-
   function setTagRows(tags: ContestTag[]) {
-    tagRows = (tags ?? []).map(mapTagToRow);
+    tagRows = createTagRows(tags ?? []);
     tagRowsInitialised = true;
   }
 
@@ -116,31 +121,51 @@
     setTagRows(contestTags);
   }
 
-  function hasTagChanges(row: TagRow): boolean {
-    return row.label.trim() !== row.originalLabel;
+  /** Single write path for row state: rows are replaced, never mutated in place. */
+  function updateTagRow(id: string, patch: Partial<TagRow>) {
+    tagRows = patchTagRow(tagRows, id, patch);
+  }
+
+  function resetTagRow(id: string, originalLabel: string) {
+    updateTagRow(id, { label: originalLabel, error: null });
   }
 
   let tagRowsView: ContestTagRowView[] = [];
 
-  $: tagRowsView = tagRows.map((row) => ({
-    id: row.id,
-    label: row.label,
-    isMandatory: row.isMandatory,
-    error: row.error,
-    inputDisabled: row.isMandatory || row.saving || row.deleting || tagsLoading,
-    showReset: !row.isMandatory,
-    showSave: !row.isMandatory,
-    showDelete: !row.isMandatory,
-    resetDisabled: row.saving || row.deleting || tagsLoading || !hasTagChanges(row),
-    saveDisabled: row.saving || row.deleting || tagsLoading || !hasTagChanges(row),
-    deleteDisabled: row.saving || row.deleting || tagsLoading,
-    saving: row.saving,
-    deleting: row.deleting,
-  }));
+  $: tagRowsView = tagRows.map((row) => toTagRowView(row, tagsLoading));
 
-  function resetTagRow(row: TagRow) {
-    row.label = row.originalLabel;
-    row.error = null;
+  function findTagRow(id: string): TagRow | undefined {
+    return tagRows.find((row) => row.id === id);
+  }
+
+  function handleRowChange(event: CustomEvent<ContestTagRowChangeDetail>) {
+    updateTagRow(event.detail.id, { label: event.detail.value, error: null });
+  }
+
+  function handleRowReset(event: CustomEvent<ContestTagRowActionDetail>) {
+    const row = findTagRow(event.detail.id);
+    if (row) {
+      resetTagRow(row.id, row.originalLabel);
+    }
+  }
+
+  function handleRowSave(event: CustomEvent<ContestTagRowActionDetail>) {
+    const row = findTagRow(event.detail.id);
+    if (row) {
+      void saveTagRow(row);
+    }
+  }
+
+  function handleRowDelete(event: CustomEvent<ContestTagRowActionDetail>) {
+    const row = findTagRow(event.detail.id);
+    if (row) {
+      void deleteTagRow(row);
+    }
+  }
+
+  function handleNewTagInput(event: CustomEvent<ContestTagNewLabelDetail>) {
+    newTagLabel = event.detail.value;
+    newTagError = null;
   }
 
   async function refreshTags() {
@@ -153,82 +178,69 @@
       }
       setTagRows(response.data ?? []);
     } catch (error) {
-      if (error instanceof ApiError) {
-        tagsError = error.message;
-      } else if (error instanceof Error) {
-        tagsError = error.message;
-      } else {
-        tagsError = t('contest_edit.tags.load_failed');
-      }
+      tagsError = describeError(error, t('contest_edit.tags.load_failed'));
     } finally {
       tagsLoading = false;
     }
   }
 
   async function saveTagRow(row: TagRow) {
-    if (row.isMandatory) {
-      row.error = t('contest_edit.tags.mandatory_hint');
-      return;
-    }
-
+    const { id, isMandatory, originalLabel } = row;
     const label = row.label.trim();
+
+    if (isMandatory) {
+      updateTagRow(id, { error: t('contest_edit.tags.mandatory_hint') });
+      return;
+    }
+
     if (!label) {
-      row.error = t('contest_edit.tags.validation.label_required');
+      updateTagRow(id, { error: t('contest_edit.tags.validation.label_required') });
       return;
     }
 
-    if (!hasTagChanges(row)) {
-      row.error = t('contest_edit.tags.validation.no_changes');
+    if (label === originalLabel) {
+      updateTagRow(id, { error: t('contest_edit.tags.validation.no_changes') });
       return;
     }
 
-    const payload: { label: string } = { label };
-
-    row.saving = true;
-    row.error = null;
+    updateTagRow(id, { saving: true, error: null });
     try {
-      const response = await apiClient.patch<ContestTag>(
-        `/contests/${contest.id}/tags/${row.id}`,
-        payload
-      );
+      const response = await apiClient.patch<ContestTag>(`/contests/${contest.id}/tags/${id}`, {
+        label,
+      });
       if (response.error) {
         throw new Error(response.error);
       }
       toast.success(t('contest_edit.tags.toast.updated'));
       await refreshTags();
     } catch (error) {
-      if (error instanceof ApiError) {
-        row.error = error.message;
-      } else if (error instanceof Error) {
-        row.error = error.message;
-      } else {
-        row.error = t('contest_edit.tags.unknown_error');
-      }
+      updateTagRow(id, { error: describeError(error, t('contest_edit.tags.unknown_error')) });
     } finally {
-      row.saving = false;
+      updateTagRow(id, { saving: false });
     }
   }
 
   async function deleteTagRow(row: TagRow) {
-    if (row.isMandatory) {
-      row.error = t('contest_edit.tags.mandatory_hint');
+    const { id, isMandatory, originalLabel } = row;
+
+    if (isMandatory) {
+      updateTagRow(id, { error: t('contest_edit.tags.mandatory_hint') });
       return;
     }
 
     const confirmed =
       typeof window === 'undefined'
         ? true
-        : window.confirm(t('contest_edit.tags.confirm_delete', { label: row.originalLabel }));
+        : window.confirm(t('contest_edit.tags.confirm_delete', { label: originalLabel }));
 
     if (!confirmed) {
       return;
     }
 
-    row.deleting = true;
-    row.error = null;
+    updateTagRow(id, { deleting: true, error: null });
     try {
       const response = await apiClient.delete<{ success: boolean }>(
-        `/contests/${contest.id}/tags/${row.id}`
+        `/contests/${contest.id}/tags/${id}`
       );
       if (response.error) {
         throw new Error(response.error);
@@ -236,15 +248,9 @@
       toast.success(t('contest_edit.tags.toast.deleted'));
       await refreshTags();
     } catch (error) {
-      if (error instanceof ApiError) {
-        row.error = error.message;
-      } else if (error instanceof Error) {
-        row.error = error.message;
-      } else {
-        row.error = t('contest_edit.tags.unknown_error');
-      }
+      updateTagRow(id, { error: describeError(error, t('contest_edit.tags.unknown_error')) });
     } finally {
-      row.deleting = false;
+      updateTagRow(id, { deleting: false });
     }
   }
 
@@ -268,20 +274,14 @@
       newTagLabel = '';
       await refreshTags();
     } catch (error) {
-      if (error instanceof ApiError) {
-        newTagError = error.message;
-      } else if (error instanceof Error) {
-        newTagError = error.message;
-      } else {
-        newTagError = t('contest_edit.tags.unknown_error');
-      }
+      newTagError = describeError(error, t('contest_edit.tags.unknown_error'));
     } finally {
       newTagSaving = false;
     }
   }
 
   function validate(): boolean {
-    const nextErrors: Record<string, string> = {};
+    const nextErrors: ContestFormErrors = {};
 
     if (!form.name.trim()) {
       nextErrors.name = t('contest.wizard.validation.name_required');
@@ -333,23 +333,11 @@
 
       const updatedContest: ContestDetail = response.data
         ? { ...response.data }
-        : {
-            ...contest,
-            ...payload,
-            organizer: payload.organizer ?? undefined,
-            federationRules: payload.federationRules ?? undefined,
-            notes: payload.notes ?? undefined,
-          };
+        : { ...contest, ...payload };
 
       onClose(updatedContest);
     } catch (error) {
-      if (error instanceof ApiError) {
-        statusMessage = error.message;
-      } else if (error instanceof Error) {
-        statusMessage = error.message;
-      } else {
-        statusMessage = t('contest_edit.toast_failed');
-      }
+      statusMessage = describeError(error, t('contest_edit.toast_failed'));
     } finally {
       isSaving = false;
     }
@@ -508,36 +496,12 @@
       saveButtonClass="btn-primary px-3 py-1"
       deleteButtonClass="btn-danger px-3 py-1"
       addButtonClass="btn-primary px-3 py-1"
-      on:rowChange={({ detail }) => {
-        const row = tagRows.find((item) => item.id === detail.id);
-        if (row) {
-          row.label = detail.value;
-          row.error = null;
-        }
-      }}
-      on:reset={({ detail }) => {
-        const row = tagRows.find((item) => item.id === detail.id);
-        if (row) {
-          resetTagRow(row);
-        }
-      }}
-      on:save={({ detail }) => {
-        const row = tagRows.find((item) => item.id === detail.id);
-        if (row) {
-          saveTagRow(row);
-        }
-      }}
-      on:delete={({ detail }) => {
-        const row = tagRows.find((item) => item.id === detail.id);
-        if (row) {
-          deleteTagRow(row);
-        }
-      }}
+      on:rowChange={handleRowChange}
+      on:reset={handleRowReset}
+      on:save={handleRowSave}
+      on:delete={handleRowDelete}
       on:add={createTag}
-      on:newTagInput={({ detail }) => {
-        newTagLabel = detail.value;
-        newTagError = null;
-      }}
+      on:newTagInput={handleNewTagInput}
     />
 
     <div class="flex justify-end gap-3">
