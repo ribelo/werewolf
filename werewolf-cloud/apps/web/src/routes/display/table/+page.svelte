@@ -262,11 +262,6 @@ import type { DisplayFilterSync, DisplayQrVisibility } from '@werewolf/domain';
 
     // Prefer referenceData; if empty, derive from registrations to avoid "only Open" issue
     const hasRefWeights = (referenceData?.weightClasses?.length ?? 0) > 0;
-    console.log('[display/table] Building weight filter groups:', {
-      from: hasRefWeights ? 'referenceData' : 'registrationsFallback',
-      weightClasses: referenceData?.weightClasses,
-      count: referenceData?.weightClasses?.length ?? 0,
-    });
 
     type WeightClassLike = {
       id?: string | undefined;
@@ -309,13 +304,6 @@ import type { DisplayFilterSync, DisplayQrVisibility } from '@werewolf/domain';
       female,
       male,
     };
-
-    console.log('[display/table] Built weight filter groups:', {
-      femaleCount: groups.female.length,
-      maleCount: groups.male.length,
-      female: groups.female,
-      male: groups.male,
-    });
 
     return groups;
   })();

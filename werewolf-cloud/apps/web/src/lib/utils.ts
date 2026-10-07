@@ -52,22 +52,6 @@ export function formatCoefficient(value: number | null | undefined, options: { f
 }
 
 /**
- * Calculate age from birth date
- */
-export function formatAge(birthDate: string): number {
-  const birth = new Date(birthDate);
-  const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const monthDiff = today.getMonth() - birth.getMonth();
-
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-    age--;
-  }
-
-  return age;
-}
-
-/**
  * Format weight class ID into display text
  */
 export function formatWeightClass(weightClassId: string | null | undefined, weightClasses: WeightClass[]): string {

@@ -1,6 +1,7 @@
-// The web tsconfig has no path mapping for '@werewolf/domain/services/*' and the
-// package subpath exports are extensionless, which the TypeScript bundler resolver
-// rejects, so the shared solver is imported straight from the workspace package.
+// The web tsconfig path mapping for '@werewolf/domain/*' points at a non-existent
+// directory and the package subpath exports are extensionless, which the TypeScript
+// bundler resolver rejects, so the shared solver is imported straight from the
+// workspace package. svelte-check rejects '@werewolf/domain/services/plate-plan'.
 import { solvePlatePlan } from '../../../../packages/domain/src/services/plate-plan';
 import type { PlateInventoryEntry } from '../../../../packages/domain/src/services/plate-plan';
 
@@ -19,9 +20,11 @@ const DEFAULT_PLATE_SET = [
   { weight: 0.5, pairs: 4 },
 ] as const;
 
+// POST /contests hard-codes 20 kg for men and 15 kg for women (migration 0005),
+// so the wizard plans against the same bars.
 const DEFAULT_BAR_WEIGHTS: Record<GenderValue, number> = {
   Male: 20,
-  Female: 20,
+  Female: 15,
 };
 
 export type PlatePlanOptions = {
@@ -78,22 +81,16 @@ export function evaluateAttemptWeight(
   options?: PlatePlanOptions,
 ): LoadCheckResult {
   const barWeight = DEFAULT_BAR_WEIGHTS[gender] ?? DEFAULT_BAR_WEIGHTS.Male;
+  const clampWeightPerClamp = Math.max(0, options?.clampWeightPerClamp ?? 0);
   const plan = buildDefaultPlatePlan(weight, gender, options);
+  // The lightest weight the solver can assemble is the bar plus both clamps, so
+  // callers can suggest it without re-adding the clamp weight themselves.
+  const minimumWeight = Number((barWeight + clampWeightPerClamp * 2).toFixed(2));
 
-  if (!Number.isFinite(weight) || weight <= 0) {
+  if (!Number.isFinite(weight) || weight <= 0 || weight < barWeight - LOAD_TOLERANCE) {
     return {
       loadable: false,
-      normalized: barWeight,
-      increment: plan.increment,
-      barWeight,
-      reason: 'below_bar',
-    };
-  }
-
-  if (weight < barWeight - LOAD_TOLERANCE) {
-    return {
-      loadable: false,
-      normalized: barWeight,
+      normalized: minimumWeight,
       increment: plan.increment,
       barWeight,
       reason: 'below_bar',

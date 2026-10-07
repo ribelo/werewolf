@@ -129,12 +129,9 @@ export function collectAttemptIssues(
           name: displayName,
           event,
           type: check.reason === 'below_bar' ? 'below_bar' : 'unloadable',
-          // Below the bar the solver reports the bare bar weight; the API also
-          // requires both clamps, so suggest the smallest weight it accepts.
-          suggestedWeight:
-            check.reason === 'below_bar'
-              ? Number((check.barWeight + DEFAULT_CLAMP_WEIGHT_PER_CLAMP * 2).toFixed(2))
-              : check.normalized,
+          // The solver already reports the lightest acceptable weight (the bar
+          // plus both clamps when the attempt is below it).
+          suggestedWeight: check.normalized,
         });
       }
     }
