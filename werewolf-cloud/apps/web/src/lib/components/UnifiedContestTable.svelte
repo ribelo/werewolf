@@ -1,12 +1,12 @@
 <script lang="ts">
   import { get } from 'svelte/store';
   import { formatAgeClass, formatWeightClass, formatCoefficient, formatWeight } from '$lib/utils';
-  import { ATTEMPT_NUMBERS, LIFTS, type AttemptCell, type LiftKind, type UnifiedRow, type AttemptNumber } from '$lib/contest-table';
-  import type { Attempt, Registration, AgeCategory, WeightClass, AttemptStatus } from '$lib/types';
-  import { getAttemptStatusClass } from '$lib/ui/status';
-  import { _ } from 'svelte-i18n';
-  import { CheckCircle2, Circle, Clock, Loader2, Radio, XCircle, ArrowUpDown, ChevronUp, ChevronDown } from 'lucide-svelte';
-  import { locale } from 'svelte-i18n';
+  import { ATTEMPT_NUMBERS, LIFTS, type AttemptCell as AttemptCellData, type LiftKind, type UnifiedRow, type AttemptNumber } from '$lib/contest-table';
+  import type { Attempt, Registration, AgeCategory, WeightClass } from '$lib/types';
+  import { _, locale } from 'svelte-i18n';
+  import { CheckCircle2, Circle, Loader2, ArrowUpDown, ChevronUp, ChevronDown } from 'lucide-svelte';
+  import AttemptCell from './AttemptCell.svelte';
+  import type { AttemptCellActions } from './attempt-cell';
 
   export let rows: UnifiedRow[] = [];
   export let sortColumn = 'order';
@@ -58,42 +58,7 @@
     Deadlift: 'contest_table.lifts_short.deadlift',
   };
 
-  const LIVE_BUTTON_BASE = 'inline-flex h-7 w-7 items-center justify-center rounded-sm border transition-colors duration-200';
-  const STATUS_BUTTON_BASE = 'inline-flex h-7 w-7 items-center justify-center rounded-sm border transition-colors duration-200';
   const TOGGLE_BUTTON_BASE = 'inline-flex h-7 w-[3.75rem] items-center justify-center rounded border transition-colors duration-200';
-  const statusIconMap: Record<AttemptStatus, typeof Clock> = {
-    Pending: Clock,
-    Successful: CheckCircle2,
-    Failed: XCircle,
-  };
-
-  $: translate = get(_);
-  $: statusLabels = {
-    Pending: translate('attempt.status.pending'),
-    Successful: translate('attempt.status.successful'),
-    Failed: translate('attempt.status.failed'),
-  };
-
-  function resolveStatus(input: string | null | undefined): AttemptStatus {
-    switch (input) {
-      case 'Successful':
-        return 'Successful';
-      case 'Failed':
-        return 'Failed';
-      default:
-        return 'Pending';
-    }
-  }
-
-  function liveButtonClass(isCurrent: boolean, isDisabled: boolean): string {
-    if (isCurrent) {
-      return `${LIVE_BUTTON_BASE} border-primary-red bg-primary-red/20 text-primary-red shadow-glow`;
-    }
-    if (isDisabled) {
-      return `${LIVE_BUTTON_BASE} border-border-color/60 text-text-tertiary cursor-not-allowed`;
-    }
-    return `${LIVE_BUTTON_BASE} border-border-color text-text-secondary hover:border-primary-red hover:text-primary-red`;
-  }
 
   function liftToggleButtonClass(isActive: boolean): string {
     if (isActive) {
@@ -152,18 +117,9 @@
     return `attempt:${lift}:${attemptNumber}`;
   }
 
-  function attemptWeightDisplay(cell: AttemptCell): string {
-    const weight = cell.attempt?.weight;
-    if (weight === undefined || weight === null || Number.isNaN(weight)) {
-      return '—';
-    }
-    return formatWeight(weight);
-  }
-
   function resolvePoints(row: UnifiedRow): number | null {
     if (!row) return null;
-    if (activeLifts.length === 1) {
-      const [soleLift] = activeLifts;
+    if (soleLift) {
       return row.pointsByLift?.[soleLift] ?? row.points ?? null;
     }
     return row.points ?? null;
@@ -189,8 +145,7 @@
 
   function resolveMax(row: UnifiedRow): number {
     if (!row) return 0;
-    if (activeLifts.length === 1) {
-      const [soleLift] = activeLifts;
+    if (soleLift) {
       return resolveBestForLift(row, soleLift);
     }
     return row.maxLift ?? 0;
@@ -237,50 +192,26 @@
     return genderDisplay(registration).label;
   }
 
-  function parseWeightInput(raw: string): number | null {
-    if (!raw) return null;
-    const normalized = raw
-      .replace(/,/g, '.')
-      .replace(/[^0-9.\-]/g, '')
-      .replace(/(\..*?)\./g, '$1');
-    const value = parseFloat(normalized);
-    if (!Number.isFinite(value)) {
-      return null;
-    }
-    return Math.round(value * 100) / 100;
-  }
-
-  function formatAttemptWeightInputValue(weight: number | null | undefined): string {
-    if (weight === null || weight === undefined || Number.isNaN(weight)) {
-      return '';
-    }
-    return weight.toFixed(2);
-  }
-
-  function attemptCellKey(registrationId: string, cell: AttemptCell): string {
+  function attemptCellKey(registrationId: string, cell: AttemptCellData): string {
     return cell.attempt?.id ?? `${registrationId}:${cell.liftType}:${cell.attemptNumber}`;
   }
 
-  function handleAttemptInput(row: UnifiedRow, cell: AttemptCell, event: Event) {
-    const input = event.currentTarget as HTMLInputElement;
-    const parsed = parseWeightInput(input.value);
-    if (!Number.isFinite(parsed as number)) {
-      return;
-    }
-
-    const key = attemptCellKey(row.registration.id, cell);
-    if (attemptWeightPending[key]) {
-      return;
-    }
-
-    onAttemptWeightChange({
-      registrationId: row.registration.id,
-      liftType: cell.liftType,
-      attemptNumber: cell.attemptNumber,
-      attemptId: cell.attempt?.id,
-      weight: parsed as number,
-    });
-  }
+  // Built once so cells receive a stable, typed action object instead of callbacks
+  // created while rendering. Reads the latest props through the closure.
+  const attemptCellActions: AttemptCellActions = {
+    setLive: (attempt) => onSetCurrentAttempt(attempt),
+    cycleStatus: (attempt) => onAttemptStatusCycle(attempt),
+    commitWeight: (registrationId, cell, weight) => {
+      const payload = {
+        registrationId,
+        liftType: cell.liftType,
+        attemptNumber: cell.attemptNumber,
+        weight,
+      };
+      const attemptId = cell.attempt?.id;
+      onAttemptWeightChange(attemptId === undefined ? payload : { ...payload, attemptId });
+    },
+  };
 
   function competitorMeta(registration: Registration): string | null {
     const parts: string[] = [];
@@ -520,9 +451,10 @@
                   {@const isActive = !row.registration.lifts || row.registration.lifts.includes(lift)}
                   {@const toggleKey = `${row.registration.id}:${lift}`}
                   {@const isLoading = Boolean(toggleLiftLoading[toggleKey])}
+                  {@const liftLabel = $_(liftHeaderKey[lift])}
                   {@const label = isActive
-                    ? translate('contest_table.actions.disable_lift', { lift: translate(liftHeaderKey[lift]) })
-                    : translate('contest_table.actions.enable_lift', { lift: translate(liftHeaderKey[lift]) })}
+                    ? $_('contest_table.actions.disable_lift', { values: { lift: liftLabel } })
+                    : $_('contest_table.actions.enable_lift', { values: { lift: liftLabel } })}
                   <button
                     class={liftToggleButtonClass(isActive)}
                     type="button"
@@ -540,91 +472,20 @@
                       <Circle class="h-4 w-4" aria-hidden="true" />
                     {/if}
                   </button>
-                {:else if !row.registration.lifts || row.registration.lifts.includes(lift)}
-                  <div class="flex flex-col items-center gap-1">
-                    <div class="flex items-center gap-1">
-                      {#if cell.attempt}
-                        {@const attemptId = cell.attempt.id}
-                        {@const attemptKey = attemptCellKey(row.registration.id, cell)}
-                        {@const status = resolveStatus(cell.attempt.status)}
-                        {@const statusPending = Boolean(statusLoading[attemptId])}
-                        {@const weightPending = Boolean(attemptWeightPending[attemptKey])}
-                        {#if !readOnly}
-                          {@const isCurrent = currentAttemptId === attemptId}
-                          {@const isLoading = Boolean(currentAttemptLoading[attemptId])}
-                          {@const isButtonDisabled = isCurrent || isLoading || weightPending}
-                          <button
-                            class={liveButtonClass(isCurrent, isLoading || weightPending)}
-                            type="button"
-                            aria-label={isCurrent ? $_('contest_table.actions.live_now') : $_('contest_table.actions.set_live')}
-                            title={isCurrent ? $_('contest_table.actions.live_now') : $_('contest_table.actions.set_live')}
-                            aria-pressed={isCurrent}
-                            disabled={isButtonDisabled}
-                            aria-busy={isLoading}
-                            on:click={() => onSetCurrentAttempt(cell.attempt)}
-                          >
-                            {#if isLoading}
-                              <Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
-                            {:else}
-                              <Radio class="h-4 w-4" aria-hidden="true" />
-                            {/if}
-                          </button>
-                        {/if}
-                        {#if readOnly}
-                          <span
-                            class={`${STATUS_BUTTON_BASE} ${getAttemptStatusClass(status)} opacity-70`}
-                            aria-label={statusLabels[status]}
-                          >
-                            <svelte:component this={statusIconMap[status] || Clock} class="h-4 w-4" aria-hidden="true" />
-                          </span>
-                        {:else}
-                          <button
-                            class={`${STATUS_BUTTON_BASE} ${getAttemptStatusClass(status)} ${statusPending ? 'cursor-progress opacity-70' : 'hover:brightness-110'}`}
-                            type="button"
-                            aria-label={statusLabels[status]}
-                            title={statusLabels[status]}
-                            disabled={statusPending}
-                            aria-busy={statusPending}
-                            on:click={() => onAttemptStatusCycle(cell.attempt)}
-                          >
-                            {#if statusPending}
-                              <Loader2 class="h-4 w-4 animate-spin" aria-hidden="true" />
-                            {:else}
-                              <svelte:component this={statusIconMap[status] || Clock} class="h-4 w-4" aria-hidden="true" />
-                            {/if}
-                          </button>
-                        {/if}
-                      {:else}
-                        <span class="inline-flex h-7 w-[3.75rem] items-center justify-center rounded border border-border-color/40 bg-element-bg/60 text-xs text-text-tertiary">
-                          —
-                        </span>
-                      {/if}
-                    </div>
-
-                    {#if readOnly}
-                      <span class="inline-flex h-7 w-[3.75rem] items-center justify-center rounded border border-border-color/60 bg-element-bg px-2 text-xs text-text-secondary">
-                        {attemptWeightDisplay(cell)}
-                      </span>
-                    {:else}
-                      {@const weightKey = attemptCellKey(row.registration.id, cell)}
-                      {@const weightInputPending = Boolean(attemptWeightPending[weightKey])}
-                      <input
-                        class={`h-7 w-[3.75rem] rounded border border-border-color bg-main-bg px-2 text-center text-xs ${weightInputPending ? 'cursor-progress opacity-60' : ''}`}
-                        type="text"
-                        inputmode="decimal"
-                        autocomplete="off"
-                        value={formatAttemptWeightInputValue(cell.attempt?.weight)}
-                        placeholder="—"
-                        disabled={weightInputPending}
-                        aria-busy={weightInputPending}
-                        on:change={(event) => handleAttemptInput(row, cell, event)}
-                      />
-                    {/if}
-                  </div>
                 {:else}
-                  <span class="inline-flex h-7 w-[3.75rem] items-center justify-center rounded border border-border-color/40 bg-element-bg/60 text-xs text-text-tertiary">
-                    —
-                  </span>
+                  <AttemptCell
+                    registrationId={row.registration.id}
+                    {cell}
+                    display={{
+                      liftEnabled: !row.registration.lifts || row.registration.lifts.includes(lift),
+                      readOnly,
+                      live: currentAttemptId === cell.attempt?.id,
+                      livePending: cell.attempt ? Boolean(currentAttemptLoading[cell.attempt.id]) : false,
+                      statusPending: cell.attempt ? Boolean(statusLoading[cell.attempt.id]) : false,
+                      weightPending: Boolean(attemptWeightPending[attemptCellKey(row.registration.id, cell)]),
+                    }}
+                    actions={attemptCellActions}
+                  />
                 {/if}
               </td>
             {/each}
