@@ -4,21 +4,19 @@
   import TeamResultsTable from './team-results/TeamResultsTable.svelte';
   import Download from 'lucide-svelte/icons/download';
   import Minus from 'lucide-svelte/icons/minus';
-  import type { ContestDetail, TeamResultsBundle } from '$lib/types';
+  import type { TeamExportDetail } from './public-results';
+  import type { TeamResultsTable as TeamResultsTableModel } from '$lib/types';
 
-  export let contest: ContestDetail | null = null;
-  export let teamResults: TeamResultsBundle | null = null;
+  export let table: TeamResultsTableModel | null = null;
   export let loading = false;
 
-  const dispatch = createEventDispatcher();
+  const dispatch = createEventDispatcher<{ export: TeamExportDetail }>();
 
-  $: hasResults = teamResults?.mixed?.rows && teamResults.mixed.rows.length > 0;
+  $: hasResults = !!table && table.rows.length > 0;
 
   function handleExport(format: 'csv' | 'json') {
-    if (!hasResults) return;
-
-    const data = teamResults.mixed.rows;
-    dispatch('export', { format, view: 'team', data });
+    if (!table || !hasResults) return;
+    dispatch('export', { kind: 'team', format, table });
   }
 </script>
 
@@ -56,9 +54,9 @@
   </div>
 
   <!-- Team Results Count -->
-  {#if hasResults}
+  {#if hasResults && table}
     <p class="text-sm text-text-secondary">
-      {$_('public.results.team.count', { count: teamResults.mixed.rows.length })}
+      {$_('public.results.team.count', { values: { count: table.rows.length } })}
     </p>
   {:else if !loading}
     <p class="text-sm text-text-secondary italic">
@@ -72,8 +70,8 @@
       <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       <span class="ml-3 text-text-secondary">{$_('public.results.loading')}</span>
     </div>
-  {:else if hasResults}
-    <TeamResultsTable table={teamResults.mixed} />
+  {:else if hasResults && table}
+    <TeamResultsTable {table} />
   {:else}
     <div class="text-center py-12">
       <Minus class="h-12 w-12 text-text-secondary mx-auto mb-4" />

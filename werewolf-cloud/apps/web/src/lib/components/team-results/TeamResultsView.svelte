@@ -87,7 +87,7 @@
     </h1>
     <p class="text-body text-text-secondary">
       {contestName
-        ? $_('contest_detail.team_results.subtitle_with_name', { contest: contestName })
+        ? $_('contest_detail.team_results.subtitle_with_name', { values: { contest: contestName } })
         : $_('contest_detail.team_results.subtitle')}
     </p>
   </header>

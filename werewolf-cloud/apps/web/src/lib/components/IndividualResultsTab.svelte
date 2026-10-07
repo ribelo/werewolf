@@ -17,16 +17,13 @@
   } from '$lib/contest-table';
   import {
     applyRegistrationFilters,
-    LABEL_FILTER_PREFIX,
-    normaliseLabelKey,
     type AgeFilter,
     type LabelFilter,
     type RegistrationFilterState,
     type WeightFilter,
-    isFemaleGender,
-    isMaleGender,
   } from '$lib/filters/registrations';
-  import { normaliseAgeCategoryLabel } from '$lib/utils';
+  import { buildPublicFilterOptions, type PublicWeightFilterOption } from './public-results-filters';
+  import type { ScoreboardExportDetail } from './public-results';
   import type {
     AgeCategory,
     ContestDetail,
@@ -40,7 +37,7 @@
   export let scoreboard: PublicScoreboardBundle | null = null;
   export let loading = false;
 
-  const dispatch = createEventDispatcher();
+  const dispatch = createEventDispatcher<{ export: ScoreboardExportDetail }>();
 
   type LiftFilter = LiftKind;
 
@@ -63,159 +60,28 @@
   $: weightClasses = scoreboard?.referenceData?.weightClasses ?? [];
   $: ageCategories = scoreboard?.referenceData?.ageCategories ?? [];
   type FilterKind = 'weight' | 'age' | 'label';
-  type WeightFilterOption = { id: WeightFilter; label: string };
-  type AgeFilterOption = { id: AgeFilter; label: string };
-  type LabelFilterOption = { id: LabelFilter; label: string };
   let selectedWeightFilter: WeightFilter = 'ALL';
   let selectedAgeFilter: AgeFilter = 'ALL';
   let selectedLabelFilter: LabelFilter = 'ALL';
   let openFilter: FilterKind | null = null;
 
-  function weightFilterLabel(entry: WeightClass): string {
-    return (entry.name ?? entry.code ?? '').toString();
-  }
+  $: filterOptions = buildPublicFilterOptions({
+    weightClasses,
+    ageCategories,
+    registrations: registrationsList,
+    translate,
+  });
 
-  $: weightFilterGroups = (() => {
-    const female: WeightFilterOption[] = [];
-    const male: WeightFilterOption[] = [];
-    const femaleSeen = new Set<string>();
-    const maleSeen = new Set<string>();
-
-    weightClasses
-      .slice()
-      .sort((a, b) => {
-        const orderA = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
-        const orderB = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
-        if (orderA !== orderB) return orderA - orderB;
-        const nameA = (a.name ?? a.code ?? '').toString();
-        const nameB = (b.name ?? b.code ?? '').toString();
-        return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
-      })
-      .forEach((entry) => {
-        const id = (entry.id ?? entry.code ?? '').toString();
-        const label = weightFilterLabel(entry);
-        if (!id || !label) return;
-
-        const gender = (entry.gender ?? '').toString().toLowerCase();
-        if (gender.startsWith('f')) {
-          if (femaleSeen.has(id)) return;
-          femaleSeen.add(id);
-          female.push({ id: id as WeightFilter, label });
-        } else if (gender.startsWith('m')) {
-          if (maleSeen.has(id)) return;
-          maleSeen.add(id);
-          male.push({ id: id as WeightFilter, label });
-        }
-      });
-
-    return {
-      femaleOpen: { id: 'FEMALE_OPEN' as WeightFilter, label: translate('contest_detail.registrations.filters.open') },
-      maleOpen: { id: 'MALE_OPEN' as WeightFilter, label: translate('contest_detail.registrations.filters.open') },
-      female,
-      male,
-    };
-  })();
+  $: weightFilterGroups = filterOptions.weightGroups;
+  $: weightFilterOptions = filterOptions.weight;
+  $: ageFilterOptions = filterOptions.age;
+  $: labelFilterOptions = filterOptions.label;
 
   $: weightFilterGenderMap = (() => {
     const map = new Map<WeightFilter, 'female' | 'male'>();
     weightFilterGroups.female.forEach((option) => map.set(option.id, 'female'));
     weightFilterGroups.male.forEach((option) => map.set(option.id, 'male'));
     return map;
-  })();
-
-  $: weightFilterOptions = (() => {
-    const options: WeightFilterOption[] = [
-      { id: 'ALL', label: translate('contest_detail.registrations.filters.all') },
-    ];
-    const hasFemale = weightFilterGroups.female.length > 0 || registrationsList.some((reg) => isFemaleGender(reg.gender));
-    const hasMale = weightFilterGroups.male.length > 0 || registrationsList.some((reg) => isMaleGender(reg.gender));
-    if (hasFemale) {
-      options.push(weightFilterGroups.femaleOpen, ...weightFilterGroups.female);
-    }
-    if (hasMale) {
-      options.push(weightFilterGroups.maleOpen, ...weightFilterGroups.male);
-    }
-    return options;
-  })();
-
-  $: ageFilterOptions = (() => {
-    const entries: AgeFilterOption[] = [
-      { id: 'ALL', label: translate('contest_detail.registrations.filters.age_all') },
-    ];
-    const hasUnassigned = registrationsList.some((registration) => !registration.ageCategoryId);
-    if (hasUnassigned) {
-      entries.push({
-        id: 'UNASSIGNED',
-        label: translate('contest_detail.registrations.filters.age_unassigned'),
-      });
-    }
-
-    const seen = new Set<string>();
-    ageCategories
-      .slice()
-      .sort((a, b) => {
-        const orderA = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
-        const orderB = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
-        if (orderA !== orderB) return orderA - orderB;
-        const labelA = normaliseAgeCategoryLabel(a.name, a.code) || (a.code ?? '').toString();
-        const labelB = normaliseAgeCategoryLabel(b.name, b.code) || (b.code ?? '').toString();
-        return labelA.localeCompare(labelB, undefined, { sensitivity: 'base' });
-      })
-      .forEach((category) => {
-        const id = (category.id ?? category.code ?? '').toString();
-        let label = normaliseAgeCategoryLabel(category.name, category.code) || id;
-        if (label.toLowerCase() === 'senior') {
-          label = translate('contest_detail.registrations.filters.age_senior');
-        }
-        if (!id || !label) return;
-        if (seen.has(id)) return;
-        seen.add(id);
-        entries.push({ id: id as AgeFilter, label });
-      });
-
-    return entries;
-  })();
-
-  $: labelFilterOptions = (() => {
-    const base: LabelFilterOption[] = [
-      { id: 'ALL', label: translate('contest_detail.registrations.filters.labels_all') },
-    ];
-    let hasUnlabeled = false;
-    const labelMap = new Map<string, string>();
-
-    registrationsList.forEach((registration) => {
-      const labels = Array.isArray(registration.labels) ? registration.labels : [];
-      if (labels.length === 0) {
-        hasUnlabeled = true;
-        return;
-      }
-      labels.forEach((label) => {
-        const trimmed = (label ?? '').trim();
-        if (!trimmed) return;
-        const key = normaliseLabelKey(trimmed);
-        if (!labelMap.has(key)) {
-          labelMap.set(key, trimmed);
-        }
-      });
-    });
-
-    if (hasUnlabeled) {
-      base.push({
-        id: 'UNLABELED',
-        label: translate('contest_detail.registrations.filters.labels_unlabeled'),
-      });
-    }
-
-    Array.from(labelMap.values())
-      .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
-      .forEach((label) => {
-        base.push({
-          id: `${LABEL_FILTER_PREFIX}${label}` as LabelFilter,
-          label,
-        });
-      });
-
-    return base;
   })();
 
   $: if (!weightFilterOptions.some((option) => option.id === selectedWeightFilter)) {
@@ -284,7 +150,7 @@
     return `${genderLabel} ${match.label}`;
   }
 
-  function getWeightOptionLabel(option: WeightFilterOption): string {
+  function getWeightOptionLabel(option: PublicWeightFilterOption): string {
     if (option.id === 'FEMALE_OPEN') {
       return `${translate('contest_detail.registrations.filters.sex_female')} ${translate('contest_detail.registrations.filters.open')}`;
     }

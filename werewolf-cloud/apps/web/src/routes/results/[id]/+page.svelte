@@ -6,93 +6,81 @@
   import Calendar from 'lucide-svelte/icons/calendar';
   import MapPin from 'lucide-svelte/icons/map-pin';
   import Clock from 'lucide-svelte/icons/clock';
-  import { buildUnifiedTableExportModel, createCsvBlob, createPdfBlob, createJpgBlob } from '$lib/export';
-  import { ATTEMPT_NUMBERS, type AttemptNumber, type LiftKind, type UnifiedRow } from '$lib/contest-table';
+  import {
+    buildTeamResultsExportModel,
+    buildUnifiedTableExportModel,
+    createCsvBlob,
+    createJpgBlob,
+    createPdfBlob,
+  } from '$lib/export';
+  import { ATTEMPT_NUMBERS, type LiftKind } from '$lib/contest-table';
+  import type {
+    ResultsExportDetail,
+    ResultsTab,
+    ScoreboardExportDetail,
+    TeamExportDetail,
+  } from '$lib/components/public-results';
   import type { PageData } from './$types';
 
   export let data: PageData;
 
-  let loading = false;
-  let selectedTab: 'individual' | 'team' = 'individual';
+  const loading = false;
+  const DEFAULT_LIFTS: LiftKind[] = ['Bench'];
+  const FALLBACK_REFERENCE_DATA = { weightClasses: [], ageCategories: [] };
 
-  // Update selectedTab from data
-  $: selectedTab = data.selectedTab as 'individual' | 'team';
+  let selectedTab: ResultsTab = 'individual';
 
-  type ScoreboardExportDetail = {
-    kind: 'scoreboard';
-    format: 'csv' | 'json' | 'pdf' | 'jpg';
-    rows: UnifiedRow[];
-    lifts: LiftKind[];
-    attemptNumbers?: AttemptNumber[];
-    showPointsColumn?: boolean;
-    showMaxColumn?: boolean;
-    showRowNumbers?: boolean;
-  };
+  // The loader validates the ?tab= query parameter, so the page only narrows it.
+  $: selectedTab = data.selectedTab === 'team' ? 'team' : 'individual';
 
-  // Export functionality
-  async function handleExport(event: CustomEvent) {
+  /** Export requests bubbled up by the results tabs. */
+  async function handleExport(event: CustomEvent<ResultsExportDetail>) {
     const detail = event.detail;
-    if (!detail) return;
-
     if (detail.kind === 'scoreboard') {
-      await exportScoreboard(detail as ScoreboardExportDetail);
+      await exportScoreboard(detail);
       return;
     }
-
-    const exportData = detail.data;
-    if (!exportData || exportData.length === 0) {
-      console.warn('No data to export');
-      return;
-    }
-
-    if (detail.view === 'team') {
-      exportTeam(detail.format, exportData);
-    }
+    exportTeam(detail);
   }
 
   async function exportScoreboard(detail: ScoreboardExportDetail) {
-    const rows = detail.rows ?? [];
+    const rows = detail.rows;
     if (rows.length === 0) {
       console.warn('No scoreboard data to export');
       return;
     }
 
-    const referenceData = data.resultsBundle?.scoreboard?.referenceData ?? {
-      weightClasses: [],
-      ageCategories: [],
-    };
-
-    const lifts = detail.lifts?.length ? detail.lifts : ['Bench'];
+    const referenceData = data.resultsBundle?.scoreboard?.referenceData ?? FALLBACK_REFERENCE_DATA;
+    const lifts = detail.lifts.length > 0 ? detail.lifts : DEFAULT_LIFTS;
     const translate = get(_);
     const statusLabels = {
       Pending: translate('attempt.status.pending'),
       Successful: translate('attempt.status.successful'),
       Failed: translate('attempt.status.failed'),
-    } as const;
+    };
     const model = buildUnifiedTableExportModel({
       rows,
       lifts,
-      attemptNumbers: detail.attemptNumbers ?? ATTEMPT_NUMBERS,
-      showPointsColumn: detail.showPointsColumn ?? true,
-      showMaxColumn: detail.showMaxColumn ?? true,
+      attemptNumbers: detail.attemptNumbers.length > 0 ? detail.attemptNumbers : ATTEMPT_NUMBERS,
+      showPointsColumn: detail.showPointsColumn,
+      showMaxColumn: detail.showMaxColumn,
       weightClasses: referenceData.weightClasses ?? [],
       ageCategories: referenceData.ageCategories ?? [],
       translate,
       statusLabels,
-      showRowNumbers: detail.showRowNumbers ?? false,
+      showRowNumbers: detail.showRowNumbers,
     });
 
     const contestName = data.contest?.name || 'results';
-    const timestamp = new Date().toISOString().split('T')[0];
-    const liftSuffix = lifts.length === 1 ? lifts[0]?.toLowerCase() : 'scoreboard';
+    const timestamp = new Date().toISOString().slice(0, 10);
+    const primaryLift: LiftKind = lifts[0] ?? 'Bench';
+    const liftSuffix = lifts.length === 1 ? primaryLift.toLowerCase() : 'scoreboard';
     const base = `${contestName.replace(/[^a-zA-Z0-9]/g, '_')}_${liftSuffix}_${timestamp}`;
 
     if (detail.format === 'csv') {
-      const blob = createCsvBlob(model);
-      downloadFile(blob, `${base}.csv`);
+      downloadFile(createCsvBlob(model), `${base}.csv`);
     } else if (detail.format === 'json') {
-      const json = JSON.stringify(rows, null, 2);
-      downloadFile(json, `${base}.json`, 'application/json');
+      downloadFile(JSON.stringify(rows, null, 2), `${base}.json`, 'application/json');
     } else if (detail.format === 'pdf') {
       const blob = await createPdfBlob(model, { title: contestName, subtitle: liftSuffix.toUpperCase() });
       downloadFile(blob, `${base}.pdf`, 'application/pdf');
@@ -102,73 +90,19 @@
     }
   }
 
-  function exportTeam(format: 'csv' | 'json', teamData: any[]) {
+  function exportTeam(detail: TeamExportDetail) {
     const contestName = data.contest?.name || 'results';
-    const timestamp = new Date().toISOString().split('T')[0];
+    const timestamp = new Date().toISOString().slice(0, 10);
     const filename = `${contestName.replace(/[^a-zA-Z0-9]/g, '_')}_team_${timestamp}`;
 
-    if (format === 'csv') {
-      const csv = generateTeamCSV(teamData);
-      downloadFile(csv, `${filename}.csv`, 'text/csv');
+    if (detail.format === 'csv') {
+      // The same mapping and CSV serialiser the organizer export uses, so the
+      // public download carries the same columns and escaping.
+      const model = buildTeamResultsExportModel({ table: detail.table, translate: get(_) });
+      downloadFile(createCsvBlob(model), `${filename}.csv`);
     } else {
-      const json = JSON.stringify(teamData, null, 2);
-      downloadFile(json, `${filename}.json`, 'application/json');
+      downloadFile(JSON.stringify(detail.table.rows, null, 2), `${filename}.json`, 'application/json');
     }
-  }
-
-  function generateTeamCSV(data: any[]): string {
-    const headers = [
-      'Rank',
-      'Team',
-      'Total Points',
-      'Contributors',
-      'First Name',
-      'Last Name',
-      'Gender',
-      'Selected Lift',
-      'Best Lift',
-      'Points'
-    ];
-
-    const rows: string[][] = [];
-
-    data.forEach((team) => {
-      const teamRow = [
-        team.rank,
-        team.club,
-        team.totalPoints,
-        team.contributors.filter((c: any) => !c.isPlaceholder).length,
-        '',
-        '',
-        '',
-        '',
-        '',
-        ''
-      ];
-      rows.push(teamRow);
-
-      team.contributors.forEach((contributor: any) => {
-        if (!contributor.isPlaceholder) {
-          const contributorRow = [
-            '',
-            '',
-            '',
-            '',
-            contributor.firstName,
-            contributor.lastName,
-            contributor.gender,
-            contributor.selectedLift || '',
-            contributor.selectedLift === 'squat' ? contributor.bestSquat :
-            contributor.selectedLift === 'bench' ? contributor.bestBench :
-            contributor.selectedLift === 'deadlift' ? contributor.bestDeadlift : '',
-            contributor.points
-          ];
-          rows.push(contributorRow);
-        }
-      });
-    });
-
-    return rows.map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
   }
 
   function downloadFile(content: string | Blob, filename: string, mimeType = 'application/octet-stream') {
@@ -190,15 +124,6 @@
       month: 'long',
       day: 'numeric'
     });
-  }
-
-  // Type-safe translation function with proper values object
-  function t(key: string, values?: Record<string, string | number>) {
-    const translate = $_(key);
-    if (values && typeof translate === 'function') {
-      return translate({ values });
-    }
-    return translate;
   }
 </script>
 

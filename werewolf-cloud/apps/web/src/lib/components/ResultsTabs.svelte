@@ -5,31 +5,37 @@
   import { _ } from 'svelte-i18n';
   import IndividualResultsTab from './IndividualResultsTab.svelte';
   import TeamResultsTab from './TeamResultsTab.svelte';
+  import type { ResultsExportDetail, ResultsTab } from './public-results';
   import type { ContestDetail, PublicResultsBundle } from '$lib/types';
 
   export let contest: ContestDetail | null = null;
   export let resultsBundle: PublicResultsBundle | null = null;
   export let loading = false;
-  export let selectedTab: 'individual' | 'team' = 'individual';
+  export let selectedTab: ResultsTab = 'individual';
 
-  const dispatch = createEventDispatcher();
+  const dispatch = createEventDispatcher<{ export: ResultsExportDetail }>();
+
+  /** Team table of the bundle; null while the bundle carries no team results. */
+  $: teamTable = resultsBundle?.team?.mixed ?? null;
+  /** Individual rankings; the empty shape keeps the tab renderable without data. */
+  $: individualResults = resultsBundle?.individual ?? { open: [], age: [], weight: [] };
 
   // Update URL when tab changes
-  function handleTabChange(tab: 'individual' | 'team') {
+  function handleTabChange(tab: ResultsTab) {
     selectedTab = tab;
     const url = new URL($page.url);
     url.searchParams.set('tab', tab);
     goto(url.toString(), { replaceState: true, noScroll: true });
   }
 
-  function handleExport(event: CustomEvent) {
+  function handleExport(event: CustomEvent<ResultsExportDetail>) {
     dispatch('export', event.detail);
   }
 
   // Initialize selectedTab from URL on mount
   onMount(() => {
-    const urlTab = $page.url.searchParams.get('tab') as 'individual' | 'team';
-    if (urlTab && (urlTab === 'individual' || urlTab === 'team')) {
+    const urlTab = $page.url.searchParams.get('tab');
+    if (urlTab === 'individual' || urlTab === 'team') {
       selectedTab = urlTab;
     }
   });
@@ -71,15 +77,14 @@
     {#if selectedTab === 'individual'}
       <IndividualResultsTab
         {contest}
-        results={resultsBundle?.individual || { open: [], age: [], weight: [] }}
-        scoreboard={resultsBundle?.scoreboard || null}
+        results={individualResults}
+        scoreboard={resultsBundle?.scoreboard ?? null}
         {loading}
         on:export={handleExport}
       />
     {:else if selectedTab === 'team'}
       <TeamResultsTab
-        {contest}
-        teamResults={resultsBundle?.team || null}
+        table={teamTable}
         {loading}
         on:export={handleExport}
       />
