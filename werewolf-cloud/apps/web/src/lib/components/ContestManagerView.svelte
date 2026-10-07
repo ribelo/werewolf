@@ -128,7 +128,7 @@ import Download from 'lucide-svelte/icons/download';
 
   export let data: ContestManagerData;
   export let params: Record<string, string> = {};
-  export let view: 'desk' | 'registrations' | 'results' | 'team_results' | 'plates' | 'bench' | 'squat' | 'deadlift' = 'desk';
+  export let view: 'desk' | 'registrations' | 'results' | 'plates' | 'bench' | 'squat' | 'deadlift' = 'desk';
 
 $: void params;
   let {
@@ -959,7 +959,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
     }
   }
 
-  type TabId = 'desk' | 'registrations' | 'results' | 'team_results' | 'plates' | 'squat' | 'bench' | 'deadlift';
+  type TabId = 'desk' | 'registrations' | 'results' | 'plates' | 'squat' | 'bench' | 'deadlift';
 
   let activeTab: TabId = view;
   $: activeTab = view;
@@ -968,7 +968,6 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
     desk: 'desk',
     registrations: 'registrations',
     results: 'results',
-    team_results: 'team-results',
     plates: 'plates',
     squat: 'squat',
     bench: 'bench',

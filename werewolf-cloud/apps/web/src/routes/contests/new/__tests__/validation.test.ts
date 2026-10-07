@@ -127,17 +127,19 @@ describe('attempt issue collection', () => {
       event: 'Squat',
       type: 'missing',
     });
+    // 25 kg is the lightest weight the API accepts: the 20 kg bar plus both
+    // 2.5 kg clamps of a fresh contest.
     expect(issues[1]).toMatchObject({
       competitorIndex: 1,
       event: 'Squat',
       type: 'below_bar',
-      suggestedWeight: 20,
+      suggestedWeight: 25,
     });
     expect(issues[2]).toMatchObject({
       competitorIndex: 1,
       event: 'Bench',
       type: 'unloadable',
-      suggestedWeight: 20,
+      suggestedWeight: 25,
     });
     expect(issues[1]?.name).toContain('contest.wizard.attempts.unnamed');
   });

@@ -7,9 +7,8 @@
   import FullScreenQR from '$lib/components/FullScreenQR.svelte';
   import PlateBar from '$lib/components/PlateBar.svelte';
   import type { PageData } from './$types';
-  import type { DisplayQrVisibility } from '@werewolf/domain';
+  import { ageOnDate, type DisplayQrVisibility } from '@werewolf/domain';
   import type { LiveEvent, AttemptStatus } from '$lib/types';
-  import { formatAge } from '$lib/utils';
   import {
     createCurrentAttemptLiveState,
     reduceCurrentAttemptEvent,
@@ -28,15 +27,11 @@
 
   let {
     contest,
-    registrations,
     attempts,
     currentAttempt,
-    referenceData,
     plateSets,
     error,
     contestId,
-    isOffline,
-    cacheAge,
   } = data;
 
   let liveState: CurrentAttemptLiveState = createCurrentAttemptLiveState(attempts, currentAttempt);
@@ -68,13 +63,6 @@
   let attemptWeightsChanged = false;
   let decipherAttemptWeights: string = '';
   
-  let previousBarWeight: string = '';
-  let previousCollarWeight: string = '';
-  let barWeightChanged = false;
-  let collarWeightChanged = false;
-  let decipherBarWeight: string = '';
-  let decipherCollarWeight: string = '';
-  
   let previousPlates: string = '';
   let platesChanged = false;
   let decipherPlates: string = '';
@@ -98,25 +86,18 @@
     ? Math.max(...contestPlateSets.map((plate) => plate.plateWeight ?? plate.weight ?? 0), 0)
     : null;
 
-  $: barWeightStr = platePlan ? formatWeight(platePlan.barWeight) : '';
-  $: collarWeightStr = platePlan && platePlan.clampWeight > 0 ? formatWeight(platePlan.clampWeight) : '';
-  
   // One animation instance per animated field, so a superseded animation can
   // be cancelled instead of writing stale text over a newer value.
   const competitorNameDecipher = new DecipherAnimation();
   const liftLabelDecipher = new DecipherAnimation();
   const competitorInfoDecipher = new DecipherAnimation();
   const attemptWeightsDecipher = new DecipherAnimation();
-  const barWeightDecipher = new DecipherAnimation();
-  const collarWeightDecipher = new DecipherAnimation();
   const platesDecipher = new DecipherAnimation();
   const decipherAnimations: DecipherAnimation[] = [
     competitorNameDecipher,
     liftLabelDecipher,
     competitorInfoDecipher,
     attemptWeightsDecipher,
-    barWeightDecipher,
-    collarWeightDecipher,
     platesDecipher,
   ];
   
@@ -153,24 +134,6 @@
       onChanged: (changed) => attemptWeightsChanged = changed,
       onText: (text) => decipherAttemptWeights = text,
       onComplete: () => previousAttemptWeights = attemptWeightsStr,
-    });
-  }
-  
-  // Bar weight decipher
-  $: if (barWeightStr && barWeightStr !== previousBarWeight) {
-    decipherBarWeight = barWeightDecipher.start(barWeightStr, previousBarWeight, {
-      onChanged: (changed) => barWeightChanged = changed,
-      onText: (text) => decipherBarWeight = text,
-      onComplete: () => previousBarWeight = barWeightStr,
-    });
-  }
-  
-  // Collar weight decipher
-  $: if (collarWeightStr && collarWeightStr !== previousCollarWeight) {
-    decipherCollarWeight = collarWeightDecipher.start(collarWeightStr, previousCollarWeight, {
-      onChanged: (changed) => collarWeightChanged = changed,
-      onText: (text) => decipherCollarWeight = text,
-      onComplete: () => previousCollarWeight = collarWeightStr,
     });
   }
   
@@ -236,7 +199,12 @@
 
   $: weightClassLabel = currentRegistration?.weightClassName ?? currentRegistration?.weightClassId ?? '—';
   $: ageCategoryLabel = currentRegistration?.ageCategoryName ?? null;
-  $: currentAge = currentCompetitor?.birthDate ? formatAge(currentCompetitor.birthDate) : null;
+  // The age at the contest date, not today: a display left running between
+  // meets must not age the competitors.
+  $: currentAge =
+    currentCompetitor?.birthDate && contest?.date
+      ? ageOnDate(currentCompetitor.birthDate, contest.date)
+      : null;
   $: currentCity = currentCompetitor?.city && currentCompetitor.city.trim().length > 0 ? currentCompetitor.city.trim() : null;
 
   $: shareableUrl = typeof window !== 'undefined' && contestId
@@ -247,18 +215,9 @@
   let qrOpen = false;
   let lastQrUrl: string | null = null;
 
-  $: currentAttemptMeta = liveCurrentAttempt
-    ? `${liftLabel()} • ${t('display_current.tiles.attempt', { number: liveCurrentAttempt.attemptNumber })}`
-    : t('display_current.waiting.next_title');
-
-  // competition order removed
-  $: competitionOrderLabel = null;
-
   $: bodyweightLabel = currentRegistration?.bodyweight
     ? formatWeight(currentRegistration.bodyweight)
     : null;
-
-  $: currentAttemptWeight = liveCurrentAttempt ? formatWeight(liveCurrentAttempt.weight) : '—';
 
   async function buildQr(url: string) {
     try {
@@ -352,13 +311,6 @@
       return 'bg-red-900/40 border border-red-700 text-red-100';
     }
     return 'bg-element-bg border border-border-color text-text-secondary';
-  }
-
-  function statusIndicatorClass(status: string): string {
-    const normalized = status?.toLowerCase() ?? '';
-    if (normalized === 'successful') return 'bg-green-500';
-    if (normalized === 'failed') return 'bg-red-600';
-    return 'bg-gray-500';
   }
 
   function glowClass(status: string): string {

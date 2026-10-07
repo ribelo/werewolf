@@ -5,9 +5,7 @@
   import { apiClient } from '$lib/api';
   import type { PageData } from './$types';
   import type {
-    Attempt,
     LiveEvent,
-    Registration,
     SystemHealth,
   } from '$lib/types';
   import { get } from 'svelte/store';
@@ -41,11 +39,6 @@ import type { DisplayFilterSync, DisplayQrVisibility } from '@werewolf/domain';
     return translate(key, values ? { values } : undefined);
   }
 
-  function formatWeight(value?: number | null): string {
-    if (value == null || Number.isNaN(value) || value <= 0) return '—';
-    return Number.isInteger(value) ? `${Math.trunc(value)}` : value.toFixed(1);
-  }
-
   export let data: PageData;
 
   let {
@@ -63,8 +56,6 @@ import type { DisplayFilterSync, DisplayQrVisibility } from '@werewolf/domain';
   let contestLifts: LiftKind[] = deriveContestLifts(contest, liveState.attempts);
   $: liveAttempts = liveState.attempts;
   $: registrations = liveState.registrations;
-  $: liveCurrentBundle = liveState.currentBundle;
-  $: liveCurrentAttempt = liveState.currentAttempt;
   let lastUpdateTime: Date | null = null;
   let lastUpdateRelative = '—';
   let lastUpdateTimer: ReturnType<typeof setInterval> | null = null;
@@ -86,9 +77,6 @@ import type { DisplayFilterSync, DisplayQrVisibility } from '@werewolf/domain';
   };
   let autoSyncEnabled = true;
   let lastSynced: DisplayFilterSync | null = null;
-  let mensBarWeightSetting: number | null = contest?.mensBarWeight ?? null;
-  let womensBarWeightSetting: number | null = contest?.womensBarWeight ?? null;
-  let clampWeightSetting: number | null = contest?.clampWeight ?? 2.5;
   let autoScrollEnabled = false;
   let scrollSpeed: ScrollSpeed = 'normal';
   let scrollDirection: 1 | -1 = 1;
@@ -242,9 +230,6 @@ import type { DisplayFilterSync, DisplayQrVisibility } from '@werewolf/domain';
   }
 
   $: contestLifts = deriveContestLifts(contest, liveAttempts);
-  $: mensBarWeightSetting = contest?.mensBarWeight ?? null;
-  $: womensBarWeightSetting = contest?.womensBarWeight ?? null;
-  $: clampWeightSetting = contest?.clampWeight ?? 2.5;
   $: if (selectedLift && !contestLifts.includes(selectedLift)) {
         selectedLift = null;
       }
@@ -530,8 +515,6 @@ import type { DisplayFilterSync, DisplayQrVisibility } from '@werewolf/domain';
     closeFilterDropdown();
   }
 
-  $: livePlatePlan = liveCurrentBundle?.platePlan ?? null;
-
   function handleSortChange(column: string) {
     if (sortColumn === column) {
       sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
@@ -553,10 +536,6 @@ import type { DisplayFilterSync, DisplayQrVisibility } from '@werewolf/domain';
 
   function liftTabLabel(lift: LiftKind): string {
     return liftLabel(lift);
-  }
-
-  function selectLift(lift: LiftKind) {
-    selectedLift = lift;
   }
 
   function loadAutoScrollPreferences() {
@@ -850,28 +829,6 @@ import type { DisplayFilterSync, DisplayQrVisibility } from '@werewolf/domain';
       default:
         return 'bg-status-error';
     }
-  }
-
-  function getCompetitor(registrationId: string): Registration | undefined {
-    return registrations.find((entry) => entry.id === registrationId);
-  }
-
-  function competitorName(registrationId: string): string {
-    const competitor = getCompetitor(registrationId);
-    return competitor ? `${competitor.lastName} ${competitor.firstName}` : t('display_table.labels.unknown');
-  }
-
-  function queueLabel(attempt: Attempt): string {
-    const competitor = getCompetitor(attempt.registrationId);
-    const orderSource = null;
-    const orderLabel =
-      orderSource != null && Number.isFinite(orderSource)
-        ? t('display_table.queue.order', { order: orderSource })
-        : t('display_table.queue.order_unknown');
-    return t('display_table.queue.label', {
-      order: orderLabel,
-      name: competitorName(attempt.registrationId)
-    });
   }
 
 </script>

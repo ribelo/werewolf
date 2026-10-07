@@ -25,10 +25,13 @@ describe('login page loader', () => {
   it('redirects an authenticated session to the dashboard', async () => {
     getMock.mockResolvedValue({ data: { authenticated: true }, error: null });
 
-    const thrown: unknown = await load(loadEvent()).then(
-      () => null,
-      (error: unknown) => error,
-    );
+    // SvelteKit's load may return the data or throw; await it and keep the throw.
+    let thrown: unknown = null;
+    try {
+      await load(loadEvent());
+    } catch (error: unknown) {
+      thrown = error;
+    }
 
     expect(isRedirect(thrown)).toBe(true);
     expect(thrown).toMatchObject({ status: 302, location: '/' });

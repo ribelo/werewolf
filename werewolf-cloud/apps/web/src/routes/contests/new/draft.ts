@@ -33,6 +33,13 @@ export const TOTAL_STEPS = MAX_STEP;
 
 export const ATTEMPT_INCREMENT = 2.5;
 export const BODYWEIGHT_STEP = 0.5;
+/**
+ * Clamp weight per side every contest the wizard creates is opened with: the
+ * API hard-codes 2.5 kg (POST /contests) and validates attempts against plate
+ * plans that load the bar and both clamps, so the wizard must use the same
+ * value or it accepts openers the API rejects.
+ */
+export const DEFAULT_CLAMP_WEIGHT_PER_CLAMP = 2.5;
 export const DEFAULT_RACK_SQUAT = 10;
 export const DEFAULT_RACK_BENCH = 5;
 export const DEFAULT_BODYWEIGHT = 70;
@@ -250,7 +257,9 @@ export function normalizeAttemptValue(value: number | null, gender: Gender): num
   if (!value || value <= 0) {
     return null;
   }
-  return normalizeAttemptWeight(value, gender);
+  return normalizeAttemptWeight(value, gender, {
+    clampWeightPerClamp: DEFAULT_CLAMP_WEIGHT_PER_CLAMP,
+  });
 }
 
 export function normalizeAttemptPlanForGender(plan: AttemptPlan, gender: Gender): AttemptPlan {

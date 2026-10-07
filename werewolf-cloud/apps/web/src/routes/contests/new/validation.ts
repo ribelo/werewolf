@@ -1,5 +1,6 @@
 import { evaluateAttemptWeight } from '$lib/plate-plan';
 import {
+  DEFAULT_CLAMP_WEIGHT_PER_CLAMP,
   competitorDisplayName,
   normaliseDraftEvents,
   syncAttemptPlan,
@@ -119,14 +120,21 @@ export function collectAttemptIssues(
         continue;
       }
 
-      const check = evaluateAttemptWeight(weight, competitor.gender);
+      const check = evaluateAttemptWeight(weight, competitor.gender, {
+        clampWeightPerClamp: DEFAULT_CLAMP_WEIGHT_PER_CLAMP,
+      });
       if (!check.loadable) {
         issues.push({
           competitorIndex: index,
           name: displayName,
           event,
           type: check.reason === 'below_bar' ? 'below_bar' : 'unloadable',
-          suggestedWeight: check.normalized,
+          // Below the bar the solver reports the bare bar weight; the API also
+          // requires both clamps, so suggest the smallest weight it accepts.
+          suggestedWeight:
+            check.reason === 'below_bar'
+              ? Number((check.barWeight + DEFAULT_CLAMP_WEIGHT_PER_CLAMP * 2).toFixed(2))
+              : check.normalized,
         });
       }
     }
