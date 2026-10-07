@@ -414,6 +414,13 @@ import type { DisplayFilterSync, DisplayQrVisibility } from '@werewolf/domain';
     ...weightFilterGroups.male,
   ];
 
+  $: weightFilterGenderMap = (() => {
+    const map = new Map<WeightFilter, 'female' | 'male'>();
+    weightFilterGroups.female.forEach((option) => map.set(option.id, 'female'));
+    weightFilterGroups.male.forEach((option) => map.set(option.id, 'male'));
+    return map;
+  })();
+
   $: availableAgeFilters = (() => {
     const entries: Array<{ id: AgeFilter; label: string }> = [
       { id: 'ALL', label: t('contest_detail.registrations.filters.age_all') },
@@ -525,16 +532,19 @@ import type { DisplayFilterSync, DisplayQrVisibility } from '@werewolf/domain';
     if (localFilters.weight === 'MALE_OPEN') {
       return `${t('contest_detail.registrations.filters.sex_male')} ${t('contest_detail.registrations.filters.open')}`;
     }
-    const femaleMatch = femaleWeightFilters.find((option) => option.id === localFilters.weight);
-    if (femaleMatch) {
-      return `${t('contest_detail.registrations.filters.sex_female')} ${femaleMatch.label}`;
-    }
-    const maleMatch = maleWeightFilters.find((option) => option.id === localFilters.weight);
-    if (maleMatch) {
-      return `${t('contest_detail.registrations.filters.sex_male')} ${maleMatch.label}`;
-    }
     const fallback = availableWeightFilters.find((option) => option.id === localFilters.weight);
-    return fallback?.label ?? t('contest_detail.registrations.filters.weight_button_all');
+    if (!fallback) {
+      return t('contest_detail.registrations.filters.weight_button_all');
+    }
+    const gender = weightFilterGenderMap.get(localFilters.weight);
+    if (!gender) {
+      return fallback.label;
+    }
+    const genderLabel =
+      gender === 'female'
+        ? t('contest_detail.registrations.filters.sex_female')
+        : t('contest_detail.registrations.filters.sex_male');
+    return `${genderLabel} ${fallback.label}`;
   })();
 
   $: ageSelectionLabel = (() => {

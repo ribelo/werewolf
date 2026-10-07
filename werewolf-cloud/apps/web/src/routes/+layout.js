@@ -8,6 +8,7 @@ export const prerender = false;
 const isPublicPath = (pathname) => {
   if (pathname === '/login') return true;
   if (pathname.startsWith('/display')) return true;
+  if (pathname.startsWith('/results')) return true;
   return false;
 };
 

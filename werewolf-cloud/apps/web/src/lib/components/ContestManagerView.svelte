@@ -22,6 +22,7 @@
     createCsvBlob,
     createPdfBlob,
     createJpgBlob,
+    createGroupedJpgBlob,
   } from '$lib/export';
   import { getStatusClasses, formatCompetitorName, formatWeight, normaliseAgeCategoryLabel } from '$lib/utils';
   import { apiClient, ApiError } from '$lib/api';
@@ -66,13 +67,14 @@
   import { bundleToCurrentAttempt } from '$lib/current-attempt';
   import { _, locale } from 'svelte-i18n';
   import { get } from 'svelte/store';
-  import { ArrowUpDown, ChevronUp, ChevronDown } from 'lucide-svelte';
+import { ArrowUpDown, ChevronUp, ChevronDown } from 'lucide-svelte';
   import reshelMenData from '@werewolf/domain/data/reshel-men.json';
   import FullScreenQR from '$lib/components/FullScreenQR.svelte';
   import QRCode from 'qrcode';
   import reshelWomenData from '@werewolf/domain/data/reshel-women.json';
   import mccData from '@werewolf/domain/data/mccullough.json';
   import { browser } from '$app/environment';
+import Download from 'lucide-svelte/icons/download';
 
   type ContestManagerData = {
     contest: ContestDetail | null;
@@ -121,6 +123,156 @@ $: void params;
   function t(key: string, values?: MessageValues): string {
     const translate = get(_);
     return translate(key, values ? { values } : undefined);
+  }
+
+  const disciplineFilenameLabels: Record<string, string> = {
+    Bench: 'Benchpress',
+    Deadlift: 'Deadlift',
+    Squat: 'Squat',
+    Powerlifting: 'Powerlifting',
+  };
+
+  function normaliseFilenameSegment(value: string): string {
+    if (!value) return '';
+    return value
+      .normalize('NFKD')
+      .replace(/[^\w\s-]/g, '')
+      .replace(/[\s-]+/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_|_$/g, '')
+      .slice(0, 80);
+  }
+
+  function buildResultsFilename(extension: 'csv' | 'json' | 'jpg'): string {
+    const nameSegment = normaliseFilenameSegment(contest?.name ?? '') || `contest_${contestId}`;
+    const disciplineSegment = normaliseFilenameSegment(disciplineFilenameLabels[contest?.discipline ?? ''] ?? 'Results') || 'Results';
+    return `${nameSegment}_${disciplineSegment}.${extension}`;
+  }
+
+  function buildResultsFilenameWithLift(extension: 'csv' | 'json' | 'jpg', lift?: 'Squat' | 'Bench' | 'Deadlift'): string {
+    const base = buildResultsFilename(extension);
+    if (!lift || contest?.discipline !== 'Powerlifting') return base;
+    const liftLabel = normaliseFilenameSegment(disciplineFilenameLabels[lift] ?? lift) || lift;
+    const [namePart, ...rest] = base.split('.');
+    const ext = rest.pop() ?? extension;
+    return `${namePart}_${liftLabel}.${ext}`;
+  }
+
+  const POWERLIFTING_LIFTS: Array<'Squat' | 'Bench' | 'Deadlift'> = ['Squat', 'Bench', 'Deadlift'];
+  const liftPrefixes: Record<'Squat' | 'Bench' | 'Deadlift', { prefix: 'SQ' | 'BP' | 'DL'; label: string }> = {
+    Squat: { prefix: 'SQ', label: 'Squat' },
+    Bench: { prefix: 'BP', label: 'Benchpress' },
+    Deadlift: { prefix: 'DL', label: 'Deadlift' },
+  };
+
+  type SingleLiftExportEntry = {
+    row: Record<string, string>;
+    gender?: string | null;
+    ageCategory?: string | null;
+    ageMin?: number | null;
+    ageMax?: number | null;
+  };
+
+  function buildGroupedJpgModel(entries: SingleLiftExportEntry[], lift: 'Squat' | 'Bench' | 'Deadlift') {
+    const prefix = liftPrefixes[lift].prefix;
+    const columns = [
+      { key: 'Place', header: 'Place' },
+      { key: 'Name', header: 'Name' },
+      { key: 'Surname', header: 'Surname' },
+      { key: 'Country', header: 'Country' },
+      { key: 'Age', header: 'Age' },
+      { key: 'Weight', header: 'Weight' },
+      { key: 'Age Class', header: 'Age Class' },
+      { key: 'Weight Class', header: 'Weight Class' },
+      { key: 'Div', header: 'Div' },
+      { key: `${prefix}1`, header: `${prefix}1` },
+      { key: `${prefix}2`, header: `${prefix}2` },
+      { key: `${prefix}3`, header: `${prefix}3` },
+      { key: `${prefix}4`, header: `${prefix}4` },
+      { key: `Total${prefix}`, header: `Total${prefix}` },
+      { key: `Reshel${prefix}`, header: `Reshel${prefix}` },
+      { key: `McCoulogh${prefix}`, header: `McCoulogh${prefix}` },
+    ];
+
+    const groups = new Map<string, SingleLiftExportEntry[]>();
+    const sexRank = (gender?: string | null) => {
+      if (gender === 'Female') return 0;
+      if (gender === 'Male') return 1;
+      return 2;
+    };
+
+    entries.forEach((entry) => {
+      const key = `${entry.gender ?? ''}|${entry.ageCategory ?? ''}`;
+      if (!groups.has(key)) {
+        groups.set(key, []);
+      }
+      groups.get(key)!.push(entry);
+    });
+
+    const sortedKeys = Array.from(groups.keys()).sort((aKey, bKey) => {
+      const a = groups.get(aKey)?.[0];
+      const b = groups.get(bKey)?.[0];
+
+      const sexDiff = sexRank(a?.gender) - sexRank(b?.gender);
+      if (sexDiff !== 0) return sexDiff;
+
+      const aMin = typeof a?.ageMin === 'number' ? a?.ageMin : Number.POSITIVE_INFINITY;
+      const bMin = typeof b?.ageMin === 'number' ? b?.ageMin : Number.POSITIVE_INFINITY;
+      if (aMin !== bMin) return aMin - bMin;
+
+      const aMax = typeof a?.ageMax === 'number' ? a?.ageMax : Number.POSITIVE_INFINITY;
+      const bMax = typeof b?.ageMax === 'number' ? b?.ageMax : Number.POSITIVE_INFINITY;
+      if (aMax !== bMax) return aMax - bMax;
+
+      const aLabel = a?.ageCategory ?? '';
+      const bLabel = b?.ageCategory ?? '';
+      return aLabel.localeCompare(bLabel);
+    });
+
+    const grouped = sortedKeys.map((key) => {
+      const list = groups.get(key) ?? [];
+      const sample = list[0];
+      const genderLabel = sample?.gender === 'Male' ? 'MEN' : sample?.gender === 'Female' ? 'WOMEN' : 'ATHLETES';
+      const ageLabel = sample?.ageCategory ?? 'Unassigned';
+
+      const totalKey = `Total${prefix}` as const;
+      const parseNum = (value: string | undefined) => {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+      };
+
+      const sorted = [...list].sort((a, b) => {
+        const aPlace = parseNum(a.row.Place);
+        const bPlace = parseNum(b.row.Place);
+        if (aPlace !== bPlace) return aPlace - bPlace;
+        const aTotal = parseNum(a.row[totalKey]);
+        const bTotal = parseNum(b.row[totalKey]);
+        if (aTotal !== bTotal) return bTotal - aTotal;
+        return (a.row.Surname ?? '').localeCompare(b.row.Surname ?? '');
+      });
+
+      let localPlace = 1;
+      const rows = sorted.map((entry) => {
+        const placeValue = entry.row.Place === 'OUT' ? 'OUT' : String(localPlace++);
+        const record: Record<string, string> = {};
+        for (const column of columns) {
+          if (column.key === 'Place') {
+            record[column.key] = placeValue;
+          } else {
+            record[column.key] = entry.row[column.key] ?? '';
+          }
+        }
+        return record;
+      });
+
+      return {
+        title: `${genderLabel} - ${ageLabel} RAW`,
+        columns,
+        rows,
+      };
+    });
+
+    return grouped;
   }
 
   let weightClasses = referenceData?.weightClasses ?? [];
@@ -1203,24 +1355,69 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
   async function exportResults(format: 'csv' | 'json') {
     exportingResults = true;
     try {
+      const liftsToExport: Array<'Squat' | 'Bench' | 'Deadlift'> =
+        contest?.discipline === 'Powerlifting'
+          ? POWERLIFTING_LIFTS
+          : contest?.discipline === 'Bench'
+            ? ['Bench']
+            : contest?.discipline === 'Deadlift'
+              ? ['Deadlift']
+              : contest?.discipline === 'Squat'
+                ? ['Squat']
+                : [];
+
       if (format === 'csv') {
-        const response = await fetch(`${apiBase}/contests/${contestId}/results/export`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ format: 'csv' }),
-        });
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        if (liftsToExport.length === 0) {
+          // Fallback to legacy single export if discipline is unknown
+          liftsToExport.push('Bench');
         }
-        const csvText = await response.text();
-        downloadFile(new Blob([csvText], { type: 'text/csv;charset=utf-8;' }), `werewolf-results-${contestId}.csv`);
-      } else {
-        const response = await apiClient.post<ContestRankingEntry[]>(`/contests/${contestId}/results/export`, { format: 'json' });
+
+        for (const lift of liftsToExport) {
+          const response = await fetch(`${apiBase}/contests/${contestId}/results/export`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ format: 'csv', lift }),
+            credentials: 'include',
+          });
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          const csvText = await response.text();
+          const filename = contest?.discipline === 'Powerlifting'
+            ? buildResultsFilenameWithLift('csv', lift)
+            : buildResultsFilename('csv');
+          downloadFile(new Blob([csvText], { type: 'text/csv;charset=utf-8;' }), filename);
+        }
+      } else if (format === 'json') {
+        const liftForJson = liftsToExport[0];
+        const response = await apiClient.post<unknown[]>(`/contests/${contestId}/results/export`, liftForJson ? { format: 'json', lift: liftForJson } : { format: 'json' });
         if (response.error) {
           throw new Error(response.error);
         }
         const jsonBlob = new Blob([JSON.stringify(response.data ?? [], null, 2)], { type: 'application/json' });
-        downloadFile(jsonBlob, `werewolf-results-${contestId}.json`);
+        const filename = contest?.discipline === 'Powerlifting'
+          ? buildResultsFilenameWithLift('json', liftForJson)
+          : buildResultsFilename('json');
+        downloadFile(jsonBlob, filename);
+      } else if (format === 'jpg') {
+        const liftsForJpg: Array<'Squat' | 'Bench' | 'Deadlift'> = liftsToExport.length > 0 ? liftsToExport : ['Bench'];
+        for (const lift of liftsForJpg) {
+          const response = await apiClient.post<SingleLiftExportEntry[]>(`/contests/${contestId}/results/export`, { format: 'json', lift });
+          if (response.error) {
+            throw new Error(response.error);
+          }
+          const data = response.data ?? [];
+          const grouped = buildGroupedJpgModel(data as SingleLiftExportEntry[], lift);
+          const blob = await createGroupedJpgBlob(grouped, {
+            title: `${contest?.name ?? 'Results'} - ${liftPrefixes[lift].label}`,
+            subtitle: contest?.discipline === 'Powerlifting' ? undefined : contest?.discipline ?? undefined,
+            generatedAtLabel: t('contest_detail.export.generated_at', { timestamp: new Date().toLocaleString() }),
+          });
+          const filename = contest?.discipline === 'Powerlifting'
+            ? buildResultsFilenameWithLift('jpg', lift)
+            : buildResultsFilename('jpg');
+          downloadFile(blob, filename);
+        }
       }
       toast.success(t('contest_detail.results.toast_export_success'));
     } catch (err) {
@@ -1860,6 +2057,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
   type ExportMenuId = 'squat' | 'bench' | 'deadlift';
   let openExportMenu: ExportMenuId | null = null;
   let exportingUnifiedTable = false;
+  let resultsExportMenuOpen = false;
 
   function toggleResultFilterPopover(target: 'weight' | 'age' | 'tags') {
     openRegistrationFilter = null;
@@ -2855,7 +3053,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
       <FullScreenQR url={shareableUrl} on:close={() => (qrOpen = false)} />
     {/if}
 
-        <section class="grid gap-4 md:grid-cols-3">
+        <section class="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <a
           class="card transition-transform hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-primary-red focus:ring-offset-2 focus:ring-offset-main-bg"
           href={`/display/table?contestId=${contestId}`}
@@ -2888,6 +3086,17 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
             <h3 class="text-h3 text-text-primary">{$_('contest_detail.links.shareable.title')}</h3>
           </div>
           <p class="text-body text-text-secondary">{$_('contest_detail.links.shareable.description')}</p>
+          </a>
+          <a
+          class="card transition-transform hover:-translate-y-1 focus:outline-none focus:ring-2 focus:ring-primary-red focus:ring-offset-2 focus:ring-offset-main-bg"
+          href={`/results/${contestId}`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          <div class="mb-3">
+            <h3 class="text-h3 text-text-primary">{$_('contest_detail.links.public_results.title')}</h3>
+          </div>
+          <p class="text-body text-text-secondary">{$_('contest_detail.links.public_results.description')}</p>
           </a>
         </section>
 
@@ -3471,23 +3680,47 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
                 <h3 class="text-h3 text-text-primary">{$_('contest_detail.results.title')}</h3>
                 <p class="text-body text-text-secondary">{$_('contest_detail.results.subtitle')}</p>
               </div>
-              <div class="flex flex-wrap items-center gap-2">
+              <div class="relative" on:click|stopPropagation>
                 <button
                   type="button"
-                  class="btn-secondary px-3 py-1 text-xxs"
-                  on:click={() => exportResults('csv')}
+                  class="btn-secondary flex items-center gap-2 px-3 py-2 text-sm"
+                  on:click={() => resultsExportMenuOpen = !resultsExportMenuOpen}
                   disabled={exportingResults}
                 >
-                  {exportingResults ? $_('contest_detail.results.exporting') : $_('contest_detail.results.export_csv')}
+                  <Download class="h-4 w-4" />
+                  <span>{$_('contest_detail.export.menu')}</span>
+                  <ChevronDown class={`h-4 w-4 transition-transform ${resultsExportMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
-                <button
-                  type="button"
-                  class="btn-secondary px-3 py-1 text-xxs"
-                  on:click={() => exportResults('json')}
-                  disabled={exportingResults}
-                >
-                  {exportingResults ? $_('contest_detail.results.exporting') : $_('contest_detail.results.export_json')}
-                </button>
+                {#if resultsExportMenuOpen}
+                  <div class="absolute right-0 top-full z-50 mt-2 w-48 rounded-md border border-border-color bg-element-bg shadow-lg">
+                    <div class="py-1">
+                      <button
+                        type="button"
+                        class="flex w-full items-center gap-2 px-4 py-2 text-sm text-text-primary hover:bg-main-bg/50 focus:bg-main-bg/50 focus:outline-none disabled:opacity-50"
+                        on:click={() => { resultsExportMenuOpen = false; exportResults('csv'); }}
+                        disabled={exportingResults}
+                      >
+                        {$_('contest_detail.export.csv')}
+                      </button>
+                      <button
+                        type="button"
+                        class="flex w-full items-center gap-2 px-4 py-2 text-sm text-text-primary hover:bg-main-bg/50 focus:bg-main-bg/50 focus:outline-none disabled:opacity-50"
+                        on:click={() => { resultsExportMenuOpen = false; exportResults('json'); }}
+                        disabled={exportingResults}
+                      >
+                        {$_('contest_detail.export.json')}
+                      </button>
+                      <button
+                        type="button"
+                        class="flex w-full items-center gap-2 px-4 py-2 text-sm text-text-primary hover:bg-main-bg/50 focus:bg-main-bg/50 focus:outline-none disabled:opacity-50"
+                        on:click={() => { resultsExportMenuOpen = false; exportResults('jpg'); }}
+                        disabled={exportingResults}
+                      >
+                        {$_('contest_detail.export.jpg')}
+                      </button>
+                    </div>
+                  </div>
+                {/if}
               </div>
             </header>
 

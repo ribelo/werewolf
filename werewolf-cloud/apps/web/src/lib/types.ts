@@ -323,6 +323,24 @@ export interface TeamResultsBundle {
   mixed: TeamResultsTable;
 }
 
+export interface PublicScoreboardBundle {
+  registrations: Registration[];
+  attempts: Attempt[];
+  referenceData: ReferenceData;
+}
+
+export interface PublicResultsBundle {
+  contest: ContestDetail;
+  individual: {
+    open: ContestRankingEntry[];
+    age: ContestRankingEntry[];
+    weight: ContestRankingEntry[];
+  };
+  team: TeamResultsBundle;
+  scoreboard: PublicScoreboardBundle;
+  lastUpdated: string;
+}
+
 export interface WeightClass {
   id?: string;
   contestId?: string;

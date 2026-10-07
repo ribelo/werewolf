@@ -923,18 +923,6 @@
         "title": "Zarejestrowani zawodnicy",
         "hint": "Liczba startujących z aktywnym zgłoszeniem."
     },
-    "filters": {
-      "weight": "Waga",
-      "age": "Wiek",
-      "label": "Etykieta",
-      "all": "Wszystko",
-      "open": "Open",
-      "age_all": "Wszystkie wieki",
-      "age_unassigned": "Nieprzypisany",
-      "age_senior": "Senior",
-      "labels_all": "Wszystkie etykiety",
-      "labels_unlabeled": "Bez etykiety"
-    },
     "summary": {
       "viewing": "Widok: {lift} • Sort: {sort} {direction} • Waga: {weight} • Wiek: {age} • Etykieta: {label}",
       "all_lifts": "Wszystkie boje",
@@ -964,6 +952,10 @@
       "shareable": {
         "title": "Tabela publiczna",
         "description": "Udostępnij wyniki bez panelu sędziego – link idealny do posta."
+      },
+      "public_results": {
+        "title": "Wyniki zawodów",
+        "description": "Oficjalna strona z wynikami indywidualnymi i drużynowymi."
       }
     },
     "current": {
@@ -1003,6 +995,18 @@
       "manage_categories": "Zarządzaj kategoriami",
       "manage_categories_description": "Konfiguruj kategorie wiekowe i wagowe dla tych zawodów",
       "coefficient_notice": "Zmiana masy ciała automatycznie przelicza współczynniki.",
+      "filters": {
+        "weight": "Waga",
+        "age": "Kategorie wiekowe",
+        "label": "Etykieta",
+        "all": "Wszystkie",
+        "open": "Open",
+        "age_all": "Wszystkie wieki",
+        "age_unassigned": "Nieprzypisany",
+        "age_senior": "Senior",
+        "labels_all": "Wszystkie etykiety",
+        "labels_unlabeled": "Bez etykiety"
+      },
       "columns": {
         "order": "Losowanie",
         "lifter": "Zawodnik",
@@ -1068,10 +1072,13 @@
         "labels_all": "Wszystkie",
         "labels_unlabeled": "Bez etykiety",
         "age_senior": "Senior (24-39)",
+        "weight": "Waga",
         "weight_button": "Waga",
         "weight_button_all": "Wszystkie klasy",
+        "age": "Kategorie wiekowe",
         "age_button": "Wiek",
         "age_button_all": "Wszystkie kategorie",
+        "label": "Etykieta",
         "labels_button": "Etykiety",
         "labels_button_all": "Wszystkie etykiety",
         "lift_button": "Bój",
@@ -1621,6 +1628,42 @@
       "squat": "Przysiad",
       "bench": "Wyciskanie leżąc",
       "deadlift": "Martwy ciąg"
+    }
+  },
+  "public": {
+    "results": {
+      "page_title": "Wyniki Zawodów",
+      "page_description": "Oficjalne wyniki zawodów: {contestName}",
+      "subtitle": "Oficjalne wyniki zawodów",
+      "loading": "Ładowanie wyników...",
+      "no_data": "Brak dostępnych wyników",
+      "no_results": "Brak wyników w kategorii: {view}",
+      "count": "Liczba zawodników: {count} ({view})",
+      "last_updated": "Ostatnia aktualizacja: {date}",
+      "footer": "Wyniki wygenerowane dla zawodów: {contestName}",
+      "error": {
+        "title": "Błąd Ładowania",
+        "back_home": "Powrót do strony głównej"
+      },
+      "tabs": {
+        "navigation": "Nawigacja po wynikach",
+        "individual": "Wyniki Indywidualne",
+        "team": "Wyniki Drużynowe",
+        "open": "Otwarte",
+        "age": "Wiekowe",
+        "weight": "Wagowe"
+      },
+      "team": {
+        "title": "Wyniki Drużynowe",
+        "subtitle": "Klasyfikacja drużynowa zawodów",
+        "count": "Liczba drużyn: {count}",
+        "no_results": "Brak wyników drużynowych",
+        "no_data": "Brak danych o wynikach drużynowych"
+      },
+      "export": {
+        "csv": "Eksportuj jako CSV",
+        "json": "Eksportuj jako JSON"
+      }
     }
   }
 }

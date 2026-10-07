@@ -933,18 +933,7 @@
       "lifters": {
         "title": "Registered lifters",
         "hint": "Competitors entered into the meet."
-    },
-    "filters": {
-      "weight": "Weight",
-      "age": "Age",
-      "label": "Label",
-      "all": "All",
-      "open": "Open",
-      "age_all": "All Ages",
-      "age_unassigned": "Unassigned",
-      "age_senior": "Senior",
-      "labels_all": "All Labels",
-      "labels_unlabeled": "Unlabeled"
+      }
     },
     "summary": {
       "viewing": "Viewing: {lift} • Sort: {sort} {direction} • Weight: {weight} • Age: {age} • Label: {label}",
@@ -955,13 +944,12 @@
       "sort_descending": "↓"
     },
     "queue": {
-        "title": "Queued attempts",
-        "hint": "Attempts waiting to be loaded onto the platform."
-      },
-      "last_update": {
-        "title": "Last update",
-        "connection_prefix": "Connection: "
-      }
+      "title": "Queued attempts",
+      "hint": "Attempts waiting to be loaded onto the platform."
+    },
+    "last_update": {
+      "title": "Last update",
+      "connection_prefix": "Connection: "
     },
     "links": {
       "announcer": {
@@ -975,6 +963,10 @@
       "shareable": {
         "title": "Public contest table",
         "description": "Shareable standings view for social posts and embeds."
+      },
+      "public_results": {
+        "title": "Contest results",
+        "description": "Official results page with individual and team rankings."
       }
     },
     "current": {
@@ -1014,6 +1006,18 @@
       "manage_categories": "Manage categories",
       "manage_categories_description": "Configure age and weight categories for this contest",
       "coefficient_notice": "Bodyweight changes automatically refresh coefficients.",
+      "filters": {
+        "weight": "Weight",
+        "age": "Age",
+        "label": "Label",
+        "all": "All",
+        "open": "Open",
+        "age_all": "All Ages",
+        "age_unassigned": "Unassigned",
+        "age_senior": "Senior",
+        "labels_all": "All Labels",
+        "labels_unlabeled": "Unlabeled"
+      },
       "columns": {
         "order": "Lot #",
         "lifter": "Lifter",
@@ -1080,12 +1084,15 @@
         "labels_all": "All",
         "labels_unlabeled": "Without labels",
         "age_senior": "Senior (24-39)",
+        "weight": "Weight",
         "weight_button": "Weight",
         "weight_button_all": "All classes",
+        "age": "Age",
         "age_button": "Age",
         "age_button_all": "All categories",
-      "labels_button": "Labels",
-      "labels_button_all": "All labels",
+        "label": "Label",
+        "labels_button": "Labels",
+        "labels_button_all": "All labels",
       "lift_button": "Discipline",
       "lift_button_all": "All disciplines",
       "clear": "Clear filters",
@@ -1632,6 +1639,42 @@
       "squat": "Squat",
       "bench": "Bench press",
       "deadlift": "Deadlift"
+    }
+  },
+  "public": {
+    "results": {
+      "page_title": "Contest Results",
+      "page_description": "Official contest results for: {contestName}",
+      "subtitle": "Official contest results",
+      "loading": "Loading results...",
+      "no_data": "No results available",
+      "no_results": "No results in category: {view}",
+      "count": "Competitors: {count} ({view})",
+      "last_updated": "Last updated: {date}",
+      "footer": "Results generated for contest: {contestName}",
+      "error": {
+        "title": "Loading Error",
+        "back_home": "Back to home"
+      },
+      "tabs": {
+        "navigation": "Results navigation",
+        "individual": "Individual Results",
+        "team": "Team Results",
+        "open": "Open",
+        "age": "Age",
+        "weight": "Weight"
+      },
+      "team": {
+        "title": "Team Results",
+        "subtitle": "Team classification for the contest",
+        "count": "Teams: {count}",
+        "no_results": "No team results available",
+        "no_data": "No team result data available"
+      },
+      "export": {
+        "csv": "Export as CSV",
+        "json": "Export as JSON"
+      }
     }
   }
 }

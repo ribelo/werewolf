@@ -130,6 +130,135 @@ function buildTable(model: UnifiedTableExportModel, palette: Palette): HTMLTable
   return table;
 }
 
+interface GroupedTableModel {
+  title: string;
+  columns: UnifiedTableExportModel['columns'];
+  rows: UnifiedTableExportModel['rows'];
+}
+
+export async function createGroupedJpgBlob(
+  groups: GroupedTableModel[],
+  options: CreateJpgOptions
+): Promise<Blob> {
+  if (typeof document === 'undefined') {
+    throw new Error('createGroupedJpgBlob must run in a browser context');
+  }
+
+  const palette = resolvePalette();
+  const root = document.createElement('div');
+  root.style.position = 'fixed';
+  root.style.top = '-10000px';
+  root.style.left = '-10000px';
+  root.style.background = palette.surface;
+  root.style.padding = '48px';
+  root.style.fontFamily = `'Inter', system-ui, sans-serif`;
+  root.style.color = palette.textPrimary;
+
+  const frame = document.createElement('div');
+  frame.style.position = 'relative';
+  frame.style.display = 'flex';
+  frame.style.flexDirection = 'column';
+  frame.style.gap = '28px';
+  frame.style.padding = '36px';
+  frame.style.background = palette.card;
+  frame.style.border = `2px solid ${palette.border}`;
+  frame.style.borderRadius = '20px';
+  frame.style.boxShadow = '0 12px 48px rgba(220, 20, 60, 0.25)';
+  frame.style.minWidth = '640px';
+  frame.style.maxWidth = '1400px';
+  frame.style.width = 'max-content';
+
+  const accentBar = document.createElement('div');
+  accentBar.style.position = 'absolute';
+  accentBar.style.top = '0';
+  accentBar.style.left = '0';
+  accentBar.style.right = '0';
+  accentBar.style.height = '6px';
+  accentBar.style.background = `linear-gradient(90deg, transparent, ${palette.primary}, ${palette.accent}, transparent)`;
+  frame.appendChild(accentBar);
+
+  const heading = document.createElement('div');
+  heading.style.display = 'flex';
+  heading.style.flexDirection = 'column';
+  heading.style.gap = '6px';
+
+  const title = document.createElement('div');
+  title.textContent = options.title;
+  title.style.fontFamily = `'Bebas Neue', 'Inter', sans-serif`;
+  title.style.fontSize = '42px';
+  title.style.letterSpacing = '0.18em';
+  title.style.textTransform = 'uppercase';
+  title.style.margin = '0';
+  heading.appendChild(title);
+
+  if (options.subtitle) {
+    const subtitle = document.createElement('div');
+    subtitle.textContent = options.subtitle;
+    subtitle.style.fontFamily = `'Inter', system-ui, sans-serif`;
+    subtitle.style.fontSize = '16px';
+    subtitle.style.fontWeight = '500';
+    subtitle.style.color = palette.textSecondary;
+    subtitle.style.textTransform = 'uppercase';
+    subtitle.style.letterSpacing = '0.12em';
+    subtitle.style.margin = '0';
+    heading.appendChild(subtitle);
+  }
+
+  frame.appendChild(heading);
+
+  groups.forEach((group) => {
+    const groupHeader = document.createElement('div');
+    groupHeader.textContent = group.title;
+    groupHeader.style.fontFamily = `'Bebas Neue', 'Inter', sans-serif`;
+    groupHeader.style.fontSize = '24px';
+    groupHeader.style.letterSpacing = '0.18em';
+    groupHeader.style.textTransform = 'uppercase';
+    groupHeader.style.margin = '0';
+    groupHeader.style.color = palette.textSecondary;
+    frame.appendChild(groupHeader);
+
+    const table = buildTable({ columns: group.columns, rows: group.rows }, palette);
+    frame.appendChild(table);
+  });
+
+  if (options.generatedAtLabel) {
+    const footer = document.createElement('div');
+    footer.textContent = options.generatedAtLabel;
+    footer.style.fontSize = '11px';
+    footer.style.letterSpacing = '0.14em';
+    footer.style.textTransform = 'uppercase';
+    footer.style.color = palette.textSecondary;
+    footer.style.display = 'flex';
+    footer.style.alignItems = 'center';
+    footer.style.gap = '8px';
+
+    const dot = document.createElement('span');
+    dot.style.display = 'inline-block';
+    dot.style.width = '6px';
+    dot.style.height = '6px';
+    dot.style.borderRadius = '999px';
+    dot.style.background = palette.primary;
+    footer.prepend(dot);
+    frame.appendChild(footer);
+  }
+
+  root.appendChild(frame);
+  document.body.appendChild(root);
+
+  const pixelRatio = options.pixelRatio ?? Math.min(Math.max(window.devicePixelRatio, 1.5), 2.5);
+
+  const dataUrl = await toJpeg(frame, {
+    pixelRatio,
+    quality: 0.95,
+    cacheBust: true,
+    backgroundColor: palette.surface,
+  });
+
+  document.body.removeChild(root);
+
+  return dataUrlToBlob(dataUrl);
+}
+
 function dataUrlToBlob(dataUrl: string): Blob {
   const commaIndex = dataUrl.indexOf(',');
   const base64 = dataUrl.slice(commaIndex + 1);

@@ -377,6 +377,12 @@
         ...femaleWeightFilters,
         ...maleWeightFilters,
       ];
+  $: weightFilterGenderMap = (() => {
+        const map = new Map<WeightFilter, 'female' | 'male'>();
+        weightFilterGroups.female.forEach((option) => map.set(option.id, 'female'));
+        weightFilterGroups.male.forEach((option) => map.set(option.id, 'male'));
+        return map;
+      })();
   $: availableAgeFilters = computeAgeFilters();
   $: availableLiftFilters = ['ALL', ...contestLifts] as LiftFilter[];
   $: weightFilterSummary = (() => {
@@ -389,16 +395,19 @@
         if (selectedWeightFilter === 'MALE_OPEN') {
           return `${t('contest_detail.registrations.filters.sex_male')} ${t('contest_detail.registrations.filters.open')}`;
         }
-        const femaleMatch = weightFilterGroups.female.find((option) => option.id === selectedWeightFilter);
-        if (femaleMatch) {
-          return `${t('contest_detail.registrations.filters.sex_female')} ${femaleMatch.label}`;
-        }
-        const maleMatch = weightFilterGroups.male.find((option) => option.id === selectedWeightFilter);
-        if (maleMatch) {
-          return `${t('contest_detail.registrations.filters.sex_male')} ${maleMatch.label}`;
-        }
         const fallback = availableWeightFilters.find((option) => option.id === selectedWeightFilter);
-        return fallback?.label ?? t('contest_detail.registrations.filters.weight_button_all');
+        if (!fallback) {
+          return t('contest_detail.registrations.filters.weight_button_all');
+        }
+        const gender = weightFilterGenderMap.get(selectedWeightFilter);
+        if (!gender) {
+          return fallback.label;
+        }
+        const genderLabel =
+          gender === 'female'
+            ? t('contest_detail.registrations.filters.sex_female')
+            : t('contest_detail.registrations.filters.sex_male');
+        return `${genderLabel} ${fallback.label}`;
       })();
   $: ageFilterSummary = (() => {
         const match = availableAgeFilters.find((option) => option.id === selectedAgeFilter);
