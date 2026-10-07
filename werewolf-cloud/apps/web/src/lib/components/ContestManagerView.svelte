@@ -8,12 +8,15 @@
   import FlightAssignmentModal from '$lib/components/FlightAssignmentModal.svelte';
   import UnifiedContestTable from '$lib/components/UnifiedContestTable.svelte';
   import ContestResultsTable from '$lib/components/ContestResultsTable.svelte';
+  import LiftPanel from './contest-manager/LiftPanel.svelte';
+  import PlatesPanel from './contest-manager/PlatesPanel.svelte';
   import {
     buildUnifiedRows,
     deriveContestLifts,
     sortUnifiedRows,
     LIFTS,
     ATTEMPT_NUMBERS,
+    type AttemptNumber as TableAttemptNumber,
     type UnifiedRow,
     type LiftKind
   } from '$lib/contest-table';
@@ -30,20 +33,47 @@
   import { modalStore } from '$lib/ui/modal';
   import { toast } from '$lib/ui/toast';
   import { contestStore, currentAgeCategories, currentWeightClasses } from '$lib/ui/contest-store';
-  import { setContestContext } from '$lib/ui/context-helpers';
   import { getAttemptStatusClass, getAttemptStatusLabel } from '$lib/ui/status';
+  import {
+    applyOptimisticAttempts as applyOptimisticAttemptsToState,
+    applySnapshot as applyRealtimeSnapshot,
+    attemptKeyFromPayload,
+    captureAttemptState,
+    cloneAttempts,
+    cloneCurrentAttempt,
+    isQueuedReceipt,
+    removeAttemptById,
+    restoreAttemptSnapshot as restoreAttemptSnapshotExact,
+    runAttemptMutation,
+    setPendingFlag,
+    shouldRefreshAfterAttemptMutation,
+    upsertAttempt,
+    type AttemptStateSnapshot,
+    type AttemptMutationResult,
+  } from './contest-manager/attempt-commands';
+  import {
+    buildGroupedJpgModel,
+    buildResultsFilename,
+    buildResultsFilenameWithLift,
+    liftPrefixes,
+    POWERLIFTING_LIFTS,
+    type ExportLift,
+    type ExportMenuId,
+    type SingleLiftExportEntry,
+  } from './contest-manager/export-mapping';
+  import { createResultsLoader } from './contest-manager/results-loader';
+  import { persistTablePrefs, readTablePrefs } from './contest-manager/table-prefs';
   import { buildRisingBarQueue, type QueuePhase } from '$lib/rising-bar';
   import {
     applyRegistrationFilters,
-    LABEL_FILTER_PREFIX,
     isFemaleGender,
     isMaleGender,
-    normaliseLabelKey,
     type RegistrationFilterState,
     type WeightFilter,
     type AgeFilter,
     type LabelFilter
   } from '$lib/filters/registrations';
+  import { buildPublicFilterOptions } from '$lib/components/public-results-filters';
   import type { DisplayFilterSync, DisplayQrVisibility } from '@werewolf/domain';
   import type {
     Registration,
@@ -63,6 +93,7 @@
     ContestCategories,
     ContestTag,
     ReferenceData,
+    RealtimeSnapshot,
   } from '$lib/types';
   import { bundleToCurrentAttempt } from '$lib/current-attempt';
   import { _, locale } from 'svelte-i18n';
@@ -125,154 +156,14 @@ $: void params;
     return translate(key, values ? { values } : undefined);
   }
 
-  const disciplineFilenameLabels: Record<string, string> = {
-    Bench: 'Benchpress',
-    Deadlift: 'Deadlift',
-    Squat: 'Squat',
-    Powerlifting: 'Powerlifting',
-  };
-
-  function normaliseFilenameSegment(value: string): string {
-    if (!value) return '';
-    return value
-      .normalize('NFKD')
-      .replace(/[^\w\s-]/g, '')
-      .replace(/[\s-]+/g, '_')
-      .replace(/_+/g, '_')
-      .replace(/^_|_$/g, '')
-      .slice(0, 80);
-  }
-
-  function buildResultsFilename(extension: 'csv' | 'json' | 'jpg'): string {
-    const nameSegment = normaliseFilenameSegment(contest?.name ?? '') || `contest_${contestId}`;
-    const disciplineSegment = normaliseFilenameSegment(disciplineFilenameLabels[contest?.discipline ?? ''] ?? 'Results') || 'Results';
-    return `${nameSegment}_${disciplineSegment}.${extension}`;
-  }
-
-  function buildResultsFilenameWithLift(extension: 'csv' | 'json' | 'jpg', lift?: 'Squat' | 'Bench' | 'Deadlift'): string {
-    const base = buildResultsFilename(extension);
-    if (!lift || contest?.discipline !== 'Powerlifting') return base;
-    const liftLabel = normaliseFilenameSegment(disciplineFilenameLabels[lift] ?? lift) || lift;
-    const [namePart, ...rest] = base.split('.');
-    const ext = rest.pop() ?? extension;
-    return `${namePart}_${liftLabel}.${ext}`;
-  }
-
-  const POWERLIFTING_LIFTS: Array<'Squat' | 'Bench' | 'Deadlift'> = ['Squat', 'Bench', 'Deadlift'];
-  const liftPrefixes: Record<'Squat' | 'Bench' | 'Deadlift', { prefix: 'SQ' | 'BP' | 'DL'; label: string }> = {
-    Squat: { prefix: 'SQ', label: 'Squat' },
-    Bench: { prefix: 'BP', label: 'Benchpress' },
-    Deadlift: { prefix: 'DL', label: 'Deadlift' },
-  };
-
-  type SingleLiftExportEntry = {
-    row: Record<string, string>;
-    gender?: string | null;
-    ageCategory?: string | null;
-    ageMin?: number | null;
-    ageMax?: number | null;
-  };
-
-  function buildGroupedJpgModel(entries: SingleLiftExportEntry[], lift: 'Squat' | 'Bench' | 'Deadlift') {
-    const prefix = liftPrefixes[lift].prefix;
-    const columns = [
-      { key: 'Place', header: 'Place' },
-      { key: 'Name', header: 'Name' },
-      { key: 'Surname', header: 'Surname' },
-      { key: 'Country', header: 'Country' },
-      { key: 'Age', header: 'Age' },
-      { key: 'Weight', header: 'Weight' },
-      { key: 'Age Class', header: 'Age Class' },
-      { key: 'Weight Class', header: 'Weight Class' },
-      { key: 'Div', header: 'Div' },
-      { key: `${prefix}1`, header: `${prefix}1` },
-      { key: `${prefix}2`, header: `${prefix}2` },
-      { key: `${prefix}3`, header: `${prefix}3` },
-      { key: `${prefix}4`, header: `${prefix}4` },
-      { key: `Total${prefix}`, header: `Total${prefix}` },
-      { key: `Reshel${prefix}`, header: `Reshel${prefix}` },
-      { key: `McCoulogh${prefix}`, header: `McCoulogh${prefix}` },
-    ];
-
-    const groups = new Map<string, SingleLiftExportEntry[]>();
-    const sexRank = (gender?: string | null) => {
-      if (gender === 'Female') return 0;
-      if (gender === 'Male') return 1;
-      return 2;
+  function resultsFilename(extension: 'csv' | 'json' | 'jpg', lift?: ExportLift): string {
+    const input = {
+      contestName: contest?.name,
+      discipline: contest?.discipline,
+      contestId,
+      extension,
     };
-
-    entries.forEach((entry) => {
-      const key = `${entry.gender ?? ''}|${entry.ageCategory ?? ''}`;
-      if (!groups.has(key)) {
-        groups.set(key, []);
-      }
-      groups.get(key)!.push(entry);
-    });
-
-    const sortedKeys = Array.from(groups.keys()).sort((aKey, bKey) => {
-      const a = groups.get(aKey)?.[0];
-      const b = groups.get(bKey)?.[0];
-
-      const sexDiff = sexRank(a?.gender) - sexRank(b?.gender);
-      if (sexDiff !== 0) return sexDiff;
-
-      const aMin = typeof a?.ageMin === 'number' ? a?.ageMin : Number.POSITIVE_INFINITY;
-      const bMin = typeof b?.ageMin === 'number' ? b?.ageMin : Number.POSITIVE_INFINITY;
-      if (aMin !== bMin) return aMin - bMin;
-
-      const aMax = typeof a?.ageMax === 'number' ? a?.ageMax : Number.POSITIVE_INFINITY;
-      const bMax = typeof b?.ageMax === 'number' ? b?.ageMax : Number.POSITIVE_INFINITY;
-      if (aMax !== bMax) return aMax - bMax;
-
-      const aLabel = a?.ageCategory ?? '';
-      const bLabel = b?.ageCategory ?? '';
-      return aLabel.localeCompare(bLabel);
-    });
-
-    const grouped = sortedKeys.map((key) => {
-      const list = groups.get(key) ?? [];
-      const sample = list[0];
-      const genderLabel = sample?.gender === 'Male' ? 'MEN' : sample?.gender === 'Female' ? 'WOMEN' : 'ATHLETES';
-      const ageLabel = sample?.ageCategory ?? 'Unassigned';
-
-      const totalKey = `Total${prefix}` as const;
-      const parseNum = (value: string | undefined) => {
-        const parsed = Number(value);
-        return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
-      };
-
-      const sorted = [...list].sort((a, b) => {
-        const aPlace = parseNum(a.row.Place);
-        const bPlace = parseNum(b.row.Place);
-        if (aPlace !== bPlace) return aPlace - bPlace;
-        const aTotal = parseNum(a.row[totalKey]);
-        const bTotal = parseNum(b.row[totalKey]);
-        if (aTotal !== bTotal) return bTotal - aTotal;
-        return (a.row.Surname ?? '').localeCompare(b.row.Surname ?? '');
-      });
-
-      let localPlace = 1;
-      const rows = sorted.map((entry) => {
-        const placeValue = entry.row.Place === 'OUT' ? 'OUT' : String(localPlace++);
-        const record: Record<string, string> = {};
-        for (const column of columns) {
-          if (column.key === 'Place') {
-            record[column.key] = placeValue;
-          } else {
-            record[column.key] = entry.row[column.key] ?? '';
-          }
-        }
-        return record;
-      });
-
-      return {
-        title: `${genderLabel} - ${ageLabel} RAW`,
-        columns,
-        rows,
-      };
-    });
-
-    return grouped;
+    return lift ? buildResultsFilenameWithLift(input, lift) : buildResultsFilename(input);
   }
 
   let weightClasses = referenceData?.weightClasses ?? [];
@@ -346,7 +237,7 @@ $: void params;
   let contestLifts: LiftKind[] = deriveContestLifts(contest, liveAttempts);
   const FALLBACK_PRIMARY_LIFT: LiftKind = 'Squat';
   const FALLBACK_CONTEST_LIFTS: LiftKind[] = [FALLBACK_PRIMARY_LIFT];
-  const FIRST_ATTEMPT_NUMBERS: AttemptNumber[] = [1];
+  const FIRST_ATTEMPT_NUMBERS: TableAttemptNumber[] = [1];
   const LIFT_SINGLETONS: Record<LiftKind, LiftKind[]> = {
     Squat: ['Squat'],
     Bench: ['Bench'],
@@ -393,16 +284,20 @@ $: void params;
   let isClearingCurrent = false;
   let currentAttemptEntity: Attempt | null = null;
 
-  $: currentAttemptEntity = liveCurrentAttempt
-    ? liveAttempts.find((attempt) => attempt.id === liveCurrentAttempt.id) ?? null
-    : null;
+  $: {
+    const currentAttemptId = liveCurrentAttempt?.id ?? null;
+    currentAttemptEntity = currentAttemptId
+      ? liveAttempts.find((attempt) => attempt.id === currentAttemptId) ?? null
+      : null;
+  }
   $: contestLifts = deriveContestLifts(contest, liveAttempts);
 
   const ATTEMPT_STATUS_SEQUENCE: AttemptStatus[] = ['Pending', 'Successful', 'Failed'];
+  const FIRST_ATTEMPT_STATUS: AttemptStatus = 'Pending';
 
   function deriveNextAttemptStatus(current: AttemptStatus | null | undefined): AttemptStatus {
     if (!current) {
-      return ATTEMPT_STATUS_SEQUENCE[0];
+      return FIRST_ATTEMPT_STATUS;
     }
 
     const normalized = ATTEMPT_STATUS_SEQUENCE.find(
@@ -410,12 +305,12 @@ $: void params;
     );
 
     if (!normalized) {
-      return ATTEMPT_STATUS_SEQUENCE[0];
+      return FIRST_ATTEMPT_STATUS;
     }
 
     const currentIndex = ATTEMPT_STATUS_SEQUENCE.indexOf(normalized);
     const nextIndex = (currentIndex + 1) % ATTEMPT_STATUS_SEQUENCE.length;
-    return ATTEMPT_STATUS_SEQUENCE[nextIndex];
+    return ATTEMPT_STATUS_SEQUENCE[nextIndex] ?? FIRST_ATTEMPT_STATUS;
   }
 
   function handleStatusClick(attempt: Attempt) {
@@ -476,8 +371,8 @@ $: void params;
   let deadliftRows: UnifiedRow[] = [];
   let tablePrefsLoaded = false;
 
-  $: if (contestId && !tablePrefsLoaded) {
-    const prefs = readTablePrefs();
+  $: if (contestId && browser && !tablePrefsLoaded) {
+    const prefs = readTablePrefs(contestId);
     if (prefs) {
       sortColumn = prefs.sortColumn || sortColumn;
       sortDirection = prefs.sortDirection;
@@ -488,8 +383,74 @@ $: void params;
     tablePrefsLoaded = true;
   }
 
+  // The payload is built here on purpose: inside `persistTablePrefs` Svelte could
+  // not see the table state this write depends on, so it would never re-run.
   $: if (tablePrefsLoaded && contestId && browser) {
-    persistTablePrefs();
+    persistTablePrefs(
+      {
+        sortColumn,
+        sortDirection,
+        weightFilter: selectedWeightFilter,
+        ageFilter: selectedAgeFilter,
+        labelFilter: selectedLabelFilter,
+      },
+      contestId
+    );
+  }
+
+  type ActiveLiftTab = { lift: LiftKind; menuId: ExportMenuId };
+
+  /** The active lift tab, if the contest actually contests that lift. */
+  function resolveActiveLiftTab(tab: TabId, contestLifts: LiftKind[]): ActiveLiftTab | null {
+    if (tab === 'squat' && contestLifts.includes('Squat')) return { lift: 'Squat', menuId: 'squat' };
+    if (tab === 'bench' && contestLifts.includes('Bench')) return { lift: 'Bench', menuId: 'bench' };
+    if (tab === 'deadlift' && contestLifts.includes('Deadlift')) return { lift: 'Deadlift', menuId: 'deadlift' };
+    return null;
+  }
+
+  $: activeLiftTab = resolveActiveLiftTab(activeTab, activeContestLifts);
+  $: activeLiftKey = activeLiftTab?.lift ?? '';
+  $: activeLiftRows =
+    activeLiftTab === null
+      ? []
+      : activeLiftTab.lift === 'Squat'
+        ? squatRows
+        : activeLiftTab.lift === 'Bench'
+          ? benchRows
+          : deadliftRows;
+  $: activeLiftSyncClass =
+    activeLiftTab === null
+      ? unsyncedBtn
+      : activeLiftTab.lift === 'Squat'
+        ? squatClass
+        : activeLiftTab.lift === 'Bench'
+          ? benchClass
+          : deadliftClass;
+  $: activeLiftTitle =
+    activeLiftTab === null ? '' : $_(`contest_detail.tabs.${activeLiftTab.lift.toLowerCase()}_table`);
+
+  function handleLiftPanelSync(): void {
+    if (activeLiftTab) void syncDisplay(activeLiftTab.lift);
+  }
+
+  function handleLiftPanelBroadcastQr(action: 'show' | 'hide'): void {
+    void broadcastDisplayQr(action);
+  }
+
+  function handleLiftPanelToggleExportMenu(): void {
+    if (activeLiftTab) toggleExportMenu(activeLiftTab.menuId);
+  }
+
+  function handleLiftPanelExport(format: 'csv' | 'pdf' | 'jpg'): void {
+    if (!activeLiftTab) return;
+    void exportUnifiedTable(format, {
+      id: activeLiftTab.menuId,
+      rows: activeLiftRows,
+      lifts: LIFT_SINGLETONS[activeLiftTab.lift],
+      showPointsColumn: true,
+      showMaxColumn: true,
+      title: activeLiftTitle,
+    });
   }
 
   function createSyncId(): string {
@@ -563,7 +524,7 @@ $: void params;
             ? error.message
             : 'Unknown error';
       console.error('[manager.sync] error', { lift, message });
-      toast.error(t('contest_detail.sync.error', { values: { message } }));
+      toast.error(t('contest_detail.sync.error', { message }));
     } finally {
       syncBusy = false;
     }
@@ -610,7 +571,7 @@ $: void params;
             ? error.message
             : 'Unknown error';
       console.error('[manager.qr] error', { action, message });
-      toast.error(t('contest_detail.qr.broadcast_error', { values: { message } }));
+      toast.error(t('contest_detail.qr.broadcast_error', { message }));
     } finally {
       qrBroadcastBusy = {
         ...qrBroadcastBusy,
@@ -680,7 +641,6 @@ $: void params;
   let resultsLoading = false;
   let exportingResults = false;
   let resultsError: string | null = null;
-  let resultsRequestToken = 0;
   let activeWeightGender: 'all' | 'female' | 'male' = 'all';
   let selectedWeightClassLabel: string | null = null;
   let selectedAgeCategoryLabel: string | null = null;
@@ -757,20 +717,22 @@ $: void params;
     selectedAgeCategoryLabel = null;
   }
 
-  function beginResultsRequest(): number {
-    resultsRequestToken += 1;
-    resultsLoading = true;
-    resultsError = null;
-    return resultsRequestToken;
-  }
+  // Owns request sequencing, the loading/error flags and the per-tag cache, so a
+  // slow response can never overwrite a newer one.
+  const resultsLoader = createResultsLoader({
+    get: (endpoint) => apiClient.get(endpoint),
+    fallbackError: () => t('contest_detail.results.reload_failed'),
+    onUnexpectedError: (message) => toast.error(message),
+  });
 
-  function endResultsRequest(token: number, errorMessage: string | null = null): void {
-    if (token !== resultsRequestToken) {
-      return;
-    }
-    resultsError = errorMessage ?? null;
-    resultsLoading = false;
-  }
+  const unsubscribeResults = resultsLoader.subscribe((state) => {
+    openRanking = state.open;
+    ageRanking = state.age;
+    weightRanking = state.weight;
+    tagRankingCache = state.tagCache;
+    resultsLoading = state.loading;
+    resultsError = state.error;
+  });
 
 let contestPlateSets: ContestPlateSetEntry[] = plateSets ?? [];
 let attemptWeightStep: number = deriveAttemptStep(contestPlateSets);
@@ -878,7 +840,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
       contestPlateSets = [
         ...contestPlateSets.filter((p) => p.plateWeight !== oldWeight),
         { plateWeight: newWeight, quantity, color: nextColor },
-      ].sort((a, b) => (b.plateWeight - a.plateWeight));
+      ].sort((a, b) => (b.plateWeight ?? 0) - (a.plateWeight ?? 0));
     } catch (err) {
       const message = err instanceof ApiError ? err.message : t('settings_page.plates_error');
       toast.error(message);
@@ -985,7 +947,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
       contestPlateSets = [
         ...contestPlateSets.filter((p) => p.plateWeight !== weight),
         { plateWeight: weight, quantity: qty, color: colorToPersist },
-      ].sort((a, b) => (b.plateWeight - a.plateWeight));
+      ].sort((a, b) => (b.plateWeight ?? 0) - (a.plateWeight ?? 0));
       newPlateWeight = null;
       newPlateQuantity = null;
       newPlateColor = null;
@@ -994,78 +956,6 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
       toast.error(message);
     } finally {
       platesBusy = false;
-    }
-  }
-
-  type TablePrefs = {
-    sortColumn: string;
-    sortDirection: 'asc' | 'desc';
-    weightFilter: WeightFilter;
-    ageFilter: AgeFilter;
-    labelFilter: LabelFilter;
-  };
-
-  const TABLE_PREFS_NAMESPACE = 'werewolf:contest-table';
-
-  function getTablePrefsKey(id: string): string {
-    return `${TABLE_PREFS_NAMESPACE}:${id}`;
-  }
-
-  function readTablePrefs(): TablePrefs | null {
-    if (!browser || !contestId) return null;
-    try {
-      const raw = localStorage.getItem(getTablePrefsKey(contestId));
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (!parsed || typeof parsed !== 'object') return null;
-      const sortColumnPref = typeof parsed.sortColumn === 'string' && parsed.sortColumn.length > 0 ? parsed.sortColumn : 'order';
-      const sortDirectionPref: 'asc' | 'desc' = parsed.sortDirection === 'desc' ? 'desc' : 'asc';
-      const savedWeightFilter =
-        typeof parsed.weightFilter === 'string'
-          ? parsed.weightFilter
-          : typeof parsed.flightFilter === 'string'
-            ? parsed.flightFilter
-            : 'ALL';
-      let weightPref: WeightFilter = 'ALL';
-      if (savedWeightFilter === 'FEMALE_OPEN' || savedWeightFilter === 'MALE_OPEN' || savedWeightFilter === 'ALL') {
-        weightPref = savedWeightFilter as WeightFilter;
-      } else if (savedWeightFilter && savedWeightFilter.length > 0 && savedWeightFilter !== 'OPEN') {
-        weightPref = savedWeightFilter as WeightFilter;
-      }
-      const savedAgeFilter =
-        typeof parsed.ageFilter === 'string' && parsed.ageFilter.length > 0
-          ? (parsed.ageFilter as AgeFilter)
-          : 'ALL';
-      const savedLabelFilter =
-        typeof parsed.labelFilter === 'string' && parsed.labelFilter.length > 0
-          ? (parsed.labelFilter as LabelFilter)
-          : 'ALL';
-      return {
-        sortColumn: sortColumnPref,
-        sortDirection: sortDirectionPref,
-        weightFilter: weightPref,
-        ageFilter: savedAgeFilter,
-        labelFilter: savedLabelFilter,
-      };
-    } catch (error) {
-      console.warn('Failed to read table preferences', error);
-      return null;
-    }
-  }
-
-  function persistTablePrefs(): void {
-    if (!browser || !contestId || !tablePrefsLoaded) return;
-    try {
-      const payload: TablePrefs = {
-        sortColumn,
-        sortDirection,
-        weightFilter: selectedWeightFilter,
-        ageFilter: selectedAgeFilter,
-        labelFilter: selectedLabelFilter,
-      };
-      localStorage.setItem(getTablePrefsKey(contestId), JSON.stringify(payload));
-    } catch (error) {
-      console.warn('Failed to persist table preferences', error);
     }
   }
 
@@ -1118,21 +1008,11 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
   }
 
   function setStatusLoadingFlag(id: string, value: boolean) {
-    if (value) {
-      statusLoading = { ...statusLoading, [id]: true };
-      return;
-    }
-    const { [id]: _omit, ...rest } = statusLoading;
-    statusLoading = rest;
+    statusLoading = setPendingFlag(statusLoading, id, value);
   }
 
   function setCurrentLoadingFlag(id: string, value: boolean) {
-    if (value) {
-      setCurrentLoading = { ...setCurrentLoading, [id]: true };
-      return;
-    }
-    const { [id]: _omit, ...rest } = setCurrentLoading;
-    setCurrentLoading = rest;
+    setCurrentLoading = setPendingFlag(setCurrentLoading, id, value);
   }
 
   function markCurrentAttempt(status: AttemptStatus) {
@@ -1177,65 +1057,18 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
   }
 
   async function reloadResults() {
-    const requestId = beginResultsRequest();
-    tagRankingCache = {};
-    let errorMessage: string | null = null;
-    try {
-      // Try aggregated endpoint first
-      const bundle = await apiClient.get<{ open: ContestRankingEntry[]; age: ContestRankingEntry[]; weight: ContestRankingEntry[] }>(
-        `/contests/${contestId}/results/rankings/all`
-      );
-      if (!bundle.error && bundle.data) {
-        openRanking = bundle.data.open ?? [];
-        ageRanking = bundle.data.age ?? [];
-        weightRanking = bundle.data.weight ?? [];
-      } else {
-        const [openResp, ageResp, weightResp] = await Promise.all([
-          apiClient.get<ContestRankingEntry[]>(`/contests/${contestId}/results/rankings?type=open`),
-          apiClient.get<ContestRankingEntry[]>(`/contests/${contestId}/results/rankings?type=age`),
-          apiClient.get<ContestRankingEntry[]>(`/contests/${contestId}/results/rankings?type=weight`),
-        ]);
-        openRanking = openResp.data ?? [];
-        ageRanking = ageResp.data ?? [];
-        weightRanking = weightResp.data ?? [];
-        const respError = openResp.error || ageResp.error || weightResp.error || null;
-        if (respError) errorMessage = respError;
-      }
-    } catch (err) {
-      errorMessage = err instanceof Error ? err.message : t('contest_detail.results.reload_failed');
-      toast.error(errorMessage);
-    } finally {
-      endResultsRequest(requestId, errorMessage);
-    }
+    if (!contestId) return;
+    await resultsLoader.loadRankings(contestId);
   }
 
   async function ensureTagResults(tagLabel: string, { force = false }: { force?: boolean } = {}) {
     if (!browser || !contestId || !tagLabel) {
       return;
     }
-    if (!force && tagRankingCache[tagLabel]) {
-      return;
-    }
-    const requestId = beginResultsRequest();
-    let errorMessage: string | null = null;
-    try {
-      const response = await apiClient.get<ContestRankingEntry[]>(`/contests/${contestId}/results/rankings?type=tag&tag=${encodeURIComponent(tagLabel)}`);
-      if (response.error) {
-        errorMessage = response.error;
-        tagRankingCache = { ...tagRankingCache, [tagLabel]: [] };
-      } else {
-        tagRankingCache = {
-          ...tagRankingCache,
-          [tagLabel]: response.data ?? [],
-        };
-      }
-    } catch (err) {
-      errorMessage = err instanceof Error ? err.message : t('contest_detail.results.reload_failed');
-      toast.error(errorMessage);
-    } finally {
-      const shouldDisplayError = selectedResultView === 'tag' && selectedTagForResults === tagLabel;
-      endResultsRequest(requestId, shouldDisplayError ? errorMessage : null);
-    }
+    await resultsLoader.ensureTagResults(contestId, tagLabel, {
+      force,
+      surfaceError: () => selectedResultView === 'tag' && selectedTagForResults === tagLabel,
+    });
   }
 
   function downloadFile(blob: Blob, filename: string) {
@@ -1253,7 +1086,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
     id: ExportMenuId;
     rows: UnifiedRow[];
     lifts: LiftKind[];
-    attemptNumbers?: AttemptNumber[];
+    attemptNumbers?: TableAttemptNumber[];
     showPointsColumn?: boolean;
     showMaxColumn?: boolean;
     title: string;
@@ -1352,10 +1185,10 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
     }
   }
 
-  async function exportResults(format: 'csv' | 'json') {
+  async function exportResults(format: 'csv' | 'json' | 'jpg') {
     exportingResults = true;
     try {
-      const liftsToExport: Array<'Squat' | 'Bench' | 'Deadlift'> =
+      const liftsToExport: ExportLift[] =
         contest?.discipline === 'Powerlifting'
           ? POWERLIFTING_LIFTS
           : contest?.discipline === 'Bench'
@@ -1383,10 +1216,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
           }
           const csvText = await response.text();
-          const filename = contest?.discipline === 'Powerlifting'
-            ? buildResultsFilenameWithLift('csv', lift)
-            : buildResultsFilename('csv');
-          downloadFile(new Blob([csvText], { type: 'text/csv;charset=utf-8;' }), filename);
+          downloadFile(new Blob([csvText], { type: 'text/csv;charset=utf-8;' }), resultsFilename('csv', lift));
         }
       } else if (format === 'json') {
         const liftForJson = liftsToExport[0];
@@ -1395,28 +1225,23 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
           throw new Error(response.error);
         }
         const jsonBlob = new Blob([JSON.stringify(response.data ?? [], null, 2)], { type: 'application/json' });
-        const filename = contest?.discipline === 'Powerlifting'
-          ? buildResultsFilenameWithLift('json', liftForJson)
-          : buildResultsFilename('json');
-        downloadFile(jsonBlob, filename);
+        downloadFile(jsonBlob, resultsFilename('json', liftForJson));
       } else if (format === 'jpg') {
-        const liftsForJpg: Array<'Squat' | 'Bench' | 'Deadlift'> = liftsToExport.length > 0 ? liftsToExport : ['Bench'];
+        const liftsForJpg: ExportLift[] = liftsToExport.length > 0 ? liftsToExport : ['Bench'];
         for (const lift of liftsForJpg) {
           const response = await apiClient.post<SingleLiftExportEntry[]>(`/contests/${contestId}/results/export`, { format: 'json', lift });
           if (response.error) {
             throw new Error(response.error);
           }
           const data = response.data ?? [];
-          const grouped = buildGroupedJpgModel(data as SingleLiftExportEntry[], lift);
+          const grouped = buildGroupedJpgModel(data, lift);
+          const subtitle = contest?.discipline === 'Powerlifting' ? undefined : contest?.discipline ?? undefined;
           const blob = await createGroupedJpgBlob(grouped, {
             title: `${contest?.name ?? 'Results'} - ${liftPrefixes[lift].label}`,
-            subtitle: contest?.discipline === 'Powerlifting' ? undefined : contest?.discipline ?? undefined,
+            ...(subtitle === undefined ? {} : { subtitle }),
             generatedAtLabel: t('contest_detail.export.generated_at', { timestamp: new Date().toLocaleString() }),
           });
-          const filename = contest?.discipline === 'Powerlifting'
-            ? buildResultsFilenameWithLift('jpg', lift)
-            : buildResultsFilename('jpg');
-          downloadFile(blob, filename);
+          downloadFile(blob, resultsFilename('jpg', lift));
         }
       }
       toast.success(t('contest_detail.results.toast_export_success'));
@@ -1494,150 +1319,31 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
   $: ageCategories = referenceData?.ageCategories ?? [];
   $: registrationsSummary = t('contest_detail.registrations.total', { count: liftersCount });
 
-  function weightFilterLabel(entry: WeightClass): string {
-    return (entry.name ?? entry.code ?? '').toString();
-  }
-
-  $: weightFilterGroups = (() => {
-        const female: WeightFilterOption[] = [];
-        const male: WeightFilterOption[] = [];
-        const femaleSeen = new Set<string>();
-        const maleSeen = new Set<string>();
-
-        weightClasses
-          .slice()
-          .sort((a, b) => {
-            const orderA = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
-            const orderB = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
-            if (orderA !== orderB) return orderA - orderB;
-            const nameA = (a.name ?? a.code ?? '').toString();
-            const nameB = (b.name ?? b.code ?? '').toString();
-            return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
-          })
-          .forEach((entry) => {
-            const id = (entry.id ?? entry.code ?? '').toString();
-            const label = weightFilterLabel(entry);
-            if (!id || !label) return;
-
-            const gender = (entry.gender ?? '').toString().toLowerCase();
-            if (gender.startsWith('f')) {
-              if (femaleSeen.has(id)) return;
-              femaleSeen.add(id);
-              female.push({ id: id as WeightFilter, label });
-            } else if (gender.startsWith('m')) {
-              if (maleSeen.has(id)) return;
-              maleSeen.add(id);
-              male.push({ id: id as WeightFilter, label });
-            }
-          });
-
-        return {
-          femaleOpen: { id: 'FEMALE_OPEN' as WeightFilter, label: t('contest_detail.registrations.filters.open') },
-          maleOpen: { id: 'MALE_OPEN' as WeightFilter, label: t('contest_detail.registrations.filters.open') },
-          female,
-          male,
-        };
-      })();
-
-  $: femaleWeightFilters = (() => {
-        const hasFemaleData = weightFilterGroups.female.length > 0 || registrations.some((reg) => isFemaleGender(reg.gender));
-        if (!hasFemaleData) {
-          return [] as WeightFilterOption[];
-        }
-        return [weightFilterGroups.femaleOpen, ...weightFilterGroups.female];
-      })();
-  $: maleWeightFilters = (() => {
-        const hasMaleData = weightFilterGroups.male.length > 0 || registrations.some((reg) => isMaleGender(reg.gender));
-        if (!hasMaleData) {
-          return [] as WeightFilterOption[];
-        }
-        return [weightFilterGroups.maleOpen, ...weightFilterGroups.male];
-      })();
-
+  // Filter dropdown options are shared with the public results page. The desk
+  // additionally splits the weight options into the two gender groups.
+  $: filterOptions = buildPublicFilterOptions({
+    weightClasses,
+    ageCategories,
+    registrations,
+    translate: t,
+  });
+  $: weightFilterGroups = filterOptions.weightGroups;
+  $: femaleWeightFilters =
+    weightFilterGroups.female.length > 0 || registrations.some((reg) => isFemaleGender(reg.gender))
+      ? [weightFilterGroups.femaleOpen, ...weightFilterGroups.female]
+      : [];
+  $: maleWeightFilters =
+    weightFilterGroups.male.length > 0 || registrations.some((reg) => isMaleGender(reg.gender))
+      ? [weightFilterGroups.maleOpen, ...weightFilterGroups.male]
+      : [];
   $: availableWeightFilters = [
-        weightFilterGroups.femaleOpen,
-        weightFilterGroups.maleOpen,
-        ...weightFilterGroups.female,
-        ...weightFilterGroups.male,
-      ];
-  $: availableAgeFilters = (() => {
-        const entries: Array<{ id: AgeFilter; label: string }> = [
-          { id: 'ALL', label: t('contest_detail.registrations.filters.age_all') },
-        ];
-        const hasUnassigned = registrations.some((registration) => !registration.ageCategoryId);
-        if (hasUnassigned) {
-          entries.push({
-            id: 'UNASSIGNED',
-            label: t('contest_detail.registrations.filters.age_unassigned'),
-          });
-        }
-
-        const seen = new Set<string>();
-        ageCategories
-          .slice()
-          .sort((a, b) => {
-            const orderA = a.sortOrder ?? Number.MAX_SAFE_INTEGER;
-            const orderB = b.sortOrder ?? Number.MAX_SAFE_INTEGER;
-            if (orderA !== orderB) return orderA - orderB;
-            const labelA = normaliseAgeCategoryLabel(a.name, a.code) || (a.code ?? '').toString();
-            const labelB = normaliseAgeCategoryLabel(b.name, b.code) || (b.code ?? '').toString();
-            return labelA.localeCompare(labelB, undefined, { sensitivity: 'base' });
-          })
-          .forEach((category) => {
-            const id = (category.id ?? category.code ?? '').toString();
-            let label = normaliseAgeCategoryLabel(category.name, category.code) || id;
-            if (label.toLowerCase() === 'senior') {
-              label = t('contest_detail.registrations.filters.age_senior');
-            }
-            if (!id || !label) return;
-            if (seen.has(id)) return;
-            seen.add(id);
-            entries.push({ id: id as AgeFilter, label });
-          });
-
-        return entries;
-      })();
-  $: availableLabelFilters = (() => {
-        const base: Array<{ id: LabelFilter; label: string }> = [
-          { id: 'ALL', label: t('contest_detail.registrations.filters.labels_all') },
-        ];
-        let hasUnlabeled = false;
-        const labelMap = new Map<string, string>();
-
-        registrations.forEach((registration) => {
-          const labels = Array.isArray(registration.labels) ? registration.labels : [];
-          if (labels.length === 0) {
-            hasUnlabeled = true;
-            return;
-          }
-          labels.forEach((label) => {
-            const trimmed = (label ?? '').trim();
-            if (!trimmed) return;
-            const key = normaliseLabelKey(trimmed);
-            if (!labelMap.has(key)) {
-              labelMap.set(key, trimmed);
-            }
-          });
-        });
-
-        if (hasUnlabeled) {
-          base.push({
-            id: 'UNLABELED',
-            label: t('contest_detail.registrations.filters.labels_unlabeled'),
-          });
-        }
-
-        Array.from(labelMap.values())
-          .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
-          .forEach((label) => {
-            base.push({
-              id: `${LABEL_FILTER_PREFIX}${label}` as LabelFilter,
-              label,
-            });
-          });
-
-        return base;
-      })();
+    weightFilterGroups.femaleOpen,
+    weightFilterGroups.maleOpen,
+    ...weightFilterGroups.female,
+    ...weightFilterGroups.male,
+  ];
+  $: availableAgeFilters = filterOptions.age;
+  $: availableLabelFilters = filterOptions.label;
   $: unifiedRows = buildUnifiedRows({
         registrations,
         attempts: liveAttempts,
@@ -1771,116 +1477,71 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
     return t('contest_detail.current.queue_order_unknown');
   }
 
-  type AttemptStateSnapshot = {
-    attempts: Attempt[];
-    current: CurrentAttempt | null;
-  };
-
-  function cloneAttempts(source: Attempt[]): Attempt[] {
-    return source.map((attempt) => ({ ...attempt }));
-  }
-
-  function cloneCurrentAttempt(current: CurrentAttempt | null): CurrentAttempt | null {
-    if (!current) return null;
-    return {
-      ...current,
-    };
+  /** Writes an attempt state snapshot back into the view and the contest store. */
+  function applyAttemptState(state: AttemptStateSnapshot): void {
+    liveAttempts = state.attempts;
+    contestStore.setAttempts(liveAttempts);
+    liveCurrentAttempt = state.current;
   }
 
   function attemptListSnapshot(): Attempt[] {
     return cloneAttempts(liveAttempts);
   }
 
-  function captureAttemptState(): AttemptStateSnapshot {
-    return {
-      attempts: attemptListSnapshot(),
-      current: cloneCurrentAttempt(liveCurrentAttempt),
-    };
-  }
-
   function applyOptimisticAttempts(attemptsToApply: Attempt[]) {
-    attemptsToApply.forEach((attempt) => {
-      upsertAttemptRecord(attempt);
-    });
-  }
-
-  function restoreAttemptSnapshot(snapshot: AttemptStateSnapshot | Attempt[]) {
-    const nextState: AttemptStateSnapshot = Array.isArray(snapshot)
-      ? {
-          attempts: cloneAttempts(snapshot),
-          current: cloneCurrentAttempt(liveCurrentAttempt),
-        }
-      : {
-          attempts: cloneAttempts(snapshot.attempts),
-          current: cloneCurrentAttempt(snapshot.current),
-        };
-
-    liveAttempts = nextState.attempts;
-    contestStore.setAttempts(liveAttempts);
-
-    if (nextState.current) {
-      liveCurrentAttempt = cloneCurrentAttempt(nextState.current);
-    } else if (liveCurrentAttempt) {
-      const existing = liveAttempts.find((attempt) => attempt.id === liveCurrentAttempt?.id);
-      liveCurrentAttempt = existing ? normaliseCurrentAttempt(existing) : null;
-    }
-  }
-
-  function sameAttempt(existing: Attempt, candidate: Attempt): boolean {
-    return (
-      existing.registrationId === candidate.registrationId &&
-      existing.liftType === candidate.liftType &&
-      existing.attemptNumber === candidate.attemptNumber
+    applyAttemptState(
+      applyOptimisticAttemptsToState(captureAttemptState(liveAttempts, liveCurrentAttempt), attemptsToApply)
     );
   }
 
-  function buildAttemptKey(registrationId: string, lift: LiftType | LiftKind, attemptNumber: number | AttemptNumber): string {
-    return `${registrationId}:${String(lift)}:${attemptNumber}`;
-  }
-
-  function attemptKeyFromAttempt(attempt: Attempt): string {
-    return buildAttemptKey(attempt.registrationId, attempt.liftType, attempt.attemptNumber);
-  }
-
-  function attemptKeyFromPayload(payload: {
-    registrationId: string;
-    liftType: LiftKind | LiftType;
-    attemptNumber: number | AttemptNumber;
-  }): string {
-    return buildAttemptKey(payload.registrationId, payload.liftType, payload.attemptNumber);
+  function restoreAttemptSnapshot(snapshot: AttemptStateSnapshot | Attempt[]) {
+    if (Array.isArray(snapshot)) {
+      // Legacy attempt-editor callers snapshot only the attempt list.
+      applyAttemptState({
+        attempts: cloneAttempts(snapshot),
+        current: cloneCurrentAttempt(liveCurrentAttempt),
+      });
+      return;
+    }
+    applyAttemptState(restoreAttemptSnapshotExact(snapshot));
   }
 
   function setAttemptWeightPendingFlag(key: string, value: boolean) {
-    if (!key) return;
-    if (value) {
-      attemptWeightPending = { ...attemptWeightPending, [key]: true };
-      return;
-    }
-    const { [key]: _omit, ...rest } = attemptWeightPending;
-    attemptWeightPending = rest;
+    attemptWeightPending = setPendingFlag(attemptWeightPending, key, value);
   }
 
-  async function withAttemptOptimism<T>(options: {
+  /**
+   * Runs one optimistic attempt command. The optimistic state is rendered before
+   * the request is awaited; a failure restores the captured snapshot exactly
+   * (including an originally empty current attempt), and a queued receipt keeps
+   * the optimistic state because the server has not seen the change yet.
+   */
+  async function withAttemptOptimism<T extends { queued?: boolean }>(options: {
     pendingKey?: string | null;
     setPending?: (key: string, value: boolean) => void;
-    applyOptimistic: () => void;
+    optimistically: (snapshot: AttemptStateSnapshot) => AttemptStateSnapshot;
     action: () => Promise<T>;
     onError?: (error: unknown) => void;
-  }): Promise<T> {
-    const snapshot = captureAttemptState();
-    const { pendingKey, setPending, applyOptimistic, action, onError } = options;
+  }): Promise<AttemptMutationResult<T>> {
+    const { pendingKey, setPending, optimistically, action, onError } = options;
 
     if (pendingKey && setPending) {
       setPending(pendingKey, true);
     }
 
     try {
-      applyOptimistic();
-      return await action();
-    } catch (error) {
-      restoreAttemptSnapshot(snapshot);
-      onError?.(error);
-      throw error;
+      const result = await runAttemptMutation<T>({
+        snapshot: captureAttemptState(liveAttempts, liveCurrentAttempt),
+        optimistically,
+        onOptimistic: applyAttemptState,
+        action,
+      });
+
+      applyAttemptState(result.state);
+      if (!result.ok) {
+        onError?.(result.error);
+      }
+      return result;
     } finally {
       if (pendingKey && setPending) {
         setPending(pendingKey, false);
@@ -1891,20 +1552,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
   function upsertAttemptRecord(attempt: Attempt) {
     if (!attempt?.id) return;
 
-    const indexById = liveAttempts.findIndex((existing) => existing.id === attempt.id);
-    const indexByKey = indexById >= 0 ? indexById : liveAttempts.findIndex((existing) => sameAttempt(existing, attempt));
-
-    if (indexByKey >= 0) {
-      const merged = { ...liveAttempts[indexByKey], ...attempt };
-      liveAttempts = [
-        ...liveAttempts.slice(0, indexByKey),
-        merged,
-        ...liveAttempts.slice(indexByKey + 1),
-      ];
-    } else {
-      liveAttempts = [...liveAttempts, attempt];
-    }
-
+    liveAttempts = upsertAttempt(liveAttempts, attempt);
     contestStore.updateAttempt(attempt);
 
     if (liveCurrentAttempt?.id === attempt.id) {
@@ -1912,13 +1560,21 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
     }
   }
 
+  function isAttemptBundle(input: Attempt | CurrentAttempt | CurrentAttemptBundle): input is CurrentAttemptBundle {
+    return 'attempt' in input;
+  }
+
+  function isCurrentAttemptWithName(input: Attempt | CurrentAttempt): input is CurrentAttempt {
+    return 'competitorName' in input && Boolean(input.competitorName);
+  }
+
   function normaliseCurrentAttempt(input: Attempt | CurrentAttempt | CurrentAttemptBundle): CurrentAttempt {
-    if ('attempt' in (input as any)) {
-      return bundleToCurrentAttempt(input as CurrentAttemptBundle);
+    if (isAttemptBundle(input)) {
+      return bundleToCurrentAttempt(input);
     }
 
-    if ('competitorName' in (input as any) && (input as CurrentAttempt).competitorName) {
-      const current = input as CurrentAttempt;
+    if (isCurrentAttemptWithName(input)) {
+      const current = input;
       return {
         id: current.id,
         registrationId: current.registrationId,
@@ -1932,15 +1588,15 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
       };
     }
 
-    const attempt = input as Attempt;
+    const attempt = input;
     return {
       id: attempt.id,
       registrationId: attempt.registrationId,
       competitorName: getAttemptCompetitor(attempt),
-      liftType: attempt.liftType as LiftType,
-      attemptNumber: (attempt.attemptNumber as AttemptNumber) ?? 1,
+      liftType: attempt.liftType,
+      attemptNumber: attempt.attemptNumber,
       weight: attempt.weight,
-      status: attempt.status as AttemptStatus,
+      status: attempt.status,
       competitionOrder: attempt.competitionOrder ?? null,
       updatedAt: attempt.updatedAt ?? null,
     };
@@ -2054,7 +1710,6 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
 
   let openResultFilter: 'weight' | 'age' | 'tags' | null = null;
   let openRegistrationFilter: 'weight' | 'age' | 'labels' | null = null;
-  type ExportMenuId = 'squat' | 'bench' | 'deadlift';
   let openExportMenu: ExportMenuId | null = null;
   let exportingUnifiedTable = false;
   let resultsExportMenuOpen = false;
@@ -2139,9 +1794,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
     return selectedTagForResults ?? t('contest_detail.results.filters.tags_button_all');
   })();
 
-  $: hasActiveResultFilters =
-    selectedResultView !== 'open' ||
-    (selectedResultView === 'tag' && !!selectedTagForResults);
+  $: hasActiveResultFilters = selectedResultView !== 'open';
 
   function clearAllResultFilters() {
     selectedResultView = 'open';
@@ -2176,7 +1829,6 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
         const mergedContest: ContestDetail = { ...contest, ...result };
         contest = mergedContest;
         contestStore.setContest(mergedContest, registrations, referenceData);
-        setContestContext(mergedContest);
         toast.success(t('contest_edit.toast_saved'));
       }
     } catch (error) {
@@ -2218,7 +1870,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
 
   async function openAttemptModal(registrationRecord: Registration) {
     try {
-      const result = (await modalStore.open({
+      const result = await modalStore.open<boolean | undefined>({
         title: t('contest_detail.modal.edit_attempts_title', {
           name: formatCompetitorName(registrationRecord.firstName, registrationRecord.lastName)
         }),
@@ -2233,7 +1885,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
           getSnapshot: () => attemptListSnapshot(),
           restoreSnapshot: (snapshot: Attempt[]) => restoreAttemptSnapshot(snapshot),
         },
-      })) as unknown as boolean | undefined;
+      });
 
       if (result) {
         await refreshAttemptsData();
@@ -2433,41 +2085,45 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
           competitionOrder: registrationRecord?.competitionOrder ?? null,
         };
 
-    try {
-      const pendingKey = payload.attemptId ?? attemptKeyFromPayload(payload);
+    const result = await withAttemptOptimism({
+      pendingKey: payload.attemptId ?? attemptKeyFromPayload(payload),
+      setPending: setAttemptWeightPendingFlag,
+      optimistically: (state) => applyOptimisticAttemptsToState(state, [optimistic]),
+      action: async () => {
+        const response = await apiClient.post(`/contests/${contestId}/registrations/${payload.registrationId}/attempts`, {
+          registrationId: payload.registrationId,
+          liftType: payload.liftType,
+          attemptNumber: payload.attemptNumber,
+          weight,
+        });
 
-      await withAttemptOptimism({
-        pendingKey,
-        setPending: setAttemptWeightPendingFlag,
-        applyOptimistic: () => applyOptimisticAttempts([optimistic]),
-        action: async () => {
-          const response = await apiClient.post(`/contests/${contestId}/registrations/${payload.registrationId}/attempts`, {
-            registrationId: payload.registrationId,
-            liftType: payload.liftType,
-            attemptNumber: payload.attemptNumber,
-            weight,
-          });
+        if (response.error) {
+          throw new Error(response.error);
+        }
 
-          if (response.error) {
-            throw new Error(response.error);
-          }
-
-          await refreshAttemptsData();
-        },
-        onError: (error) => {
-          const message = error instanceof ApiError
+        return response;
+      },
+      onError: (error) => {
+        const message = error instanceof ApiError
+          ? error.message
+          : error instanceof Error
             ? error.message
-            : error instanceof Error
-              ? error.message
-              : t('contest_detail.toast.attempt_update_failed');
-          toast.error(message);
-        },
-      });
+            : t('contest_detail.toast.attempt_update_failed');
+        toast.error(message);
+      },
+    });
 
-      toast.success(t('contest_detail.toast.attempt_updated_short'));
-    } catch (error) {
-      console.error('Failed to update attempt weight inline', error);
+    if (!result.ok) {
+      console.error('Failed to update attempt weight inline', result.error);
+      return;
     }
+
+    // A queued receipt is stored offline: refreshing would wipe the optimistic row.
+    if (shouldRefreshAfterAttemptMutation(result)) {
+      await refreshAttemptsData();
+    }
+
+    toast.success(t('contest_detail.toast.attempt_updated_short'));
   }
 
   function liftToggleKey(registrationId: string, lift: LiftType): string {
@@ -2511,7 +2167,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
     }
 
     const key = liftToggleKey(registration.id, lift);
-    liftToggleLoading = { ...liftToggleLoading, [key]: true };
+    liftToggleLoading = setPendingFlag(liftToggleLoading, key, true);
 
     try {
       const response = await apiClient.patch<Registration>(`/registrations/${registration.id}`, {
@@ -2522,9 +2178,12 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
         throw new Error(response.error);
       }
 
-      const updated = response.data
-        ? ({ ...registration, ...response.data } as Registration)
-        : ({ ...registration, lifts: nextLifts } as Registration);
+      // A queued receipt carries no data, so the optimistic registration stands
+      // until the offline queue replays it.
+      const updated =
+        response.data && !isQueuedReceipt(response)
+          ? { ...registration, ...response.data }
+          : { ...registration, lifts: nextLifts };
 
       if (!updated.lifts || updated.lifts.length === 0) {
         updated.lifts = nextLifts;
@@ -2543,8 +2202,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
       console.error('Failed to toggle registration lift', error);
       toast.error(t('contest_detail.registrations.lifts.update_failed'));
     } finally {
-      const { [key]: _omit, ...rest } = liftToggleLoading;
-      liftToggleLoading = rest;
+      liftToggleLoading = setPendingFlag(liftToggleLoading, key, false);
     }
   }
 
@@ -2560,6 +2218,8 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
     selectedLabelFilter = filter;
   }
 
+  type FlightUpdate = { id: string; flightCode: string; flightOrder: number | null };
+
   function openFlightManager() {
     modalStore.open({
       title: t('contest_detail.registrations.manage_flights_title'),
@@ -2567,16 +2227,14 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
       component: FlightAssignmentModal,
       data: {
         registrations,
-        onSaved: async (updates: any[]) => {
+        onSaved: async (updates: FlightUpdate[]) => {
           await handleFlightUpdates(updates);
         }
       }
     });
   }
 
-
-
-  async function handleFlightUpdates(updates: any[]) {
+  async function handleFlightUpdates(updates: FlightUpdate[]) {
     if (!contestId) {
       return;
     }
@@ -2586,6 +2244,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
       flightCode: update.flightCode,
       flightOrder: update.flightOrder,
     }));
+
 
     if (assignments.length === 0) {
       return;
@@ -2597,6 +2256,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
         throw new Error(response.error);
       }
 
+      // Applied locally as well when the request was queued offline.
       registrations = registrations.map((reg) => {
         const update = assignments.find((assignment) => assignment.registrationId === reg.id);
         if (!update) return reg;
@@ -2617,6 +2277,8 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
           ? error.message
           : t('contest_detail.toast.flights_update_failed');
       toast.error(message);
+      // Rethrow so the modal shell keeps the dialog open with the edits intact.
+      throw error;
     }
   }
 
@@ -2627,36 +2289,40 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
     const now = new Date().toISOString();
     const optimistic: Attempt = { ...attempt, status, updatedAt: now };
 
-    try {
-      await withAttemptOptimism({
-        pendingKey: attempt.id,
-        setPending: setStatusLoadingFlag,
-        applyOptimistic: () => applyOptimisticAttempts([optimistic]),
-        action: async () => {
-          const response = await apiClient.patch(`/attempts/${attempt.id}/result`, {
-            status,
-          });
+    const result = await withAttemptOptimism({
+      pendingKey: attempt.id,
+      setPending: setStatusLoadingFlag,
+      optimistically: (state) => applyOptimisticAttemptsToState(state, [optimistic]),
+      action: async () => {
+        const response = await apiClient.patch(`/attempts/${attempt.id}/result`, {
+          status,
+        });
 
-          if (response.error) {
-            throw new Error(response.error);
-          }
-        },
-        onError: (error) => {
-          const message = error instanceof ApiError
+        if (response.error) {
+          throw new Error(response.error);
+        }
+
+        // A queued receipt keeps the optimistic status until the queue replays.
+        return response;
+      },
+      onError: (error) => {
+        const message = error instanceof ApiError
+          ? error.message
+          : error instanceof Error
             ? error.message
-            : error instanceof Error
-              ? error.message
-              : t('contest_detail.toast.attempt_update_failed');
-          toast.error(message);
-        },
-      });
+            : t('contest_detail.toast.attempt_update_failed');
+        toast.error(message);
+      },
+    });
 
-      toast.success(t('contest_detail.toast.attempt_updated', {
-        status: getAttemptStatusLabel(status)
-      }));
-    } catch (error) {
-      console.error('Failed to update attempt status', error);
+    if (!result.ok) {
+      console.error('Failed to update attempt status', result.error);
+      return;
     }
+
+    toast.success(t('contest_detail.toast.attempt_updated', {
+      status: getAttemptStatusLabel(status)
+    }));
   }
 
   async function setCurrentAttemptHandler(attempt: Attempt) {
@@ -2664,35 +2330,38 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
     if (liveCurrentAttempt?.id === attempt.id) return;
 
     const now = new Date().toISOString();
+    const optimistic: Attempt = { ...attempt, updatedAt: now };
 
-    try {
-      await withAttemptOptimism({
-        pendingKey: attempt.id,
-        setPending: setCurrentLoadingFlag,
-        applyOptimistic: () => {
-          applyOptimisticAttempts([{ ...attempt, updatedAt: now }]);
-          liveCurrentAttempt = normaliseCurrentAttempt({ ...attempt, updatedAt: now });
-        },
-        action: async () => {
-          const response = await apiClient.put(`/contests/${contestId}/attempts/current`, { attemptId: attempt.id });
-          if (response.error) {
-            throw new Error(response.error);
-          }
-        },
-        onError: (error) => {
-          const message = error instanceof ApiError
+    const result = await withAttemptOptimism({
+      pendingKey: attempt.id,
+      setPending: setCurrentLoadingFlag,
+      optimistically: (state) => ({
+        attempts: applyOptimisticAttemptsToState(state, [optimistic]).attempts,
+        current: normaliseCurrentAttempt(optimistic),
+      }),
+      action: async () => {
+        const response = await apiClient.put(`/contests/${contestId}/attempts/current`, { attemptId: attempt.id });
+        if (response.error) {
+          throw new Error(response.error);
+        }
+        return response;
+      },
+      onError: (error) => {
+        const message = error instanceof ApiError
+          ? error.message
+          : error instanceof Error
             ? error.message
-            : error instanceof Error
-              ? error.message
-              : t('contest_detail.toast.current_set_failed');
-          toast.error(message);
-        },
-      });
+            : t('contest_detail.toast.current_set_failed');
+        toast.error(message);
+      },
+    });
 
-      toast.success(t('contest_detail.toast.current_set'));
-    } catch (error) {
-      console.error('Failed to set current attempt', error);
+    if (!result.ok) {
+      console.error('Failed to set current attempt', result.error);
+      return;
     }
+
+    toast.success(t('contest_detail.toast.current_set'));
   }
 
   async function clearCurrentAttemptHandler() {
@@ -2740,8 +2409,10 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
     merged.lastName = incoming.lastName ?? existing?.lastName ?? '';
     merged.gender = incoming.gender ?? existing?.gender ?? '';
     merged.birthDate = incoming.birthDate ?? existing?.birthDate ?? '';
-    merged.club = incoming.club ?? existing?.club;
-    merged.city = incoming.city ?? existing?.city;
+    const club = incoming.club ?? existing?.club;
+    if (club !== undefined) merged.club = club;
+    const city = incoming.city ?? existing?.city;
+    if (city !== undefined) merged.city = city;
     merged.labels = Array.isArray(incoming.labels)
       ? [...incoming.labels]
       : Array.isArray(existing?.labels)
@@ -2774,12 +2445,20 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
         const payload = event.data as { attemptId?: string } | undefined;
         const attemptId = payload?.attemptId;
         if (!attemptId) break;
-        liveAttempts = liveAttempts.filter((attempt) => attempt.id !== attemptId);
+        liveAttempts = removeAttemptById(liveAttempts, attemptId);
         contestStore.setAttempts(liveAttempts);
         if (liveCurrentAttempt?.id === attemptId) {
           liveCurrentAttempt = null;
         }
         void reloadResults();
+        break;
+      }
+      case 'snapshot': {
+        // Polling and reconnect emit the full contest state: replace attempts and
+        // the current attempt with it so deletions and clears are recovered.
+        const snapshot = event.data as RealtimeSnapshot | undefined;
+        if (!snapshot) break;
+        applyAttemptState(applyRealtimeSnapshot(snapshot, normaliseCurrentAttempt));
         break;
       }
       case 'attempt.currentSet': {
@@ -2840,7 +2519,6 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
   // Set contest in store and context when data is available
   $: if (contest) {
     contestStore.setContest(contest, registrations, referenceData);
-    setContestContext(contest);
   }
 
   onMount(() => {
@@ -2853,6 +2531,7 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
     realtimeClient.disconnect();
     unsubscribeStatus();
     unsubscribeEvents();
+    unsubscribeResults();
   });
 
   async function openCompetitorModal(registration: Registration) {
@@ -3533,144 +3212,27 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
         </section>
 
         <!-- Moved Plates management into Desk view -->
-        <section class="space-y-4">
-          <div class="card space-y-4">
-            <header class="space-y-3">
-              <div>
-                <h3 class="text-h3 text-text-primary">{$_('contest_detail.plates.title')}</h3>
-                <p class="text-body text-text-secondary">{$_('contest_detail.plates.subtitle')}</p>
-              </div>
-              {#if contestBarWeights || contest}
-                <div class="grid gap-2 md:grid-cols-2 text-caption text-text-secondary uppercase tracking-[0.35em]">
-                  <span>{$_('contest_detail.plates.bar_weight_men', { values: { weight: displayWeightValue(contestBarWeights?.mensBarWeight ?? contest?.mensBarWeight ?? null) } })}</span>
-                  <span>{$_('contest_detail.plates.bar_weight_women', { values: { weight: displayWeightValue(contestBarWeights?.womensBarWeight ?? contest?.womensBarWeight ?? null) } })}</span>
-                </div>
-              {/if}
-            </header>
-
-            <div class="space-y-4">
-              <div class="grid gap-4 md:grid-cols-3">
-                <div>
-                  <label class="input-label" for="mens-bar-weight-setting">
-                    {$_('contest_detail.plates.bar_weight_men', { values: { weight: '' } })}
-                  </label>
-                  <input id="mens-bar-weight-setting" class="input-field" type="number" step="0.25" bind:value={mensBarWeightSetting} />
-                </div>
-                <div>
-                  <label class="input-label" for="womens-bar-weight-setting">
-                    {$_('contest_detail.plates.bar_weight_women', { values: { weight: '' } })}
-                  </label>
-                  <input id="womens-bar-weight-setting" class="input-field" type="number" step="0.25" bind:value={womensBarWeightSetting} />
-                </div>
-                <div>
-                  <label class="input-label" for="clamp-weight-setting">
-                    {$_('contest_detail.plates.clamp_weight_label')}
-                  </label>
-                  <input id="clamp-weight-setting" class="input-field" type="number" step="0.25" bind:value={clampWeightSetting} />
-                  <p class="text-caption text-text-secondary mt-1">{$_('contest_detail.plates.clamp_weight_hint')}</p>
-                </div>
-                <div class="md:col-span-3">
-                  <button class="btn-primary px-3 py-1 text-xxs" disabled={barWeightsBusy} on:click|preventDefault={saveBarWeights}>
-                    {barWeightsBusy ? $_('buttons.saving') : $_('buttons.save')}
-                  </button>
-                </div>
-              </div>
-
-              <div class="overflow-x-auto">
-                <table class="min-w-full text-left text-sm text-text-secondary">
-                  <thead class="bg-element-bg text-label">
-                    <tr>
-                      <th class="px-4 py-3">{$_('contest_detail.plates.columns.weight')}</th>
-                      <th class="px-4 py-3">{$_('contest_detail.plates.columns.quantity')}</th>
-                      <th class="px-4 py-3">{$_('contest_detail.plates.columns.color')}</th>
-                      <th class="px-4 py-3 text-right">{$_('contest_table.columns.actions')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {#if contestPlateSets.length === 0}
-                      <tr>
-                        <td class="px-4 py-3 text-text-secondary" colspan="4">{$_('contest_detail.plates.empty')}</td>
-                      </tr>
-                    {/if}
-                    {#each contestPlateSets as plate, idx (plate.plateWeight ?? plate.weight ?? idx)}
-                      <tr class="border-b border-border-color last:border-b-0">
-                        <td class="px-4 py-3">
-                          <input
-                            class="input-field w-28"
-                            type="number"
-                            min="0.25"
-                            step="0.25"
-                            value={displayWeightValue(plate.plateWeight ?? plate.weight ?? null)}
-                            on:change={(event) => handlePlateWeightChange(plate.plateWeight, plate.quantity, plate.color ?? null, event)}
-                          />
-                        </td>
-                        <td class="px-4 py-3">
-                          <input
-                            class="input-field w-24"
-                            type="number"
-                            min="0"
-                            step="1"
-                            value={plate.quantity}
-                            on:change={(event) => handlePlateQuantityChange(plate.plateWeight, event)}
-                          />
-                        </td>
-                        <td class="px-4 py-3">
-                          <div class="flex flex-wrap items-center gap-2">
-                            <input
-                              class="h-10 w-10 cursor-pointer rounded border border-border-color bg-transparent p-0"
-                              type="color"
-                              value={plate.color ?? DEFAULT_PLATE_COLOR}
-                              aria-label={$_('contest_detail.plates.columns.color')}
-                              on:change={(event) => handlePlateColorChange(plate.plateWeight, event)}
-                            />
-                            <input
-                              class="input-field w-32 font-mono"
-                              type="text"
-                              value={plate.color ?? DEFAULT_PLATE_COLOR}
-                              placeholder={DEFAULT_PLATE_COLOR}
-                              on:change={(event) => handlePlateColorChange(plate.plateWeight, event)}
-                            />
-                          </div>
-                        </td>
-                        <td class="px-4 py-3 text-right">
-                          <button class="btn-secondary px-3 py-1 text-xxs" on:click={() => deletePlate(plate.plateWeight)} disabled={platesBusy}>{$_('buttons.delete')}</button>
-                        </td>
-                      </tr>
-                    {/each}
-                    <tr>
-                      <td class="px-4 py-3">
-                        <input class="input-field w-28" type="number" step="0.25" placeholder="np. 25" bind:value={newPlateWeight} />
-                      </td>
-                      <td class="px-4 py-3">
-                        <input class="input-field w-24" type="number" min="0" step="1" placeholder="0" bind:value={newPlateQuantity} />
-                      </td>
-                      <td class="px-4 py-3">
-                        <div class="flex flex-wrap items-center gap-2">
-                          <input
-                            class="h-10 w-10 cursor-pointer rounded border border-border-color bg-transparent p-0"
-                            type="color"
-                            value={newPlateColor ?? DEFAULT_PLATE_COLOR}
-                            aria-label={$_('contest_detail.plates.columns.color')}
-                            on:change={(event) => (newPlateColor = event.currentTarget.value)}
-                          />
-                          <input
-                            class="input-field w-36 font-mono"
-                            type="text"
-                            placeholder={DEFAULT_PLATE_COLOR}
-                            bind:value={newPlateColor}
-                          />
-                        </div>
-                      </td>
-                      <td class="px-4 py-3 text-right">
-                        <button class="btn-primary px-3 py-1 text-xxs" on:click|preventDefault={addPlate} disabled={platesBusy}>{$_('buttons.add')}</button>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </section>
+        <PlatesPanel
+          {contest}
+          {contestBarWeights}
+          {contestPlateSets}
+          {platesBusy}
+          {barWeightsBusy}
+          bind:mensBarWeightSetting={mensBarWeightSetting}
+          bind:womensBarWeightSetting={womensBarWeightSetting}
+          bind:clampWeightSetting={clampWeightSetting}
+          bind:newPlateWeight={newPlateWeight}
+          bind:newPlateQuantity={newPlateQuantity}
+          bind:newPlateColor={newPlateColor}
+          defaultPlateColor={DEFAULT_PLATE_COLOR}
+          {displayWeightValue}
+          onSaveBarWeights={saveBarWeights}
+          onPlateWeightChange={handlePlateWeightChange}
+          onPlateQuantityChange={handlePlateQuantityChange}
+          onPlateColorChange={handlePlateColorChange}
+          onDeletePlate={deletePlate}
+          onAddPlate={addPlate}
+        />
 
       {:else if activeTab === 'results'}
         <section class="space-y-4">
@@ -3967,1439 +3529,88 @@ $: if (contestBarWeights !== previousContestBarWeights || contest !== previousCo
                 getCategory={(entry) => getResultCategory(entry, selectedResultView)}
                 formatLift={formatLift}
                 formatPoints={formatPoints}
-                formatName={formatCompetitorName}
+                formatName={(first, last) => formatCompetitorName(first ?? '', last ?? '')}
                 ariaSort={resultsAriaSort}
                 indicator={resultsSortIndicatorIcon}
               />
             {/if}
           </div>
         </section>
-      {:else if activeTab === 'team_results'}
-        <section class="space-y-4">
-          <div class="card space-y-4">
-            <header class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <h3 class="text-h3 text-text-primary">{$_('contest_detail.team_results.title')}</h3>
-                <p class="text-body text-text-secondary">{$_('contest_detail.team_results.subtitle')}</p>
-              </div>
-              <div class="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  class="btn-secondary px-3 py-1 text-xxs"
-                  on:click={() => exportResults('csv')}
-                  disabled={exportingResults}
-                >
-                  {exportingResults ? $_('contest_detail.team_results.exporting') : $_('contest_detail.team_results.export_csv')}
-                </button>
-                <button
-                  type="button"
-                  class="btn-secondary px-3 py-1 text-xxs"
-                  on:click={() => exportResults('json')}
-                  disabled={exportingResults}
-                >
-                  {exportingResults ? $_('contest_detail.team_results.exporting') : $_('contest_detail.team_results.export_json')}
-                </button>
-              </div>
-            </header>
-
-            <div class="flex flex-wrap items-center gap-2">
-              {#if weightClasses.length > 0}
-                <div class="relative" on:click|stopPropagation>
-                  <button
-                    type="button"
-                    class={`${resultFilterButtonClass(selectedResultView === 'weight')} flex min-w-[190px] items-center justify-between gap-3`}
-                    on:click|stopPropagation={() => toggleResultFilterPopover('weight')}
-                  >
-                    <div class="flex flex-col text-left leading-tight">
-                      <span class="font-semibold">{$_('contest_detail.team_results.filters.weight_button')}</span>
-                      <span class="text-text-secondary">{weightSelectionLabel}</span>
-                    </div>
-                    <ChevronDown
-                      class={`h-3.5 w-3.5 transition-transform ${openResultFilter === 'weight' ? 'rotate-180' : ''}`}
-                      aria-hidden="true"
-                    />
-                  </button>
-                  {#if openResultFilter === 'weight'}
-                    <div
-                      class="absolute left-0 top-full z-40 mt-2 w-72 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
-                      on:click|stopPropagation
-                    >
-                      <div class="space-y-4">
-                        <div>
-                          <p class="mb-2 text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.team_results.filters.weights_all')}</p>
-                          <button
-                            type="button"
-                            class={`${resultFilterButtonClass(selectedResultView !== 'weight')} w-full justify-start`}
-                            on:click={() => {
-                              selectAllResultWeights();
-                              closeResultFilterPopover();
-                            }}
-                          >
-                            {$_('contest_detail.team_results.filters.all')}
-                          </button>
-                        </div>
-
-                        {#if femaleWeightClassOptions.length > 0}
-                          <div>
-                            <p class="mb-2 text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.team_results.filters.weights_female')}</p>
-                            <div class="grid grid-cols-2 gap-2">
-                              <button
-                                type="button"
-                                class={`${resultFilterButtonClass(selectedResultView === 'weight' && activeWeightGender === 'female' && !selectedWeightClassLabel)} w-full`}
-                                on:click={() => {
-                                  selectResultWeight('female', null);
-                                  closeResultFilterPopover();
-                                }}
-                              >
-                                {$_('contest_detail.team_results.filters.open')}
-                              </button>
-                              {#each femaleWeightClassOptions as option}
-                                <button
-                                  type="button"
-                                  class={`${resultFilterButtonClass(selectedResultView === 'weight' && activeWeightGender === 'female' && selectedWeightClassLabel === option.value)} w-full`}
-                                  on:click={() => {
-                                    selectResultWeight('female', option.value);
-                                    closeResultFilterPopover();
-                                  }}
-                                >
-                                  {option.label}
-                                </button>
-                              {/each}
-                            </div>
-                          </div>
-                        {/if}
-
-                        {#if maleWeightClassOptions.length > 0}
-                          <div>
-                            <p class="mb-2 text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.team_results.filters.weights_male')}</p>
-                            <div class="grid grid-cols-2 gap-2">
-                              <button
-                                type="button"
-                                class={`${resultFilterButtonClass(selectedResultView === 'weight' && activeWeightGender === 'male' && !selectedWeightClassLabel)} w-full`}
-                                on:click={() => {
-                                  selectResultWeight('male', null);
-                                  closeResultFilterPopover();
-                                }}
-                              >
-                                {$_('contest_detail.team_results.filters.open')}
-                              </button>
-                              {#each maleWeightClassOptions as option}
-                                <button
-                                  type="button"
-                                  class={`${resultFilterButtonClass(selectedResultView === 'weight' && activeWeightGender === 'male' && selectedWeightClassLabel === option.value)} w-full`}
-                                  on:click={() => {
-                                    selectResultWeight('male', option.value);
-                                    closeResultFilterPopover();
-                                  }}
-                                >
-                                  {option.label}
-                                </button>
-                              {/each}
-                            </div>
-                          </div>
-                        {/if}
-                      </div>
-                    </div>
-                  {/if}
-                </div>
-              {/if}
-
-              {#if ageCategoryOptions.length > 0}
-                <div class="relative" on:click|stopPropagation>
-                  <button
-                    type="button"
-                    class={`${resultFilterButtonClass(selectedResultView === 'age')} flex min-w-[170px] items-center justify-between gap-3`}
-                    on:click|stopPropagation={() => toggleResultFilterPopover('age')}
-                  >
-                    <div class="flex flex-col text-left leading-tight">
-                      <span class="font-semibold">{$_('contest_detail.team_results.filters.age_button')}</span>
-                      <span class="text-text-secondary">{ageSelectionLabel}</span>
-                    </div>
-                    <ChevronDown
-                      class={`h-3.5 w-3.5 transition-transform ${openResultFilter === 'age' ? 'rotate-180' : ''}`}
-                      aria-hidden="true"
-                    />
-                  </button>
-                  {#if openResultFilter === 'age'}
-                    <div
-                      class="absolute left-0 top-full z-40 mt-2 w-64 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
-                      on:click|stopPropagation
-                    >
-                      <div class="space-y-3">
-                        <button
-                          type="button"
-                          class={`${resultFilterButtonClass(selectedResultView !== 'age')} w-full justify-start`}
-                          on:click={() => {
-                            selectResultAge(null);
-                            closeResultFilterPopover();
-                          }}
-                        >
-                          {$_('contest_detail.team_results.filters.all')}
-                        </button>
-                        <div class="grid max-h-52 grid-cols-2 gap-2 overflow-y-auto pr-1">
-                          {#each ageCategoryOptions as option}
-                            <button
-                              type="button"
-                              class={`${resultFilterButtonClass(selectedResultView === 'age' && selectedAgeCategoryLabel === option.value)} w-full`}
-                              on:click={() => {
-                                selectResultAge(option.value);
-                                closeResultFilterPopover();
-                              }}
-                            >
-                              {option.label}
-                            </button>
-                          {/each}
-                        </div>
-                      </div>
-                    </div>
-                  {/if}
-                </div>
-              {/if}
-
-              <div class="relative" on:click|stopPropagation>
-                <button
-                  type="button"
-                  class={`${resultFilterButtonClass(selectedResultView === 'tag')} flex min-w-[170px] items-center justify-between gap-3`}
-                  on:click|stopPropagation={() => toggleResultFilterPopover('tags')}
-                >
-                  <div class="flex flex-col text-left leading-tight">
-                    <span class="font-semibold">{$_('contest_detail.team_results.filters.tags_button')}</span>
-                    <span class="text-text-secondary">{tagsSelectionLabel}</span>
-                  </div>
-                  <ChevronDown
-                    class={`h-3.5 w-3.5 transition-transform ${openResultFilter === 'tags' ? 'rotate-180' : ''}`}
-                    aria-hidden="true"
-                  />
-                </button>
-                {#if openResultFilter === 'tags'}
-                  <div
-                    class="absolute left-0 top-full z-40 mt-2 w-60 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
-                    on:click|stopPropagation
-                  >
-                    {#if sortedContestTags.length > 0}
-                      <div class="space-y-3">
-                        <button
-                          type="button"
-                          class={`${resultFilterButtonClass(selectedResultView !== 'tag')} w-full justify-start`}
-                          on:click={() => {
-                            selectAllResultTags();
-                            closeResultFilterPopover();
-                          }}
-                        >
-                          {$_('contest_detail.team_results.filters.all')}
-                        </button>
-                        <div class="grid max-h-52 grid-cols-2 gap-2 overflow-y-auto pr-1">
-                          {#each sortedContestTags as tag}
-                            <button
-                              type="button"
-                              class={`${resultFilterButtonClass(selectedResultView === 'tag' && selectedTagForResults === tag.label)} w-full`}
-                              on:click={() => {
-                                selectResultTag(tag.label);
-                                closeResultFilterPopover();
-                              }}
-                              disabled={resultsLoading && selectedResultView === 'tag' && selectedTagForResults === tag.label}
-                            >
-                              {tag.label}
-                            </button>
-                          {/each}
-                        </div>
-                      </div>
-                    {:else}
-                      <p class="text-xxs text-text-secondary">{$_('contest_detail.team_results.tags.empty')}</p>
-                    {/if}
-                  </div>
-                {/if}
-              </div>
-
-              {#if hasActiveResultFilters}
-                <button
-                  type="button"
-                  class="ml-auto text-xxs text-text-secondary underline decoration-dotted decoration-1 underline-offset-4"
-                  on:click={clearAllResultFilters}
-                >
-                  {$_('contest_detail.team_results.filters.clear')}
-                </button>
-              {/if}
-            </div>
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <span class="text-caption uppercase tracking-[0.35em] text-text-secondary">{resultsSummaryLabel}</span>
-            </div>
-
-            {#if resultsError}
-              <div class="rounded border border-status-error bg-status-error/20 px-3 py-2 text-sm text-status-error">{resultsError}</div>
-            {/if}
-
-            {#if resultsLoading && displayedResults.length === 0}
-              <p class="text-body text-text-secondary">{$_('contest_detail.team_results.loading')}</p>
-            {:else if displayedResults.length === 0}
-              <p class="text-body text-text-secondary">{$_('contest_detail.team_results.empty')}</p>
-            {:else}
-              <div class="overflow-x-auto">
-                <table class="min-w-full text-left text-sm text-text-secondary">
-                  <thead class="bg-element-bg text-label">
-                    <tr>
-                      <th 
-                        class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
-                        role="columnheader"
-                        aria-sort={resultsAriaSort('place')}
-                        on:click={() => handleResultsSortChange('place')}
-                      >
-                        <div class="flex items-center gap-1">
-                          <span>{$_('contest_detail.team_results.columns.place')}</span>
-                          <span aria-hidden="true">{#if resultsSortIndicatorIcon('place')}<svelte:component this={resultsSortIndicatorIcon('place')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
-                        </div>
-                      </th>
-                      <th 
-                        class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
-                        role="columnheader"
-                        aria-sort={resultsAriaSort('lifter')}
-                        on:click={() => handleResultsSortChange('lifter')}
-                      >
-                        <div class="flex items-center gap-1">
-                          <span>{$_('contest_detail.team_results.columns.lifter')}</span>
-                          <span aria-hidden="true">{#if resultsSortIndicatorIcon('lifter')}<svelte:component this={resultsSortIndicatorIcon('lifter')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
-                        </div>
-                      </th>
-                      {#if selectedResultView !== 'open'}
-                        <th 
-                          class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
-                          role="columnheader"
-                          aria-sort={resultsAriaSort('category')}
-                          on:click={() => handleResultsSortChange('category')}
-                        >
-                          <div class="flex items-center gap-1">
-                            <span>
-                              {selectedResultView === 'age'
-                                ? $_('contest_detail.team_results.columns.age_category')
-                                : $_('contest_detail.team_results.columns.weight_class')}
-                            </span>
-                            <span aria-hidden="true">{#if resultsSortIndicatorIcon('category')}<svelte:component this={resultsSortIndicatorIcon('category')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
-                          </div>
-                        </th>
-                      {/if}
-                      {#if hasSquatResults}
-                        <th 
-                          class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
-                          role="columnheader"
-                          aria-sort={resultsAriaSort('bestSquat')}
-                          on:click={() => handleResultsSortChange('bestSquat')}
-                        >
-                          <div class="flex items-center gap-1">
-                            <span>{$_('contest_detail.team_results.columns.best_squat')}</span>
-                            <span aria-hidden="true">{#if resultsSortIndicatorIcon('bestSquat')}<svelte:component this={resultsSortIndicatorIcon('bestSquat')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
-                          </div>
-                        </th>
-                      {/if}
-                      {#if hasBenchResults}
-                        <th 
-                          class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
-                          role="columnheader"
-                          aria-sort={resultsAriaSort('bestBench')}
-                          on:click={() => handleResultsSortChange('bestBench')}
-                        >
-                          <div class="flex items-center gap-1">
-                            <span>{$_('contest_detail.team_results.columns.best_bench')}</span>
-                            <span aria-hidden="true">{#if resultsSortIndicatorIcon('bestBench')}<svelte:component this={resultsSortIndicatorIcon('bestBench')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
-                          </div>
-                        </th>
-                      {/if}
-                      {#if hasDeadliftResults}
-                        <th 
-                          class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
-                          role="columnheader"
-                          aria-sort={resultsAriaSort('bestDeadlift')}
-                          on:click={() => handleResultsSortChange('bestDeadlift')}
-                        >
-                          <div class="flex items-center gap-1">
-                            <span>{$_('contest_detail.team_results.columns.best_deadlift')}</span>
-                            <span aria-hidden="true">{#if resultsSortIndicatorIcon('bestDeadlift')}<svelte:component this={resultsSortIndicatorIcon('bestDeadlift')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
-                          </div>
-                        </th>
-                      {/if}
-                      {#if hasSquatResults}
-                        <th 
-                          class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
-                          role="columnheader"
-                          aria-sort={resultsAriaSort('squatPoints')}
-                          on:click={() => handleResultsSortChange('squatPoints')}
-                        >
-                          <div class="flex items-center gap-1">
-                            <span>{$_('contest_detail.team_results.columns.squat_points')}</span>
-                            <span aria-hidden="true">{#if resultsSortIndicatorIcon('squatPoints')}<svelte:component this={resultsSortIndicatorIcon('squatPoints')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
-                          </div>
-                        </th>
-                      {/if}
-                      {#if hasBenchResults}
-                        <th 
-                          class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
-                          role="columnheader"
-                          aria-sort={resultsAriaSort('benchPoints')}
-                          on:click={() => handleResultsSortChange('benchPoints')}
-                        >
-                          <div class="flex items-center gap-1">
-                            <span>{$_('contest_detail.team_results.columns.bench_points')}</span>
-                            <span aria-hidden="true">{#if resultsSortIndicatorIcon('benchPoints')}<svelte:component this={resultsSortIndicatorIcon('benchPoints')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
-                          </div>
-                        </th>
-                      {/if}
-                      {#if hasDeadliftResults}
-                        <th 
-                          class="px-4 py-3 cursor-pointer hover:bg-element-bg/80 transition-colors"
-                          role="columnheader"
-                          aria-sort={resultsAriaSort('deadliftPoints')}
-                          on:click={() => handleResultsSortChange('deadliftPoints')}
-                        >
-                          <div class="flex items-center gap-1">
-                            <span>{$_('contest_detail.team_results.columns.deadlift_points')}</span>
-                            <span aria-hidden="true">{#if resultsSortIndicatorIcon('deadliftPoints')}<svelte:component this={resultsSortIndicatorIcon('deadliftPoints')} class="h-3.5 w-3.5 opacity-70" />{/if}</span>
-                          </div>
-                        </th>
-                      {/if}
-
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {#each displayedResults as result (result.id ?? result.registrationId)}
-                      <tr class={`border-b border-border-color last:border-b-0 ${result.isDisqualified ? 'bg-status-error/20' : ''}`}>
-                        <td class="px-4 py-3 font-semibold text-text-primary">
-                          {#if getResultPlace(result, selectedResultView) !== null}
-                            {getResultPlace(result, selectedResultView)}
-                          {:else}
-                            –
-                          {/if}
-                        </td>
-                        <td class="px-4 py-3 text-text-secondary">
-                          {formatCompetitorName(result.firstName, result.lastName)}
-                        </td>
-                        {#if selectedResultView !== 'open'}
-                          <td class="px-4 py-3 text-text-secondary">{getResultCategory(result, selectedResultView)}</td>
-                        {/if}
-                        {#if hasSquatResults}
-                          <td class="px-4 py-3 text-text-secondary">{displayWeightValue(result.bestSquat)}</td>
-                        {/if}
-                        {#if hasBenchResults}
-                          <td class="px-4 py-3 text-text-secondary">{displayWeightValue(result.bestBench)}</td>
-                        {/if}
-                        {#if hasDeadliftResults}
-                          <td class="px-4 py-3 text-text-secondary">{displayWeightValue(result.bestDeadlift)}</td>
-                        {/if}
-                        {#if hasSquatResults}
-                          <td class="px-4 py-3 text-text-secondary">{result.squatPoints ?? '-'}</td>
-                        {/if}
-                        {#if hasBenchResults}
-                          <td class="px-4 py-3 text-text-secondary">{result.benchPoints ?? '-'}</td>
-                        {/if}
-                        {#if hasDeadliftResults}
-                          <td class="px-4 py-3 text-text-secondary">{result.deadliftPoints ?? '-'}</td>
-                        {/if}
-                      </tr>
-                    {/each}
-                  </tbody>
-                </table>
-              </div>
-            {/if}
-          </div>
-        </section>
       {:else if activeTab === 'plates'}
-        <section class="space-y-4">
-          <div class="card space-y-4">
-            <header class="space-y-3">
-              <div>
-                <h3 class="text-h3 text-text-primary">{$_('contest_detail.plates.title')}</h3>
-                <p class="text-body text-text-secondary">{$_('contest_detail.plates.subtitle')}</p>
-              </div>
-              {#if contestBarWeights || contest}
-                <div class="grid gap-2 md:grid-cols-2 text-caption text-text-secondary uppercase tracking-[0.35em]">
-                  <span>{$_('contest_detail.plates.bar_weight_men', { values: { weight: displayWeightValue(contestBarWeights?.mensBarWeight ?? contest?.mensBarWeight ?? null) } })}</span>
-                  <span>{$_('contest_detail.plates.bar_weight_women', { values: { weight: displayWeightValue(contestBarWeights?.womensBarWeight ?? contest?.womensBarWeight ?? null) } })}</span>
-                </div>
-              {/if}
-            </header>
-
-              <div class="space-y-4">
-                <div class="grid gap-4 md:grid-cols-3">
-                  <div>
-                    <label class="input-label" for="mens-bar-weight-setting">
-                      {$_('contest_detail.plates.bar_weight_men', { values: { weight: '' } })}
-                    </label>
-                    <input id="mens-bar-weight-setting" class="input-field" type="number" step="0.25" bind:value={mensBarWeightSetting} />
-                  </div>
-                  <div>
-                    <label class="input-label" for="womens-bar-weight-setting">
-                      {$_('contest_detail.plates.bar_weight_women', { values: { weight: '' } })}
-                    </label>
-                    <input id="womens-bar-weight-setting" class="input-field" type="number" step="0.25" bind:value={womensBarWeightSetting} />
-                  </div>
-                  <div>
-                    <label class="input-label" for="clamp-weight-setting">
-                      {$_('contest_detail.plates.clamp_weight_label')}
-                    </label>
-                    <input id="clamp-weight-setting" class="input-field" type="number" step="0.25" bind:value={clampWeightSetting} />
-                    <p class="text-caption text-text-secondary mt-1">{$_('contest_detail.plates.clamp_weight_hint')}</p>
-                  </div>
-                  <div class="md:col-span-3">
-                    <button class="btn-primary px-3 py-1 text-xxs" disabled={barWeightsBusy} on:click|preventDefault={saveBarWeights}>
-                      {barWeightsBusy ? $_('buttons.saving') : $_('buttons.save')}
-                    </button>
-                  </div>
-                </div>
-
-                <div class="overflow-x-auto">
-                  <table class="min-w-full text-left text-sm text-text-secondary">
-                    <thead class="bg-element-bg text-label">
-                      <tr>
-                        <th class="px-4 py-3">{$_('contest_detail.plates.columns.weight')}</th>
-                        <th class="px-4 py-3">{$_('contest_detail.plates.columns.quantity')}</th>
-                        <th class="px-4 py-3">{$_('contest_detail.plates.columns.color')}</th>
-                        <th class="px-4 py-3 text-right">{$_('contest_table.columns.actions')}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {#if contestPlateSets.length === 0}
-                        <tr>
-                          <td class="px-4 py-3 text-text-secondary" colspan="4">{$_('contest_detail.plates.empty')}</td>
-                        </tr>
-                      {/if}
-                      {#each contestPlateSets as plate, idx (plate.plateWeight ?? plate.weight ?? idx)}
-                        <tr class="border-b border-border-color last:border-b-0">
-                        <td class="px-4 py-3">
-                          <input
-                            class="input-field w-28"
-                            type="number"
-                            min="0.25"
-                            step="0.25"
-                            value={displayWeightValue(plate.plateWeight ?? plate.weight ?? null)}
-                            on:change={(event) => handlePlateWeightChange(plate.plateWeight, plate.quantity, plate.color ?? null, event)}
-                          />
-                        </td>
-                          <td class="px-4 py-3">
-                            <input
-                              class="input-field w-24"
-                              type="number"
-                              min="0"
-                              step="1"
-                              value={plate.quantity}
-                              on:change={(event) => handlePlateQuantityChange(plate.plateWeight, event)}
-                            />
-                          </td>
-                    <td class="px-4 py-3">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <input
-                          class="h-10 w-10 cursor-pointer rounded border border-border-color bg-transparent p-0"
-                          type="color"
-                          value={plate.color ?? DEFAULT_PLATE_COLOR}
-                          aria-label={$_('contest_detail.plates.columns.color')}
-                          on:change={(event) => handlePlateColorChange(plate.plateWeight, event)}
-                        />
-                        <input
-                          class="input-field w-32 font-mono"
-                          type="text"
-                          value={plate.color ?? DEFAULT_PLATE_COLOR}
-                          placeholder={DEFAULT_PLATE_COLOR}
-                          on:change={(event) => handlePlateColorChange(plate.plateWeight, event)}
-                        />
-                      </div>
-                    </td>
-                          <td class="px-4 py-3 text-right">
-                            <button class="btn-secondary px-3 py-1 text-xxs" on:click={() => deletePlate(plate.plateWeight)} disabled={platesBusy}>{$_('buttons.delete')}</button>
-                          </td>
-                        </tr>
-                      {/each}
-                      <tr>
-                        <td class="px-4 py-3">
-                          <input class="input-field w-28" type="number" step="0.25" placeholder="np. 25" bind:value={newPlateWeight} />
-                        </td>
-                        <td class="px-4 py-3">
-                          <input class="input-field w-24" type="number" min="0" step="1" placeholder="0" bind:value={newPlateQuantity} />
-                        </td>
-                  <td class="px-4 py-3">
-                    <div class="flex flex-wrap items-center gap-2">
-                      <input
-                        class="h-10 w-10 cursor-pointer rounded border border-border-color bg-transparent p-0"
-                        type="color"
-                        value={newPlateColor ?? DEFAULT_PLATE_COLOR}
-                        aria-label={$_('contest_detail.plates.columns.color')}
-                        on:change={(event) => (newPlateColor = event.currentTarget.value)}
-                      />
-                      <input
-                        class="input-field w-36 font-mono"
-                        type="text"
-                        placeholder={DEFAULT_PLATE_COLOR}
-                        bind:value={newPlateColor}
-                      />
-                    </div>
-                  </td>
-                        <td class="px-4 py-3 text-right">
-                          <button class="btn-primary px-3 py-1 text-xxs" on:click|preventDefault={addPlate} disabled={platesBusy}>{$_('buttons.add')}</button>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-      </div>
-          </div>
-        </section>
-      {:else if activeTab === 'squat' && activeContestLifts.includes('Squat')}
-        <section class="space-y-4">
-          <div class="card space-y-6">
-            <header class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              <h3 class="text-h3 text-text-primary">{$_('contest_detail.tabs.squat_table')}</h3>
-              <div class="flex items-center gap-2 md:gap-3">
-                <button
-                  type="button"
-                  class={squatClass}
-                  disabled={syncBusy || squatRows.length === 0}
-                  aria-busy={syncBusy}
-                  on:click={() => void syncDisplay('Squat')}
-                >
-                  {$_('contest_detail.sync.button')}
-                </button>
-
-                <button
-                  type="button"
-                  class="btn-secondary px-3 py-1 text-xxs"
-                  disabled={qrBroadcastBusy[remoteQrVisible ? 'hide' : 'show']}
-                  aria-busy={qrBroadcastBusy[remoteQrVisible ? 'hide' : 'show']}
-                  on:click={() => void broadcastDisplayQr(remoteQrVisible ? 'hide' : 'show')}
-                >
-                  {$_(remoteQrVisible ? 'display_table.actions.hide_qr' : 'display_table.actions.show_qr')}
-                </button>
-
-                
-                <div class="relative" on:click|stopPropagation>
-                  <button
-                    type="button"
-                    class="btn-secondary px-3 py-1 text-xxs"
-                    disabled={exportingUnifiedTable || squatRows.length === 0}
-                    on:click={() => toggleExportMenu('squat')}
-                  >
-                    {exportingUnifiedTable ? $_('contest_detail.export.exporting') : $_('contest_detail.export.menu')}
-                  </button>
-                  {#if openExportMenu === 'squat'}
-                    <div class="absolute right-0 top-full z-40 mt-2 w-48 rounded border border-border-color bg-element-bg shadow-lg">
-                      <button
-                        type="button"
-                        class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
-                        disabled={exportingUnifiedTable}
-                        on:click={() =>
-                          void exportUnifiedTable('csv', {
-                            id: 'squat',
-                            rows: squatRows,
-                            lifts: LIFT_SINGLETONS.Squat,
-                            showPointsColumn: true,
-                            showMaxColumn: true,
-                            title: t('contest_detail.tabs.squat_table'),
-                          })
-                        }
-                      >
-                        <span>{$_('contest_detail.export.csv')}</span>
-                      </button>
-                      <button
-                        type="button"
-                        class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
-                        disabled={exportingUnifiedTable}
-                        on:click={() =>
-                          void exportUnifiedTable('pdf', {
-                            id: 'squat',
-                            rows: squatRows,
-                            lifts: LIFT_SINGLETONS.Squat,
-                            showPointsColumn: true,
-                            showMaxColumn: true,
-                            title: t('contest_detail.tabs.squat_table'),
-                          })
-                        }
-                      >
-                        <span>{$_('contest_detail.export.pdf')}</span>
-                      </button>
-                      <button
-                        type="button"
-                        class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
-                        disabled={exportingUnifiedTable}
-                        on:click={() =>
-                          void exportUnifiedTable('jpg', {
-                            id: 'squat',
-                            rows: squatRows,
-                            lifts: LIFT_SINGLETONS.Squat,
-                            showPointsColumn: true,
-                            showMaxColumn: true,
-                            title: t('contest_detail.tabs.squat_table'),
-                          })
-                        }
-                      >
-                        <span>{$_('contest_detail.export.jpg')}</span>
-                      </button>
-                    </div>
-                  {/if}
-                </div>
-              </div>
-            </header>
-            <div class="flex flex-wrap items-center gap-2">
-              {#if femaleWeightFilters.length > 0 || maleWeightFilters.length > 0}
-                <div class="relative" on:click|stopPropagation>
-                  <button
-                    type="button"
-                    class={`${resultFilterButtonClass(selectedWeightFilter !== 'ALL')} flex min-w-[190px] items-center justify-between gap-3`}
-                    on:click|stopPropagation={() => toggleRegistrationFilterPopover('weight')}
-                  >
-                    <div class="flex flex-col text-left leading-tight">
-                      <span class="font-semibold">{$_('contest_detail.registrations.filters.weight_button')}</span>
-                      <span class="text-text-secondary">{registrationWeightSelectionLabel}</span>
-                    </div>
-                    <ChevronDown
-                      class={`h-3.5 w-3.5 transition-transform ${openRegistrationFilter === 'weight' ? 'rotate-180' : ''}`}
-                      aria-hidden="true"
-                    />
-                  </button>
-                  {#if openRegistrationFilter === 'weight'}
-                    <div
-                      class="absolute left-0 top-full z-40 mt-2 w-72 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
-                      on:click|stopPropagation
-                    >
-                      <div class="space-y-4">
-                        <button
-                          type="button"
-                          class={`${resultFilterButtonClass(selectedWeightFilter === 'ALL')} w-full justify-start`}
-                          on:click={() => {
-                            selectWeightFilter('ALL');
-                            closeRegistrationFilterPopover();
-                          }}
-                        >
-                          {$_('contest_detail.results.filters.all')}
-                        </button>
-                        {#if femaleWeightFilters.length > 0}
-                          <div>
-                            <p class="mb-2 text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_female')}</p>
-                            <div class="grid grid-cols-2 gap-2">
-                              {#each femaleWeightFilters as filter}
-                                <button
-                                  type="button"
-                                  class={`${resultFilterButtonClass(selectedWeightFilter === filter.id)} w-full`}
-                                  on:click={() => {
-                                    selectWeightFilter(filter.id);
-                                    closeRegistrationFilterPopover();
-                                  }}
-                                >
-                                  {filter.label}
-                                </button>
-                              {/each}
-                            </div>
-                          </div>
-                        {/if}
-                        {#if maleWeightFilters.length > 0}
-                          <div>
-                            <p class="mb-2 text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_male')}</p>
-                            <div class="grid grid-cols-2 gap-2">
-                              {#each maleWeightFilters as filter}
-                                <button
-                                  type="button"
-                                  class={`${resultFilterButtonClass(selectedWeightFilter === filter.id)} w-full`}
-                                  on:click={() => {
-                                    selectWeightFilter(filter.id);
-                                    closeRegistrationFilterPopover();
-                                  }}
-                                >
-                                  {filter.label}
-                                </button>
-                              {/each}
-                            </div>
-                          </div>
-                        {/if}
-                      </div>
-                    </div>
-                  {/if}
-                </div>
-              {/if}
-
-              <div class="relative" on:click|stopPropagation>
-                <button
-                  type="button"
-                  class={`${resultFilterButtonClass(selectedAgeFilter !== 'ALL')} flex min-w-[170px] items-center justify-between gap-3`}
-                  on:click|stopPropagation={() => toggleRegistrationFilterPopover('age')}
-                >
-                  <div class="flex flex-col text-left leading-tight">
-                    <span class="font-semibold">{$_('contest_detail.registrations.filters.age_button')}</span>
-                    <span class="text-text-secondary">{registrationAgeSelectionLabel}</span>
-                  </div>
-                  <ChevronDown
-                    class={`h-3.5 w-3.5 transition-transform ${openRegistrationFilter === 'age' ? 'rotate-180' : ''}`}
-                    aria-hidden="true"
-                  />
-                </button>
-                {#if openRegistrationFilter === 'age'}
-                  <div
-                    class="absolute left-0 top-full z-40 mt-2 w-60 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
-                    on:click|stopPropagation
-                  >
-                    <div class="grid max-h-52 grid-cols-2 gap-2 overflow-y-auto pr-1">
-                      {#each availableAgeFilters as filter}
-                        <button
-                          type="button"
-                          class={`${resultFilterButtonClass(selectedAgeFilter === filter.id)} w-full`}
-                          on:click={() => {
-                            selectAgeFilter(filter.id);
-                            closeRegistrationFilterPopover();
-                          }}
-                        >
-                          {filter.label}
-                        </button>
-                      {/each}
-                    </div>
-                  </div>
-                {/if}
-              </div>
-
-              <div class="relative" on:click|stopPropagation>
-                <button
-                  type="button"
-                  class={`${resultFilterButtonClass(selectedLabelFilter !== 'ALL')} flex min-w-[170px] items-center justify-between gap-3`}
-                  on:click|stopPropagation={() => toggleRegistrationFilterPopover('labels')}
-                >
-                  <div class="flex flex-col text-left leading-tight">
-                    <span class="font-semibold">{$_('contest_detail.registrations.filters.labels_button')}</span>
-                    <span class="text-text-secondary">{registrationLabelSelectionLabel}</span>
-                  </div>
-                  <ChevronDown
-                    class={`h-3.5 w-3.5 transition-transform ${openRegistrationFilter === 'labels' ? 'rotate-180' : ''}`}
-                    aria-hidden="true"
-                  />
-                </button>
-                {#if openRegistrationFilter === 'labels'}
-                  <div
-                    class="absolute left-0 top-full z-40 mt-2 w-60 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
-                    on:click|stopPropagation
-                  >
-                    <div class="grid max-h-52 grid-cols-2 gap-2 overflow-y-auto pr-1">
-                      {#each availableLabelFilters as filter}
-                        <button
-                          type="button"
-                          class={`${resultFilterButtonClass(selectedLabelFilter === filter.id)} w-full`}
-                          on:click={() => {
-                            selectLabelFilter(filter.id);
-                            closeRegistrationFilterPopover();
-                          }}
-                        >
-                          {filter.label}
-                        </button>
-                      {/each}
-                    </div>
-                  </div>
-                {/if}
-              </div>
-
-              {#if hasRegistrationFiltersActive}
-                <button
-                  type="button"
-                  class="ml-auto text-xxs text-text-secondary underline decoration-dotted decoration-1 underline-offset-4"
-                  on:click={clearRegistrationFilters}
-                >
-                  {$_('contest_detail.registrations.filters.clear')}
-                </button>
-              {/if}
-            </div>
-            {#if registrations.length === 0}
-              <div class="text-center py-8 text-text-secondary">{$_('contest_detail.registrations.empty')}</div>
-            {:else if squatRows.length === 0}
-              <div class="text-center py-8 text-text-secondary">{$_('contest_detail.registrations.empty_filter')}</div>
-            {:else}
-              <div class="max-h-[70vh] overflow-x-auto overflow-y-auto">
-                <UnifiedContestTable
-                  rows={squatRows}
-                  sortColumn={sortColumn}
-                  sortDirection={sortDirection}
-                  readOnly={false}
-                  activeFlight={activeFlight}
-                  lifts={LIFT_SINGLETONS.Squat}
-                  weightClasses={weightClasses}
-                  ageCategories={ageCategories}
-                  currentAttemptId={liveCurrentAttempt?.id ?? null}
-                  currentAttemptLoading={setCurrentLoading}
-                  statusLoading={statusLoading}
-                  attemptWeightPending={attemptWeightPending}
-                  onSortChange={handleSortChange}
-                  onOpenCompetitorModal={openCompetitorModal}
-                  onSetCurrentAttempt={setCurrentAttemptHandler}
-                  showRowNumbers={true}
-                  onAttemptStatusCycle={handleStatusClick}
-                  onAttemptWeightChange={handleAttemptWeightChangeInline}
-                />
-              </div>
-            {/if}
-          </div>
-        </section>
-      {:else if activeTab === 'bench' && activeContestLifts.includes('Bench')}
-        <section class="space-y-4">
-          <div class="card space-y-6">
-            <header class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              <h3 class="text-h3 text-text-primary">{$_('contest_detail.tabs.bench_table')}</h3>
-              <div class="flex items-center gap-2 md:gap-3">
-                <button
-                  type="button"
-                  class={benchClass}
-                  disabled={syncBusy || benchRows.length === 0}
-                  aria-busy={syncBusy}
-                  on:click={() => void syncDisplay('Bench')}
-                >
-                  {$_('contest_detail.sync.button')}
-                </button>
-
-                <button
-                  type="button"
-                  class="btn-secondary px-3 py-1 text-xxs"
-                  disabled={qrBroadcastBusy[remoteQrVisible ? 'hide' : 'show']}
-                  aria-busy={qrBroadcastBusy[remoteQrVisible ? 'hide' : 'show']}
-                  on:click={() => void broadcastDisplayQr(remoteQrVisible ? 'hide' : 'show')}
-                >
-                  {$_(remoteQrVisible ? 'display_table.actions.hide_qr' : 'display_table.actions.show_qr')}
-                </button>
-
-                
-                <div class="relative" on:click|stopPropagation>
-                  <button
-                    type="button"
-                    class="btn-secondary px-3 py-1 text-xxs"
-                    disabled={exportingUnifiedTable || benchRows.length === 0}
-                    on:click={() => toggleExportMenu('bench')}
-                  >
-                    {exportingUnifiedTable ? $_('contest_detail.export.exporting') : $_('contest_detail.export.menu')}
-                  </button>
-                  {#if openExportMenu === 'bench'}
-                    <div class="absolute right-0 top-full z-40 mt-2 w-48 rounded border border-border-color bg-element-bg shadow-lg">
-                      <button
-                        type="button"
-                        class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
-                        disabled={exportingUnifiedTable}
-                        on:click={() =>
-                          void exportUnifiedTable('csv', {
-                            id: 'bench',
-                            rows: benchRows,
-                            lifts: LIFT_SINGLETONS.Bench,
-                            showPointsColumn: true,
-                            showMaxColumn: true,
-                            title: t('contest_detail.tabs.bench_table'),
-                          })
-                        }
-                      >
-                        <span>{$_('contest_detail.export.csv')}</span>
-                      </button>
-                      <button
-                        type="button"
-                        class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
-                        disabled={exportingUnifiedTable}
-                        on:click={() =>
-                          void exportUnifiedTable('pdf', {
-                            id: 'bench',
-                            rows: benchRows,
-                            lifts: LIFT_SINGLETONS.Bench,
-                            showPointsColumn: true,
-                            showMaxColumn: true,
-                            title: t('contest_detail.tabs.bench_table'),
-                          })
-                        }
-                      >
-                        <span>{$_('contest_detail.export.pdf')}</span>
-                      </button>
-                      <button
-                        type="button"
-                        class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
-                        disabled={exportingUnifiedTable}
-                        on:click={() =>
-                          void exportUnifiedTable('jpg', {
-                            id: 'bench',
-                            rows: benchRows,
-                            lifts: LIFT_SINGLETONS.Bench,
-                            showPointsColumn: true,
-                            showMaxColumn: true,
-                            title: t('contest_detail.tabs.bench_table'),
-                          })
-                        }
-                      >
-                        <span>{$_('contest_detail.export.jpg')}</span>
-                      </button>
-                    </div>
-                  {/if}
-                </div>
-              </div>
-            </header>
-            <div class="flex flex-wrap items-center gap-2">
-              {#if femaleWeightFilters.length > 0 || maleWeightFilters.length > 0}
-                <div class="relative" on:click|stopPropagation>
-                  <button
-                    type="button"
-                    class={`${resultFilterButtonClass(selectedWeightFilter !== 'ALL')} flex min-w-[190px] items-center justify-between gap-3`}
-                    on:click|stopPropagation={() => toggleRegistrationFilterPopover('weight')}
-                  >
-                    <div class="flex flex-col text-left leading-tight">
-                      <span class="font-semibold">{$_('contest_detail.registrations.filters.weight_button')}</span>
-                      <span class="text-text-secondary">{registrationWeightSelectionLabel}</span>
-                    </div>
-                    <ChevronDown
-                      class={`h-3.5 w-3.5 transition-transform ${openRegistrationFilter === 'weight' ? 'rotate-180' : ''}`}
-                      aria-hidden="true"
-                    />
-                  </button>
-                  {#if openRegistrationFilter === 'weight'}
-                    <div
-                      class="absolute left-0 top-full z-40 mt-2 w-72 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
-                      on:click|stopPropagation
-                    >
-                      <div class="space-y-4">
-                        <button
-                          type="button"
-                          class={`${resultFilterButtonClass(selectedWeightFilter === 'ALL')} w-full justify-start`}
-                          on:click={() => {
-                            selectWeightFilter('ALL');
-                            closeRegistrationFilterPopover();
-                          }}
-                        >
-                          {$_('contest_detail.results.filters.all')}
-                        </button>
-                        {#if femaleWeightFilters.length > 0}
-                          <div>
-                            <p class="mb-2 text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_female')}</p>
-                            <div class="grid grid-cols-2 gap-2">
-                              {#each femaleWeightFilters as filter}
-                                <button
-                                  type="button"
-                                  class={`${resultFilterButtonClass(selectedWeightFilter === filter.id)} w-full`}
-                                  on:click={() => {
-                                    selectWeightFilter(filter.id);
-                                    closeRegistrationFilterPopover();
-                                  }}
-                                >
-                                  {filter.label}
-                                </button>
-                              {/each}
-                            </div>
-                          </div>
-                        {/if}
-                        {#if maleWeightFilters.length > 0}
-                          <div>
-                            <p class="mb-2 text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_male')}</p>
-                            <div class="grid grid-cols-2 gap-2">
-                              {#each maleWeightFilters as filter}
-                                <button
-                                  type="button"
-                                  class={`${resultFilterButtonClass(selectedWeightFilter === filter.id)} w-full`}
-                                  on:click={() => {
-                                    selectWeightFilter(filter.id);
-                                    closeRegistrationFilterPopover();
-                                  }}
-                                >
-                                  {filter.label}
-                                </button>
-                              {/each}
-                            </div>
-                          </div>
-                        {/if}
-                      </div>
-                    </div>
-                  {/if}
-                </div>
-              {/if}
-
-              <div class="relative" on:click|stopPropagation>
-                <button
-                  type="button"
-                  class={`${resultFilterButtonClass(selectedAgeFilter !== 'ALL')} flex min-w-[170px] items-center justify-between gap-3`}
-                  on:click|stopPropagation={() => toggleRegistrationFilterPopover('age')}
-                >
-                  <div class="flex flex-col text-left leading-tight">
-                    <span class="font-semibold">{$_('contest_detail.registrations.filters.age_button')}</span>
-                    <span class="text-text-secondary">{registrationAgeSelectionLabel}</span>
-                  </div>
-                  <ChevronDown
-                    class={`h-3.5 w-3.5 transition-transform ${openRegistrationFilter === 'age' ? 'rotate-180' : ''}`}
-                    aria-hidden="true"
-                  />
-                </button>
-                {#if openRegistrationFilter === 'age'}
-                  <div
-                    class="absolute left-0 top-full z-40 mt-2 w-60 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
-                    on:click|stopPropagation
-                  >
-                    <div class="grid max-h-52 grid-cols-2 gap-2 overflow-y-auto pr-1">
-                      {#each availableAgeFilters as filter}
-                        <button
-                          type="button"
-                          class={`${resultFilterButtonClass(selectedAgeFilter === filter.id)} w-full`}
-                          on:click={() => {
-                            selectAgeFilter(filter.id);
-                            closeRegistrationFilterPopover();
-                          }}
-                        >
-                          {filter.label}
-                        </button>
-                      {/each}
-                    </div>
-                  </div>
-                {/if}
-              </div>
-
-              <div class="relative" on:click|stopPropagation>
-                <button
-                  type="button"
-                  class={`${resultFilterButtonClass(selectedLabelFilter !== 'ALL')} flex min-w-[170px] items-center justify-between gap-3`}
-                  on:click|stopPropagation={() => toggleRegistrationFilterPopover('labels')}
-                >
-                  <div class="flex flex-col text-left leading-tight">
-                    <span class="font-semibold">{$_('contest_detail.registrations.filters.labels_button')}</span>
-                    <span class="text-text-secondary">{registrationLabelSelectionLabel}</span>
-                  </div>
-                  <ChevronDown
-                    class={`h-3.5 w-3.5 transition-transform ${openRegistrationFilter === 'labels' ? 'rotate-180' : ''}`}
-                    aria-hidden="true"
-                  />
-                </button>
-                {#if openRegistrationFilter === 'labels'}
-                  <div
-                    class="absolute left-0 top-full z-40 mt-2 w-60 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
-                    on:click|stopPropagation
-                  >
-                    <div class="grid max-h-52 grid-cols-2 gap-2 overflow-y-auto pr-1">
-                      {#each availableLabelFilters as filter}
-                        <button
-                          type="button"
-                          class={`${resultFilterButtonClass(selectedLabelFilter === filter.id)} w-full`}
-                          on:click={() => {
-                            selectLabelFilter(filter.id);
-                            closeRegistrationFilterPopover();
-                          }}
-                        >
-                          {filter.label}
-                        </button>
-                      {/each}
-                    </div>
-                  </div>
-                {/if}
-              </div>
-
-              {#if hasRegistrationFiltersActive}
-                <button
-                  type="button"
-                  class="ml-auto text-xxs text-text-secondary underline decoration-dotted decoration-1 underline-offset-4"
-                  on:click={clearRegistrationFilters}
-                >
-                  {$_('contest_detail.registrations.filters.clear')}
-                </button>
-              {/if}
-            </div>
-            {#if registrations.length === 0}
-              <div class="text-center py-8 text-text-secondary">{$_('contest_detail.registrations.empty')}</div>
-            {:else if benchRows.length === 0}
-              <div class="text-center py-8 text-text-secondary">{$_('contest_detail.registrations.empty_filter')}</div>
-            {:else}
-              <div class="max-h-[70vh] overflow-x-auto overflow-y-auto">
-                <UnifiedContestTable
-                  rows={benchRows}
-                  sortColumn={sortColumn}
-                  sortDirection={sortDirection}
-                  readOnly={false}
-                  activeFlight={activeFlight}
-                  lifts={LIFT_SINGLETONS.Bench}
-                  weightClasses={weightClasses}
-                  ageCategories={ageCategories}
-                  currentAttemptId={liveCurrentAttempt?.id ?? null}
-                  currentAttemptLoading={setCurrentLoading}
-                  statusLoading={statusLoading}
-                  attemptWeightPending={attemptWeightPending}
-                  onSortChange={handleSortChange}
-                  onOpenCompetitorModal={openCompetitorModal}
-                  onSetCurrentAttempt={setCurrentAttemptHandler}
-                  onAttemptStatusCycle={handleStatusClick}
-                  showRowNumbers={true}
-                  onAttemptWeightChange={handleAttemptWeightChangeInline}
-                />
-              </div>
-            {/if}
-          </div>
-        </section>
-      {:else if activeTab === 'deadlift' && activeContestLifts.includes('Deadlift')}
-        <section class="space-y-4">
-          <div class="card space-y-6">
-            <header class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              <h3 class="text-h3 text-text-primary">{$_('contest_detail.tabs.deadlift_table')}</h3>
-              <div class="flex items-center gap-2 md:gap-3">
-                <button
-                  type="button"
-                  class={deadliftClass}
-                  disabled={syncBusy || deadliftRows.length === 0}
-                  aria-busy={syncBusy}
-                  on:click={() => void syncDisplay('Deadlift')}
-                >
-                  {$_('contest_detail.sync.button')}
-                </button>
-
-                <button
-                  type="button"
-                  class="btn-secondary px-3 py-1 text-xxs"
-                  disabled={qrBroadcastBusy[remoteQrVisible ? 'hide' : 'show']}
-                  aria-busy={qrBroadcastBusy[remoteQrVisible ? 'hide' : 'show']}
-                  on:click={() => void broadcastDisplayQr(remoteQrVisible ? 'hide' : 'show')}
-                >
-                  {$_(remoteQrVisible ? 'display_table.actions.hide_qr' : 'display_table.actions.show_qr')}
-                </button>
-
-                
-                <div class="relative" on:click|stopPropagation>
-                  <button
-                    type="button"
-                    class="btn-secondary px-3 py-1 text-xxs"
-                    disabled={exportingUnifiedTable || deadliftRows.length === 0}
-                    on:click={() => toggleExportMenu('deadlift')}
-                  >
-                    {exportingUnifiedTable ? $_('contest_detail.export.exporting') : $_('contest_detail.export.menu')}
-                  </button>
-                  {#if openExportMenu === 'deadlift'}
-                    <div class="absolute right-0 top-full z-40 mt-2 w-48 rounded border border-border-color bg-element-bg shadow-lg">
-                      <button
-                        type="button"
-                        class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
-                        disabled={exportingUnifiedTable}
-                        on:click={() =>
-                          void exportUnifiedTable('csv', {
-                            id: 'deadlift',
-                            rows: deadliftRows,
-                            lifts: LIFT_SINGLETONS.Deadlift,
-                            showPointsColumn: true,
-                            showMaxColumn: true,
-                            title: t('contest_detail.tabs.deadlift_table'),
-                          })
-                        }
-                      >
-                        <span>{$_('contest_detail.export.csv')}</span>
-                      </button>
-                      <button
-                        type="button"
-                        class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
-                        disabled={exportingUnifiedTable}
-                        on:click={() =>
-                          void exportUnifiedTable('pdf', {
-                            id: 'deadlift',
-                            rows: deadliftRows,
-                            lifts: LIFT_SINGLETONS.Deadlift,
-                            showPointsColumn: true,
-                            showMaxColumn: true,
-                            title: t('contest_detail.tabs.deadlift_table'),
-                          })
-                        }
-                      >
-                        <span>{$_('contest_detail.export.pdf')}</span>
-                      </button>
-                      <button
-                        type="button"
-                        class="flex w-full items-center justify-between px-3 py-2 text-xxs uppercase tracking-[0.2em] transition hover:bg-element-bg/80 disabled:opacity-50"
-                        disabled={exportingUnifiedTable}
-                        on:click={() =>
-                          void exportUnifiedTable('jpg', {
-                            id: 'deadlift',
-                            rows: deadliftRows,
-                            lifts: LIFT_SINGLETONS.Deadlift,
-                            showPointsColumn: true,
-                            showMaxColumn: true,
-                            title: t('contest_detail.tabs.deadlift_table'),
-                          })
-                        }
-                      >
-                        <span>{$_('contest_detail.export.jpg')}</span>
-                      </button>
-                    </div>
-                  {/if}
-                </div>
-              </div>
-            </header>
-            <div class="flex flex-wrap items-center gap-2">
-              {#if femaleWeightFilters.length > 0 || maleWeightFilters.length > 0}
-                <div class="relative" on:click|stopPropagation>
-                  <button
-                    type="button"
-                    class={`${resultFilterButtonClass(selectedWeightFilter !== 'ALL')} flex min-w-[190px] items-center justify-between gap-3`}
-                    on:click|stopPropagation={() => toggleRegistrationFilterPopover('weight')}
-                  >
-                    <div class="flex flex-col text-left leading-tight">
-                      <span class="font-semibold">{$_('contest_detail.registrations.filters.weight_button')}</span>
-                      <span class="text-text-secondary">{registrationWeightSelectionLabel}</span>
-                    </div>
-                    <ChevronDown
-                      class={`h-3.5 w-3.5 transition-transform ${openRegistrationFilter === 'weight' ? 'rotate-180' : ''}`}
-                      aria-hidden="true"
-                    />
-                  </button>
-                  {#if openRegistrationFilter === 'weight'}
-                    <div
-                      class="absolute left-0 top-full z-40 mt-2 w-72 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
-                      on:click|stopPropagation
-                    >
-                      <div class="space-y-4">
-                        <button
-                          type="button"
-                          class={`${resultFilterButtonClass(selectedWeightFilter === 'ALL')} w-full justify-start`}
-                          on:click={() => {
-                            selectWeightFilter('ALL');
-                            closeRegistrationFilterPopover();
-                          }}
-                        >
-                          {$_('contest_detail.results.filters.all')}
-                        </button>
-                        {#if femaleWeightFilters.length > 0}
-                          <div>
-                            <p class="mb-2 text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_female')}</p>
-                            <div class="grid grid-cols-2 gap-2">
-                              {#each femaleWeightFilters as filter}
-                                <button
-                                  type="button"
-                                  class={`${resultFilterButtonClass(selectedWeightFilter === filter.id)} w-full`}
-                                  on:click={() => {
-                                    selectWeightFilter(filter.id);
-                                    closeRegistrationFilterPopover();
-                                  }}
-                                >
-                                  {filter.label}
-                                </button>
-                              {/each}
-                            </div>
-                          </div>
-                        {/if}
-                        {#if maleWeightFilters.length > 0}
-                          <div>
-                            <p class="mb-2 text-xxs uppercase tracking-[0.3em] text-text-secondary">{$_('contest_detail.registrations.filters.weights_male')}</p>
-                            <div class="grid grid-cols-2 gap-2">
-                              {#each maleWeightFilters as filter}
-                                <button
-                                  type="button"
-                                  class={`${resultFilterButtonClass(selectedWeightFilter === filter.id)} w-full`}
-                                  on:click={() => {
-                                    selectWeightFilter(filter.id);
-                                    closeRegistrationFilterPopover();
-                                  }}
-                                >
-                                  {filter.label}
-                                </button>
-                              {/each}
-                            </div>
-                          </div>
-                        {/if}
-                      </div>
-                    </div>
-                  {/if}
-                </div>
-              {/if}
-
-              <div class="relative" on:click|stopPropagation>
-                <button
-                  type="button"
-                  class={`${resultFilterButtonClass(selectedAgeFilter !== 'ALL')} flex min-w-[170px] items-center justify-between gap-3`}
-                  on:click|stopPropagation={() => toggleRegistrationFilterPopover('age')}
-                >
-                  <div class="flex flex-col text-left leading-tight">
-                    <span class="font-semibold">{$_('contest_detail.registrations.filters.age_button')}</span>
-                    <span class="text-text-secondary">{registrationAgeSelectionLabel}</span>
-                  </div>
-                  <ChevronDown
-                    class={`h-3.5 w-3.5 transition-transform ${openRegistrationFilter === 'age' ? 'rotate-180' : ''}`}
-                    aria-hidden="true"
-                  />
-                </button>
-                {#if openRegistrationFilter === 'age'}
-                  <div
-                    class="absolute left-0 top-full z-40 mt-2 w-60 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
-                    on:click|stopPropagation
-                  >
-                    <div class="grid max-h-52 grid-cols-2 gap-2 overflow-y-auto pr-1">
-                      {#each availableAgeFilters as filter}
-                        <button
-                          type="button"
-                          class={`${resultFilterButtonClass(selectedAgeFilter === filter.id)} w-full`}
-                          on:click={() => {
-                            selectAgeFilter(filter.id);
-                            closeRegistrationFilterPopover();
-                          }}
-                        >
-                          {filter.label}
-                        </button>
-                      {/each}
-                    </div>
-                  </div>
-                {/if}
-              </div>
-
-              <div class="relative" on:click|stopPropagation>
-                <button
-                  type="button"
-                  class={`${resultFilterButtonClass(selectedLabelFilter !== 'ALL')} flex min-w-[170px] items-center justify-between gap-3`}
-                  on:click|stopPropagation={() => toggleRegistrationFilterPopover('labels')}
-                >
-                  <div class="flex flex-col text-left leading-tight">
-                    <span class="font-semibold">{$_('contest_detail.registrations.filters.labels_button')}</span>
-                    <span class="text-text-secondary">{registrationLabelSelectionLabel}</span>
-                  </div>
-                  <ChevronDown
-                    class={`h-3.5 w-3.5 transition-transform ${openRegistrationFilter === 'labels' ? 'rotate-180' : ''}`}
-                    aria-hidden="true"
-                  />
-                </button>
-                {#if openRegistrationFilter === 'labels'}
-                  <div
-                    class="absolute left-0 top-full z-40 mt-2 w-60 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg"
-                    on:click|stopPropagation
-                  >
-                    <div class="grid max-h-52 grid-cols-2 gap-2 overflow-y-auto pr-1">
-                      {#each availableLabelFilters as filter}
-                        <button
-                          type="button"
-                          class={`${resultFilterButtonClass(selectedLabelFilter === filter.id)} w-full`}
-                          on:click={() => {
-                            selectLabelFilter(filter.id);
-                            closeRegistrationFilterPopover();
-                          }}
-                        >
-                          {filter.label}
-                        </button>
-                      {/each}
-                    </div>
-                  </div>
-                {/if}
-              </div>
-
-              {#if hasRegistrationFiltersActive}
-                <button
-                  type="button"
-                  class="ml-auto text-xxs text-text-secondary underline decoration-dotted decoration-1 underline-offset-4"
-                  on:click={clearRegistrationFilters}
-                >
-                  {$_('contest_detail.registrations.filters.clear')}
-                </button>
-              {/if}
-            </div>
-            {#if registrations.length === 0}
-              <div class="text-center py-8 text-text-secondary">{$_('contest_detail.registrations.empty')}</div>
-            {:else if deadliftRows.length === 0}
-              <div class="text-center py-8 text-text-secondary">{$_('contest_detail.registrations.empty_filter')}</div>
-            {:else}
-              <div class="max-h-[70vh] overflow-x-auto overflow-y-auto">
-                <UnifiedContestTable
-                  rows={deadliftRows}
-                  sortColumn={sortColumn}
-                  sortDirection={sortDirection}
-                  readOnly={false}
-                  activeFlight={activeFlight}
-                  lifts={LIFT_SINGLETONS.Deadlift}
-                  weightClasses={weightClasses}
-                  ageCategories={ageCategories}
-                  currentAttemptId={liveCurrentAttempt?.id ?? null}
-                  currentAttemptLoading={setCurrentLoading}
-                  statusLoading={statusLoading}
-                  attemptWeightPending={attemptWeightPending}
-                  onSortChange={handleSortChange}
-                  onOpenCompetitorModal={openCompetitorModal}
-                  onSetCurrentAttempt={setCurrentAttemptHandler}
-                  onAttemptStatusCycle={handleStatusClick}
-                  onAttemptWeightChange={handleAttemptWeightChangeInline}
-                  showRowNumbers={true}
-                />
-              </div>
-            {/if}
-          </div>
-        </section>
+        <PlatesPanel
+          {contest}
+          {contestBarWeights}
+          {contestPlateSets}
+          {platesBusy}
+          {barWeightsBusy}
+          bind:mensBarWeightSetting={mensBarWeightSetting}
+          bind:womensBarWeightSetting={womensBarWeightSetting}
+          bind:clampWeightSetting={clampWeightSetting}
+          bind:newPlateWeight={newPlateWeight}
+          bind:newPlateQuantity={newPlateQuantity}
+          bind:newPlateColor={newPlateColor}
+          defaultPlateColor={DEFAULT_PLATE_COLOR}
+          {displayWeightValue}
+          onSaveBarWeights={saveBarWeights}
+          onPlateWeightChange={handlePlateWeightChange}
+          onPlateQuantityChange={handlePlateQuantityChange}
+          onPlateColorChange={handlePlateColorChange}
+          onDeletePlate={deletePlate}
+          onAddPlate={addPlate}
+        />
+      {:else if activeLiftTab !== null}
+        {#key activeLiftKey}
+          <LiftPanel
+            lift={activeLiftTab.lift}
+            title={activeLiftTitle}
+            rows={activeLiftRows}
+            exportMenuId={activeLiftTab.menuId}
+            syncClass={activeLiftSyncClass}
+            {syncBusy}
+            exportingTable={exportingUnifiedTable}
+            {qrBroadcastBusy}
+            {remoteQrVisible}
+            {openExportMenu}
+            registrationsCount={registrations.length}
+            {weightClasses}
+            {ageCategories}
+            {activeFlight}
+            {sortColumn}
+            {sortDirection}
+            {femaleWeightFilters}
+            {maleWeightFilters}
+            {availableAgeFilters}
+            {availableLabelFilters}
+            {registrationWeightSelectionLabel}
+            {registrationAgeSelectionLabel}
+            {registrationLabelSelectionLabel}
+            {selectedWeightFilter}
+            {selectedAgeFilter}
+            {selectedLabelFilter}
+            {openRegistrationFilter}
+            {hasRegistrationFiltersActive}
+            currentAttemptId={liveCurrentAttempt?.id ?? null}
+            currentAttemptLoading={setCurrentLoading}
+            {statusLoading}
+            {attemptWeightPending}
+            filterButtonClass={resultFilterButtonClass}
+            onSync={handleLiftPanelSync}
+            onBroadcastQr={handleLiftPanelBroadcastQr}
+            onToggleExportMenu={handleLiftPanelToggleExportMenu}
+            onExport={handleLiftPanelExport}
+            onToggleFilter={toggleRegistrationFilterPopover}
+            onCloseFilter={closeRegistrationFilterPopover}
+            onSelectWeight={selectWeightFilter}
+            onSelectAge={selectAgeFilter}
+            onSelectLabel={selectLabelFilter}
+            onClearFilters={clearRegistrationFilters}
+            onSortChange={handleSortChange}
+            onOpenCompetitorModal={openCompetitorModal}
+            onSetCurrentAttempt={setCurrentAttemptHandler}
+            onAttemptStatusCycle={handleStatusClick}
+            onAttemptWeightChange={handleAttemptWeightChangeInline}
+          />
+        {/key}
       {:else}
         <section class="space-y-4">
           <div class="card space-y-4">
