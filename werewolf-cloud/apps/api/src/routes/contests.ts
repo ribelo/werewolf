@@ -20,7 +20,7 @@ import {
   replaceRegistrationLifts,
   removeAttemptsForInactiveLifts,
 } from '../utils/lifts';
-import { mapRegistrationRow } from '../utils/registration-map';
+import { selectRegistration } from '../services/registrations/reader';
 import { contestCreateSchema, contestUpdateSchema, contestStatusSchema } from '@werewolf/domain/models/contest';
 
 const activeFlightSchema = z.object({
@@ -28,23 +28,6 @@ const activeFlightSchema = z.object({
 });
 
 const contests = new Hono<WerewolfEnvironment>();
-
-const REGISTRATION_LIFTS_JSON = `
-      (
-        SELECT json_group_array(lift_type)
-        FROM (
-          SELECT lift_type
-          FROM registration_lifts rl
-          WHERE rl.registration_id = r.id
-          ORDER BY
-            CASE rl.lift_type
-              WHEN 'Squat' THEN 1
-              WHEN 'Bench' THEN 2
-              WHEN 'Deadlift' THEN 3
-            END
-        )
-      ) AS lifts
-`;
 
 // GET /contests - List all contests
 contests.get('/', async (c) => {
@@ -565,38 +548,27 @@ async function syncContestRegistrationsForLifts(
     }
 
     if (liftsChanged || rackUpdates.length > 0) {
-      await removeAttemptsForInactiveLifts(env, contestId, db, registration.id, nextLifts);
-      // Removing attempts changes the persisted totals even when the attempt
-      // deletion itself could not infer that, so rebuild this registration.
-      await calculateRegistrationResults(db, registration.id);
-      resultsChanged = true;
-
-      const refreshed = await executeQueryOne(
+      // Deleting attempts runs the shared attempt-mutation sequence, which
+      // rebuilds this registration's result, the contest rankings and their
+      // cached payloads; a rack-height-only edit still needs the rebuild here.
+      const attemptsRemoved = await removeAttemptsForInactiveLifts(
+        env,
+        contestId,
         db,
-        `
-        SELECT
-          r.id, r.contest_id, r.competitor_id, r.age_category_id, r.weight_class_id,
-          r.bodyweight, r.reshel_coefficient, r.mccullough_coefficient,
-          r.rack_height_squat, r.rack_height_bench, r.created_at,
-          r.flight_code, r.flight_order, COALESCE(r.labels, '[]') AS labels,
-          ${REGISTRATION_LIFTS_JSON},
-          c.first_name, c.last_name, c.gender, c.birth_date, c.club, c.city,
-          cac.name AS age_category_name,
-          cwc.name AS weight_class_name
-        FROM registrations r
-        JOIN competitors c ON r.competitor_id = c.id
-        LEFT JOIN contest_age_categories cac ON r.age_category_id = cac.id
-        LEFT JOIN contest_weight_classes cwc ON r.weight_class_id = cwc.id
-        WHERE r.id = ?
-        `,
-        [registration.id]
+        registration.id,
+        nextLifts,
       );
+      if (!attemptsRemoved) {
+        await calculateRegistrationResults(db, registration.id);
+        resultsChanged = true;
+      }
+
+      const refreshed = await selectRegistration(db, registration.id);
 
       if (refreshed) {
-        const payload = mapRegistrationRow(convertKeysToCamelCase(refreshed));
         await publishEvent(env, contestId, {
           type: 'registration.upserted',
-          payload,
+          payload: refreshed,
         });
       }
     }

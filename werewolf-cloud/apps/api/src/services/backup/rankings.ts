@@ -1,5 +1,5 @@
 import { executeQuery } from '../../utils/database';
-import { invalidatePrefix, rankingsBundlePrefix } from '../../utils/cache';
+import { invalidateResultsCache } from '../../utils/cache';
 import { calculateRegistrationResults, updateAllRankings } from '../results';
 
 export interface RebuildContestOptions {
@@ -38,5 +38,5 @@ export async function rebuildContestResults(
   }
 
   await updateAllRankings(db, contestId);
-  await invalidatePrefix(kv, rankingsBundlePrefix(contestId));
+  await invalidateResultsCache(kv, contestId);
 }

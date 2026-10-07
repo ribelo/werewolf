@@ -3,7 +3,7 @@ import { resolveContestLifts, ensureLiftsWithinContest, ALL_LIFTS } from '@werew
 import { executeMutation, executeQuery } from './database';
 import { publishEvent } from '../live/publish';
 import type { WerewolfBindings } from '../env';
-import { calculateRegistrationResults, updateAllRankings } from '../services/results';
+import { finalizeAttemptMutation } from '../services/attempts';
 
 export function contestLiftsFromRow(contest: { discipline?: string | null; competition_type?: string | null }): LiftType[] {
   return resolveContestLifts({
@@ -42,85 +42,67 @@ export async function replaceRegistrationLifts(db: D1Database, registrationId: s
   }
 }
 
+type RemovedAttempt = { id: string; lift_type: LiftType };
+
+/**
+ * Delete the attempts of the lifts a registration no longer competes in and run
+ * the shared attempt-mutation sequence, so stored results, contest rankings and
+ * the cached rankings payloads follow the deletion. Returns true when attempts
+ * were deleted, which tells the caller the result of this registration has
+ * already been rebuilt.
+ */
 export async function removeAttemptsForInactiveLifts(
   env: WerewolfBindings,
   contestId: string,
   db: D1Database,
   registrationId: string,
   activeLifts: LiftType[],
-) {
+): Promise<boolean> {
   if (activeLifts.length >= ALL_LIFTS.length) {
-    return;
+    return false;
   }
 
-  if (activeLifts.length === 0) {
-    const removed = await executeQuery(
-      db,
-      'SELECT id, lift_type FROM attempts WHERE registration_id = ?',
-      [registrationId]
-    );
-
-    if (removed.length === 0) {
-      return;
-    }
-
-    await executeMutation(db, 'DELETE FROM attempts WHERE registration_id = ?', [registrationId]);
-    await calculateRegistrationResults(db, registrationId);
-    await updateAllRankings(db, contestId);
-
-    for (const attempt of removed) {
-      await publishEvent(env, contestId, {
-        type: 'attempt.deleted',
-        payload: {
-          attemptId: attempt.id,
-          registrationId,
-          liftType: attempt.lift_type,
-        },
-      });
-    }
-    return;
-  }
-
-  const placeholders = activeLifts.map(() => '?').join(',');
+  // An empty lift list has no IN clause to build; it removes every attempt.
+  const inactiveClause =
+    activeLifts.length === 0 ? '' : ` AND lift_type NOT IN (${activeLifts.map(() => '?').join(',')})`;
   const params = [registrationId, ...activeLifts];
 
-  const removedAttempts = await executeQuery(
+  const removed = await executeQuery<RemovedAttempt>(
     db,
-    `
-    SELECT id, lift_type
-    FROM attempts
-    WHERE registration_id = ?
-      AND lift_type NOT IN (${placeholders})
-    `,
+    `SELECT id, lift_type FROM attempts WHERE registration_id = ?${inactiveClause}`,
     params
   );
 
-  if (removedAttempts.length === 0) {
-    return;
+  if (removed.length === 0) {
+    return false;
   }
 
   await executeMutation(
     db,
-    `
-    DELETE FROM attempts
-    WHERE registration_id = ?
-      AND lift_type NOT IN (${placeholders})
-    `,
+    `DELETE FROM attempts WHERE registration_id = ?${inactiveClause}`,
     params
   );
-  await calculateRegistrationResults(db, registrationId);
-  await updateAllRankings(db, contestId);
 
-  for (const attempt of removedAttempts) {
-    await publishEvent(env, contestId, {
-      type: 'attempt.deleted',
-      payload: {
-        attemptId: attempt.id,
-        registrationId,
-        liftType: attempt.lift_type,
-      },
-    });
-  }
+  await finalizeAttemptMutation({
+    env,
+    db,
+    contestId,
+    registrationId,
+    publish: async () => {
+      for (const attempt of removed) {
+        await publishEvent(env, contestId, {
+          type: 'attempt.deleted',
+          payload: {
+            attemptId: attempt.id,
+            registrationId,
+            liftType: attempt.lift_type,
+          },
+        });
+      }
+    },
+  });
+
+  return true;
 }
 
 export function ensureLiftsForContest(

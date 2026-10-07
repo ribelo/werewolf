@@ -1,4 +1,4 @@
-import type { D1Database } from '@cloudflare/workers-types';
+import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 import { executeMutation, executeQuery, executeQueryOne, generateId, getCurrentTimestamp } from '../utils/database';
 import { MANDATORY_TAG_LABEL } from '../utils/tags';
 import { compareResults, hasTag } from './results/ranking';
@@ -144,13 +144,14 @@ export async function calculateRegistrationResults(db: D1Database, registrationI
 const MAX_BOUND_PARAMS_PER_STATEMENT = 90;
 const PLACEMENT_PARAMS_PER_ROW = 3;
 
-async function applyPlacementChanges(
+function placementStatements(
   db: D1Database,
   column: 'place_open' | 'place_in_age_class' | 'place_in_weight_class',
   changes: ReadonlyMap<string, number | null>,
-): Promise<void> {
+): D1PreparedStatement[] {
   const entries = Array.from(changes.entries());
   const chunkSize = Math.max(1, Math.floor(MAX_BOUND_PARAMS_PER_STATEMENT / PLACEMENT_PARAMS_PER_ROW));
+  const statements: D1PreparedStatement[] = [];
 
   for (let start = 0; start < entries.length; start += chunkSize) {
     const chunk = entries.slice(start, start + chunkSize);
@@ -165,12 +166,14 @@ async function applyPlacementChanges(
       params.push(id);
     }
 
-    await executeMutation(
-      db,
-      `UPDATE results SET ${column} = CASE id ${cases} ELSE ${column} END WHERE id IN (${idPlaceholders})`,
-      params
+    statements.push(
+      db
+        .prepare(`UPDATE results SET ${column} = CASE id ${cases} ELSE ${column} END WHERE id IN (${idPlaceholders})`)
+        .bind(...params)
     );
   }
+
+  return statements;
 }
 
 export async function updateAllRankings(db: D1Database, contestId: string) {
@@ -299,7 +302,11 @@ export async function updateAllRankings(db: D1Database, contestId: string) {
     return;
   }
 
-  await applyPlacementChanges(db, 'place_open', openChanges);
-  await applyPlacementChanges(db, 'place_in_age_class', ageChanges);
-  await applyPlacementChanges(db, 'place_in_weight_class', weightChanges);
+  // One batch: D1 applies it as a transaction, so a failing statement cannot
+  // leave some placement columns updated and others behind.
+  await db.batch([
+    ...placementStatements(db, 'place_open', openChanges),
+    ...placementStatements(db, 'place_in_age_class', ageChanges),
+    ...placementStatements(db, 'place_in_weight_class', weightChanges),
+  ]);
 }

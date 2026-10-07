@@ -355,17 +355,16 @@ registrations.patch('/:registrationId/labels', zValidator('json', labelsSchema),
     return c.json({ data: null, error: message, requestId: c.get('requestId') }, 400);
   }
 
-  const result = await executeMutation(
+  // The registration was read above, so a write that changes nothing (the same
+  // labels again) is still a successful update, not a missing row.
+  await executeMutation(
     db,
     'UPDATE registrations SET labels = ? WHERE id = ?',
     [serialiseLabels(normalised), registrationId]
   );
 
-  if (result.changes === 0) {
-    return c.json({ data: null, error: 'Registration not found', requestId: c.get('requestId') }, 404);
-  }
-
   await updateAllRankings(db, existing.contest_id);
+  await invalidateResultsCache(c.env.KV, existing.contest_id);
 
   const updated = await selectRegistration(db, registrationId);
   if (updated) {
@@ -579,12 +578,23 @@ registrations.patch('/:registrationId', zValidator('json', registrationUpdateSch
     params
   );
 
+  let attemptsRemoved = false;
   if (liftsChanged || input.lifts !== undefined || input.contestId !== undefined) {
     await replaceRegistrationLifts(db, registrationId, nextLifts);
-    await removeAttemptsForInactiveLifts(c.env, nextContestId, db, registrationId, nextLifts);
+    attemptsRemoved = await removeAttemptsForInactiveLifts(
+      c.env,
+      nextContestId,
+      db,
+      registrationId,
+      nextLifts,
+    );
   }
 
-  await calculateRegistrationResults(db, registrationId);
+  // Removing attempts rebuilt the stored result through the shared
+  // attempt-mutation sequence; every other edit rebuilds it here.
+  if (!attemptsRemoved) {
+    await calculateRegistrationResults(db, registrationId);
+  }
   const affectedContestIds = new Set<string>([existing.contest_id, nextContestId]);
   for (const contestIdentifier of affectedContestIds) {
     await updateAllRankings(db, contestIdentifier);

@@ -8,7 +8,7 @@ import { listContestTags, MANDATORY_TAG_LABEL } from '../utils/tags';
 import { calculateRegistrationResults, updateAllRankings } from '../services/results';
 import { computeTeamResults } from '@werewolf/domain/services/team-results';
 import { getJson, putJson, invalidateResultsCache, publicResultsCacheKey } from '../utils/cache';
-import { mapRegistrationRow, type RegistrationRow } from '../utils/registration-map';
+import { selectContestRegistrations } from '../services/registrations/reader';
 import { loadExportRows, loadRankingRows, loadTeamRows } from '../services/results/rows';
 import { buildIndividualRankings, buildTagRankings, toTeamResultInputs } from '../services/results/ranking';
 import {
@@ -21,23 +21,6 @@ import {
 } from '../services/results/csv';
 
 export const contestResults = new Hono<WerewolfEnvironment>();
-
-const REGISTRATION_LIFTS_JSON = `
-      (
-        SELECT json_group_array(lift_type)
-        FROM (
-          SELECT lift_type
-          FROM registration_lifts rl
-          WHERE rl.registration_id = r.id
-          ORDER BY
-            CASE rl.lift_type
-              WHEN 'Squat' THEN 1
-              WHEN 'Bench' THEN 2
-              WHEN 'Deadlift' THEN 3
-            END
-        )
-      ) AS lifts
-`;
 
 // POST /contests/:contestId/results/recalculate - Recalculate all results
 contestResults.post('/recalculate', async (c) => {
@@ -269,35 +252,8 @@ contestResults.get('/public-bundle', async (c) => {
       return c.json({ data: null, error: 'Contest not found', requestId: c.get('requestId') }, 404);
     }
 
-    const [registrationRows, attemptRows, ageCategoriesRaw, weightClassesRaw] = await Promise.all([
-      executeQuery(
-        db,
-        `
-        SELECT
-          r.id, r.contest_id, r.competitor_id, r.age_category_id, r.weight_class_id,
-          r.bodyweight, r.reshel_coefficient, r.mccullough_coefficient,
-          r.rack_height_squat, r.rack_height_bench, r.created_at,
-          r.flight_code, r.flight_order, COALESCE(r.labels, '[]') AS labels,
-          ${REGISTRATION_LIFTS_JSON},
-          c.first_name, c.last_name, c.gender, c.club, c.city, c.birth_date,
-          cac.name AS age_category_name,
-          cwc.name AS weight_class_name
-        FROM registrations r
-        JOIN competitors c ON r.competitor_id = c.id
-        LEFT JOIN contest_age_categories cac ON r.age_category_id = cac.id
-        LEFT JOIN contest_weight_classes cwc ON r.weight_class_id = cwc.id
-        WHERE r.contest_id = ?
-        ORDER BY
-          CASE WHEN r.flight_code IS NULL THEN 1 ELSE 0 END,
-          r.flight_code ASC,
-          COALESCE(r.flight_order, 0) ASC,
-          cac.sort_order ASC,
-          cwc.sort_order ASC,
-          c.last_name ASC,
-          c.first_name ASC
-        `,
-        [contestId]
-      ),
+    const [registrations, attemptRows, ageCategoriesRaw, weightClassesRaw] = await Promise.all([
+      selectContestRegistrations(db, contestId),
       executeQuery(
         db,
         `
@@ -320,9 +276,6 @@ contestResults.get('/public-bundle', async (c) => {
       listContestWeightClasses(db, contestId),
     ]);
 
-    const registrations = (convertKeysToCamelCase(registrationRows) as RegistrationRow[]).map((row) =>
-      mapRegistrationRow(row),
-    );
     const attempts = convertKeysToCamelCase(attemptRows);
     const referenceData = {
       ageCategories: convertKeysToCamelCase(ageCategoriesRaw),

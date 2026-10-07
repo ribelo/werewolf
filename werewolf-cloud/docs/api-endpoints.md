@@ -17,13 +17,30 @@ Success and error responses always use the same envelope:
 
 Zod validation failures are normalised to `400` with
 `{ "data": null, "error": "Validation failed: <field>: <message>", "requestId": "..." }`.
-Other common statuses: `201` on create, `204` for an empty display sync, `401` when a write has no
-valid session, `404` not found, `409` conflicting state, `500`/503 server or database errors.
+Other common statuses: `201` on create, `204` for an empty display sync, `401` when a request has no
+valid session and is not public, `404` not found, `409` conflicting state, `500`/503 server or database
+errors.
 
 ## Authentication
 
 There is one organizer account (P0), configured as the `ADMIN_PASSWORD` Worker secret. Everything that
-changes data needs a session cookie; **all GET routes, including the display views, are public.**
+changes data needs a session cookie, and reads are default-deny: every request without one of the
+public routes below answers `401`. The public allowlist in `apps/api/src/middleware/auth.ts` is
+`/`, `/health`, `/auth/*`, every `OPTIONS` request, and these GET/HEAD routes:
+
+- `/system/health`
+- `/contests/:contestId`
+- `/contests/:contestId/registrations`
+- `/contests/:contestId/attempts`
+- `/contests/:contestId/attempts/current`
+- `/contests/:contestId/categories`
+- `/contests/:contestId/platesets`
+- `/contests/:contestId/display/sync`
+- `/contests/:contestId/results/public-bundle`
+- `/ws/contests/:contestId`
+
+Any other GET (for example `/contests`, `/competitors`, `/contests/:contestId/results/rankings`
+or `/registrations/:registrationId`) needs a session even though it only reads.
 
 | Method | Path | Body | Notes |
 |--------|------|------|-------|
@@ -133,7 +150,7 @@ photos are out of P0 scope; they are deliberately not documented here and their 
 | POST | `/contests/:contestId/registrations` | `{ competitorId, bodyweight?, ageCategoryId?, weightClassId?, rackHeightSquat?, rackHeightBench?, flightCode?, flightOrder?, labels?, lifts? }`. Categories and coefficients are derived when omitted. `201`. |
 | POST | `/contests/:contestId/registrations/bulk-flight` | `{ assignments: [{ registrationId, flightCode?, flightOrder? }] }`; empty/absent codes default to `A`. |
 | GET | `/registrations/:registrationId` | Single registration (enriched). |
-| PATCH | `/registrations/:registrationId` | Partial update; bodyweight changes recompute categories and coefficients. |
+| PATCH | `/registrations/:registrationId` | Partial update; bodyweight changes recompute categories and coefficients. `400` when `ageCategoryId` or `weightClassId` names a category of another contest (or none). Dropping a lift deletes its attempts and rebuilds the stored result. |
 | PATCH | `/registrations/:registrationId/labels` | `{ labels: string[] }` replaces the label array. |
 | DELETE | `/registrations/:registrationId` | Delete the registration. |
 
@@ -148,7 +165,7 @@ photos are out of P0 scope; they are deliberately not documented here and their 
 | PUT | `/contests/:contestId/attempts/current` | `{ attemptId }` (UUID); also moves the contest state to `InProgress` and publishes `attempt.currentSet`. |
 | DELETE | `/contests/:contestId/attempts/current` | Clears the active lift and publishes `attempt.currentCleared`. |
 | GET | `/contests/:contestId/attempts/queue` | Pending attempts for the current lift and round in rising-bar order (weight, then flight order, then name); filtered to `contests.activeFlight` when one is set. |
-| PATCH | `/attempts/:attemptId/result` | `{ status, judge1Decision?, judge2Decision?, judge3Decision?, notes? }`; publishes `attempt.resultUpdated` and recalculates results. |
+| PATCH | `/attempts/:attemptId/result` | `{ status, judge1Decision?, judge2Decision?, judge3Decision?, notes? }`; publishes `attempt.resultUpdated` and recalculates results. `404` with `error: "ATTEMPT_NOT_FOUND"` when the attempt id does not exist. |
 
 ## Results
 
@@ -161,7 +178,7 @@ photos are out of P0 scope; they are deliberately not documented here and their 
 | POST | `/contests/:contestId/results/export` | `{ format: "csv" \| "json", lift? }` — returns the exported document. |
 | GET | `/contests/:contestId/results/public-bundle` | Everything the public results page needs (contest, individual rankings, team, scoreboard data); cached 60 s. |
 | GET | `/contests/:contestId/results/scoreboard` | Rankings plus contest name and competitor count. |
-| GET | `/registrations/:registrationId/results` | Result row for one registration. |
+| GET | `/registrations/:registrationId/results` | Stored result row for one registration; `404` `"Result not found"` when no result has been written yet (the read never calculates one). |
 
 ## Settings
 
