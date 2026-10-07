@@ -68,9 +68,9 @@
             export PKG_CONFIG_PATH="${pkgs.lib.makeSearchPathOutput "dev" "lib/pkgconfig" (tauriBuildInputs ++ tauriNativeInputs)}:$PKG_CONFIG_PATH"
             export WEBKIT_DISABLE_COMPOSITING_MODE=1
 
-            echo "🐺 Werewolf Tauri shell loaded"
-            echo "  bun run tauri dev    # Start desktop app"
-            echo "  bun run tauri build  # Build desktop app"
+            echo "🐺 Werewolf Tauri shell loaded (frozen legacy app — new work lives in werewolf-cloud/)"
+            echo "  bun run tauri dev    # Start desktop app (legacy reference)"
+            echo "  bun run tauri build  # Build desktop app (legacy reference)"
           '';
         };
 
@@ -89,9 +89,10 @@
             export NODE_OPTIONS="--enable-source-maps $NODE_OPTIONS"
 
             echo "☁️ Werewolf cloud shell loaded"
-            echo "  bun install           # Install dependencies"
-            echo "  bun run dev           # Start local Pages/Worker dev server"
-            echo "  wrangler dev         # Cloudflare worker dev"
+            echo "  cd werewolf-cloud && bun install                        # Install workspace dependencies"
+            echo "  cd werewolf-cloud && bun run dev                        # Worker API + local D1/KV on :8787"
+            echo "  cd werewolf-cloud && bun run check                      # Typecheck + lint + tests"
+            echo "  cd werewolf-cloud/apps/web && PUBLIC_API_BASE=http://127.0.0.1:8787 bun run dev   # SvelteKit UI"
           '';
         };
       in {

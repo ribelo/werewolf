@@ -1,11 +1,15 @@
 # Cloudflare Environments
 
 Centralised reference for the provisioned Cloudflare resources that power the Werewolf Cloud stack.
+All commands are run from `werewolf-cloud/` unless noted.
 
 ## Accounts & Workers
 - **Worker name:** `werewolf`
 - **workers.dev URL:** `https://werewolf.r-krzywaznia-2c4.workers.dev`
 - **Entry file:** `apps/api/src/index.ts`
+- **Worker config:** `wrangler.worker.toml` (API Worker, D1 migrations, Durable Objects)
+- **Pages config:** `wrangler.toml` (web app, `pages_build_output_dir = ".svelte-kit/cloudflare"`)
+- **Local dev config:** `wrangler.dev.toml`
 
 ## Data Stores
 - **D1 (production):** `werewolf-d1`
@@ -21,17 +25,28 @@ Centralised reference for the provisioned Cloudflare resources that power the We
 ## Deployment Commands
 
 ```bash
-# Local development (default config points at dev bindings)
-wrangler dev --config wrangler.worker.toml --local
+# Worker API + local D1/KV state on http://127.0.0.1:8787
+bun run dev
 
-# List and apply migrations in production
-a bun run typecheck
-b wrangler d1 migrations list werewolf --env production
-c wrangler d1 migrations apply werewolf --env production --config wrangler.worker.toml
+# Typecheck, lint and tests
+bun run check
 
-# Publish the worker
-wrangler deploy --config wrangler.worker.toml --env production
+# Typecheck the workspace
+bun run typecheck
+
+# List and apply migrations in production (API Worker config, remote D1)
+bunx wrangler d1 migrations list werewolf-d1 --env production --remote --config wrangler.worker.toml
+bunx wrangler d1 migrations apply werewolf-d1 --env production --remote --config wrangler.worker.toml
+
+# Publish the Worker API
+bunx wrangler deploy --config wrangler.worker.toml --env production
+
+# Build and publish the web app to Cloudflare Pages (uses wrangler.toml)
+bun run deploy:web
 ```
+
+Never edit a migration that has already been applied — add a new file to
+`werewolf-cloud/migrations/` instead.
 
 ## Data Migration
 
@@ -94,9 +109,9 @@ sqlite3 ~/.local/share/werewolf/werewolf.db "SELECT COUNT(*) FROM contests;"
 
 - Generate a Cloudflare API token with **Workers KV:Edit**, **D1:Edit**, **Workers R2:Edit**, and **Cloudflare Pages:Edit** on the `r-krzywaznia-2c4` account. Store it alongside the account ID in a local `.env` file (already gitignored), for example:
   ```bash
-  # werewolf-cloud/.env
-  CLOUDFLARE_ACCOUNT_ID=2c42f4960f9c28a9235cac01483bd626
-  CLOUDFLARE_API_TOKEN=MeKJV3fDOswsV_JB-70ZFjE7YobOich5nLgydGoO
+  # werewolf-cloud/.env — placeholders, fill in your own values
+  CLOUDFLARE_ACCOUNT_ID=your_account_id
+  CLOUDFLARE_API_TOKEN=your_api_token
   ```
 - Load the credentials before running `wrangler` (either `source .env` or `dotenv -f .env -- wrangler <command>`):
   ```bash

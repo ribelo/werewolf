@@ -1,101 +1,61 @@
-name: Build
+name: CI
 
 on:
   push:
     branches: [ master, main, develop ]
   pull_request:
     branches: [ master, main ]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  CARGO_TERM_COLOR: always
-  RUST_BACKTRACE: 1
-
 jobs:
-  # Quick build test on Linux only for faster feedback
-  quick-build:
+  cloud:
+    name: Cloud workspace (typecheck, lint, tests)
     runs-on: ubuntu-22.04
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Setup Bun
-      uses: oven-sh/setup-bun@v2
-      with:
-        bun-version: latest
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.x
 
-    - name: Rust setup
-      uses: dtolnay/rust-toolchain@stable
+      - name: Install dependencies
+        working-directory: werewolf-cloud
+        run: bun install --frozen-lockfile
 
-    - name: Rust cache
-      uses: swatinem/rust-cache@v2
-      with:
-        workspaces: './src-tauri -> target'
+      - name: Check workspace
+        working-directory: werewolf-cloud
+        run: bun run check
 
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
-
-    - name: Install frontend dependencies
-      run: bun install --frozen-lockfile
-
-    - name: Build frontend
-      run: bun run build
-
-    # Skip SQLx prepare for CI builds - use offline mode disabled instead
-
-    - name: Build Rust backend (check compilation)
-      working-directory: ./src-tauri
-      env:
-        SQLX_OFFLINE: true
-      run: cargo build --release
-
-  test:
+  web:
+    name: Web (svelte-check, vitest)
     runs-on: ubuntu-22.04
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Setup Bun
-      uses: oven-sh/setup-bun@v2
-      with:
-        bun-version: latest
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.x
 
-    - name: Rust setup
-      uses: dtolnay/rust-toolchain@stable
+      - name: Install dependencies
+        working-directory: werewolf-cloud
+        run: bun install --frozen-lockfile
 
-    - name: Rust cache
-      uses: swatinem/rust-cache@v2
-      with:
-        workspaces: './src-tauri -> target'
+      - name: Sync SvelteKit
+        working-directory: werewolf-cloud/apps/web
+        run: bunx svelte-kit sync
 
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
+      - name: Type-check
+        working-directory: werewolf-cloud/apps/web
+        run: bunx svelte-check --tsconfig ./tsconfig.json
 
-    - name: Install frontend dependencies
-      run: bun install --frozen-lockfile
-
-    - name: Run frontend checks
-      run: bun run check
-
-    - name: Run Rust tests
-      working-directory: ./src-tauri
-      env:
-        SQLX_OFFLINE: true
-      run: cargo test --all-targets --all-features
-
-    - name: Run Rust clippy
-      working-directory: ./src-tauri
-      env:
-        SQLX_OFFLINE: true
-      run: cargo clippy -- -D warnings
-
-    - name: Check Rust formatting
-      working-directory: ./src-tauri
-      run: cargo fmt --all -- --check
+      - name: Test
+        working-directory: werewolf-cloud/apps/web
+        run: bunx vitest run

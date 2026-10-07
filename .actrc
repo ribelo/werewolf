@@ -1,6 +1,8 @@
 # Act configuration for local GitHub Actions testing
-# Usage: act push (to test build workflow)
-# Usage: act push -e events/release.json (to test release workflow)
+# Usage:
+#   act push                                                                    # cloud CI (workflows/build.yml)
+#   act workflow_dispatch -W .github/workflows/desktop.yml                      # legacy desktop build/checks
+#   act workflow_dispatch -W .github/workflows/release.yml -e events/release.json   # legacy desktop release
 
 # Use larger runner images for better compatibility
 -P ubuntu-latest=catthehacker/ubuntu:act-latest

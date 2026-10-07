@@ -1,6 +1,8 @@
 {
-  "ref": "refs/tags/v0.1.0",
-  "ref_type": "tag",
+  "ref": "refs/heads/master",
+  "inputs": {
+    "tag": "v0.1.0"
+  },
   "repository": {
     "name": "werewolf",
     "full_name": "ribelo/werewolf",
@@ -8,18 +10,7 @@
       "login": "ribelo"
     }
   },
-  "pusher": {
-    "name": "ribelo"
-  },
-  "created": true,
-  "deleted": false,
-  "forced": false,
-  "head_commit": {
-    "id": "example-commit-sha",
-    "message": "Release v0.1.0",
-    "author": {
-      "name": "ribelo",
-      "email": "user@example.com"
-    }
+  "sender": {
+    "login": "ribelo"
   }
 }

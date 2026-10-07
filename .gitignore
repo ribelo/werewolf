@@ -35,3 +35,11 @@ Cargo.lock
 
 # Environment variables
 .env
+
+# Cloudflare local dev state and secrets
+.dev.vars
+.wrangler/
+
+# Local validation databases (D1/Miniflare state, SQLite scratch DBs)
+*.sqlite
+*.sqlite-*
