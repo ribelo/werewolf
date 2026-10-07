@@ -36,6 +36,7 @@
   },
   "type": "module",
   "dependencies": {
+    "@formatjs/fast-memoize": "^2",
     "@formatjs/icu-messageformat-parser": "^2",
     "@sveltejs/adapter-cloudflare": "^4.4.4",
     "@werewolf/domain": "workspace:*",

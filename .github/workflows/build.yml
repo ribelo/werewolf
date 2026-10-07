@@ -24,38 +24,5 @@ jobs:
         with:
           bun-version: 1.2.x
 
-      - name: Install dependencies
-        working-directory: werewolf-cloud
-        run: bun install --frozen-lockfile
-
-      - name: Check workspace
-        working-directory: werewolf-cloud
-        run: bun run check
-
-  web:
-    name: Web (svelte-check, vitest)
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.2.x
-
-      - name: Install dependencies
-        working-directory: werewolf-cloud
-        run: bun install --frozen-lockfile
-
-      - name: Sync SvelteKit
-        working-directory: werewolf-cloud/apps/web
-        run: bunx svelte-kit sync
-
-      - name: Type-check
-        working-directory: werewolf-cloud/apps/web
-        run: bunx svelte-check --tsconfig ./tsconfig.json
-
-      - name: Test
-        working-directory: werewolf-cloud/apps/web
-        run: bunx vitest run
+      - name: Install dependencies and check workspace
+        run: cd werewolf-cloud && bun install --frozen-lockfile && bun run check
