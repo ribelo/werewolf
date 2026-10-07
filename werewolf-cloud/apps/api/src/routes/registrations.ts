@@ -3,9 +3,9 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import type { D1Database } from '@cloudflare/workers-types';
 import type { WerewolfEnvironment } from '../env';
-import { executeQuery, executeQueryOne, executeMutation, generateId, getCurrentTimestamp, convertKeysToCamelCase } from '../utils/database';
+import { executeQuery, executeQueryOne, executeMutation, generateId, getCurrentTimestamp } from '../utils/database';
 import type { LiftType } from '@werewolf/domain';
-import { registrationSchema, registrationCreateSchema, registrationUpdateSchema } from '@werewolf/domain/models/registration';
+import { registrationCreateSchema, registrationUpdateSchema } from '@werewolf/domain/models/registration';
 import { determineAgeCategory, determineWeightClass } from '@werewolf/domain/services/coefficients';
 import {
   contestLiftsFromRow,
@@ -15,32 +15,15 @@ import {
   removeAttemptsForInactiveLifts,
   ensureLiftsForContest,
 } from '../utils/lifts';
-import { mapRegistrationRow } from '../utils/registration-map';
+import { selectContestRegistrations, selectRegistration } from '../services/registrations/reader';
 import { listContestTags, seedContestTags, MANDATORY_TAG_LABEL } from '../utils/tags';
 import { getReshelCoefficient, getMcCulloughCoefficient } from '../services/coefficients';
 import { getContestAgeDescriptors, getContestWeightDescriptors, seedContestCategories } from '../utils/category-templates';
 import { publishEvent } from '../live/publish';
 import { calculateRegistrationResults, updateAllRankings } from '../services/results';
-import { invalidatePrefix, rankingsBundlePrefix } from '../utils/cache';
+import { invalidateResultsCache } from '../utils/cache';
 
 export const contestRegistrations = new Hono<WerewolfEnvironment>();
-
-const LIFTS_JSON_SELECT = `
-      (
-        SELECT json_group_array(lift_type)
-        FROM (
-          SELECT lift_type
-          FROM registration_lifts rl
-          WHERE rl.registration_id = r.id
-          ORDER BY
-            CASE rl.lift_type
-              WHEN 'Squat' THEN 1
-              WHEN 'Bench' THEN 2
-              WHEN 'Deadlift' THEN 3
-            END
-        )
-      ) AS lifts
-`;
 
 function serialiseLabels(labels: readonly string[] | null | undefined): string {
   if (!labels || labels.length === 0) {
@@ -246,30 +229,7 @@ contestRegistrations.post('/', zValidator('json', registrationCreateSchema), asy
 
   await replaceRegistrationLifts(db, id, selectedLifts);
 
-  const registration = await executeQueryOne(
-    db,
-    `
-    SELECT
-      r.id, r.contest_id, r.competitor_id, r.age_category_id, r.weight_class_id,
-      r.bodyweight, r.reshel_coefficient, r.mccullough_coefficient,
-      r.rack_height_squat, r.rack_height_bench, r.created_at,
-      r.flight_code, r.flight_order, COALESCE(r.labels, '[]') AS labels,
-      ${LIFTS_JSON_SELECT},
-      c.first_name, c.last_name, c.gender, c.birth_date, c.club, c.city,
-      cac.name AS age_category_name,
-      cwc.name AS weight_class_name
-    FROM registrations r
-    JOIN competitors c ON r.competitor_id = c.id
-    LEFT JOIN contest_age_categories cac ON r.age_category_id = cac.id
-    LEFT JOIN contest_weight_classes cwc ON r.weight_class_id = cwc.id
-    WHERE r.id = ?
-    `,
-    [id]
-  );
-
-  const registrationData = registration
-    ? mapRegistrationRow(convertKeysToCamelCase(registration))
-    : null;
+  const registrationData = await selectRegistration(db, id);
 
   if (registrationData) {
     await publishEvent(c.env, contestId, {
@@ -339,42 +299,12 @@ contestRegistrations.post('/bulk-flight', zValidator('json', bulkFlightSchema), 
 // GET /contests/:contestId/registrations - List registrations for contest
 contestRegistrations.get('/', async (c) => {
   const db = c.env.DB;
-  const contestId = c.req.param('contestId');
+  const contestId = c.req.param('contestId') as string;
 
-  const registrations = await executeQuery(
-    db,
-    `
-    SELECT
-      r.id, r.contest_id, r.competitor_id, r.age_category_id, r.weight_class_id,
-      r.bodyweight, r.reshel_coefficient, r.mccullough_coefficient,
-      r.rack_height_squat, r.rack_height_bench, r.created_at,
-      r.flight_code, r.flight_order, COALESCE(r.labels, '[]') AS labels,
-      ${LIFTS_JSON_SELECT},
-      c.first_name, c.last_name, c.gender, c.club, c.city, c.birth_date,
-      cac.name AS age_category_name,
-      cwc.name AS weight_class_name
-    FROM registrations r
-    JOIN competitors c ON r.competitor_id = c.id
-    LEFT JOIN contest_age_categories cac ON r.age_category_id = cac.id
-    LEFT JOIN contest_weight_classes cwc ON r.weight_class_id = cwc.id
-    WHERE r.contest_id = ?
-    ORDER BY
-      CASE WHEN r.flight_code IS NULL THEN 1 ELSE 0 END,
-      r.flight_code ASC,
-      COALESCE(r.flight_order, 0) ASC,
-      cac.sort_order ASC,
-      cwc.sort_order ASC,
-      c.last_name ASC,
-      c.first_name ASC
-    `,
-    [contestId]
-  );
-
-  const camel = convertKeysToCamelCase(registrations) as any[];
-  const enriched = camel.map((row) => mapRegistrationRow(row));
+  const registrations = await selectContestRegistrations(db, contestId);
 
   return c.json({
-    data: enriched,
+    data: registrations,
     error: null,
     requestId: c.get('requestId'),
   });
@@ -387,32 +317,11 @@ registrations.get('/:registrationId', async (c) => {
   const db = c.env.DB;
   const registrationId = c.req.param('registrationId');
 
-  const registration = await executeQueryOne(
-    db,
-    `
-    SELECT
-      r.id, r.contest_id, r.competitor_id, r.age_category_id, r.weight_class_id,
-      r.bodyweight, r.reshel_coefficient, r.mccullough_coefficient,
-      r.rack_height_squat, r.rack_height_bench, r.created_at,
-      r.flight_code, r.flight_order, COALESCE(r.labels, '[]') AS labels,
-      ${LIFTS_JSON_SELECT},
-      c.first_name, c.last_name, c.gender, c.birth_date, c.club, c.city,
-      cac.name AS age_category_name,
-      cwc.name AS weight_class_name
-    FROM registrations r
-    JOIN competitors c ON r.competitor_id = c.id
-    LEFT JOIN contest_age_categories cac ON r.age_category_id = cac.id
-    LEFT JOIN contest_weight_classes cwc ON r.weight_class_id = cwc.id
-    WHERE r.id = ?
-    `,
-    [registrationId]
-  );
+  const registrationData = await selectRegistration(db, registrationId);
 
-  if (!registration) {
+  if (!registrationData) {
     return c.json({ data: null, error: 'Registration not found', requestId: c.get('requestId') }, 404);
   }
-
-  const registrationData = mapRegistrationRow(convertKeysToCamelCase(registration));
 
   return c.json({
     data: registrationData,
@@ -457,6 +366,14 @@ registrations.patch('/:registrationId/labels', zValidator('json', labelsSchema),
   }
 
   await updateAllRankings(db, existing.contest_id);
+
+  const updated = await selectRegistration(db, registrationId);
+  if (updated) {
+    await publishEvent(c.env, existing.contest_id, {
+      type: 'registration.upserted',
+      payload: updated,
+    });
+  }
 
   return c.json({
     data: { labels: normalised },
@@ -545,10 +462,16 @@ registrations.patch('/:registrationId', zValidator('json', registrationUpdateSch
     getContestWeightDescriptors(db, nextContestId),
   ]);
 
-  const resolvedAgeCode = input.ageCategoryId
-    ? ageDescriptors.find((descriptor) => descriptor.id === input.ageCategoryId)?.code ?? undefined
-    : determineAgeCategory(competitor.birth_date, contest.date, ageDescriptors);
-  const ageCategory = ageDescriptors.find((descriptor) => descriptor.code === resolvedAgeCode) ?? ageDescriptors[0];
+  let ageCategory: (typeof ageDescriptors)[number] | undefined;
+  if (input.ageCategoryId) {
+    ageCategory = ageDescriptors.find((descriptor) => descriptor.id === input.ageCategoryId);
+    if (!ageCategory) {
+      return c.json({ data: null, error: 'Invalid age category selection', requestId: c.get('requestId') }, 400);
+    }
+  } else {
+    const resolvedAgeCode = determineAgeCategory(competitor.birth_date, contest.date, ageDescriptors);
+    ageCategory = ageDescriptors.find((descriptor) => descriptor.code === resolvedAgeCode) ?? ageDescriptors[0];
+  }
 
   let weightClassId: string | null = existing.weight_class_id ?? null;
   if (typeof input.weightClassId === 'string' && input.weightClassId.length > 0) {
@@ -577,7 +500,7 @@ registrations.patch('/:registrationId', zValidator('json', registrationUpdateSch
   ]);
 
   const updates: string[] = [];
-  const params: any[] = [];
+  const params: unknown[] = [];
 
   if (input.contestId !== undefined) {
     updates.push('contest_id = ?');
@@ -633,7 +556,10 @@ registrations.patch('/:registrationId', zValidator('json', registrationUpdateSch
     input.reshelCoefficient !== undefined
       ? input.reshelCoefficient
       : recalculatedReshel;
-  const nextMcCullough = input.mcculloughCoefficient ?? recalculatedMcCullough;
+  const nextMcCullough =
+    input.mcculloughCoefficient !== undefined
+      ? input.mcculloughCoefficient
+      : recalculatedMcCullough;
 
   updates.push('reshel_coefficient = ?');
   params.push(nextReshel);
@@ -662,35 +588,22 @@ registrations.patch('/:registrationId', zValidator('json', registrationUpdateSch
   const affectedContestIds = new Set<string>([existing.contest_id, nextContestId]);
   for (const contestIdentifier of affectedContestIds) {
     await updateAllRankings(db, contestIdentifier);
-    await invalidatePrefix(c.env.KV, rankingsBundlePrefix(contestIdentifier));
+    await invalidateResultsCache(c.env.KV, contestIdentifier);
   }
 
-  const registration = await executeQueryOne(
-    db,
-    `
-    SELECT
-      r.id, r.contest_id, r.competitor_id, r.age_category_id, r.weight_class_id,
-      r.bodyweight, r.reshel_coefficient, r.mccullough_coefficient,
-      r.rack_height_squat, r.rack_height_bench, r.created_at,
-      r.flight_code, r.flight_order, COALESCE(r.labels, '[]') AS labels,
-      ${LIFTS_JSON_SELECT},
-      c.first_name, c.last_name, c.gender, c.birth_date, c.club, c.city,
-      cac.name AS age_category_name,
-      cwc.name AS weight_class_name
-    FROM registrations r
-    JOIN competitors c ON r.competitor_id = c.id
-    LEFT JOIN contest_age_categories cac ON r.age_category_id = cac.id
-    LEFT JOIN contest_weight_classes cwc ON r.weight_class_id = cwc.id
-    WHERE r.id = ?
-    `,
-    [registrationId]
-  );
+  const registrationData = await selectRegistration(db, registrationId);
 
-  if (!registration) {
+  if (!registrationData) {
     return c.json({ data: null, error: 'Registration not found', requestId: c.get('requestId') }, 404);
   }
 
-  const registrationData = mapRegistrationRow(convertKeysToCamelCase(registration));
+  if (existing.contest_id !== nextContestId) {
+    // The registration left the source room: tell its clients to drop the row.
+    await publishEvent(c.env, existing.contest_id, {
+      type: 'registration.deleted',
+      payload: { registrationId },
+    });
+  }
 
   await publishEvent(c.env, nextContestId, {
     type: 'registration.upserted',
@@ -735,7 +648,7 @@ registrations.delete('/:registrationId', async (c) => {
     [registrationId]
   );
   await updateAllRankings(db, existing.contest_id);
-  await invalidatePrefix(c.env.KV, rankingsBundlePrefix(existing.contest_id));
+  await invalidateResultsCache(c.env.KV, existing.contest_id);
 
   await publishEvent(c.env, existing.contest_id, {
     type: 'registration.deleted',

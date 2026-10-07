@@ -3,31 +3,16 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import type { WerewolfEnvironment, WerewolfBindings } from '../env';
 import { executeQuery, executeQueryOne, executeMutation, generateId, getCurrentTimestamp, convertKeysToCamelCase } from '../utils/database';
-import { competitorSchema, competitorCreateSchema, competitorUpdateSchema } from '@werewolf/domain/models/competitor';
+import { competitorCreateSchema, competitorUpdateSchema } from '@werewolf/domain/models/competitor';
 import { publishEvent } from '../live/publish';
 import { determineAgeCategory, determineWeightClass } from '@werewolf/domain/services/coefficients';
 import { getReshelCoefficient, getMcCulloughCoefficient } from '../services/coefficients';
 import { getContestAgeDescriptors, getContestWeightDescriptors } from '../utils/category-templates';
-import { mapRegistrationRow } from '../utils/registration-map';
+import { selectCompetitorRegistrations, selectRegistration } from '../services/registrations/reader';
+import { calculateRegistrationResults, updateAllRankings } from '../services/results';
+import { invalidateResultsCache } from '../utils/cache';
 
 const competitors = new Hono<WerewolfEnvironment>();
-
-const LIFTS_JSON_SELECT = `
-        (
-          SELECT json_group_array(lift_type)
-          FROM (
-            SELECT lift_type
-            FROM registration_lifts rl
-            WHERE rl.registration_id = r.id
-            ORDER BY
-              CASE rl.lift_type
-                WHEN 'Squat' THEN 1
-                WHEN 'Bench' THEN 2
-                WHEN 'Deadlift' THEN 3
-              END
-          )
-        ) AS lifts
-`;
 
 // GET /competitors - List all competitors
 competitors.get('/', async (c) => {
@@ -165,7 +150,7 @@ competitors.patch('/:competitorId', zValidator('json', competitorUpdateSchema), 
   }
 
   const updates: string[] = [];
-  const params: any[] = [];
+  const params: unknown[] = [];
 
   if (input.firstName !== undefined) {
     updates.push('first_name = ?');
@@ -201,7 +186,13 @@ competitors.patch('/:competitorId', zValidator('json', competitorUpdateSchema), 
     return c.json({ data: null, error: 'No fields to update', requestId: c.get('requestId') }, 400);
   }
 
-  const shouldRecalculate = input.birthDate !== undefined || input.gender !== undefined;
+  const shouldSyncRegistrations =
+    input.birthDate !== undefined ||
+    input.gender !== undefined ||
+    input.firstName !== undefined ||
+    input.lastName !== undefined ||
+    input.club !== undefined ||
+    input.city !== undefined;
 
   updates.push('updated_at = ?');
   params.push(getCurrentTimestamp());
@@ -213,7 +204,7 @@ competitors.patch('/:competitorId', zValidator('json', competitorUpdateSchema), 
     params
   );
 
-  const competitor = await executeQueryOne(
+  const competitor = await executeQueryOne<{ id: string; birth_date: string; gender: string }>(
     db,
     `
     SELECT
@@ -230,8 +221,8 @@ competitors.patch('/:competitorId', zValidator('json', competitorUpdateSchema), 
     return c.json({ data: null, error: 'Competitor not found', requestId: c.get('requestId') }, 404);
   }
 
-  if (shouldRecalculate) {
-    await recalculateCompetitorRegistrations(c.env, db, competitorId, competitor);
+  if (shouldSyncRegistrations) {
+    await syncCompetitorRegistrations(c.env, db, competitor);
   }
 
   return c.json({
@@ -241,156 +232,139 @@ competitors.patch('/:competitorId', zValidator('json', competitorUpdateSchema), 
   });
 });
 
-async function recalculateCompetitorRegistrations(
+/**
+ * Re-derives the registrations of a competitor after a demographic or identity
+ * edit. Age category and McCullough follow the competitor, so they are updated
+ * even while the bodyweight is still pending; weight class and Reshel wait for
+ * a weigh-in. Existing result rows and the rankings of every affected contest
+ * are rebuilt, and each registration is republished so live views pick up the
+ * new coefficients, name, club and city.
+ */
+async function syncCompetitorRegistrations(
   env: WerewolfEnvironment['Bindings'],
   db: WerewolfBindings['DB'],
-  competitorId: string,
-  competitor: { birth_date: string; gender: string }
+  competitor: { id: string; birth_date: string; gender: string }
 ): Promise<void> {
-  const registrations = await executeQuery<{
-    id: string;
-    contest_id: string;
-    bodyweight: number | null;
-    age_category_id: string | null;
-    weight_class_id: string | null;
-    reshel_coefficient: number | null;
-    mccullough_coefficient: number | null;
-    contest_date: string;
-  }>(
-    db,
-    `
-    SELECT
-      r.id,
-      r.contest_id,
-      r.bodyweight,
-      r.age_category_id,
-      r.weight_class_id,
-      r.reshel_coefficient,
-      r.mccullough_coefficient,
-      ct.date AS contest_date
-    FROM registrations r
-    JOIN contests ct ON r.contest_id = ct.id
-    WHERE r.competitor_id = ?
-    `,
-    [competitorId]
-  );
-
+  const registrations = await selectCompetitorRegistrations(db, competitor.id);
   if (registrations.length === 0) {
     return;
   }
 
-  const contestCache = new Map<
+  const registrationIds = registrations.map((registration) => registration.id);
+  const contestIds = [...new Set(registrations.map((registration) => registration.contestId))];
+
+  const contestRows = await executeQuery<{ id: string; date: string }>(
+    db,
+    `SELECT id, date FROM contests WHERE id IN (${contestIds.map(() => '?').join(',')})`,
+    contestIds
+  );
+  const contestDates = new Map(contestRows.map((row) => [row.id, row.date]));
+
+  const resultRows = await executeQuery<{ registration_id: string }>(
+    db,
+    `SELECT registration_id FROM results WHERE registration_id IN (${registrationIds.map(() => '?').join(',')})`,
+    registrationIds
+  );
+  const registrationsWithResults = new Set(resultRows.map((row) => row.registration_id));
+
+  const descriptorCache = new Map<
     string,
     {
-      date: string;
       ageDescriptors: Awaited<ReturnType<typeof getContestAgeDescriptors>>;
       weightDescriptors: Awaited<ReturnType<typeof getContestWeightDescriptors>>;
     }
   >();
 
   for (const registration of registrations) {
-    const bodyweight = Number(registration.bodyweight);
-    if (!Number.isFinite(bodyweight) || bodyweight <= 0) {
+    const contestDate = contestDates.get(registration.contestId);
+    if (!contestDate) {
       continue;
     }
 
-    let descriptors = contestCache.get(registration.contest_id);
+    let descriptors = descriptorCache.get(registration.contestId);
     if (!descriptors) {
       const [ageDescriptors, weightDescriptors] = await Promise.all([
-        getContestAgeDescriptors(db, registration.contest_id),
-        getContestWeightDescriptors(db, registration.contest_id),
+        getContestAgeDescriptors(db, registration.contestId),
+        getContestWeightDescriptors(db, registration.contestId),
       ]);
 
-      descriptors = {
-        date: registration.contest_date,
-        ageDescriptors,
-        weightDescriptors,
-      };
-      contestCache.set(registration.contest_id, descriptors);
+      descriptors = { ageDescriptors, weightDescriptors };
+      descriptorCache.set(registration.contestId, descriptors);
     }
 
-    const { date: contestDate, ageDescriptors, weightDescriptors } = descriptors;
-    if (ageDescriptors.length === 0 || weightDescriptors.length === 0) {
-      continue;
-    }
-
-    const reshel = await getReshelCoefficient(db, competitor.gender, bodyweight);
-    const mcc = await getMcCulloughCoefficient(db, competitor.birth_date, contestDate);
+    const { ageDescriptors, weightDescriptors } = descriptors;
+    const bodyweight = Number(registration.bodyweight);
+    const hasBodyweight = Number.isFinite(bodyweight) && bodyweight > 0;
 
     const ageCode = determineAgeCategory(competitor.birth_date, contestDate, ageDescriptors);
     const ageDescriptor =
       ageDescriptors.find((descriptor) => descriptor.code === ageCode) ?? ageDescriptors[0];
 
-    const weightCode = determineWeightClass(bodyweight, competitor.gender, weightDescriptors);
-    const weightDescriptor =
-      weightDescriptors.find((descriptor) => descriptor.code === weightCode) ?? weightDescriptors[0];
+    const weightCode = hasBodyweight
+      ? determineWeightClass(bodyweight, competitor.gender, weightDescriptors)
+      : null;
+    const weightDescriptor = hasBodyweight
+      ? weightDescriptors.find((descriptor) => descriptor.code === weightCode) ?? weightDescriptors[0]
+      : undefined;
+
+    const reshel = hasBodyweight
+      ? await getReshelCoefficient(db, competitor.gender, bodyweight)
+      : null;
+    const mcc = await getMcCulloughCoefficient(db, competitor.birth_date, contestDate);
 
     const updates: string[] = [];
-    const params: any[] = [];
+    const params: unknown[] = [];
+    let coefficientsChanged = false;
 
-    if (ageDescriptor && registration.age_category_id !== ageDescriptor.id) {
+    if (ageDescriptor && registration.ageCategoryId !== ageDescriptor.id) {
       updates.push('age_category_id = ?');
       params.push(ageDescriptor.id);
     }
 
-    if (weightDescriptor && registration.weight_class_id !== weightDescriptor.id) {
+    if (weightDescriptor && registration.weightClassId !== weightDescriptor.id) {
       updates.push('weight_class_id = ?');
       params.push(weightDescriptor.id);
     }
 
-    if (Math.abs((registration.reshel_coefficient ?? 0) - reshel) > 0.0001) {
+    if (reshel !== null && Math.abs((registration.reshelCoefficient ?? 0) - reshel) > 0.0001) {
       updates.push('reshel_coefficient = ?');
       params.push(reshel);
+      coefficientsChanged = true;
     }
 
-    if (Math.abs((registration.mccullough_coefficient ?? 0) - mcc) > 0.0001) {
+    if (Math.abs((registration.mcculloughCoefficient ?? 0) - mcc) > 0.0001) {
       updates.push('mccullough_coefficient = ?');
       params.push(mcc);
+      coefficientsChanged = true;
     }
 
-    if (updates.length === 0) {
-      continue;
+    if (updates.length > 0) {
+      params.push(registration.id);
+      await executeMutation(
+        db,
+        `UPDATE registrations SET ${updates.join(', ')} WHERE id = ?`,
+        params
+      );
     }
 
-    params.push(registration.id);
-
-    await executeMutation(
-      db,
-      `UPDATE registrations SET ${updates.join(', ')} WHERE id = ?`,
-      params
-    );
-
-    const refreshed = await executeQueryOne(
-      db,
-      `
-      SELECT
-        r.id, r.contest_id, r.competitor_id, r.age_category_id, r.weight_class_id,
-        r.bodyweight, r.reshel_coefficient, r.mccullough_coefficient,
-        r.rack_height_squat, r.rack_height_bench, r.created_at,
-        r.flight_code, r.flight_order, COALESCE(r.labels, '[]') AS labels,
-        ${LIFTS_JSON_SELECT},
-        c.first_name, c.last_name, c.gender, c.birth_date, c.club, c.city,
-        cac.name AS age_category_name,
-        cwc.name AS weight_class_name
-      FROM registrations r
-      JOIN competitors c ON r.competitor_id = c.id
-      LEFT JOIN contest_age_categories cac ON r.age_category_id = cac.id
-      LEFT JOIN contest_weight_classes cwc ON r.weight_class_id = cwc.id
-      WHERE r.id = ?
-      `,
-      [registration.id]
-    );
-
-    if (!refreshed) {
-      continue;
+    // Rebuild only result rows that already exist: a pending weigh-in must not
+    // gain a zero-point ranking entry from a demographic edit.
+    if (coefficientsChanged && registrationsWithResults.has(registration.id)) {
+      await calculateRegistrationResults(db, registration.id);
     }
 
-    const payload = mapRegistrationRow(convertKeysToCamelCase(refreshed));
+    const refreshed = await selectRegistration(db, registration.id);
+    if (refreshed) {
+      await publishEvent(env, refreshed.contestId, {
+        type: 'registration.upserted',
+        payload: refreshed,
+      });
+    }
+  }
 
-    await publishEvent(env, registration.contest_id, {
-      type: 'registration.upserted',
-      payload,
-    });
+  for (const contestId of contestIds) {
+    await updateAllRankings(db, contestId);
+    await invalidateResultsCache(env.KV, contestId);
   }
 }
 
@@ -415,6 +389,18 @@ competitors.delete('/:competitorId', async (c) => {
     return c.json({ data: null, error: 'Competitor not found', requestId: c.get('requestId') }, 404);
   }
 
+  const contestIds = [...new Set(relatedRegistrations.map((registration) => registration.contest_id))];
+
+  if (relatedRegistrations.length > 0) {
+    // The registrations cascade away with the competitor; drop any result row
+    // the cascade leaves behind before the survivors are re-ranked.
+    await executeMutation(
+      db,
+      `DELETE FROM results WHERE registration_id IN (${relatedRegistrations.map(() => '?').join(',')})`,
+      relatedRegistrations.map((registration) => registration.id)
+    );
+  }
+
   await Promise.all(
     relatedRegistrations.map((registration) =>
       publishEvent(c.env, registration.contest_id, {
@@ -423,6 +409,11 @@ competitors.delete('/:competitorId', async (c) => {
       })
     )
   );
+
+  for (const contestId of contestIds) {
+    await updateAllRankings(db, contestId);
+    await invalidateResultsCache(c.env.KV, contestId);
+  }
 
   return c.json({
     data: { success: true },

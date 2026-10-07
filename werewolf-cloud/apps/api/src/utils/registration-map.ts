@@ -26,18 +26,50 @@ export function parseLifts(input: unknown): LiftType[] {
   return selected.length > 0 ? selected : [...ALL_LIFTS];
 }
 
-export function mapRegistrationRow(row: Record<string, any>): Record<string, any> {
-  const normalised: Record<string, any> = { ...row };
+/**
+ * Row returned by the joined registration SELECT in
+ * services/registrations/reader, after convertKeysToCamelCase. The two JSON
+ * columns still hold whatever the driver returned: a JSON string, an array or
+ * null.
+ */
+export type RegistrationRow = {
+  id: string;
+  contestId: string;
+  competitorId: string;
+  ageCategoryId: string;
+  weightClassId: string | null;
+  bodyweight: number | null;
+  reshelCoefficient: number | null;
+  mcculloughCoefficient: number | null;
+  rackHeightSquat: number | null;
+  rackHeightBench: number | null;
+  createdAt: string;
+  flightCode: string | null;
+  flightOrder: number | null;
+  firstName: string;
+  lastName: string;
+  gender: string;
+  birthDate: string;
+  club: string | null;
+  city: string | null;
+  ageCategoryName: string | null;
+  weightClassName: string | null;
+  labels?: unknown;
+  lifts?: unknown;
+};
 
-  if ('labels' in normalised) {
-    normalised['labels'] = parseLabels(normalised['labels']);
-  }
+/** The registration payload every route response and live event carries. */
+export type RegistrationRecord = Omit<RegistrationRow, 'labels' | 'lifts'> & {
+  labels: string[];
+  lifts: LiftType[];
+};
 
-  if ('lifts' in normalised) {
-    normalised['lifts'] = parseLifts(normalised['lifts']);
-  } else {
-    normalised['lifts'] = [...ALL_LIFTS];
-  }
+export function mapRegistrationRow(row: RegistrationRow): RegistrationRecord {
+  const { labels, lifts, ...rest } = row;
 
-  return normalised;
+  return {
+    ...rest,
+    labels: parseLabels(labels),
+    lifts: lifts === undefined ? [...ALL_LIFTS] : parseLifts(lifts),
+  };
 }
