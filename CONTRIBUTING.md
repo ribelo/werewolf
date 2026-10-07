@@ -1,407 +1,94 @@
 # Contributing to Werewolf
 
-**Thanks for considering contributing to Werewolf - the rock-solid powerlifting contest management application.**
+Werewolf is a powerlifting contest manager. The active product is **Werewolf Cloud** in
+`werewolf-cloud/`; the old Tauri desktop app in `src/` and `src-tauri/` is frozen reference material and
+must not be changed or used as a design constraint. New features land in the cloud workspace only.
 
-**This project exists to solve real problems for powerlifting meet directors. Every contribution should make their lives easier, not add complexity they don't need.**
+Read `AGENTS.md` for the P0 scope decisions and `werewolf-cloud/docs/architecture.md` for how the app is
+built.
 
----
+## Prerequisites
 
-## Quick Start for Contributors
+- Bun 1.2+ (`packageManager` is pinned in `werewolf-cloud/package.json`).
+- Optional: `nix develop` from the repo root for the cloud shell (Bun, Node, Wrangler preinstalled).
 
-### What You're Contributing To
-
-**Werewolf is intentionally simple:**
-- Desktop app that works offline (no cloud, no subscriptions, no bullshit)
-- Manages powerlifting competitions from registration to results
-- Dual-window system: organizer interface + spectator display
-- Built for Polish Powerlifting Federation but works internationally
-- Zero external dependencies during competition (SQLite database)
-
-**What we're NOT building:**
-- Timer systems, judge scoring, federation uploads, hardware integration
-- Complex validation rules, multiple platforms, announcer features
-- Cloud sync, multi-user access, audit trails, or banking-level security
-
-See `REQUIREMENTS_AND_ROADMAP.md` for the complete scope definition.
-
-### Prerequisites
-
-**Required:**
-- Rust (latest stable)
-- Bun (package manager - faster than npm/yarn)
-- SQLite
-- Git
-- Basic understanding of Tauri, Svelte, and SQLite
-
-**Recommended:**
-- NixOS (development shell with all dependencies)
-- VS Code with Rust, Svelte, and Tauri extensions
-- Experience with powerlifting competitions (helps understand the domain)
-
-### Development Environment Setup
+## Setup and local development
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd werewolf
-
-# Option 1: NixOS users (easiest)
-nix develop
+cd werewolf-cloud
 bun install
 
-# Option 2: Manual setup
-# Install Rust: https://rustup.rs/
-# Install Bun: https://bun.sh/
-bun install
+# Organizer password for local dev (git-ignored)
+cp .dev.vars.example .dev.vars       # then edit ADMIN_PASSWORD
 
-# Create environment file for SQLx
-echo 'DATABASE_URL="sqlite:~/.local/share/werewolf/werewolf.db"' > src-tauri/.env
+# Terminal 1 — Worker API + local D1/KV/DO on http://127.0.0.1:8787
+bun run dev                          # applies pending migrations, then starts Wrangler
 
-# Run all quality checks
-./check.sh              # Rust formatting, linting, tests
-bun check               # Frontend type checking
-
-# Start development (user runs this, not automated)
-bun run tauri dev       # Opens desktop app with hot reload
+# Terminal 2 — SvelteKit UI on http://127.0.0.1:5173
+cd apps/web && PUBLIC_API_BASE=http://127.0.0.1:8787 bun run dev
 ```
 
----
+Open `http://127.0.0.1:5173`, sign in with the `ADMIN_PASSWORD` you set, and create a contest. Public
+display routes (`/display/current`, `/display/table`, `/results/[id]`) need no login; `/`, `/health`
+and `/auth/*` are always open.
 
-## Development Workflow
+## Checks before you push
 
-### Before You Start
+Run these inside `werewolf-cloud/`:
 
-1. **Read existing code** - understand the patterns and architecture
-2. **Check the scope** - make sure your idea fits the project goals
-3. **Search existing issues** - avoid duplicate work
-4. **Start small** - fix bugs or small improvements before major features
-
-### Making Changes
-
-**Code Quality Requirements:**
 ```bash
-# These must pass before any commit
-./check.sh              # Rust fmt, clippy, tests
-bun check               # Frontend type checking
+bun run typecheck                    # tsc --build
+bun run lint                         # oxlint; no explicit any is the rule that matters
+bun run test                         # Vitest with config/vitest.config.ts (API + domain + lib tests)
+bun run check                        # all three
+cd apps/web && bunx vitest run       # jsdom route/component tests (apps/web/vitest.config.ts)
+cd apps/web && bun run check         # svelte-kit sync + svelte-check
 ```
 
-**Testing Strategy:**
-- **Unit tests** for business logic in Rust (`cargo test`)
-- **Integration tests** for database operations
-- **Manual testing** for UI workflows (run the app and test by hand)
-- **No mocking** - use real SQLite database for integration tests
-
-**Git Workflow:**
-1. **Fork the repository**
-2. **Create feature branch** (`git checkout -b feature/description`)
-3. **Make small, focused commits** with clear messages
-4. **Test thoroughly** on your local machine
-5. **Open pull request** with description of changes and testing done
-
-### Code Style and Architecture
-
-**Backend (Rust) Patterns:**
-- **Domain-based commands**: `contest_create`, `competitor_register`, `attempt_record`
-- **Database as state**: All application state lives in SQLite
-- **Compile-time SQL**: Use `sqlx::query!()` macros, never runtime queries
-- **Error propagation**: `thiserror` errors through the entire stack
-- **No complex abstractions**: Keep it simple and testable
-
-**Frontend (Svelte) Patterns:**
-- **Dumb views**: Frontend calls Tauri commands, displays results
-- **No complex state**: Temporary form state only, database holds real state
-- **Mandatory i18n**: ALL user-visible text uses `$t('key.name')` translation
-- **TypeScript**: Full type safety with Svelte 5.38 and runes
-
-**Database (SQLite) Rules:**
-- **Compile-time checked queries**: Always use `sqlx::query!()` macros
-- **Never modify migrations**: Once applied, migrations are immutable
-- **New migrations for changes**: Even small schema changes need new migration files
-- **Local development reset**: `rm ~/.local/share/werewolf/werewolf.db` to reset
-
----
-
-## Types of Contributions We Need
-
-### High Priority (Always Welcome)
-
-**Bug Fixes:**
-- Crashes, data corruption, incorrect calculations
-- UI inconsistencies or translation errors
-- Build issues on different platforms
-- Database migration problems
-
-**Documentation Improvements:**
-- User guides for meet directors
-- Developer documentation and API docs
-- Architecture explanations and decision rationale
-- Installation and troubleshooting guides
-
-**Testing and Quality:**
-- Unit tests for business logic
-- Integration tests for database operations
-- Platform-specific testing (Windows/macOS/Linux)
-- Performance testing with large competitions
-
-### Medium Priority (Case-by-Case)
-
-**Small Feature Additions:**
-- New export formats (PDF certificates, federation-specific CSV)
-- Additional competitor fields or categories
-- UI improvements for better workflow
-- Keyboard shortcuts for power users
-
-**Developer Experience:**
-- Build process improvements
-- Better error messages and debugging
-- Code organization and refactoring
-- Performance optimizations
-
-### Lower Priority (Discuss First)
-
-**New Features:**
-- Major UI changes or new windows
-- Additional scoring systems
-- Import/export integrations
-- Configuration options
-
-**Before starting major features**: Open an issue to discuss fit with project goals.
-
----
-
-## Specific Contribution Guidelines
-
-### Adding New Tauri Commands
-
-**Pattern to follow:**
-```rust
-// src-tauri/src/commands/competitor.rs
-#[tauri::command]
-pub async fn competitor_create(
-    state: tauri::State<'_, AppState>,
-    competitor: CompetitorCreate,
-) -> Result<Competitor, AppError> {
-    let db = state.database.lock().await;
-    db.competitor_create(competitor).await
-}
-```
-
-1. **Define in domain-specific file** (`src-tauri/src/commands/competitor.rs`)
-2. **Use existing Database methods** - don't duplicate database logic
-3. **Register in handler** (`src-tauri/src/lib.rs` `invoke_handler![]`)
-4. **Add to frontend types** if using TypeScript bindings
-5. **Write unit tests** for the command logic
-
-### Database Schema Changes
-
-**CRITICAL RULES:**
-```bash
-# NEVER modify existing migrations
-# ALWAYS create new migration files
-sqlx migrate add descriptive_name_of_change
-
-# Test locally before committing
-cargo run -- db migrate
-cargo test
-
-# Check migration applied correctly
-sqlite3 ~/.local/share/werewolf/werewolf.db "SELECT * FROM _sqlx_migrations;"
-```
-
-### Frontend Component Development
-
-**Required patterns:**
-```svelte
-<!-- All user-visible text must be translatable -->
-<button>{$t('competitor.create.button')}</button>
-<h1>{$t('contest.results.title')}</h1>
-<div>{$t('errors.database.connection_failed')}</div>
-
-<!-- Use existing stores and command patterns -->
-<script lang="ts">
-  import { invoke } from '@tauri-apps/api/core'
-  import { t } from 'svelte-i18n'
-  
-  async function createCompetitor() {
-    try {
-      await invoke('competitor_create', { competitor })
-    } catch (error) {
-      errorMessage = $t('errors.competitor.create_failed')
-    }
-  }
-</script>
-```
-
-### Internationalization (i18n)
-
-**For ALL user-visible text:**
-1. **Add translation keys** to both `src/lib/i18n/locales/pl.json` and `en.json`
-2. **Use descriptive key names**: `domain.section.specific_text`
-3. **Polish is primary language** - make sure Polish translations are accurate
-4. **Test both languages** - switch language in app settings
-
-**Key naming convention:**
-```json
-{
-  "common": {
-    "save": "Zapisz",
-    "cancel": "Anuluj",
-    "delete": "Usuń"
-  },
-  "competitor": {
-    "create": {
-      "title": "Dodaj zawodnika",
-      "button": "Dodaj"
-    }
-  },
-  "errors": {
-    "database": {
-      "connection_failed": "Błąd połączenia z bazą danych"
-    }
-  }
-}
-```
-
----
-
-## Pull Request Process
-
-### Before Opening a PR
-
-**Required:**
-- [ ] Code compiles without warnings (`./check.sh` passes)
-- [ ] All tests pass (`cargo test`)
-- [ ] Frontend builds (`bun check` passes)
-- [ ] Manual testing completed for changed functionality
-- [ ] New user-visible text has Polish and English translations
-
-**Good to have:**
-- [ ] New unit tests for changed business logic
-- [ ] Documentation updates for significant changes
-- [ ] Performance testing for database-related changes
-
-### PR Description Template
-
-```markdown
-## What Changed
-Brief description of the changes and why they were needed.
-
-## Testing Done
-- [ ] Manual testing on Linux/Windows/macOS
-- [ ] Unit tests added/updated
-- [ ] Database migrations tested
-- [ ] UI tested in both Polish and English
-
-## Database Changes
-- [ ] No schema changes
-- [ ] New migration files created (not modified existing)
-- [ ] Migration tested locally
-
-## Breaking Changes
-- [ ] No breaking changes
-- [ ] Breaking changes documented with migration path
-```
-
-### Code Review Process
-
-**What reviewers look for:**
-1. **Follows established patterns** - doesn't introduce new architectural concepts
-2. **Database safety** - uses compile-time SQLx macros, proper migrations
-3. **Error handling** - proper `thiserror` error types and propagation
-4. **i18n compliance** - all user-visible text is translatable
-5. **Testing adequacy** - appropriate tests for the change complexity
-6. **Documentation** - clear code comments and updated docs where needed
-
-**Review timeline:**
-- Small bug fixes: 1-2 days
-- Feature additions: 3-7 days
-- Large changes: May require discussion and iteration
-
----
-
-## Getting Help
-
-### Where to Ask Questions
-
-**GitHub Issues:**
-- Bug reports with reproducible steps
-- Feature requests (discuss fit with project scope first)
-- Build and setup problems
-- Documentation improvements
-
-**GitHub Discussions:**
-- General questions about the codebase
-- Architecture decisions and design discussions
-- Powerlifting domain questions
-- Getting started help
-
-**Code Comments:**
-- Most functions have clear documentation
-- Architecture decisions explained in `docs/ARCHITECTURE.md`
-- Database schema documented in migration files
-
-### Common Development Issues
-
-**Build Fails:**
-```bash
-# Clear all caches
-rm -rf target/ node_modules/ dist/
-bun install
-./check.sh
-```
-
-**Database Issues:**
-```bash
-# Reset local database (development only - destroys data)
-rm ~/.local/share/werewolf/werewolf.db
-# App will recreate on next startup
-
-# Check migration status
-sqlite3 ~/.local/share/werewolf/werewolf.db "SELECT * FROM _sqlx_migrations;"
-```
-
-**SQLx Compile Errors:**
-```bash
-# Make sure DATABASE_URL is set
-echo 'DATABASE_URL="sqlite:~/.local/share/werewolf/werewolf.db"' > src-tauri/.env
-
-# Prepare queries for offline compilation
-./prepare.sh
-```
-
-**Frontend Type Errors:**
-```bash
-# Check TypeScript
-bun check
-
-# Verify all translations exist
-# Check that all $t('key.name') references have corresponding JSON entries
-```
-
----
-
-## Project Philosophy
-
-**This app exists because existing powerlifting software is:**
-- Expensive (hundreds of dollars per meet)
-- Overcomplicated (designed by programmers, not meet directors)
-- Internet-dependent (fails when gym WiFi is down)
-- Feature-bloated (tries to do everything poorly)
-
-**We're building the opposite:**
-- **Free and open source** - no licensing fees
-- **Simple and reliable** - does the core job perfectly
-- **Offline-first** - works anywhere, anytime
-- **Domain-focused** - built for powerlifting, by people who understand powerlifting
-
-**Every contribution should serve meet directors who:**
-- Run competitions on weekends in community gyms
-- Need reliable software that doesn't fail at critical moments
-- Want to focus on the competition, not fight with technology
-- May not be highly technical but know powerlifting inside and out
-
-**When in doubt, choose simplicity over features, reliability over complexity, and practical solutions over perfect abstractions.**
-
----
-
-**Welcome to the project, and thank you for helping make powerlifting competitions run smoother!**
+The API integration suite is the slow one (~100 s); run a single file with
+`bunx vitest run --config config/vitest.config.ts <path>`.
+
+## Coding rules
+
+- Strict TypeScript, no `any` (use `unknown` plus narrowing), 2-space indent, camelCase helpers,
+  PascalCase Svelte components.
+- API responses use the envelope `{ data, error, requestId }`; validate request bodies with Zod through
+  `@hono/zod-validator`, reusing schemas from `@werewolf/domain` where they exist.
+- Shared domain logic stays pure and testable in `packages/domain`; the Worker keeps DB access in
+  `apps/api/src/utils/database.ts` helpers and `apps/api/src/services/`.
+- All user-visible copy goes through `$_('key')` in components or `t('key')` in scripts and must exist in
+  **both** `apps/web/src/lib/i18n/locales/pl.json` (default) and `en.json`. Never hardcode Polish or
+  English strings in markup.
+- Never edit files that are mid-change by another engineer, and never reformat a file you are not touching.
+
+## Migrations
+
+- Migrations live in `werewolf-cloud/migrations/` and are applied by `bun run dev` locally and by
+  `bun run deploy` in production.
+- Applied SQL is immutable: never edit an existing migration file. Add a new one and note why in its header
+  comment. The `migrations/` folder at the repo root belongs to the legacy desktop app — do not touch it.
+- Local data reset: stop the dev server, delete `werewolf-cloud/.wrangler/state`, start `bun run dev` again.
+
+## Pull requests
+
+- Keep commits small and imperative; prefix with a scope when it helps
+  (`fix(api): reject unloadable attempt weights`).
+- Describe motivation, the commands you ran (`bun run check`, targeted Vitest, `svelte-check`) and any
+  manual QA. UI changes should say what was checked in the Polish and English UI.
+- Do not deploy, do not run Wrangler against `--remote`, and do not commit secrets. Deployment is done by
+  the maintainers following `werewolf-cloud/docs/deployment.md`.
+
+## Documentation map
+
+| Document | Content |
+|----------|---------|
+| [architecture.md](werewolf-cloud/docs/architecture.md) | How the cloud app is built (the architecture source of truth). |
+| [api-endpoints.md](werewolf-cloud/docs/api-endpoints.md) | Every HTTP route, auth requirement and envelope. |
+| [deployment.md](werewolf-cloud/docs/deployment.md) | Worker/Pages deployment and credentials. |
+| [SPEC.md](werewolf-cloud/docs/SPEC.md) | P0 requirements in EARS form. |
+| [BACKLOG.md](werewolf-cloud/docs/BACKLOG.md) | Open work that is still in scope. |
+| [USER_GUIDE.md](docs/USER_GUIDE.md) | Operator walkthrough of a meet. |
+| [FAQ.md](docs/FAQ.md) | Common questions about the cloud app. |
+
+Keep documentation current: a wrong document is worse than no document. Delete superseded plans instead of
+leaving them next to the current ones — git keeps the history.

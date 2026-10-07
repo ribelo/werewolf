@@ -59,9 +59,9 @@ default pipeline. All new work targets `werewolf-cloud/`.
 
 ## Documentation
 
-- [Architecture](docs/ARCHITECTURE.md)
+- [Architecture](werewolf-cloud/docs/architecture.md)
+- [API endpoints](werewolf-cloud/docs/api-endpoints.md)
 - [User Guide](docs/USER_GUIDE.md)
 - [FAQ](docs/FAQ.md)
-- [Post-Migration Action Plan](docs/post-migration-action-plan.md)
-- [Requirements & Roadmap](REQUIREMENTS_AND_ROADMAP.md)
+- [Spec](werewolf-cloud/docs/SPEC.md) and [Backlog](werewolf-cloud/docs/BACKLOG.md)
 - Contributor conventions: [CLAUDE.md](CLAUDE.md), [AGENTS.md](AGENTS.md)

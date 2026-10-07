@@ -1,72 +1,96 @@
 # Werewolf Cloud FAQ
 
-_Last updated: 2025-09-20_
+Answers reflect the code in `werewolf-cloud/`. Architecture: [architecture.md](../werewolf-cloud/docs/architecture.md);
+routes: [api-endpoints.md](../werewolf-cloud/docs/api-endpoints.md).
 
 ## General
 
 ### Why move from the Tauri desktop app to Cloudflare?
-The desktop version served us well, but the cloud rewrite gives us easier multi-screen sharing, real-time sync between roles, and managed infrastructure without sacrificing offline resilience. We still support local development for meet-day reliability.
+The cloud app gives multiple screens (desk, announcer, big screen) the same live data over WebSockets, works
+from any browser, and keeps the contest in D1 so a lost laptop does not lose the meet.
 
 ### Is the desktop app still available?
-Yes. The legacy Tauri project lives in `src/` and `src-tauri/`. It is no longer the primary target, but you can build it using the legacy instructions if you need a fully offline fallback.
+Yes, the legacy Tauri project lives in `src/` and `src-tauri/`. It is frozen reference material and is no
+longer developed; new work happens in `werewolf-cloud/`.
 
 ### What browsers are supported?
-Chrome/Chromium, Firefox, and Safari on desktop. Tablet support is in progress; mobile devices should use the table display view for now.
+The organizer desk targets desktop Chrome/Chromium, Firefox and Safari. The display routes
+(`/display/current`, `/display/table`, `/results/[id]`) are simple pages that also render on tablets.
 
-## Accounts & Security
+## Accounts & security
 
-### Do organizers need individual logins?
-Not yet. The initial release assumes a trusted network with shared access. The roadmap includes optional Cloudflare Access or token-based auth for admin routes.
+### Do organizers have logins?
+Yes. There is one organizer account per deployment. `POST /auth/login` takes the password from the
+`ADMIN_PASSWORD` secret, sets an HttpOnly `werewolf_session` cookie and stores the session in KV for 14
+days. `POST /auth/logout` clears it and `GET /auth/session` probes it. All GET routes, including the public
+displays, stay open; every write needs the session. Multi-user accounts and audit trails are out of P0 scope.
 
-### Where should I store the Cloudflare API token?
-Keep it in the `.env` file for local development only. In production, configure secrets via `wrangler secret put` and Cloudflare Pages environment variables. Never commit the token to git.
+### Where is the Cloudflare API token stored?
+In `werewolf-cloud/.dev.vars` locally (git-ignored, template in `.dev.vars.example`) and as Wrangler/Pages
+secrets in production (`wrangler secret put`). Never commit it and never paste it into issues or logs.
 
-### What permissions does the API token require?
-Workers KV Storage (Edit), Workers D1 (Edit), Workers Scripts (Edit), Workers Tail (Read), Cloudflare Pages (Edit), Workers R2 (Edit). The provided token is scoped to the Werewolf project only.
+### What permissions does the deploy token need?
+Workers Scripts, D1, Workers KV and Cloudflare Pages edit permissions for this account, plus Workers Tail for
+reading live logs. See `werewolf-cloud/docs/cloudflare-environments.md` for the provisioned ids.
 
-## Data & Reliability
+## Data & reliability
 
 ### How are contests stored?
-Contests, competitors, registrations, attempts, and results live in Cloudflare D1 (SQLite backend). Reference data (age/weight classes, settings) is seeded via migrations.
-
-### What if D1 goes down during a meet?
-Wrangler’s local dev stores data in `.wrangler/state`. In production, Cloudflare D1 provides high availability. The roadmap includes an offline mutation queue so the desk can continue accepting attempts during brief outages.
+Contests, competitors, registrations, attempts, results, plate sets, categories, settings and the coefficient
+tables live in Cloudflare D1. Reference data is seeded by the migrations in `werewolf-cloud/migrations/`.
 
 ### Is KV used today?
-KV currently stores contest snapshots for display preloading. Diagnostics UI is under construction (see `docs/post-migration-action-plan.md`).
+Yes: session records, backup metadata, display filter sync payloads and short-lived rankings/public-bundle
+caches. KV does **not** hold live contest state or Durable Object snapshots.
 
-## Running a Meet
+### What if the connection drops during a meet?
+The desk keeps working: mutating calls that cannot reach the Worker are queued in IndexedDB and replayed when
+the connection returns, while displays keep rendering their last payload and poll every 2 seconds. On
+reconnect the client fetches the latest state over REST; there is no event replay.
+
+### What if D1 goes down during a meet?
+Local development persists state in `.wrangler/state`. In production D1 is a managed service; a D1 outage is
+still a hard stop for writes, which is why the offline queue exists and why backups matter.
+
+## Running a meet
 
 ### How fast do displays update?
-Under normal conditions the announcer and big-screen update within ~1 second via WebSockets. If the WS connection drops, the UI switches to polling every 2 seconds until the socket resumes.
+While the WebSocket is connected, updates are sub-second. When the socket drops the client polls
+`/contests/:id/attempts/current` and `/contests/:id/attempts` every 2 seconds until it reconnects.
 
 ### Can I run multiple contests at once?
-The current Proof-of-Concept assumes one active contest per deployment. Multi-flight and multi-platform support is on the roadmap.
+No. The current version assumes one active contest per deployment, although each contest has its own
+Durable Object room. Multi-contest routing is post-P0 work.
 
 ### How do I change the language?
-Go to **Ustawienia** → **Preferencje interfejsu**, choose Polish or English. The selection is persisted in the settings table and takes effect immediately after the next render.
+Open **Ustawienia** and switch the language. The choice is saved through `PUT /settings/language` and kept
+in `localStorage`; Polish is the default.
 
 ## Development
 
 ### How do I run the app locally?
-1. `cd werewolf-cloud && bun run dev` to start the Worker.
-2. `cd werewolf-cloud/apps/web && PUBLIC_API_BASE=http://127.0.0.1:8787 bun run dev` for the frontend.
-3. Visit `http://localhost:5173` (or the port Vite chooses). Details are in the README.
+1. `cd werewolf-cloud && bun install && bun run dev` (Worker API on `http://127.0.0.1:8787`).
+2. `cd werewolf-cloud/apps/web && PUBLIC_API_BASE=http://127.0.0.1:8787 bun run dev` (UI on `http://127.0.0.1:5173`).
+3. Sign in with the `ADMIN_PASSWORD` from `werewolf-cloud/.dev.vars`.
 
-### The console says `Cannot apply new_classes migration to existing class ContestRoom`. What now?
-Use `wrangler.dev.toml` for local development or clear the `.wrangler/state` directory before re-running `bun run dev`. We also provide a `bun run dev:clean` script to reset local bindings.
+### What does `Cannot apply new_classes migration to existing class ContestRoom` mean?
+The local Durable Object state is older than the current Worker config. Stop the dev server, delete
+`werewolf-cloud/.wrangler/state` and run `bun run dev` again.
 
-### Why do I see “connection lost” toasts locally?
-Durable Objects aren’t fully emulated in the combined Worker + Pages dev setup. The UI falls back to polling and recovers automatically. In production, the WebSocket stays connected.
+### Why do I see "connection lost" toasts locally?
+Durable Objects behave differently under local Wrangler than in production. The UI falls back to polling and
+recovers on its own; production keeps the WebSocket.
 
-## Future Enhancements
+## Future
 
-### When will results export return?
-It’s tracked in `REQUIREMENTS_AND_ROADMAP.md` and the post-migration plan. The target is to ship CSV and JSON exports alongside plate-set presets before the first public beta.
+### Can I export results?
+Yes: `POST /contests/:id/results/export` returns CSV or JSON. Federation-specific templates and PDF
+exports are not built.
 
-### Will there be authentication and audit trails?
-Yes, after the parity work is complete. The planned approach uses Cloudflare Access or signed tokens for desk operators, plus audit logging in D1.
+### What about authentication and audit trails?
+Organizer login and sessions exist (see above). Audit logging in D1, multi-user accounts and multi-tenant
+deployments are post-P0; the tracked list is in `werewolf-cloud/docs/BACKLOG.md`.
 
 ### How can I contribute?
-Open an issue describing the bug or enhancement, follow the coding standards in the README, and submit a PR. We welcome help tightening tests, polishing UX, and expanding documentation.
-
+Start with [CONTRIBUTING.md](../CONTRIBUTING.md). Bugs and enhancements go through GitHub issues; follow the
+checks and migration rules there.

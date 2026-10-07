@@ -1,277 +1,173 @@
-# Werewolf Cloud – Architecture & Constraints
+# Werewolf Cloud — Architecture
 
-This document captures the agreed constraints, architecture decisions, and concrete specs for implementing live competition features and UI flows. Treat this as the source of truth for the PoC and subsequent iterations.
+Source of truth for how the cloud app is put together. For endpoint details see
+[api-endpoints.md](./api-endpoints.md); for open work see [BACKLOG.md](./BACKLOG.md); for deploy steps see
+[deployment.md](./deployment.md).
 
-## 1) Scope & Constraints
+## 1. Scope
 
-- Deployment: Cloudflare Workers + Hono (API), D1 (DB), KV (auxiliary), Durable Objects (realtime fan‑out).
-- Transport: WebSockets via Durable Object per contest. Fallback to polling (1–2s acceptable). SSE optional later.
-- Latency target: 1–2 seconds end‑to‑end is sufficient.
-- Public views: Announcer table and big‑screen current lift are public (no auth). Management UI remains admin‑only.
-- Events to broadcast: attempts upsert/result updates, current attempt changes, optional queue updates. Do not broadcast competitor/registration changes in PoC.
-- Active contests: Single active contest for PoC (room per contest still supported).
-- State of truth: D1 is authoritative. DO provides in‑memory fan‑out only. KV is not used for live state (use later for backups/snapshots only).
-- Offline tolerance: Management UI queues writes offline and replays on reconnect; displays show last snapshot and auto‑poll until realtime reconnects.
+- Cloudflare-native rewrite of the legacy Tauri desktop app. All active code lives in `werewolf-cloud/`;
+  `src/` and `src-tauri/` are frozen legacy references and are not part of the deployment path.
+- P0 target: one organizer account, one active contest per deployment, Polish/English UI, reliable
+  meet-day desk with offline write queuing. Photos are out of scope.
 
-## 2) Realtime Architecture
+## 2. Runtime topology
 
-- Durable Object: `ContestRoom` manages WebSocket connections per contest and broadcasts JSON events.
-- Join endpoint: `GET /ws/contests/:contestId` forwards upgrade to the DO instance.
-- Broadcast hooks: attempt routes publish to the room after DB mutation.
-- Heartbeat: DO emits `heartbeat` every ~25s for connection liveness.
-
-Event envelope (JSON):
 ```
+        Organizer desk / displays (SvelteKit, SPA + SSR build)
+                        │  REST + WebSocket
+                        ▼
+        ┌───────────────────────────────┐
+        │ Worker API (Hono)             │
+        │  apps/api/src/app.ts          │
+        │  routes/*, middleware/auth    │
+        └───────┬───────────┬───────────┘
+                │           │
+        ┌───────▼─────┐ ┌───▼────────────────────┐
+        │ D1 (DB)     │ │ ContestRoom Durable    │
+        │ authoritative│ │ Object: in-memory     │
+        └─────────────┘ │ WebSocket fan-out only │
+                        └───────┬────────────────┘
+        ┌─────────────┐         │ broadcast
+        │ KV          │◀────────┘ (nothing is stored in the DO)
+        │ sessions,   │
+        │ caches,     │
+        │ backup meta │
+        └─────────────┘
+```
+
+### Worker API (`apps/api`)
+- Hono + TypeScript, entry `src/index.ts` → `createApp()` in `src/app.ts`; routes are mounted in
+  `src/routes/index.ts`.
+- Request pipeline: request logger → CORS → Zod error normaliser → `/health` and `/` handlers →
+  `requireAuth` → route modules → 404 catch-all.
+- Validation uses `@hono/zod-validator` with schemas from `@werewolf/domain`; success responses use
+  `{ data, error: null, requestId }`, errors `{ data: null, error, requestId }`. Zod failures are rewritten
+  to `400 { error: "Validation failed: <path>: <message>" }`.
+- CORS allows the local Vite origins plus the Pages/Worker origins and sends credentials (session cookie).
+
+### D1
+- Authoritative store. Schema and seed data live in `werewolf-cloud/migrations/` (applied versions are
+  recorded in `d1_migrations`); helpers in `apps/api/src/utils/database.ts`.
+- Domain data: contests, competitors, registrations (`flight_code`, `flight_order`, `labels`,
+  `registration_lifts`), attempts, results, contest categories, contest tags, plate sets, settings,
+  coefficient tables (`reshel_coefficients`, `mccullough_coefficients`).
+
+### KV
+- Session records (`session:<id>`, 14-day TTL), backup metadata (`backup_meta:`), display filter sync
+  (`displaySync:<contestId>`), rankings caches and the 60-second public results bundle.
+- KV is **not** live contest state and holds no room snapshots.
+
+### ContestRoom Durable Object
+- `apps/api/src/live/contest-room.ts`, bound as `werewolf-contest-room` (one instance per contest id).
+- Keeps a `Set` of connected WebSockets and re-broadcasts JSON events; it emits a `heartbeat` every 25 s
+  while clients are connected and answers the literal text `ping` with `pong`.
+- It uses no Durable Object storage: nothing survives a restart and a client that connects late receives only
+  future events. Current state always comes from D1 through the REST endpoints.
+- Joining: `GET /ws/contests/:contestId` forwards the upgrade to the room. Publishing:
+  `publishEvent()` in `apps/api/src/live/publish.ts` posts the event to the room's `/broadcast` route.
+
+## 3. Realtime contract
+
+Event envelope:
+
+```json
 {
-  "type": "attempt.upserted" | "attempt.resultUpdated" | "attempt.currentSet" | "attempt.currentCleared" | "queue.updated" | "scoreboard.updated" | "contest.stateChanged" | "heartbeat",
+  "type": "attempt.currentSet",
   "contestId": "<uuid>",
   "timestamp": "2025-09-18T12:34:56.000Z",
-  "payload": { /* event-specific fields */ }
+  "payload": { }
 }
 ```
 
-Attempt summary payload (typical):
-```
-{
-  "attemptId": "<uuid>",
-  "registrationId": "<uuid>",
-  "liftType": "Squat" | "Bench" | "Deadlift",
-  "attemptNumber": 1 | 2 | 3 | 4,
-  "weight": 220.0,
-  "status": "Pending" | "Successful" | "Failed",
-  "firstName": "Jane",
-  "lastName": "Doe",
-  "competitorName": "Jane Doe",
-  "competitionOrder": 7,
-  "updatedAt": "2025-09-18T12:34:56.000Z"
-}
-```
+Events actually published today: `attempt.upserted`, `attempt.deleted`, `attempt.resultUpdated`,
+`attempt.currentSet`, `attempt.currentCleared`, `registration.upserted`, `registration.deleted`,
+`display.filtersSynced`, `display.qrVisibility`, `heartbeat`. `queue.updated`, `scoreboard.updated` and
+`contest.stateChanged` exist in the `LiveEventType` union but are not emitted yet.
 
-Client policy:
-- Try WS first; on failure, fall back to polling `GET /contests/:id/attempts/current` and `GET /contests/:id/attempts` every 1–2s.
-- Reconnect with exponential backoff.
+Client policy (`apps/web/src/lib/realtime.ts`):
+- Connect over WebSocket; when the socket closes, immediately poll
+  `GET /contests/:id/attempts/current` and `GET /contests/:id/attempts` every 2 s and retry the socket with
+  exponential backoff (5 attempts max, 1 s → 30 s cap).
+- Reconnect is "fetch latest state and resume": there is no event replay protocol and no server-side snapshot
+  to catch up from. Displays also cache their last payload in `localStorage`.
 
-## 3) UI Surfaces (Three Screens)
+## 4. Auth & access
 
-- Management (admin): existing contest detail becomes control hub; shows connection status; applies live events to current attempt and attempts list. Offline write‑queue support (IndexedDB) for POST/PATCH/PUT requests.
-  - Per registration “Edit attempts” modal exposes 3 attempts × lifts grid; saves via POST `/contests/:contestId/registrations/:registrationId/attempts` and refreshes list.
-  - Attempt rows provide status selector (Pending/Successful/Failed) backed by `PATCH /attempts/:id/result` with optimistic label updates.
-  - “Set current” button issues `PUT /contests/:contestId/attempts/current`; current panel offers “Clear current” (DELETE) to release displays.
-  - Toasts summarise outcomes; realtime bridge keeps contest store and displays in sync (events: `attempt.upserted`, `attempt.resultUpdated`, `attempt.currentSet`, `attempt.currentCleared`).
-- Announcer Table (public): `/display/table` – readonly, large rows; columns include rotation order, name, lift, attempt #, weight, status. Uses WS/polling.
-- Big‑Screen Current (public): `/display/current` – shows current lifter, attempt #, weight, rack heights, lights (judge decisions), basic timer; full‑screen layout.
+- `POST /auth/login` accepts `{ password }`, compares it with the `ADMIN_PASSWORD` secret and sets the
+  HttpOnly `werewolf_session` cookie; `POST /auth/logout` deletes it; `GET /auth/session` probes it.
+- Sessions are random 32-byte ids stored in KV for 14 days and refreshed on use. In production the cookie is
+  `Secure` with `SameSite=None` (the Pages frontend is cross-site); locally it is `SameSite=Lax`.
+- `requireAuth` (`apps/api/src/middleware/auth.ts`) protects every non-GET request except `/`, `/health`
+  and `/auth/*`. All GET routes — including displays — are public. `ENV=test` bypasses the check so the
+  integration suite can call write routes directly.
+- Single organizer account: there is no user table and no multi-tenant isolation.
 
-## 4) Competition Modeling & Wizard
+## 5. Offline & resilience
 
-Baseline today (schema): `contests.discipline` is a single value: `Bench | Squat | Deadlift | Powerlifting`.
+- IndexedDB mutation queue (`apps/web/src/lib/offline/mutation-queue.ts`): `idb` database
+  `werewolf_mutations` with a `mutations` store. Mutating calls that fail because the browser is offline or
+  the request never reached the Worker are queued and replayed oldest-first when connectivity returns
+  (backoff 1 s → 120 s cap); permanently failing entries land in a failed list with retry/discard controls.
+- The desk keeps optimistic state while a mutation is queued; displays keep rendering their last payload.
+- Reconnect semantics are described in §3: latest snapshot, no replay.
 
-New requirement:
-- Wizard must support building competitions from exercises (e.g., “Deadlift + Bench” push‑pull). Most events are Deadlift + Bench.
-- Constraint: Do not include any “club” input in the Contest Wizard. “Club” belongs to competitor profiles only.
+## 6. Frontend building blocks (`apps/web`)
 
-Recommended data model change (non‑breaking):
-- Contest lift availability comes from `contests.discipline`/`competition_type`. Each registration stores explicit selections in `registration_lifts (registration_id, lift_type)` to support single- or dual-lift entries.
-- Keep `contests.discipline` for backward compatibility and default presets:
-  - Powerlifting → [Squat, Bench, Deadlift]
-  - Bench → [Bench]
-  - Deadlift → [Deadlift]
-  - PushPull (new preset) → [Bench, Deadlift]
-- UI: Contest Wizard presets plus “Custom” (multi‑select lifts). Persist per-registration selections to `registration_lifts`. If a registration does not override, fall back to contest defaults derived from `competition_type` or `discipline`.
+- SvelteKit (Svelte 4) + Tailwind; i18n via `svelte-i18n` (`pl` default, `en` fallback, both bundles
+  lazy-loaded in `src/lib/i18n/index.ts`).
+- Shared state: `$lib/ui/contest-store.ts` (contest + registrations), `$lib/ui/realtime-store.ts`,
+  `$lib/ui/notification-bridge.ts` (applies live events), `$lib/ui/modal.ts`, `$lib/ui/toast.ts`.
+- Desk helpers: `$lib/current-attempt.ts`, `$lib/rising-bar.ts`, `$lib/contest-table.ts`,
+  `$lib/filters/registrations.ts`, `$lib/plate-plan.ts`.
+- Routes: contest wizard and desk under `/contests`, procedure screens (`/contests/[id]/squat`, `/bench`,
+  `/deadlift`, `/desk`, `/plates`, `/registrations`, `/results`, `/team-results`), public
+  `/display/current`, `/display/table`, `/display/share`, public `/results/[id]`, `/settings`, `/login`.
 
-Migration sketch (0021):
-```
-CREATE TABLE IF NOT EXISTS registration_lifts (
-  registration_id TEXT NOT NULL,
-  lift_type TEXT NOT NULL CHECK(lift_type IN ('Bench','Squat','Deadlift')),
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (registration_id, lift_type),
-  FOREIGN KEY (registration_id) REFERENCES registrations(id) ON DELETE CASCADE
-);
+## 7. Environments & local development
 
--- backfill by inspecting attempts; if none recorded, derive from contest.competition_type/discipline
+| Config | Purpose | D1 | KV |
+|--------|---------|----|----|
+| `wrangler.dev.toml` | local Worker (`bun run dev`) | `werewolf-d1-dev` | dev namespace |
+| `wrangler.worker.toml` | deployed API Worker (`env.production`) | `werewolf-d1` | production namespace |
+| `wrangler.toml` | Pages frontend, points at the Worker via `script_name = "werewolf"` | production | production |
+
+```bash
+cd werewolf-cloud
+bun install
+bun run dev                                    # worker + local D1/KV on :8787 (applies migrations first)
+cd apps/web && PUBLIC_API_BASE=http://127.0.0.1:8787 bun run dev   # SvelteKit on :5173
 ```
 
-API updates:
-- `POST/PATCH /contests/:id/registrations` accept an optional `lifts` array (subset of contest lifts, minimum one).
-- Attempt upserts validate `liftType` against the registration's active lifts (`400 LIFT_NOT_REGISTERED`).
-- Contest patch cascades removed lifts to registrations and deletes orphaned attempts.
+Deployment is `bun run deploy` (migrations → Worker → Pages); see [deployment.md](./deployment.md).
+Provisioned ids and environments are documented in
+[cloudflare-environments.md](./cloudflare-environments.md).
 
-Frontend wizard:
-- Step “Disciplines”: contest-wide presets remain, but each competitor draft exposes toggles per lift backed by `registration_lifts`.
-- Competitor modal mirrors the same toggles when editing registrations.
+## 8. Coefficient tables
 
-## 5) Offline Strategy
+- Canonical data lives as JSON in `packages/domain/src/data/` (`reshel-men.json`, `reshel-women.json`,
+  `mccullough.json`); each file records its `source` and `retrievedAt`.
+- Load it into D1 with `scripts/seed-coefficients.ts` (run from `werewolf-cloud/`, needs `wrangler` on
+  `PATH`). It wipes the affected ranges and re-inserts:
+  ```bash
+  bun run scripts/seed-coefficients.ts --local                      # werewolf-d1-dev via wrangler.dev.toml
+  bun run scripts/seed-coefficients.ts --database werewolf-d1 --env production
+  ```
+- After a reseed, call `POST /system/maintenance/recalculate-coefficients` and spot-check a few
+  registrations with `GET /registrations/:id`.
+- Lookup rules: bodyweight is rounded to the table increment (0.25 kg) and clamped to the published range;
+  ages above the maximum clamp to the last entry.
 
-- Management (admin):
-  - Cache core entities (contest, registrations, attempts, state) in IndexedDB.
-  - Queue mutations locally with idempotency keys; replay on reconnect.
-  - Visual banner for offline with pending count.
-- Public displays:
-  - Cache last snapshot in localStorage; when offline, keep rendering snapshot.
-  - Poll until WS reconnects; indicate “Disconnected” subtly.
+## 9. Testing
 
-## 6) Security & Access
+- `bun run typecheck`, `bun run lint` (oxlint, `no-explicit-any`) and `bun run test` run the workspace
+  checks from `werewolf-cloud/`.
+- `config/vitest.config.ts` discovers `packages/**/*.test.ts`, `apps/api/**/*.test.ts` and
+  `apps/web/src/lib/__tests__/**`. The Miniflare-backed API suite lives in `apps/api/__tests__/`.
+- Web route/component tests use `apps/web/vitest.config.ts` (jsdom) and run from `apps/web`.
 
-- Public (read‑only) routes: announcer and big‑screen pages; corresponding REST endpoints remain public for reads.
-- Admin (write): protected via planned admin token/session; for PoC, local dev and trusted operator only.
-- API response envelope stays `{ data, error, requestId }` for success; errors `{ data: null, error, requestId }`.
+## 10. Known gaps
 
-## 7) Operations & Environments
-
-- Wrangler config binds D1/KV/ROOM (DO) for dev and prod. See `wrangler.worker.toml` for the API Worker and `wrangler.toml` for Pages.
-- Dev:
-  - Backend: `nix develop -c wrangler dev --local --config wrangler.worker.toml --port 8787`
-  - Frontend: `PUBLIC_API_BASE=http://127.0.0.1:8787 bun run dev`
-- Deploy: `wrangler deploy --env production --config wrangler.worker.toml`
-
-## 8) Coefficient Data Maintenance
-
-- **Storage**: Official Reshel and McCullough coefficients live in D1 tables `reshel_coefficients` (PK: gender + bodyweight_kg) and `mccullough_coefficients` (PK: age). Each record keeps source URL and retrieval timestamp so we can track revisions.
-- **Canonical Assets**: JSON exports are committed under `packages/domain/src/data/` (`reshel-men.json`, `reshel-women.json`, `mccullough.json`). Update these files first whenever federations publish new tables.
-- **Seeding**: Use the Bun script to load JSON into D1:
-  - Local: `bun run scripts/seed-coefficients.ts --local --config wrangler.dev.toml`
-  - Remote: `bun run scripts/seed-coefficients.ts --database werewolf-d1 --env production`
-  The script wipes existing rows for the affected gender/age range and re-inserts from the JSON payload.
-- **Refresh Workflow**:
-  1. Regenerate JSON from the official PDFs (see `scripts/seed-coefficients.ts` comments). The extraction currently relies on pdfminer via the project virtualenv; rerun the helper and commit the regenerated JSON.
-  2. Bump `retrievedAt` in the JSON file to the extraction timestamp and note the change in `docs/coefficients-parity-plan.md`.
-  3. Re-run the seed script locally and in production.
-  4. Execute coefficient regression tests (`bun run test` at repo root plus `cd apps/web && bun run test:run`) before sign-off and archive the run in `docs/api-test-results.md`.
-- **Operational checklist** (print for production workflows):
-  - Follow the refresh workflow above, then hit `POST /system/maintenance/recalculate-coefficients` to rehydrate existing registrations.
-  - Spot-check representative lifters (lightweight female, heavyweight male, masters age brackets) with `GET /registrations/{id}` to confirm stored coefficients match the reference table.
-  - Update the “Coefficient tables” stanza in `docs/api-endpoints.md` if source URLs change, and log the maintenance window in `docs/post-migration-action-plan.md`.
-- **Fallback Policy**: Until Foster coefficients are onboarded, lifters younger than 40 default to 1.00. Ages above the published maximum clamp to the final entry (currently 90 → 2.549).
-- **Rounding Rule**: Bodyweight values are rounded to the nearest 0.25 kg (dataset increment) and clamped to the table range before lookup. When no exact match exists, the closest entry is used.
-- **Maintenance Endpoint**: `POST /system/maintenance/recalculate-coefficients` recalculates Reshel/McCullough values (and derived categories/classes) for all registrations using the D1 tables. Use after updating datasets or when data drift is suspected.
-
-## 9) Using Modal/Toast/Contest Store
-
-### Modal System
-`modalStore` centralises dialog presentation. Use `modalStore.open<T>()` to display a dialog and await the user's decision while the global modal host handles accessibility (focus trap, ARIA labels, ESC/backdrop handling).
-
-```ts
-import { modalStore } from '$lib/ui/modal';
-
-async function confirmReset() {
-  const confirmed = await modalStore.open<boolean>({
-    title: 'Reset contest?',
-    content: 'All attempts will be cleared.',
-    confirmText: 'Reset',
-    cancelText: 'Cancel',
-    variant: 'danger',
-  });
-
-  if (confirmed) {
-    // perform reset
-  }
-}
-```
-
-### Toast Notifications
-`toast` exposes helpers to surface transient messages. The global `ToastList` component is already mounted in the root layout, so features simply call the helper functions.
-
-```ts
-import { toast } from '$lib/ui/toast';
-
-toast.success('Contest created successfully');
-toast.error('Failed to save registration', { duration: 7000 });
-toast.warning('Connection unstable – working offline');
-toast.info('Next attempt queued');
-```
-
-### Contest Store
-`contestStore` keeps contest state in sync across components and realtime events. Seed it after fetching contest data, then consume the derived stores for reactivity.
-
-```ts
-import { contestStore, currentContest, currentRegistrations } from '$lib/ui/contest-store';
-
-contestStore.setContest(contest, registrations);
-
-$: contest = $currentContest;
-$: registrations = $currentRegistrations;
-```
-
-The notification bridge updates `contestStore` whenever WebSocket events arrive, so displays and management screens automatically reflect live data.
-
-### Live Display Payloads
-- `attempt.currentSet` events now publish a display-ready bundle (contest metadata, competitor/registration snapshot, attempts grouped by lift, and a server-computed plate plan). See `apps/api/src/services/attempts.ts`.
-- `/contests/{id}/attempts/current` returns the same payload so polling fallbacks and initial page loads share a single contract.
-- Frontend helpers (`$lib/current-attempt.ts`) normalise bundles into lightweight summaries for operator UI while keeping full context for displays.
-
-## 10) Open Items (tracked)
-
-- Add `contest_disciplines` table and API routes (0008 migration).
-
-## 11) Offline Mutation Queue (Current Implementation)
-
-To keep the meet desk usable during short connectivity drops we now ship an IndexedDB-backed queue beneath the existing API client (`$lib/offline/mutation-queue.ts`):
-
-- **Storage**: `idb` database `werewolf_mutations` (v1) with a `mutations` object store keyed by GUID. Each record stores `{ id, createdAt, endpoint, method, body, headers, retryCount, status, lastError }`. Derived stores expose `pending`, `failed`, and `inFlight` slices plus aggregated counts for the layout badge.
-- **Enqueue rules**: whenever `navigator.onLine === false` or a request throws an `ApiError` with `status === 0` we persist the mutation, emit `queue.toast.saved`, and keep the optimistic UI that already applied the change.
-- **Replay engine**: `registerMutationExecutor` replays the oldest pending mutation as soon as connectivity returns. Successes are batched into a single toast (`synced_single` / `synced_multi`). Network failures trigger exponential backoff (1 s → 2 s → … capped at 120 s); non-network failures move the item to the `failed` column and surface `queue.toast.failed` with the offending endpoint.
-- **Client integration**: `apiClient.post/put/patch/delete` delegates to `enqueueMutation` whenever we are offline or a network exception bubbles up so every mutating call participates automatically. `GET` routes stay untouched.
-- **UI feedback**: the header button now distinguishes healthy vs. failing queues (`Queued changes: {total}` vs. `Queue issues – {failed} failed / {pending} pending`) and links to the drawer. The modal shows live counts for pending/in-flight/failed entries with retry/discard controls and localized timestamps.
-- **Resilience**: the queue loads persisted entries on boot, hooks `online` events to resume processing, and tolerates browsers without IndexedDB by falling back to a warning toast (`queue.toast.unsupported`). Cursor failures during teardown are swallowed to avoid noisy console warnings in tests.
-- **Testing**: `apps/web/src/lib/offline/__tests__/mutation-queue.test.ts` exercises enqueue, replay, fatal failure, retry flows, and verifies toast copy.
-
-Remaining polish ideas (tracked in `docs/OPEN-ISSUES.md`): coalescing writes to the same resource, surfacing queue state in diagnostics, and wiring background sync once we adopt service workers.
-
-## 11) Operator Runbook – Attempts & Displays
-
-1. **Prepare backend**
-   - Confirm the worker is running: `bun run dev` from the repo root (wrangler dev) and ensure D1 migrations are applied locally.
-   - Frontend connects to the worker via `PUBLIC_API_BASE=http://127.0.0.1:8787 bun run dev`.
-
-2. **Contest desk workflow ( `/contests/:id` )**
-   - Registrations tab → *Edytuj podejścia*: opens the attempt grid. Each lift (Przysiad, Wyciskanie, Martwy ciąg) exposes Attempt 1–3 (4th enabled when federation rules allow). Saving issues POST `/contests/:id/registrations/:registrationId/attempts` once per cell.
-   - “Szybkie + podejście” button duplicates the current weight + increment for the next empty slot, respecting max attempts. Errors surface as translated toasts.
-   - Attempts & Live tab lists every attempt. Status selector persists via `PATCH /attempts/:id/result`. Judge decisions default to null and can be extended later.
-   - “Ustaw jako aktualne” → `PUT /contests/:id/attempts/current`; the right‑hand panel mirrors the payload. “Wyczyść aktualne” issues DELETE and immediately clears displays.
-   - Connection badge shows `Połączono`, `Łączenie…`, or `Tryb polling` depending on WebSocket state. Polling is expected locally because Durable Objects are not emulated; production remains WebSocket‑first.
-
-3. **Display endpoints**
-   - `GET /contests/:id/attempts/current` and `attempt.currentSet` events both return a *display bundle*:
-     ```json
-     {
-       "contest": { "id": "…", "name": "…", "status": "Live", "mensBarWeight": 20, "womensBarWeight": 15 },
-       "attempt": { "id": "…", "liftType": "Bench", "attemptNumber": 1, "weight": 140, "status": "Pending", "updatedAt": "…" },
-      "registration": { "id": "…", "contestId": "…", "weightClassId": "…", "rackHeightSquat": 10, … },
-       "competitor": { "firstName": "Piotr", "lastName": "Lis", "club": null, … },
-       "attemptsByLift": { "Squat": [], "Bench": [ { "attemptNumber": 1, "weight": 140 } ], "Deadlift": [] },
-       "platePlan": { "plates": [ { "plateWeight": 20, "count": 1 } ], "targetWeight": 140, "barWeight": 20, "exact": true },
-       "highlight": { "liftType": "Bench", "attemptNumber": 1 }
-     }
-     ```
-   - `/display/current` listens for the same bundle; last snapshot is cached in `localStorage` for offline continuity. `/display/table` consumes the lighter `attempt.upserted`/`attempt.resultUpdated` events and surfaces queue/plans for the announcer.
-
-4. **Live event flow**
-   - **Upsert** → `attempt.upserted` with attempt + competitor metadata.
-   - **Result update** → `attempt.resultUpdated` with new status/judge calls.
-   - **Set current** → `attempt.currentSet` with display bundle (see above).
-   - **Clear current** → `attempt.currentCleared` (payload `{ success: true }`).
-   - Displays automatically degrade to polling every 2s when the connection badge reports “Polling”. When the Durable Object becomes reachable again, the badge flips back to “Live”.
-
-5. **Troubleshooting**
-   - If display badges stay “Offline” in local dev, confirm the worker is running; Durable Objects are disabled locally by design, so expect occasional reconnect toasts. Production should remain stable.
-   - If attempt weights fail to save, check toast errors – most originate from validation (weight must be > 0) or missing registration IDs.
-   - To reset state: `bunx wrangler@latest d1 execute werewolf-d1-dev --local --command "DELETE FROM current_lifts"` and refresh; production requires the remote variant (see migration notes below).
-
-## 10) Contest Categories
-
-- Contest-specific age and weight categories live in D1 tables `contest_age_categories` and `contest_weight_classes`. Contest creation seeds the URP defaults, but operators can tailor the list per meet.
-- API surface:
-  - `GET /contests/:id/categories` returns `{ ageCategories, weightClasses }` (camelCase, includes IDs and sort orders).
-  - `PUT /contests/:id/categories` replaces both lists. Validation ensures non-empty codes/names, ordered ranges, and rejects deletion of categories referenced by existing registrations.
-  - `POST /contests/:id/categories/defaults` re-applies the URP template. This endpoint is blocked once registrations exist.
-- Frontend:
-  - The contest wizard (step 2) now exposes tables to edit age and weight categories before creating the contest. If operators diverge from the defaults, the wizard applies the new sets immediately after contest creation so auto-classification uses the tailored ranges.
-  - Contest detail adds a “Manage categories” action in the registrations card. The modal uses the same `PUT`/`POST` endpoints and updates the contest store so tables, modals, announcer, and display screens reflect the new labels instantly.
-- Shared helpers (`$lib/categories.ts`) provide default templates, validation (`validateCategories`), payload builders (`buildCategoryPayload`), and translation-friendly error formatting; reuse them for any future tooling or CLI scripts.
-
----
-
-References
-- WS & DO foundation: apps/api/src/live/*, wrangler.worker.toml DO binding.
-- Event producers: apps/api/src/routes/attempts.ts (upsert, result update, current set).
-- Domain logic: packages/domain/src/services/score-engine.ts.
+Backups still use KV instead of R2, the PWA shell/service worker is missing, the photo endpoints are still
+wired up although photos are out of scope, and observability dashboards and E2E coverage are unfinished.
+The current list, with what was verified in code, is in [BACKLOG.md](./BACKLOG.md).

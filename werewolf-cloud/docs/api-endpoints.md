@@ -1,1085 +1,196 @@
-# Werewolf Cloud API Documentation
+# Werewolf Cloud API
 
-## Overview
+Reference for the Worker API in `apps/api`. Routes are mounted in `apps/api/src/routes/index.ts`; every
+path below exists in code.
 
-The Werewolf Cloud API provides RESTful endpoints for managing powerlifting contests, competitors, registrations, attempts, and results. All endpoints return JSON responses and use standard HTTP status codes.
+- Production base URL: `https://werewolf.r-krzywaznia-2c4.workers.dev`
+- Local dev base URL: `http://127.0.0.1:8787`
 
-**Base URL:** `https://werewolf.r-krzywaznia-2c4.workers.dev`
+## Envelope and errors
+
+Success and error responses always use the same envelope:
+
+```json
+{ "data": { }, "error": null, "requestId": "<id>" }
+{ "data": null, "error": "Contest not found", "requestId": "<id>" }
+```
+
+Zod validation failures are normalised to `400` with
+`{ "data": null, "error": "Validation failed: <field>: <message>", "requestId": "..." }`.
+Other common statuses: `201` on create, `204` for an empty display sync, `401` when a write has no
+valid session, `404` not found, `409` conflicting state, `500`/503 server or database errors.
 
 ## Authentication
 
-Currently, the API does not require authentication. In production, consider implementing API keys or OAuth.
+There is one organizer account (P0), configured as the `ADMIN_PASSWORD` Worker secret. Everything that
+changes data needs a session cookie; **all GET routes, including the display views, are public.**
 
-## Response Format
+| Method | Path | Body | Notes |
+|--------|------|------|-------|
+| POST | `/auth/login` | `{ "password": "..." }` | Sets the HttpOnly `werewolf_session` cookie; `401` with `{ "data": { "authenticated": false } }` on bad credentials. |
+| POST | `/auth/logout` | – | Deletes the session and the cookie. |
+| GET | `/auth/session` | – | `{ "data": { "authenticated": true \| false } }`; refreshes the session TTL. |
 
-All responses follow this structure:
+Sessions live in KV for 14 days and are refreshed on use. In production the cookie is `Secure` and
+`SameSite=None`; locally it is `SameSite=Lax`. `/`, `/health` and `/auth/*` never require a session.
 
-```json
-{
-  "data": { ... },
-  "error": null,
-  "requestId": "uuid"
-}
-```
-
-Error responses:
-
-```json
-{
-  "error": "Error message",
-  "requestId": "uuid"
-}
-```
-
-## Core Endpoints
-
-### Health Check
-
-#### GET /health
-
-Check API health status.
-
-**Response:**
-```json
-{
-  "data": {
-    "status": "ok",
-    "timestamp": "2025-09-18T08:00:00.000Z"
-  },
-  "error": null,
-  "requestId": "uuid"
-}
-```
-
-**Example:**
 ```bash
-curl -X GET https://werewolf.r-krzywaznia-2c4.workers.dev/health
-```
-
-### System Health
-
-#### GET /system/health
-
-Get detailed system health information.
-
-**Response:**
-```json
-{
-  "status": "healthy",
-  "database": "connected",
-  "stats": {
-    "contests_count": 5,
-    "competitors_count": 25,
-    "registrations_count": 20,
-    "attempts_count": 80
-  },
-  "timestamp": "2025-09-18T08:00:00.000Z",
-  "version": "1.0.0"
-}
-```
-
-**Example:**
-```bash
-curl -X GET https://werewolf.r-krzywaznia-2c4.workers.dev/system/health
-```
-
-## Contest Management
-
-### List Contests
-
-#### GET /contests
-
-Get all contests.
-
-**Query Parameters:**
-- `status` (optional): Filter by contest status (`Setup`, `InProgress`, `Paused`, `Completed`)
-- `limit` (optional): Limit results (default: 50)
-- `offset` (optional): Pagination offset (default: 0)
-
-**Response:**
-```json
-[
-  {
-    "id": "uuid",
-    "name": "Test Competition 2025",
-    "date": "2025-09-20",
-    "location": "Test Gym",
-    "discipline": "Powerlifting",
-    "status": "Setup",
-    "federationRules": "IPF",
-    "competitionType": "Local",
-    "organizer": "Test Organizer",
-    "notes": "API Test Competition",
-    "isArchived": false,
-    "createdAt": "2025-09-18T08:00:00.000Z",
-    "updatedAt": "2025-09-18T08:00:00.000Z",
-    "mensBarWeight": 20,
-    "womensBarWeight": 15,
-    "barWeight": 20
-  }
-]
-```
-
-**Example:**
-```bash
-curl -X GET "https://werewolf.r-krzywaznia-2c4.workers.dev/contests?status=Setup"
-```
-
-### Create Contest
-
-#### POST /contests
-
-Create a new contest.
-
-**Request Body:**
-```json
-{
-  "name": "Test Competition 2025",
-  "date": "2025-09-20",
-  "location": "Test Gym",
-  "discipline": "Powerlifting",
-  "federationRules": "IPF",
-  "competitionType": "Local",
-  "organizer": "Test Organizer",
-  "notes": "API Test Competition"
-}
-```
-
-**Response:** Contest object (201 Created)
-
-**Example:**
-```bash
-curl -X POST https://werewolf.r-krzywaznia-2c4.workers.dev/contests \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Test Competition 2025",
-    "date": "2025-09-20",
-    "location": "Test Gym",
-    "discipline": "Powerlifting",
-    "federationRules": "IPF",
-    "competitionType": "Local",
-    "organizer": "Test Organizer",
-    "notes": "API Test Competition"
-  }'
-```
-
-### Get Contest
-
-#### GET /contests/{contestId}
-
-Get a specific contest by ID.
-
-**Response:** Contest object
-
-**Example:**
-```bash
-curl -X GET https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000
-```
-
-### Update Contest
-
-#### PATCH /contests/{contestId}
-
-Update contest details.
-
-**Request Body:** Partial contest object
-
-**Example:**
-```bash
-curl -X PATCH https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000 \
-  -H "Content-Type: application/json" \
-  -d '{
-    "status": "InProgress",
-    "notes": "Updated notes"
-  }'
-```
-
-### Delete Contest
-
-#### DELETE /contests/{contestId}
-
-Delete a contest.
-
-**Example:**
-```bash
-curl -X DELETE https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000
-```
-
-### Get Contest State
-
-#### GET /contests/{contestId}/state
-
-Get contest state information.
-
-**Response:**
-```json
-{
-  "contest_id": "uuid",
-  "status": "InProgress",
-  "current_lift": "Squat",
-  "current_round": 1
-}
-```
-
-**Example:**
-```bash
-curl -X GET https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/state
-```
-
-### Update Contest State
-
-#### PUT /contests/{contestId}/state
-
-Update contest state.
-
-**Request Body:**
-```json
-{
-  "status": "InProgress",
-  "currentLift": "Bench",
-  "currentRound": 2
-}
-```
-
-**Example:**
-```bash
-curl -X PUT https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/state \
-  -H "Content-Type: application/json" \
-  -d '{
-    "status": "InProgress",
-    "currentLift": "Bench",
-    "currentRound": 2
-  }'
-```
-
-## Competitor Management
-
-### List Competitors
-
-#### GET /competitors
-
-Get all competitors.
-
-**Query Parameters:**
-- `search` (optional): Search by name
-- `limit` (optional): Limit results
-- `offset` (optional): Pagination offset
-
-**Response:** Array of competitor objects
-
-**Example:**
-```bash
-curl -X GET "https://werewolf.r-krzywaznia-2c4.workers.dev/competitors?search=John"
-```
-
-### Create Competitor
-
-#### POST /competitors
-
-Create a new competitor.
-
-**Request Body:**
-```json
-{
-  "firstName": "John",
-  "lastName": "Doe",
-  "birthDate": "1990-05-15",
-  "gender": "Male",
-  "club": "Test Club",
-  "city": "Test City",
-  "notes": "Test competitor"
-}
-```
-
-**Example:**
-```bash
-curl -X POST https://werewolf.r-krzywaznia-2c4.workers.dev/competitors \
-  -H "Content-Type: application/json" \
-  -d '{
-    "firstName": "John",
-    "lastName": "Doe",
-    "birthDate": "1990-05-15",
-    "gender": "Male",
-    "club": "Test Club",
-    "city": "Test City",
-    "notes": "Test competitor"
-  }'
-```
-
-### Get Competitor
-
-#### GET /competitors/{competitorId}
-
-Get a specific competitor.
-
-**Example:**
-```bash
-curl -X GET https://werewolf.r-krzywaznia-2c4.workers.dev/competitors/123e4567-e89b-12d3-a456-426614174000
-```
-
-### Update Competitor
-
-#### PATCH /competitors/{competitorId}
-
-Update competitor details.
-
-**Example:**
-```bash
-curl -X PATCH https://werewolf.r-krzywaznia-2c4.workers.dev/competitors/123e4567-e89b-12d3-a456-426614174000 \
-  -H "Content-Type: application/json" \
-  -d '{
-    "club": "Updated Club",
-    "notes": "Updated notes"
-  }'
-```
-
-### Upload Competitor Photo
-
-#### PUT /competitors/{competitorId}/photo
-
-Upload a photo for the competitor.
-
-**Request Body:**
-```json
-{
-  "photoData": "base64-encoded-image-data",
-  "filename": "photo.jpg"
-}
-```
-
-**Example:**
-```bash
-curl -X PUT https://werewolf.r-krzywaznia-2c4.workers.dev/competitors/123e4567-e89b-12d3-a456-426614174000/photo \
-  -H "Content-Type: application/json" \
-  -d '{
-    "photoData": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
-    "filename": "john-doe.jpg"
-  }'
-```
-
-### Get Competitor Photo
-
-#### GET /competitors/{competitorId}/photo
-
-Get competitor's photo.
-
-**Response:**
-```json
-{
-  "data": "base64-encoded-image-data",
-  "format": "webp"
-}
-```
-
-**Example:**
-```bash
-curl -X GET https://werewolf.r-krzywaznia-2c4.workers.dev/competitors/123e4567-e89b-12d3-a456-426614174000/photo
-```
-
-## Registration Management
-
-### List Registrations for Contest
-
-#### GET /contests/{contestId}/registrations
-
-Get all registrations for a contest.
-
-**Example:**
-```bash
-curl -X GET https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/registrations
-```
-
-### Create Registration
-
-#### POST /contests/{contestId}/registrations
-
-Register a competitor for a contest.
-
-**Request Body:**
-```json
-{
-  "competitorId": "uuid",
-  "bodyweight": 82.5,
-  "rackHeightSquat": 45,
-  "rackHeightBench": 40
-}
-```
-
-**Auto classification & coefficients:**
-- `ageCategoryId` and `weightClassId` are optional – they are derived from the competitor profile when omitted.
-- `reshelCoefficient` and `mcculloughCoefficient` are calculated server-side using the official Reshel (sex + bodyweight rounded to the nearest 0.25 kg) and McCullough (age-on-day) tables that ship with Werewolf Cloud.
-- When federations publish new tables, run `POST /system/maintenance/recalculate-coefficients` after seeding the updated data to refresh stored registrations.
-
-**Example:**
-```bash
-curl -X POST https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/registrations \
-  -H "Content-Type: application/json" \
-  -d '{
-    "competitorId": "456e7890-e89b-12d3-a456-426614174001",
-    "bodyweight": 82.5,
-    "rackHeightSquat": 45,
-    "rackHeightBench": 40
-  }'
-```
-
-### Get Registration
-
-#### GET /registrations/{registrationId}
-
-Get a specific registration.
-
-**Example:**
-```bash
-curl -X GET https://werewolf.r-krzywaznia-2c4.workers.dev/registrations/789e0123-e89b-12d3-a456-426614174002
-```
-
-### Update Registration
-
-#### PATCH /registrations/{registrationId}
-
-Update registration details.
-
-**Example:**
-```bash
-curl -X PATCH https://werewolf.r-krzywaznia-2c4.workers.dev/registrations/789e0123-e89b-12d3-a456-426614174002 \
-  -H "Content-Type: application/json" \
-  -d '{
-    "bodyweight": 83.0,
-    "rackHeightSquat": 46
-  }'
-```
-
-## Attempt Management
-
-### Upsert Attempt Weight
-
-#### POST /contests/{contestId}/registrations/{registrationId}/attempts
-
-Create or update an attempt weight.
-
-**Request Body:**
-```json
-{
-  "liftType": "Squat",
-  "attemptNumber": 1,
-  "weight": 200.0
-}
-```
-
-**Example:**
-```bash
-curl -X POST https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/registrations/789e0123-e89b-12d3-a456-426614174002/attempts \
-  -H "Content-Type: application/json" \
-  -d '{
-    "liftType": "Squat",
-    "attemptNumber": 1,
-    "weight": 200.0
-  }'
-```
-
-### List Attempts for Registration
-
-#### GET /contests/{contestId}/registrations/{registrationId}/attempts
-
-Get all attempts for a registration.
-
-**Example:**
-```bash
-curl -X GET https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/registrations/789e0123-e89b-12d3-a456-426614174002/attempts
-```
-
-### List Attempts for Contest
-
-#### GET /contests/{contestId}/attempts
-
-List every attempt in a contest (joined with competitor information). Results are ordered by competitor order, then lift, then attempt number.
-
-**Example:**
-```bash
-curl -X GET https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/attempts
-```
-
-### Update Attempt Result
-
-#### PATCH /attempts/{attemptId}/result
-
-Update attempt result (success/failure).
-
-**Request Body:**
-```json
-{
-  "attemptId": "012e3456-e89b-12d3-a456-426614174003",
-  "status": "Successful",
-  "judge1Decision": true,
-  "judge2Decision": true,
-  "judge3Decision": true,
-  "notes": "Good lift"
-}
-```
-
-**Example:**
-```bash
-curl -X PATCH https://werewolf.r-krzywaznia-2c4.workers.dev/attempts/012e3456-e89b-12d3-a456-426614174003/result \
-  -H "Content-Type: application/json" \
-  -d '{
-    "attemptId": "012e3456-e89b-12d3-a456-426614174003",
-    "status": "Successful",
-    "judge1Decision": true,
-    "judge2Decision": true,
-    "judge3Decision": true,
-    "notes": "Good lift"
-  }'
-```
-
-> **Live updates:** publishing a result triggers `attempt.resultUpdated` over WebSocket and notifies all connected displays.
-
-### Get Current Attempt
-
-#### GET /contests/{contestId}/attempts/current
-
-Get the currently active attempt. The response now includes a display-ready bundle used by realtime clients:
-
-- `contest`: id, name, location, date, discipline, status, default/mens/womens bar weights
-- `attempt`: full attempt row (lift type, weight, status, judges, timestamps)
-- `registration`: bodyweight, weight/age class labels, rack heights, competition order
-- `competitor`: identity info (name, gender, club/city)
-- `attemptsByLift`: the competitor's attempts grouped by lift (including status + updatedAt)
-- `platePlan`: computed loading plan for the declared weight (plates per side, bar weight, total, accuracy flag)
-- `highlight`: the lift/attempt number that should be emphasised on displays
-
-**Example:**
-```bash
-curl -X GET https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/attempts/current
-```
-
-### Set Current Attempt
-
-#### PUT /contests/{contestId}/attempts/current
-
-Set the currently active attempt.
-
-**Request Body:**
-```json
-{
-  "attemptId": "uuid"
-}
-```
-
-**Example:**
-```bash
-curl -X PUT https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/attempts/current \
-  -H "Content-Type: application/json" \
-  -d '{
-    "attemptId": "012e3456-e89b-12d3-a456-426614174003"
-  }'
-```
-
-> **Live updates:** setting the current attempt broadcasts `attempt.currentSet` so announcer and big-screen refresh immediately.
-
-### Clear Current Attempt
-
-#### DELETE /contests/{contestId}/attempts/current
-
-Clear the active attempt (announcer/big-screen will fall back to queue). Returns `{ "success": true, "cleared": true }` when an active attempt was cleared.
-
-**Example:**
-```bash
-curl -X DELETE https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/attempts/current
-```
-
-> **Live updates:** clearing the active lift emits `attempt.currentCleared` so connected clients fall back to the next lift.
-
-## Results & Scoring
-
-### Recalculate Results
-
-#### POST /contests/{contestId}/results/recalculate
-
-Recalculate all results for a contest.
-
-**Example:**
-```bash
-curl -X POST https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/results/recalculate
-```
-
-### Get Rankings
-
-#### GET /contests/{contestId}/results/rankings
-
-Get contest rankings.
-
-**Query Parameters:**
-- `type` (optional): Ranking type (`open`, `age`, `weight`) - default: `open`
-
-**Example:**
-```bash
-curl -X GET "https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/results/rankings?type=age"
-```
-
-### Get Competitor Results
-
-#### GET /registrations/{registrationId}/results
-
-Get results for a specific competitor.
-
-**Example:**
-```bash
-curl -X GET https://werewolf.r-krzywaznia-2c4.workers.dev/registrations/789e0123-e89b-12d3-a456-426614174002/results
-```
-
-### Export Results
-
-#### POST /contests/{contestId}/results/export
-
-Export results in CSV or JSON format.
-
-**Request Body:**
-```json
-{
-  "format": "csv"
-}
-```
-
-**Example:**
-```bash
-curl -X POST https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/results/export \
-  -H "Content-Type: application/json" \
-  -d '{
-    "format": "csv"
-  }'
-```
-
-### Get Scoreboard
-
-#### GET /contests/{contestId}/scoreboard
-
-Get scoreboard data for display.
-
-**Example:**
-```bash
-curl -X GET https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/scoreboard
-```
-
-## Contest Categories
-
-Manage age and weight classifications on a per-contest basis. Categories are seeded with URP defaults when a contest is created and can be customised later.
-
-### List Contest Categories
-
-#### GET /contests/{contestId}/categories
-
-Returns the current age and weight category lists for the contest.
-
-**Example:**
-```bash
-curl -X GET https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/categories
-```
-
-**Response (200 OK):**
-```json
-{
-  "data": {
-    "ageCategories": [
-      {
-        "id": "0e1f...",
-        "contestId": "123e4567-e89b-12d3-a456-426614174000",
-        "code": "T16",
-        "name": "T16 (≤16)",
-        "minAge": null,
-        "maxAge": 16,
-        "sortOrder": 10,
-        "metadata": null
-      }
-    ],
-    "weightClasses": [
-      {
-        "id": "caf3...",
-        "contestId": "123e4567-e89b-12d3-a456-426614174000",
-        "gender": "Female",
-        "code": "F_52",
-        "name": "Do 52 kg",
-        "minWeight": null,
-        "maxWeight": 52.0,
-        "sortOrder": 10,
-        "metadata": null
-      }
-    ]
-  },
-  "error": null,
-  "requestId": "..."
-}
-```
-
-### Update Contest Categories
-
-#### PUT /contests/{contestId}/categories
-
-Bulk-upsert the contest's age and weight categories. Existing IDs will be updated; omitted IDs are deleted (only if unused). Codes must be unique (case-insensitive) per contest and gender.
-
-**Request Body:**
-```json
-{
-  "ageCategories": [
-    {
-      "id": "0e1f...",
-      "code": "T16",
-      "name": "T16 / Młodzicy",
-      "minAge": null,
-      "maxAge": 16,
-      "sortOrder": 5
-    },
-    {
-      "code": "LEGENDS",
-      "name": "Legends 60+",
-      "minAge": 60,
-      "maxAge": null,
-      "sortOrder": 90
-    }
-  ],
-  "weightClasses": [
-    {
-      "id": "caf3...",
-      "gender": "Female",
-      "code": "F_52",
-      "name": "Kobiety do 52 kg",
-      "minWeight": null,
-      "maxWeight": 52,
-      "sortOrder": 10
-    },
-    {
-      "gender": "Male",
-      "code": "M_SUPER",
-      "name": "Mężczyźni 140+ kg",
-      "minWeight": 140,
-      "maxWeight": null,
-      "sortOrder": 95
-    }
-  ]
-}
-```
-
-**Example:**
-```bash
-curl -X PUT https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/categories \
-  -H "Content-Type: application/json" \
-  -d @categories.json
-```
-
-**Responses:**
-- `200 OK` with updated lists on success.
-- `400 Bad Request` when codes are duplicated or validation fails (error strings: `DUPLICATE_AGE_CODE:CODE`, `DUPLICATE_WEIGHT_CODE:Gender:CODE`).
-- `409 Conflict` when trying to remove a category referenced by registrations (`AGE_CATEGORY_IN_USE`, `WEIGHT_CLASS_IN_USE`).
-
-### Restore Default Categories
-
-#### POST /contests/{contestId}/categories/defaults
-
-Recreate the URP default category sets. Only allowed when the contest has no registrations.
-
-**Example:**
-```bash
-curl -X POST https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/categories/defaults
-```
-
-**Responses:**
-- `201 Created` with fresh defaults.
-- `409 Conflict` when registrations exist (`CONTEST_HAS_REGISTRATIONS`).
-
-## Equipment Management
-
-### List Plate Sets
-
-#### GET /contests/{contestId}/platesets
-
-Get plate sets for a contest.
-
-**Example:**
-```bash
-curl -X GET https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/platesets
-```
-
-### Create Plate Set
-
-#### POST /contests/{contestId}/platesets
-
-Add plates to a contest.
-
-**Request Body:**
-```json
-{
-  "plateWeight": 25.0,
-  "quantity": 4,
-  "color": "#DC2626"
-}
-```
-
-**Example:**
-```bash
-curl -X POST https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/platesets \
-  -H "Content-Type: application/json" \
-  -d '{
-    "plateWeight": 25.0,
-    "quantity": 4,
-    "color": "#DC2626"
-  }'
-```
-
-### Calculate Plates
-
-#### POST /contests/{contestId}/platesets/calculate
-
-Calculate plate loading for a target weight.
-
-**Request Body:**
-```json
-{
-  "targetWeight": 200.0,
-  "barWeight": 20.0
-}
-```
-
-**Response:**
-```json
-{
-  "plates": [
-    { "plateWeight": 25, "count": 2, "color": "#DC2626" },
-    { "plateWeight": 10, "count": 1, "color": "#16A34A" }
-  ],
-  "totalLoaded": 220.0,
-  "barWeight": 20.0
-}
-```
-
-**Example:**
-```bash
-curl -X POST https://werewolf.r-krzywaznia-2c4.workers.dev/contests/123e4567-e89b-12d3-a456-426614174000/platesets/calculate \
-  -H "Content-Type: application/json" \
-  -d '{
-    "targetWeight": 200.0,
-    "barWeight": 20.0
-  }'
-```
-
-## Reference Data
-
-### Get Weight Classes
-
-#### GET /reference/weight-classes
-
-Get all weight classes.
-
-**Example:**
-```bash
-curl -X GET https://werewolf.r-krzywaznia-2c4.workers.dev/reference/weight-classes
-```
-
-### Get Age Categories
-
-#### GET /reference/age-categories
-
-Get all age categories.
-
-**Example:**
-```bash
-curl -X GET https://werewolf.r-krzywaznia-2c4.workers.dev/reference/age-categories
-```
-
-## Settings Management
-
-### Get Settings
-
-#### GET /settings
-
-Get all application settings.
-
-**Response:** Parsed settings object (not raw JSON string)
-
-**Example:**
-```bash
-curl -X GET https://werewolf.r-krzywaznia-2c4.workers.dev/settings
-```
-
-### Update Settings
-
-#### PUT /settings
-
-Update all settings.
-
-**Request Body:** Complete settings object
-
-**Example:**
-```bash
-curl -X PUT https://werewolf.r-krzywaznia-2c4.workers.dev/settings \
-  -H "Content-Type: application/json" \
-  -d '{
-    "language": "pl",
-    "ui": {
-      "theme": "dark",
-      "showWeights": true,
-      "showAttempts": true
-    },
-    "competition": {
-      "federationRules": "IPF",
-      "defaultBarWeight": 20
-    },
-    "database": {
-      "backupEnabled": true,
-      "autoBackupInterval": 24
-    }
-  }'
-```
-
-### Update UI Settings
-
-#### PATCH /settings/ui
-
-Update UI-specific settings.
-
-**Example:**
-```bash
-curl -X PATCH https://werewolf.r-krzywaznia-2c4.workers.dev/settings/ui \
-  -H "Content-Type: application/json" \
-  -d '{
-    "theme": "dark",
-    "showWeights": true
-  }'
-```
-
-### Get Language Setting
-
-#### GET /settings/language
-
-Get current language setting.
-
-**Example:**
-```bash
-curl -X GET https://werewolf.r-krzywaznia-2c4.workers.dev/settings/language
-```
-
-### Set Language
-
-#### PUT /settings/language
-
-Set language preference.
-
-**Example:**
-```bash
-curl -X PUT https://werewolf.r-krzywaznia-2c4.workers.dev/settings/language \
-  -H "Content-Type: application/json" \
-  -d '{
-    "language": "en"
-  }'
-```
-
-## System Management
-
-### Get Database Status
-
-#### GET /system/database
-
-Get database statistics.
-
-**Example:**
-```bash
-curl -X GET https://werewolf.r-krzywaznia-2c4.workers.dev/system/database
-```
-
-### List Backups
-
-#### GET /system/backups
-
-List all available backups.
-
-**Example:**
-```bash
-curl -X GET https://werewolf.r-krzywaznia-2c4.workers.dev/system/backups
-```
-
-### Create Backup
-
-#### POST /system/backups
-
-Create a new backup of all data.
-
-**Response:**
-```json
-{
-  "success": true,
-  "backupId": "backup_1632000000000",
-  "timestamp": "2025-09-18T08:00:00.000Z",
-  "size": 1024,
-  "recordCounts": {
-    "contests": 5,
-    "competitors": 25,
-    "registrations": 20,
-    "attempts": 80,
-    "results": 20
-  }
-}
-```
-
-**Example:**
-```bash
-curl -X POST https://werewolf.r-krzywaznia-2c4.workers.dev/system/backups
-```
-
-### Restore from Backup
-
-#### POST /system/backups/{backupId}/restore
-
-Restore data from a backup.
-
-**Example:**
-```bash
-curl -X POST https://werewolf.r-krzywaznia-2c4.workers.dev/system/backups/backup_1632000000000/restore
-```
-
-### Reset Database
-
-#### POST /system/database/reset
-
-Reset database (dangerous - use with caution).
-
-**Request Body:**
-```json
-{
-  "confirm": "YES_I_WANT_TO_RESET_THE_DATABASE"
-}
-```
-
-**Example:**
-```bash
-curl -X POST https://werewolf.r-krzywaznia-2c4.workers.dev/system/database/reset \
-  -H "Content-Type: application/json" \
-  -d '{
-    "confirm": "YES_I_WANT_TO_RESET_THE_DATABASE"
-  }'
-```
-
-## Error Handling
-
-All endpoints return appropriate HTTP status codes:
-
-- `200`: Success
-- `201`: Created
-- `400`: Bad Request
-- `404`: Not Found
-- `500`: Internal Server Error
-
-Error responses include a descriptive message and request ID for debugging.
-
-## Rate Limiting
-
-Currently, no rate limiting is implemented. Consider adding rate limiting in production based on usage patterns.
-
-## Data Types
-
-### Common Data Types
-
-- **UUID**: String in UUID format (e.g., `123e4567-e89b-12d3-a456-426614174000`)
-- **Timestamp**: ISO 8601 string (e.g., `2025-09-18T08:00:00.000Z`)
-- **Gender**: `"Male"` or `"Female"`
-- **Lift Type**: `"Squat"`, `"Bench"`, or `"Deadlift"`
-- **Attempt Status**: `"Pending"`, `"Successful"`, or `"Failed"`
-
-This documentation covers all implemented API endpoints. For the most up-to-date information, refer to the OpenAPI specification or test the endpoints directly.
+# Log in once; the cookie jar carries the session for later write calls
+curl -c cookies.txt -X POST http://127.0.0.1:8787/auth/login \
+  -H 'Content-Type: application/json' -d '{"password":"<ADMIN_PASSWORD>"}'
+
+curl -b cookies.txt -X POST http://127.0.0.1:8787/contests \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Club Meet","date":"2025-10-12","location":"Gym","discipline":"Powerlifting"}'
+```
+
+## Service and system
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/` | Service name, version and `ENV`. |
+| GET | `/health` | `{ status: "ok", timestamp }`. |
+| GET | `/system/health` | DB connectivity plus contests/competitors/registrations/attempts counts; `503` when D1 is unreachable. |
+| GET | `/system/database` | Row counts per table. |
+| GET | `/system/backups` | `{ backups, total, timestamp }` from KV metadata. |
+| GET | `/system/backups/:backupId` | Single backup metadata/payload. |
+| POST | `/system/backups` | Create a backup (stored in KV; R2 is on the backlog). |
+| POST | `/system/backups/:backupId/restore` | Restore a backup. |
+| POST | `/system/backups/import` | Import a backup JSON document and register it in KV. |
+| DELETE | `/system/backups/:backupId` | Delete backup blob and metadata. |
+| POST | `/system/database/reset` | Requires `{ "confirm": "YES_I_WANT_TO_RESET_THE_DATABASE" }`. |
+| POST | `/system/maintenance/recalculate-coefficients` | Recompute Reshel/McCullough values and categories for all registrations. |
+
+## Reference data
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/reference/weight-classes` | Global weight classes. |
+| GET | `/reference/age-categories` | Global age categories. |
+
+## Contests
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/contests` | All contests, newest date first. No query filters. |
+| POST | `/contests` | `{ name, date (YYYY-MM-DD), location, discipline, federationRules?, competitionType?, organizer?, notes? }`; seeds default plate sets, categories and tags. `201`. |
+| GET | `/contests/:contestId` | Single contest (includes `mensBarWeight`, `womensBarWeight`, `clampWeight`, `activeFlight`). |
+| PATCH | `/contests/:contestId` | Partial contest update; changing `discipline` cascades registration lifts. |
+| PATCH | `/contests/:contestId/active-flight` | `{ "activeFlight": "A" \| null }`; drives queue gating. |
+| DELETE | `/contests/:contestId` | Deletes the contest and its dependent rows. |
+| GET | `/contests/:contestId/state` | `{ contestId, status, currentLift, currentRound }`; returns the Setup default when no row exists. |
+| PUT | `/contests/:contestId/state` | `{ status?, currentLift?, currentRound? }` with `status` in `Setup \| InProgress \| Paused \| Completed`. |
+
+### Contest categories
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/contests/:contestId/categories` | `{ ageCategories, weightClasses }` for the contest. |
+| PUT | `/contests/:contestId/categories` | Bulk upsert both lists; `400 DUPLICATE_*_CODE`, `409 *_IN_USE` when a removed category is referenced. |
+| POST | `/contests/:contestId/categories/defaults` | Re-seed the URP template; `409 CONTEST_HAS_REGISTRATIONS` once registrations exist. |
+
+### Contest tags
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/contests/:contestId/tags` | `{ id, label }` rows; the mandatory tag is always present. |
+| POST | `/contests/:contestId/tags` | `{ "label": "..." }` (1–64 chars, unique per contest). |
+| PATCH | `/contests/:contestId/tags/:tagId` | `{ "label" }`; renames the tag on registrations results. |
+| DELETE | `/contests/:contestId/tags/:tagId` | Removes the tag; the mandatory tag cannot be removed. |
+
+### Plate sets
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/contests/:contestId/platesets` | Plate inventory for the contest. |
+| POST | `/contests/:contestId/platesets` | `{ plateWeight, quantity, color? }`. |
+| PATCH | `/contests/:contestId/platesets/:plateWeight` | `{ quantity?, color? }` (hex colour); at least one field. |
+| DELETE | `/contests/:contestId/platesets/:plateWeight` | Remove one plate size. |
+| POST | `/contests/:contestId/platesets/calculate` | `{ targetWeight, barWeight? }` → per-side plates, total and `exact` flag; honours `clampWeight`. |
+| GET | `/contests/:contestId/platesets/barweights` | Men's/women's (and default) bar weights. |
+| PUT | `/contests/:contestId/platesets/barweights` | Update bar weights. |
+| GET | `/contests/:contestId/platesets/colors` | Plate colour mapping. |
+
+## Competitors
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/competitors` | All competitors, surname order. No query filters. |
+| POST | `/competitors` | `{ firstName, lastName, birthDate, gender, club?, city?, notes? }`. |
+| GET | `/competitors/:competitorId` | Single competitor. |
+| PATCH | `/competitors/:competitorId` | Partial update. |
+| DELETE | `/competitors/:competitorId` | Delete competitor and dependent registrations. |
+
+Competitor photo routes (`PUT/GET/DELETE /competitors/:competitorId/photo`) still exist in the Worker but
+photos are out of P0 scope; they are deliberately not documented here and their removal is tracked in
+[BACKLOG.md](./BACKLOG.md).
+
+## Registrations
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/contests/:contestId/registrations` | Enriched list: competitor identity, club/city, categories, coefficients, rack heights, attempts (`lifts`), `flightCode`, `flightOrder`, `labels`. |
+| POST | `/contests/:contestId/registrations` | `{ competitorId, bodyweight?, ageCategoryId?, weightClassId?, rackHeightSquat?, rackHeightBench?, flightCode?, flightOrder?, labels?, lifts? }`. Categories and coefficients are derived when omitted. `201`. |
+| POST | `/contests/:contestId/registrations/bulk-flight` | `{ assignments: [{ registrationId, flightCode?, flightOrder? }] }`; empty/absent codes default to `A`. |
+| GET | `/registrations/:registrationId` | Single registration (enriched). |
+| PATCH | `/registrations/:registrationId` | Partial update; bodyweight changes recompute categories and coefficients. |
+| PATCH | `/registrations/:registrationId/labels` | `{ labels: string[] }` replaces the label array. |
+| DELETE | `/registrations/:registrationId` | Delete the registration. |
+
+## Attempts
+
+| Method | Path | Notes |
+|--------|------|-------|
+| POST | `/contests/:contestId/registrations/:registrationId/attempts` | Upsert `{ liftType, attemptNumber, weight }`; validates the weight is loadable with the contest plate set (and clamp) and that the lift is registered (`LIFT_NOT_REGISTERED`). Publishes `attempt.upserted`. |
+| GET | `/contests/:contestId/registrations/:registrationId/attempts` | Attempts for one registration. |
+| GET | `/contests/:contestId/attempts` | Every attempt in the contest with competitor names (surname order, then lift, then attempt). |
+| GET | `/contests/:contestId/attempts/current` | Display bundle for the active lift (contest, attempt, registration, competitor, `attemptsByLift`, plate plan, highlight); `data: null` when nothing is set. |
+| PUT | `/contests/:contestId/attempts/current` | `{ attemptId }` (UUID); also moves the contest state to `InProgress` and publishes `attempt.currentSet`. |
+| DELETE | `/contests/:contestId/attempts/current` | Clears the active lift and publishes `attempt.currentCleared`. |
+| GET | `/contests/:contestId/attempts/queue` | Pending attempts for the current lift and round in rising-bar order (weight, then flight order, then name); filtered to `contests.activeFlight` when one is set. |
+| PATCH | `/attempts/:attemptId/result` | `{ status, judge1Decision?, judge2Decision?, judge3Decision?, notes? }`; publishes `attempt.resultUpdated` and recalculates results. |
+
+## Results
+
+| Method | Path | Notes |
+|--------|------|-------|
+| POST | `/contests/:contestId/results/recalculate` | Recompute results and rankings. |
+| GET | `/contests/:contestId/results/rankings` | `?type=open \| age \| weight \| tag` (default `open`); `tag` accepts `tag` or `label` and must exist for the contest; answers are KV-cached. |
+| GET | `/contests/:contestId/results/rankings/all` | `{ open, age, weight }` in one call. |
+| GET | `/contests/:contestId/results/team` | Team/club standings. |
+| POST | `/contests/:contestId/results/export` | `{ format: "csv" \| "json", lift? }` — returns the exported document. |
+| GET | `/contests/:contestId/results/public-bundle` | Everything the public results page needs (contest, individual rankings, team, scoreboard data); cached 60 s. |
+| GET | `/contests/:contestId/results/scoreboard` | Rankings plus contest name and competitor count. |
+| GET | `/registrations/:registrationId/results` | Result row for one registration. |
+
+## Settings
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/settings` | Parsed settings object (not the raw JSON string). |
+| PUT | `/settings` | Full/partial settings document: `{ language?, ui?, competition?, database? }`. |
+| GET | `/settings/ui` | `ui` section only. |
+| PATCH | `/settings/ui` | `{ theme?, showAttempts?, showWeights? }`. |
+| PATCH | `/settings/competition` | `{ federationRules? }`. |
+| PATCH | `/settings/database` | `{ backupEnabled?, autoBackupInterval? }`. |
+| GET | `/settings/language` | Current language code. |
+| PUT | `/settings/language` | `{ "language": "pl" \| "en" }`. |
+| POST | `/settings/reset` | Reset to defaults and return them. |
+| GET | `/settings/health` | Lightweight D1 probe. |
+
+## Realtime and display sync
+
+| Method | Path | Notes |
+|--------|------|-------|
+| GET | `/ws/contests/:contestId` | WebSocket upgrade; forwarded to the `ContestRoom` Durable Object for that contest. The room broadcasts events and does not persist anything (see [architecture.md](./architecture.md#contestroom-durable-object)). |
+| POST | `/contests/:contestId/display/sync` | Publish a display filter sync payload (validated by `displayFilterSyncSchema`); stored under the KV key `displaySync:<contestId>` and broadcast as `display.filtersSynced`. |
+| GET | `/contests/:contestId/display/sync` | Last stored display sync; `204` when nothing has been stored. |
+| POST | `/contests/:contestId/display/qr` | Broadcast `display.qrVisibility` so displays show/hide the QR panel. |
+
+Event envelope and the full event list are documented in
+[architecture.md](./architecture.md#3-realtime-contract).
+
+## Not implemented
+
+Rate limiting, API keys/OAuth, pagination and OpenAPI generation do not exist. Backups use KV rather than
+R2. See [BACKLOG.md](./BACKLOG.md) for the tracked follow-ups.

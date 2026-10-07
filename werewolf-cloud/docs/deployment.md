@@ -1,54 +1,90 @@
 # Deployment Guide
 
+Deployment targets Cloudflare Workers (API) and Cloudflare Pages (SvelteKit frontend), both backed by the
+production D1 database and KV namespace.
+
+## Credentials — two different things
+
+- **Organizer password** (`ADMIN_PASSWORD`): the app's own login for the desk. It is a Worker secret, entered
+  by operators in the browser. It has nothing to do with Cloudflare accounts.
+- **Cloudflare credentials**: an API token (`CLOUDFLARE_API_TOKEN`, with Workers Scripts, D1, KV and Pages
+  edit permissions) or an OAuth session from `wrangler login`. Needed only to deploy and to apply remote
+  migrations. Never share them with operators and never commit them.
+
+Wrangler reads the account from `wrangler.worker.toml` / `wrangler.toml`; the account id and the
+provisioned D1/KV ids per environment are listed in
+[cloudflare-environments.md](./cloudflare-environments.md).
+
 ## Prerequisites
-- Wrangler configured with either an API token (`CLOUDFLARE_API_TOKEN`) or an OAuth session (`wrangler login`).
-- Cloudflare D1, KV, and Durable Object bindings already present in `wrangler.worker.toml` (API Worker) and mirrored in `wrangler.toml` (Pages).
-- Pages project provisioned (`werewolf`). The first deploy auto-creates the project if needed.
-- Know the public Worker URL; production currently lives at `https://werewolf.r-krzywaznia-2c4.workers.dev`.
 
-## One-time setup
+- Bundled dependencies installed: `cd werewolf-cloud && bun install`.
+- Cloudflare credentials available to Wrangler (token in the environment or `wrangler login`).
+- The `werewolf-d1` D1 database, the production KV namespace and the `ContestRoom` Durable Object are
+  already bound in `wrangler.worker.toml`; the Pages project (`werewolf`) exists.
+- The Worker URL is known; production currently is `https://werewolf.r-krzywaznia-2c4.workers.dev`.
+
+## Deploying
+
 ```bash
 cd werewolf-cloud
-# Set the public API base for the frontend build
-# Deploy once (the script defaults to https://werewolf.r-krzywaznia-2c4.workers.dev)
 bun run deploy
 ```
 
-The script automatically:
-1. Applies D1 migrations to the production database (`werewolf-d1`).
-2. Publishes the Worker (`wrangler deploy --env production`).
-3. Builds the SvelteKit bundle for Pages and updates the `PUBLIC_API_BASE` secret.
-4. Deploys the Pages site (defaults to project `werewolf`, branch `master`).
+`scripts/deploy.sh` performs, in order:
 
-## Subsequent deployments
+1. `wrangler d1 migrations apply werewolf-d1 --config wrangler.worker.toml --env production --remote`.
+2. `wrangler deploy --config wrangler.worker.toml --env production`.
+3. `cd apps/web && PUBLIC_API_BASE=... SVELTE_ADAPTER=cloudflare bun run build`.
+4. `wrangler pages secret put PUBLIC_API_BASE --project-name werewolf` (idempotent).
+5. `wrangler pages deploy .svelte-kit/cloudflare --project-name werewolf --branch master`.
+
+`PUBLIC_API_BASE` defaults to the production Worker URL above; export it to point the frontend elsewhere.
+
+### Overrides
+
+- `API_ENV=staging` — Wrangler env used for migrations and the Worker deploy (default `production`).
+- `PAGES_PROJECT=werewolf-preview` — different Pages project.
+- `PAGES_BRANCH=staging` — branch label for the Pages deployment.
+- `PAGES_ENV=preview` — push the Pages secret/deployment to the preview environment.
+- `PUBLIC_API_BASE=https://...` — API base baked into the frontend and stored as a Pages secret.
+
+### Single-target commands
+
 ```bash
-cd werewolf-cloud
-# Optional: override the API base
-export PUBLIC_API_BASE="https://custom.example.com"
-bun run deploy
+bun run deploy:api    # wrangler deploy --config wrangler.worker.toml --env production
+bun run deploy:web    # build + wrangler pages deploy (.svelte-kit/cloudflare)
 ```
 
-### Optional overrides
-- `API_ENV=staging` — Deploy the Worker using another Wrangler environment.
-- `PAGES_PROJECT=werewolf-preview` — Target a different Pages project.
-- `PAGES_BRANCH=staging` — Mark the deployment with another branch name.
-- `PAGES_ENV=preview` — Push the Pages secret/deployment to the preview environment instead of production.
+## Manual equivalents
 
-The Pages secret update is idempotent; the script pipes the `PUBLIC_API_BASE` value into `wrangler pages secret put PUBLIC_API_BASE` before every deploy to ensure the UI never falls back to `127.0.0.1`.
-
-## Manual commands (if you prefer)
 ```bash
-# Apply migrations
+cd werewolf-cloud
+
+# Apply migrations to production
 bunx wrangler@latest d1 migrations apply werewolf-d1 --config wrangler.worker.toml --env production --remote
 
-# Deploy the Worker
+# Deploy the API Worker
 bunx wrangler@latest deploy --config wrangler.worker.toml --env production
 
-# Build and deploy the frontend
+# Build and publish the frontend
 cd apps/web
 PUBLIC_API_BASE="https://werewolf.r-krzywaznia-2c4.workers.dev" \
   SVELTE_ADAPTER=cloudflare bun run build
-printf 'https://werewolf.r-krzywaznia-2c4.workers.dev' | \
-  npx wrangler@latest pages secret put PUBLIC_API_BASE --project-name werewolf
-npx wrangler@latest pages deploy .svelte-kit/cloudflare --project-name werewolf --branch master --commit-dirty=true
+printf '%s' "https://werewolf.r-krzywaznia-2c4.workers.dev" | \
+  bunx wrangler@latest pages secret put PUBLIC_API_BASE --project-name werewolf
+bunx wrangler@latest pages deploy .svelte-kit/cloudflare --project-name werewolf --branch master --commit-dirty=true
 ```
+
+## After deploying
+
+1. `curl https://<worker>/health` returns `{ "data": { "status": "ok" } }`.
+2. Sign in at the Pages URL with the organizer password; `POST /auth/login` must set the
+   `werewolf_session` cookie (production cookie: `Secure`, `SameSite=None`).
+3. Open `/display/current` and `/display/table` and confirm they update when an attempt is set as current.
+4. Check `/system/health` and the settings page for D1/KV status.
+
+## Rollback
+
+Redeploy the previous Worker version from the Cloudflare dashboard (`wrangler rollback` also works) and
+redeploy the previous Pages deployment. Migrations are forward-only: an applied migration is never edited or
+reverted, so ship a new migration to undo a schema mistake.
