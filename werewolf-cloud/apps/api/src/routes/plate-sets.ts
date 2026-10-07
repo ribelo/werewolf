@@ -1,11 +1,26 @@
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import type { WerewolfEnvironment } from '../env';
-import { executeQuery, executeQueryOne, executeMutation, getCurrentTimestamp, convertKeysToCamelCase } from '../utils/database';
+import type { Database } from '../utils/database';
+import { executeQuery, executeQueryOne, executeMutation, convertKeysToCamelCase } from '../utils/database';
 import { buildPlatePlan } from '../services/plate-plan';
+import { defaultPlateColor } from '@werewolf/domain/services/plate-plan';
 
 const plateSets = new Hono<WerewolfEnvironment>();
+
+async function contestExists(db: Database, contestId: string): Promise<boolean> {
+  const contest = await executeQueryOne<{ id: string }>(
+    db,
+    'SELECT id FROM contests WHERE id = ?',
+    [contestId]
+  );
+  return contest !== null;
+}
+
+const contestNotFound = (c: Context<WerewolfEnvironment>) =>
+  c.json({ data: null, error: 'Contest not found', requestId: c.get('requestId') }, 404);
 
 // POST /contests/:contestId/platesets - Create plate set
 plateSets.post('/', zValidator('json', z.object({
@@ -14,8 +29,12 @@ plateSets.post('/', zValidator('json', z.object({
   color: z.string().optional(),
 })), async (c) => {
   const db = c.env.DB;
-  const contestId = c.req.param('contestId');
+  const contestId = c.req.param('contestId') ?? '';
   const { plateWeight, quantity, color } = c.req.valid('json');
+
+  if (!(await contestExists(db, contestId))) {
+    return contestNotFound(c);
+  }
 
   await executeMutation(
     db,
@@ -23,7 +42,7 @@ plateSets.post('/', zValidator('json', z.object({
     INSERT OR REPLACE INTO plate_sets (contest_id, plate_weight, quantity, color)
     VALUES (?, ?, ?, ?)
     `,
-    [contestId, plateWeight, quantity, color || getDefaultPlateColor(plateWeight)]
+    [contestId, plateWeight, quantity, color || defaultPlateColor(plateWeight)]
   );
 
   return c.json({
@@ -36,7 +55,11 @@ plateSets.post('/', zValidator('json', z.object({
 // GET /contests/:contestId/platesets - List plate sets
 plateSets.get('/', async (c) => {
   const db = c.env.DB;
-  const contestId = c.req.param('contestId');
+  const contestId = c.req.param('contestId') ?? '';
+
+  if (!(await contestExists(db, contestId))) {
+    return contestNotFound(c);
+  }
 
   const plateSets = await executeQuery(
     db,
@@ -66,9 +89,13 @@ plateSets.patch('/:plateWeight', zValidator('json', z.object({
   message: 'No fields to update',
 })), async (c) => {
   const db = c.env.DB;
-  const contestId = c.req.param('contestId');
+  const contestId = c.req.param('contestId') ?? '';
   const plateWeight = parseFloat(c.req.param('plateWeight'));
   const { quantity, color } = c.req.valid('json');
+
+  if (!(await contestExists(db, contestId))) {
+    return contestNotFound(c);
+  }
 
   const updates: string[] = [];
   const params: (number | string)[] = [];
@@ -107,8 +134,12 @@ plateSets.patch('/:plateWeight', zValidator('json', z.object({
 // DELETE /contests/:contestId/platesets/:plateWeight - Delete plate set
 plateSets.delete('/:plateWeight', async (c) => {
   const db = c.env.DB;
-  const contestId = c.req.param('contestId');
+  const contestId = c.req.param('contestId') ?? '';
   const plateWeight = parseFloat(c.req.param('plateWeight'));
+
+  if (!(await contestExists(db, contestId))) {
+    return contestNotFound(c);
+  }
 
   const result = await executeMutation(
     db,
@@ -133,13 +164,13 @@ plateSets.post('/calculate', zValidator('json', z.object({
   barWeight: z.number().positive().optional(),
 })), async (c) => {
   const db = c.env.DB;
-  const contestId = c.req.param('contestId');
+  const contestId = c.req.param('contestId') ?? '';
   const { targetWeight, barWeight } = c.req.valid('json');
 
-  if (!contestId) {
-    return c.json({ error: 'Contest ID is required', data: null }, 400);
+  if (!(await contestExists(db, contestId))) {
+    return contestNotFound(c);
   }
-  
+
   const plan = await buildPlatePlan(db, contestId, targetWeight, { barWeightOverride: barWeight ?? null });
 
   return c.json({
@@ -162,7 +193,7 @@ plateSets.post('/calculate', zValidator('json', z.object({
 // GET /contests/:contestId/barweights - Get bar weights
 plateSets.get('/barweights', async (c) => {
   const db = c.env.DB;
-  const contestId = c.req.param('contestId');
+  const contestId = c.req.param('contestId') ?? '';
 
   const contest = await executeQueryOne(
     db,
@@ -171,7 +202,7 @@ plateSets.get('/barweights', async (c) => {
   );
 
   if (!contest) {
-    return c.json({ data: null, error: 'Contest not found', requestId: c.get('requestId') }, 404);
+    return contestNotFound(c);
   }
 
   return c.json({
@@ -192,11 +223,15 @@ plateSets.put('/barweights', zValidator('json', z.object({
   clampWeight: z.number().positive().optional(),
 })), async (c) => {
   const db = c.env.DB;
-  const contestId = c.req.param('contestId');
+  const contestId = c.req.param('contestId') ?? '';
   const { mensBarWeight, womensBarWeight, clampWeight } = c.req.valid('json');
 
+  if (!(await contestExists(db, contestId))) {
+    return contestNotFound(c);
+  }
+
   const updates: string[] = [];
-  const params: any[] = [];
+  const params: (number | string)[] = [];
 
   if (mensBarWeight !== undefined) {
     updates.push('mens_bar_weight = ?');
@@ -233,7 +268,11 @@ plateSets.put('/barweights', zValidator('json', z.object({
 // GET /contests/:contestId/platesets/colors - Get plate colors
 plateSets.get('/colors', async (c) => {
   const db = c.env.DB;
-  const contestId = c.req.param('contestId');
+  const contestId = c.req.param('contestId') ?? '';
+
+  if (!(await contestExists(db, contestId))) {
+    return contestNotFound(c);
+  }
 
   const colors = await executeQuery(
     db,
@@ -254,30 +293,3 @@ plateSets.get('/colors', async (c) => {
 });
 
 export default plateSets;
-
-// Helper functions
-
-// Helper function to get plate color based on weight (hex codes matching migration defaults)
-function getDefaultPlateColor(weight: number): string {
-  switch (weight) {
-    case 25:
-    case 2.5:
-      return '#DC2626'; // red
-    case 20:
-    case 2:
-      return '#2563EB'; // blue
-    case 15:
-    case 1.5:
-      return '#EAB308'; // yellow
-    case 10:
-    case 1.25:
-    case 1:
-      return '#16A34A'; // green
-    case 5:
-      return '#F8FAFC'; // white
-    case 0.5:
-      return '#6B7280'; // gray
-    default:
-      return '#374151'; // default gray
-  }
-}

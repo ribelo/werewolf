@@ -1,5 +1,7 @@
 import type { Database } from '../utils/database';
 import { executeQuery, executeQueryOne } from '../utils/database';
+import { solvePlatePlan } from '@werewolf/domain/services/plate-plan';
+import type { PlateInventoryEntry } from '@werewolf/domain/services/plate-plan';
 
 type PlateDbRow = {
   plate_weight: number;
@@ -33,38 +35,7 @@ export type PlatePlan = {
 
 const DEFAULT_MENS_BAR_WEIGHT = 20;
 const DEFAULT_WOMENS_BAR_WEIGHT = 15;
-const EPSILON = 1e-6;
-
-function getDefaultPlateColor(weight: number): string {
-  switch (weight) {
-    case 25:
-    case 2.5:
-      return '#DC2626';
-    case 20:
-    case 2:
-      return '#2563EB';
-    case 15:
-    case 1.5:
-      return '#EAB308';
-    case 10:
-    case 1.25:
-    case 1:
-      return '#16A34A';
-    case 5:
-      return '#F8FAFC';
-    case 0.5:
-      return '#6B7280';
-    default:
-      return '#374151';
-  }
-}
-
-function normaliseColor(weight: number, color?: string | null): string {
-  if (color && color.trim().length > 0) {
-    return color;
-  }
-  return getDefaultPlateColor(weight);
-}
+const DEFAULT_CLAMP_WEIGHT_PER_CLAMP = 2.5;
 
 function deriveBarWeight(row: ContestBarWeightsRow | null, gender?: string, override?: number | null): number {
   if (override !== undefined && override !== null && !Number.isNaN(override)) {
@@ -94,85 +65,36 @@ export async function buildPlatePlan(
   );
 
   const barWeight = deriveBarWeight(barWeightsRow, options?.gender ?? undefined, options?.barWeightOverride ?? undefined);
-  const clampWeightPerClamp = barWeightsRow?.clamp_weight ?? 2.5;
-  const clampWeightTotal = clampWeightPerClamp * 2;
-  const baseAssemblyWeight = barWeight + clampWeightTotal;
-  const weightToLoad = Math.max(0, targetWeight - baseAssemblyWeight);
+  const clampWeightPerClamp = barWeightsRow?.clamp_weight ?? DEFAULT_CLAMP_WEIGHT_PER_CLAMP;
 
-  const availablePlates = await executeQuery<PlateDbRow>(
+  const plateRows = await executeQuery<PlateDbRow>(
     db,
-    `
-      SELECT plate_weight, quantity, color
-      FROM plate_sets
-      WHERE contest_id = ? AND quantity > 0
-      ORDER BY plate_weight DESC
-    `,
+    'SELECT plate_weight, quantity, color FROM plate_sets WHERE contest_id = ?',
     [contestId]
   );
 
-  const smallestPlate = availablePlates
-    .filter((plate) => plate.quantity > 0 && plate.plate_weight > 0)
-    .map((plate) => plate.plate_weight)
-    .reduce((min, weight) => (min === 0 || weight < min ? weight : min), 0);
+  const inventory: PlateInventoryEntry[] = plateRows.map((plate) => ({
+    plateWeight: plate.plate_weight,
+    quantity: plate.quantity,
+    color: plate.color ?? null,
+  }));
 
-  const increment = smallestPlate > 0 ? smallestPlate * 2 : 2.5;
-
-  if (weightToLoad <= EPSILON || availablePlates.length === 0) {
-    return {
-      plates: [],
-      exact: weightToLoad <= EPSILON,
-      total: baseAssemblyWeight,
-      increment,
-      targetWeight,
-      barWeight,
-      clampWeight: clampWeightTotal,
-      clampWeightPerClamp,
-      weightToLoad,
-    };
-  }
-
-  const plates: PlatePlanEntry[] = [];
-  let remainingPerSide = weightToLoad / 2;
-
-  for (const plate of availablePlates) {
-    if (remainingPerSide <= EPSILON) {
-      break;
-    }
-
-    const plateWeight = plate.plate_weight;
-    if (plateWeight <= 0) {
-      continue;
-    }
-
-    if (plateWeight - remainingPerSide > EPSILON) {
-      continue;
-    }
-
-    const maxPairs = Math.floor(remainingPerSide / plateWeight);
-    const usable = Math.min(maxPairs, plate.quantity);
-
-    if (usable > 0) {
-      plates.push({
-        plateWeight,
-        count: usable,
-        color: normaliseColor(plateWeight, plate.color),
-      });
-      remainingPerSide -= plateWeight * usable;
-    }
-  }
-
-  const actualSideLoad = Math.max(0, weightToLoad / 2 - remainingPerSide);
-  const actualTotal = baseAssemblyWeight + actualSideLoad * 2;
-
-  return {
-    plates,
-    exact: remainingPerSide <= EPSILON,
-    total: actualTotal,
-    increment,
+  const plan = solvePlatePlan({
     targetWeight,
     barWeight,
-    clampWeight: clampWeightTotal,
     clampWeightPerClamp,
-    weightToLoad,
+    plates: inventory,
+  });
+
+  return {
+    plates: plan.plates,
+    exact: plan.exact,
+    total: plan.total,
+    increment: plan.increment,
+    targetWeight: plan.targetWeight,
+    barWeight: plan.barWeight,
+    weightToLoad: plan.weightToLoad,
+    clampWeight: plan.clampWeight,
+    clampWeightPerClamp: plan.clampWeightPerClamp,
   };
 }
