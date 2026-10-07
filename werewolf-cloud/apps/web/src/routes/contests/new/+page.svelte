@@ -4,378 +4,87 @@ import Layout from '$lib/components/Layout.svelte';
 import ContestTagsForm, { type ContestTagRowView } from '$lib/components/ContestTagsForm.svelte';
 import { apiClient } from '$lib/api';
 import type { PageData } from './$types';
-import type { ContestSummary, AgeCategory, WeightClass, ContestCategories, RegistrationSummary } from '$lib/types';
+import type { AgeCategory, ContestCategories, WeightClass } from '$lib/types';
 import { toast } from '$lib/ui/toast';
 import { _ } from 'svelte-i18n';
 import { get } from 'svelte/store';
 import { tick } from 'svelte';
 import {
-  createDefaultAgeCategories,
-  createDefaultWeightClasses,
-  validateCategories,
-  formatCategoryIssues,
   buildCategoryPayload,
   categoriesEqual,
+  createDefaultAgeCategories,
+  createDefaultWeightClasses,
+  formatCategoryIssues,
+  validateCategories,
 } from '$lib/categories';
-import { evaluateAttemptWeight, normalizeAttemptWeight } from '$lib/plate-plan';
 import { formatWeight } from '$lib/utils';
+import {
+  AVAILABLE_EVENTS,
+  BODYWEIGHT_STEP,
+  EVENT_LABEL_KEYS,
+  GENDERS,
+  GENDER_LABEL_KEYS,
+  MANDATORY_TAG_KEY,
+  MANDATORY_TAG_LABEL,
+  MAX_STEP,
+  MIN_STEP,
+  TOTAL_STEPS,
+  arraysEqual,
+  buildNextLifts,
+  canonicaliseTagLabel,
+  collectExtraTagLabels,
+  computeAvailableTagOptions,
+  createEmptyCompetitorDraft,
+  createIdFactory,
+  createTagDraftFactory,
+  disciplineForEvents,
+  fillAttemptPlan,
+  normaliseDraftEvents,
+  normaliseTagSelection,
+  normalizeAttemptPlanForGender,
+  replaceTagLabelInTags,
+  syncAttemptPlan,
+  type AttemptIssue,
+  type AttemptPlan,
+  type CompetitorDraft,
+  type ContestEvent,
+  type ContestForm,
+  type TagDraft,
+} from './draft';
+import {
+  generateSampleCompetitorDrafts,
+  generateSampleForm,
+  randomCompetitorCount,
+} from './sample-data';
+import {
+  buildSubmissionCompetitors,
+  pendingDrafts,
+  runContestSetup,
+  type SetupOptions,
+  type SetupProgress,
+  type SetupResult,
+} from './submit';
+import {
+  collectAttemptIssues,
+  collectCompetitorDraftErrors,
+  collectStepErrors,
+  collectTagDraftErrors,
+} from './validation';
 
-  const AVAILABLE_EVENTS = ['Squat', 'Bench', 'Deadlift'] as const;
-  const EVENT_LABEL_KEYS: Record<typeof AVAILABLE_EVENTS[number], string> = {
-    Squat: 'contest.wizard.events.squat',
-    Bench: 'contest.wizard.events.bench',
-    Deadlift: 'contest.wizard.events.deadlift',
-  };
+  const translate = (key: string, values?: Record<string, unknown>) => get(_)(key, values) as string;
 
-  const GENDERS = ['Male', 'Female'] as const;
-  const GENDER_LABEL_KEYS: Record<typeof GENDERS[number], string> = {
-    Male: 'contest.wizard.genders.male',
-    Female: 'contest.wizard.genders.female',
-  };
-
-  const MANDATORY_TAG_LABEL = 'Open';
-  const MANDATORY_TAG_KEY = MANDATORY_TAG_LABEL.toLowerCase();
-
-  function arraysEqual(a: readonly string[], b: readonly string[]): boolean {
-    if (a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i += 1) {
-      if (a[i] !== b[i]) return false;
-    }
-    return true;
-  }
-
-  type TagDraft = {
-    id: string;
-    label: string;
-    isMandatory: boolean;
-    error: string | null;
-  };
-
-  let tagDraftSequence = 0;
-  function nextTagDraftId(): string {
-    tagDraftSequence += 1;
-    return `tag-${tagDraftSequence}`;
-  }
-
-  function createTagDraft(label: string, options: { mandatory?: boolean } = {}): TagDraft {
-    return {
-      id: nextTagDraftId(),
-      label,
-      isMandatory: Boolean(options.mandatory),
-      error: null,
-    };
-  }
+  const createTagDraft = createTagDraftFactory('tag');
+  const nextCompetitorDraftId = createIdFactory('competitor');
 
   let availableTagOptions: string[] = [MANDATORY_TAG_LABEL];
 
-  function computeAvailableTagOptions(drafts: TagDraft[]): string[] {
-    const seen = new Set<string>();
-    const result: string[] = [];
-    for (const draft of drafts) {
-      const label = draft.label.trim();
-      if (!label) continue;
-      const key = label.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      result.push(label);
-    }
-    if (!seen.has(MANDATORY_TAG_KEY)) {
-      result.unshift(MANDATORY_TAG_LABEL);
-    }
-    return result;
-  }
-
-  function canonicaliseTagLabel(label: string): string | null {
-    const key = label.trim().toLowerCase();
-    if (!key) return null;
-    for (const option of availableTagOptions) {
-      if (option.toLowerCase() === key) {
-        return option;
-      }
-    }
-    return null;
-  }
-
-  function normaliseTagSelection(
-    source: readonly string[] | undefined,
-    { enforceMandatory = true }: { enforceMandatory?: boolean } = {},
-  ): string[] {
-    if (availableTagOptions.length === 0) {
-      return enforceMandatory ? [MANDATORY_TAG_LABEL] : [];
-    }
-    const optionMap = new Map(availableTagOptions.map((label) => [label.toLowerCase(), label]));
-    const unique: string[] = [];
-    for (const raw of source ?? []) {
-      const key = raw.trim().toLowerCase();
-      if (!key) continue;
-      const canonical = optionMap.get(key);
-      if (!canonical) continue;
-      if (!unique.includes(canonical)) {
-        unique.push(canonical);
-      }
-    }
-    if (enforceMandatory) {
-      const mandatory = optionMap.get(MANDATORY_TAG_KEY);
-      if (mandatory && !unique.includes(mandatory)) {
-        unique.unshift(mandatory);
-      }
-    }
-    return unique;
-  }
-
   export let data: PageData;
-  export let params: Record<string, string> = {};
 
-  $: void params;
   const { apiBase } = data;
-
-  type ContestEvent = typeof AVAILABLE_EVENTS[number];
-  type Gender = typeof GENDERS[number];
-
-  type AttemptPlan = Record<ContestEvent, number | null>;
-
-  type AttemptIssueType = 'missing' | 'unloadable' | 'below_bar';
-
-  interface AttemptIssue {
-    competitorIndex: number;
-    name: string;
-    event: ContestEvent;
-    type: AttemptIssueType;
-    suggestedWeight?: number;
-  }
-
-  const ATTEMPT_INCREMENT = 2.5;
-
-  function roundToIncrement(value: number, increment = ATTEMPT_INCREMENT): number {
-    const rounded = Math.round(value / increment) * increment;
-    return Number(rounded.toFixed(2));
-  }
-
-  function suggestOpener(event: ContestEvent, bodyweight: number): number {
-    const base = Math.max(bodyweight || 0, 20);
-    const multiplier = {
-      Squat: 1.2,
-      Bench: 0.8,
-      Deadlift: 1.4,
-    }[event];
-
-    const suggested = roundToIncrement(base * multiplier);
-    return Math.max(20, suggested);
-  }
-
-  function createAttemptPlan(events: ContestEvent[], bodyweight: number, fill = false): AttemptPlan {
-    const plan = {} as AttemptPlan;
-    for (const event of events) {
-      plan[event] = fill ? suggestOpener(event, bodyweight) : null;
-    }
-    return plan;
-  }
-
-  function syncAttemptPlan(plan: AttemptPlan | undefined, events: ContestEvent[]): AttemptPlan {
-    const source = plan ?? ({} as AttemptPlan);
-    const next = {} as AttemptPlan;
-    for (const event of events) {
-      next[event] = source[event] ?? null;
-    }
-    return next;
-  }
-
-  function normalizeAttemptValue(value: number | null, gender: Gender): number | null {
-    if (!value || value <= 0) {
-      return null;
-    }
-    return normalizeAttemptWeight(value, gender);
-  }
-
-  function normalizeAttemptPlanForGender(plan: AttemptPlan, gender: Gender): AttemptPlan {
-    const events = Object.keys(plan) as ContestEvent[];
-    const normalized = {} as AttemptPlan;
-    for (const event of events) {
-      normalized[event] = normalizeAttemptValue(plan[event] ?? null, gender);
-    }
-    return normalized;
-  }
-
-  function cloneAttemptPlan(plan: AttemptPlan): AttemptPlan {
-    const events = Object.keys(plan) as ContestEvent[];
-    return syncAttemptPlan(plan, events);
-  }
-
-  function fillAttemptPlan(plan: AttemptPlan, events: ContestEvent[], bodyweight: number, onlyMissing = false): AttemptPlan {
-    const next = { ...plan } as AttemptPlan;
-    for (const event of events) {
-      const current = next[event] ?? null;
-      if (!onlyMissing || !current || current <= 0) {
-        next[event] = suggestOpener(event, bodyweight);
-      }
-    }
-    return next;
-  }
-
-  const translate = (key: string, values?: Record<string, unknown>) => get(_)(key, values) as string;
 
   let ageCategoriesDraft: AgeCategory[] = createDefaultAgeCategories();
   let weightClassesDraft: WeightClass[] = createDefaultWeightClasses();
   let categoryIssues: string[] = [];
-
-  const CONTEST_NAMES = [
-    'Werewolf Classic',
-    'Northern Lights Open',
-    'Iron Den Invitational',
-    'Capital City Throwdown',
-    'Vistula Strength Meet',
-    'Silver Moon Showdown'
-  ] as const;
-
-  const VENUES = [
-    'Warsaw',
-    'Kraków',
-    'Gdańsk',
-    'Wrocław',
-    'Poznań',
-    'Łódź',
-    'Katowice'
-  ] as const;
-
-  const ORGANIZERS = [
-    'Werewolf Powerlifting Club',
-    'Northern Strength Association',
-    'Iron Den Athletics',
-    'Polska Liga Siły',
-    'Vistula Barbell'
-  ] as const;
-
-  const RULESETS = ['IPF', 'WRPF', 'USAPL', 'URP'] as const;
-
-  const CLUBS = [
-    'Werewolf PL',
-    'Barbell Syndicate',
-    'Northern Strength',
-    'Vistula Barbell',
-    'Katowice Ironworks',
-    'Łódź Power Crew'
-  ] as const;
-
-  const CITIES = [
-    'Warszawa',
-    'Kraków',
-    'Łódź',
-    'Gdynia',
-    'Szczecin',
-    'Białystok',
-    'Lublin',
-    'Rzeszów'
-  ] as const;
-
-  type NameTuple = readonly [string, string];
-
-  const FEMALE_NAMES: readonly NameTuple[] = [
-    ['Anna', 'Nowak'],
-    ['Magda', 'Kowalska'],
-    ['Kinga', 'Wiśniewska'],
-    ['Natalia', 'Mazur'],
-    ['Julia', 'Baran'],
-    ['Marta', 'Lis'],
-    ['Karolina', 'Jasińska'],
-    ['Ewelina', 'Sobczak'],
-    ['Zuzanna', 'Kaczmarek']
-  ] as const;
-
-  const MALE_NAMES: readonly NameTuple[] = [
-    ['Paweł', 'Zieliński'],
-    ['Tomasz', 'Lewandowski'],
-    ['Michał', 'Piotrowski'],
-    ['Krzysztof', 'Sikora'],
-    ['Piotr', 'Bryk'],
-    ['Damian', 'Olszewski'],
-    ['Łukasz', 'Kubiak'],
-    ['Jakub', 'Konarski']
-  ] as const;
-
-  const NAME_SETS: Record<Gender, readonly NameTuple[]> = {
-    Male: MALE_NAMES,
-    Female: FEMALE_NAMES,
-  } as const;
-
-  function randomItem<T>(items: readonly T[]): T {
-    if (items.length === 0) {
-      throw new Error('Cannot select a random item from an empty array');
-    }
-    const index = Math.floor(Math.random() * items.length);
-    return items[index] as T;
-  }
-
-  function randomDateWithin(days: number): string {
-    const base = new Date();
-    const offset = Math.floor(Math.random() * days);
-    base.setDate(base.getDate() + offset);
-    return base.toISOString().slice(0, 10);
-  }
-
-  function randomBodyweight(gender: Gender): number {
-    const min = gender === 'Male' ? 70 : 55;
-    const max = gender === 'Male' ? 125 : 85;
-    const value = min + Math.random() * (max - min);
-    return Number(value.toFixed(1));
-  }
-
-  function randomBirthDate(): string {
-    const today = new Date();
-    const minAge = 18;
-    const maxAge = 40;
-    const age = minAge + Math.floor(Math.random() * (maxAge - minAge + 1));
-    const birth = new Date(today.getFullYear() - age, Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1);
-    return birth.toISOString().slice(0, 10);
-  }
-
-  function randomEvents(): ContestEvent[] {
-    const shuffled = [...AVAILABLE_EVENTS].sort(() => Math.random() - 0.5);
-    const count = Math.random() < 0.4 ? 3 : Math.random() < 0.7 ? 2 : 1;
-    return shuffled.slice(0, count);
-  }
-
-  function buildRandomCompetitor(
-    gender: Gender,
-    usedNames: Set<string>,
-    events: ContestEvent[],
-  ): CompetitorDraft {
-    const baseNames = NAME_SETS[gender];
-    const available = baseNames.filter(([firstName, lastName]) => !usedNames.has(`${firstName}|${lastName}`));
-    const [firstName, lastName] = available.length > 0
-      ? randomItem(available)
-      : randomItem(baseNames);
-    usedNames.add(`${firstName}|${lastName}`);
-    const rackHeightSquat = DEFAULT_RACK_SQUAT + Math.floor(Math.random() * 5) - 2;
-    const rackHeightBench = DEFAULT_RACK_BENCH + Math.floor(Math.random() * 3) - 1;
-    const bodyweight = randomBodyweight(gender);
-    const randomTags = availableTagOptions.reduce<string[]>((acc, option) => {
-      const key = option.toLowerCase();
-      if (key === MANDATORY_TAG_KEY) {
-        if (!acc.includes(option)) acc.push(option);
-        return acc;
-      }
-      if (Math.random() < 0.35) {
-        acc.push(option);
-      }
-      return acc;
-    }, [] as string[]);
-    const tags = normaliseTagSelection(randomTags);
-
-    return {
-      firstName,
-      lastName,
-      birthDate: randomBirthDate(),
-      gender,
-      club: randomItem(CLUBS),
-      city: randomItem(CITIES),
-      bodyweight,
-      rackHeightSquat,
-      rackHeightBench,
-      lifts: [...events],
-      attempts: normalizeAttemptPlanForGender(createAttemptPlan(events, bodyweight, true), gender),
-      tags,
-    };
-  }
 
   function resetCategoryDraftsToDefault() {
     ageCategoriesDraft = createDefaultAgeCategories();
@@ -383,19 +92,21 @@ import { formatWeight } from '$lib/utils';
     categoryIssues = [];
   }
 
+  function parseOptionalNumber(value: string): number | null {
+    const parsed = value.trim() === '' ? null : Number(value);
+    return parsed !== null && Number.isFinite(parsed) ? parsed : null;
+  }
+
   function addAgeCategoryDraft() {
-    ageCategoriesDraft = [
-      ...ageCategoriesDraft,
-      {
-        id: undefined,
-        code: '',
-        name: '',
-        minAge: null,
-        maxAge: null,
-        sortOrder: (ageCategoriesDraft.length + 1) * 10,
-        metadata: null,
-      },
-    ];
+    const next: AgeCategory = {
+      code: '',
+      name: '',
+      minAge: null,
+      maxAge: null,
+      sortOrder: (ageCategoriesDraft.length + 1) * 10,
+      metadata: null,
+    };
+    ageCategoriesDraft = [...ageCategoriesDraft, next];
   }
 
   function removeAgeCategoryDraft(index: number) {
@@ -403,18 +114,21 @@ import { formatWeight } from '$lib/utils';
   }
 
   function updateAgeCategoryDraft(index: number, field: keyof AgeCategory, value: string) {
-    const updated = [...ageCategoriesDraft];
-    const target = { ...updated[index] };
+    const current = ageCategoriesDraft[index];
+    if (!current) return;
+    let target: AgeCategory = { ...current };
     if (field === 'code') {
-      target.code = value.trim().toUpperCase();
+      target = { ...current, code: value.trim().toUpperCase() };
     } else if (field === 'name') {
-      target.name = value;
-    } else if (field === 'minAge' || field === 'maxAge' || field === 'sortOrder') {
-      const parsed = value.trim() === '' ? null : Number(value);
-      target[field] = Number.isFinite(parsed) ? (parsed as number) : null;
+      target = { ...current, name: value };
+    } else if (field === 'minAge') {
+      target = { ...current, minAge: parseOptionalNumber(value) };
+    } else if (field === 'maxAge') {
+      target = { ...current, maxAge: parseOptionalNumber(value) };
+    } else if (field === 'sortOrder') {
+      target = { ...current, sortOrder: parseOptionalNumber(value) };
     }
-    updated[index] = target;
-    ageCategoriesDraft = updated;
+    ageCategoriesDraft = ageCategoriesDraft.map((category, idx) => (idx === index ? target : category));
     categoryIssues = [];
   }
 
@@ -426,19 +140,16 @@ import { formatWeight } from '$lib/utils';
   }
 
   function addWeightClassDraft() {
-    weightClassesDraft = [
-      ...weightClassesDraft,
-      {
-        id: undefined,
-        code: '',
-        name: '',
-        gender: weightClassesDraft.length % 2 === 0 ? 'Female' : 'Male',
-        minWeight: null,
-        maxWeight: null,
-        sortOrder: (weightClassesDraft.length + 1) * 10,
-        metadata: null,
-      },
-    ];
+    const next: WeightClass = {
+      code: '',
+      name: '',
+      gender: weightClassesDraft.length % 2 === 0 ? 'Female' : 'Male',
+      minWeight: null,
+      maxWeight: null,
+      sortOrder: (weightClassesDraft.length + 1) * 10,
+      metadata: null,
+    };
+    weightClassesDraft = [...weightClassesDraft, next];
   }
 
   function removeWeightClassDraft(index: number) {
@@ -446,21 +157,24 @@ import { formatWeight } from '$lib/utils';
   }
 
   function updateWeightClassDraft(index: number, field: keyof WeightClass, value: string) {
-    const updated = [...weightClassesDraft];
-    const target = { ...updated[index] };
+    const current = weightClassesDraft[index];
+    if (!current) return;
+    let target: WeightClass = { ...current };
     if (field === 'code') {
-      target.code = value.trim().toUpperCase();
+      target = { ...current, code: value.trim().toUpperCase() };
     } else if (field === 'name') {
-      target.name = value;
+      target = { ...current, name: value };
     } else if (field === 'gender') {
       const upper = value.trim().toUpperCase();
-      target.gender = upper.startsWith('F') ? 'Female' : 'Male';
-    } else if (field === 'minWeight' || field === 'maxWeight' || field === 'sortOrder') {
-      const parsed = value.trim() === '' ? null : Number(value);
-      target[field] = Number.isFinite(parsed) ? (parsed as number) : null;
+      target = { ...current, gender: upper.startsWith('F') ? 'Female' : 'Male' };
+    } else if (field === 'minWeight') {
+      target = { ...current, minWeight: parseOptionalNumber(value) };
+    } else if (field === 'maxWeight') {
+      target = { ...current, maxWeight: parseOptionalNumber(value) };
+    } else if (field === 'sortOrder') {
+      target = { ...current, sortOrder: parseOptionalNumber(value) };
     }
-    updated[index] = target;
-    weightClassesDraft = updated;
+    weightClassesDraft = weightClassesDraft.map((weightClass, idx) => (idx === index ? target : weightClass));
     categoryIssues = [];
   }
 
@@ -517,33 +231,14 @@ import { formatWeight } from '$lib/utils';
 
   function validateTagDrafts(): boolean {
     newTagError = null;
-    let hasError = false;
-    const counts: Record<string, number> = {};
+    const result = collectTagDraftErrors(tagDrafts, translate);
+    tagDrafts = result.drafts;
 
-    for (const draft of tagDrafts) {
-      const key = draft.label.trim().toLowerCase();
-      if (!key) continue;
-      counts[key] = (counts[key] ?? 0) + 1;
-    }
-
-    tagDrafts = tagDrafts.map((draft) => {
-      const label = draft.label.trim();
-      let error: string | null = null;
-      if (!label) {
-        error = translate('contest_edit.tags.validation.label_required');
-        hasError = true;
-      } else if ((counts[label.toLowerCase()] ?? 0) > 1) {
-        error = translate('contest_edit.tags.validation.duplicate');
-        hasError = true;
-      }
-      return { ...draft, label, error };
-    });
-
-    if (!hasError) {
+    if (!result.hasError) {
       syncAllCompetitorTags();
     }
 
-    return !hasError;
+    return !result.hasError;
   }
 
   let tagDraftRows: ContestTagRowView[] = [];
@@ -568,44 +263,12 @@ import { formatWeight } from '$lib/utils';
     deleteDisabled: false,
   }));
 
-  interface ContestForm {
-    name: string;
-    date: string;
-    location: string;
-    discipline: 'Powerlifting' | 'Bench' | 'Squat' | 'Deadlift';
-    events: ContestEvent[];
-    federationRules: string;
-    organizer: string;
-    notes: string;
-  }
-
-  interface CompetitorDraft {
-    firstName: string;
-    lastName: string;
-    birthDate: string;
-    gender: Gender;
-    club: string;
-    city: string;
-    bodyweight: number;
-    rackHeightSquat: number | null;
-    rackHeightBench: number | null;
-    lifts: ContestEvent[];
-    attempts: AttemptPlan;
-    tags: string[];
-  }
-
-  const MIN_STEP = 1;
-  const MAX_STEP = 4;
-  const TOTAL_STEPS = MAX_STEP;
-  const BODYWEIGHT_STEP = 0.5;
-  const DEFAULT_RACK_SQUAT = 10;
-  const DEFAULT_RACK_BENCH = 5;
-
   let step = MIN_STEP;
   let isSubmitting = false;
   let isGeneratingSample = false;
   let error: string | null = null;
   let success: string | null = null;
+  let setupProgress: SetupProgress | null = null;
 
   const today = new Date();
   const isoToday = today.toISOString().slice(0, 10);
@@ -621,20 +284,11 @@ import { formatWeight } from '$lib/utils';
     notes: '',
   };
 
-  let competitorDraft: CompetitorDraft = {
-    firstName: '',
-    lastName: '',
-    birthDate: '',
-    gender: 'Male',
-    club: '',
-    city: '',
-    bodyweight: 70,
-    rackHeightSquat: DEFAULT_RACK_SQUAT,
-    rackHeightBench: DEFAULT_RACK_BENCH,
-    lifts: [...form.events],
-    attempts: createAttemptPlan(form.events, 70, false),
-    tags: normaliseTagSelection([MANDATORY_TAG_LABEL]),
-  };
+  let competitorDraft: CompetitorDraft = createEmptyCompetitorDraft({
+    id: nextCompetitorDraftId(),
+    events: form.events,
+    tagOptions: availableTagOptions,
+  });
 
   let competitorDrafts: CompetitorDraft[] = [];
   let validationErrors: Record<string, string> = {};
@@ -648,24 +302,8 @@ import { formatWeight } from '$lib/utils';
     isGeneratingSample = true;
 
     try {
-      const DEFAULT_EVENTS = ['Squat', 'Bench', 'Deadlift'] as const;
-      const hasCustomEventSelection =
-        form.events.length !== DEFAULT_EVENTS.length ||
-        form.events.some((event, index) => event !== DEFAULT_EVENTS[index]);
-
-      const events = hasCustomEventSelection ? [...form.events] : randomEvents();
-      const discipline = events.length >= 2 ? 'Powerlifting' : events[0] ?? 'Powerlifting';
-
-      form = {
-        name: randomItem(CONTEST_NAMES),
-        date: randomDateWithin(21),
-        location: randomItem(VENUES),
-        discipline: discipline as ContestForm['discipline'],
-        events,
-        federationRules: Math.random() < 0.7 ? randomItem(RULESETS) : '',
-        organizer: randomItem(ORGANIZERS),
-        notes: translate('contest.wizard.sample.notes'),
-      };
+      const sampleForm = generateSampleForm(form.events, translate('contest.wizard.sample.notes'));
+      form = sampleForm;
 
       tagDrafts = [
         createTagDraft(MANDATORY_TAG_LABEL, { mandatory: true }),
@@ -676,12 +314,12 @@ import { formatWeight } from '$lib/utils';
       availableTagOptions = computeAvailableTagOptions(tagDrafts);
       syncAllCompetitorTags();
 
-      const competitorCount = 6 + Math.floor(Math.random() * 4);
-      const usedNames = new Set<string>();
-      competitorDrafts = Array.from({ length: competitorCount }, (_, index) => {
-        const gender: Gender = index % 2 === 0 ? 'Male' : 'Female';
-        return buildRandomCompetitor(gender, usedNames, events);
-      });
+      competitorDrafts = generateSampleCompetitorDrafts(
+        sampleForm.events,
+        randomCompetitorCount(),
+        availableTagOptions,
+        nextCompetitorDraftId,
+      );
       syncAllCompetitorTags();
 
       validationErrors = {};
@@ -707,53 +345,26 @@ import { formatWeight } from '$lib/utils';
   }
 
   function updateDiscipline() {
-    if (form.events.length >= 2) {
-      form.discipline = 'Powerlifting';
-      return;
-    }
-
-    const [singleEvent] = form.events;
-    if (singleEvent) {
-      form.discipline = singleEvent;
-    }
+    form.discipline = disciplineForEvents(form.events);
   }
 
   function resetCompetitorDraft() {
-    competitorDraft = {
-      firstName: '',
-      lastName: '',
-      birthDate: '',
-      gender: 'Male',
-      club: '',
-      city: '',
-      bodyweight: 70,
-      rackHeightSquat: DEFAULT_RACK_SQUAT,
-      rackHeightBench: DEFAULT_RACK_BENCH,
-      lifts: [...form.events],
-      attempts: createAttemptPlan(form.events, 70, false),
-      tags: normaliseTagSelection([MANDATORY_TAG_LABEL]),
-    };
-  }
-
-  function normaliseDraftEvents(source: ContestEvent[]): ContestEvent[] {
-    const allowed = form.events;
-    if (allowed.length === 0) {
-      return [...AVAILABLE_EVENTS];
-    }
-    const uniqueAllowed = Array.from(new Set(allowed));
-    const filtered = Array.from(new Set(source.filter((event) => uniqueAllowed.includes(event))));
-    return filtered.length > 0 ? uniqueAllowed.filter((event) => filtered.includes(event)) : [...uniqueAllowed];
+    competitorDraft = createEmptyCompetitorDraft({
+      id: nextCompetitorDraftId(),
+      events: form.events,
+      tagOptions: availableTagOptions,
+    });
   }
 
   function syncAllCompetitorTags() {
-    const nextDraftTags = normaliseTagSelection(competitorDraft.tags);
+    const nextDraftTags = normaliseTagSelection(competitorDraft.tags, availableTagOptions);
     if (!arraysEqual(competitorDraft.tags, nextDraftTags)) {
       competitorDraft = { ...competitorDraft, tags: nextDraftTags };
     }
 
     let updated = false;
     const nextDrafts = competitorDrafts.map((draft) => {
-      const normalised = normaliseTagSelection(draft.tags);
+      const normalised = normaliseTagSelection(draft.tags, availableTagOptions);
       if (!arraysEqual(draft.tags, normalised)) {
         updated = true;
         return { ...draft, tags: normalised };
@@ -766,7 +377,7 @@ import { formatWeight } from '$lib/utils';
   }
 
   function syncAttemptPlansWithEvents() {
-    const updatedDraftEvents = normaliseDraftEvents(competitorDraft.lifts);
+    const updatedDraftEvents = normaliseDraftEvents(competitorDraft.lifts, form.events);
     competitorDraft = {
       ...competitorDraft,
       lifts: updatedDraftEvents,
@@ -776,7 +387,7 @@ import { formatWeight } from '$lib/utils';
       ),
     };
     competitorDrafts = competitorDrafts.map((draft) => {
-      const lifts = normaliseDraftEvents(draft.lifts);
+      const lifts = normaliseDraftEvents(draft.lifts, form.events);
       return {
         ...draft,
         lifts,
@@ -788,29 +399,18 @@ import { formatWeight } from '$lib/utils';
   function addCompetitorDraft() {
     validationErrors = {};
 
-    if (!competitorDraft.firstName.trim()) {
-      validationErrors['firstName'] = translate('contest.wizard.validation.first_name_required');
-    }
-    if (!competitorDraft.lastName.trim()) {
-      validationErrors['lastName'] = translate('contest.wizard.validation.last_name_required');
-    }
-    if (!competitorDraft.birthDate) {
-      validationErrors['birthDate'] = translate('contest.wizard.validation.birth_date_required');
-    }
-    if (competitorDraft.bodyweight <= 0) {
-      validationErrors['bodyweight'] = translate('contest.wizard.validation.bodyweight_positive');
-    }
+    Object.assign(validationErrors, collectCompetitorDraftErrors(competitorDraft, translate));
 
     if (Object.keys(validationErrors).length > 0) {
       return;
     }
 
-    const lifts = normaliseDraftEvents(competitorDraft.lifts);
+    const lifts = normaliseDraftEvents(competitorDraft.lifts, form.events);
     const attempts = normalizeAttemptPlanForGender(
       syncAttemptPlan(competitorDraft.attempts, lifts),
       competitorDraft.gender,
     );
-    const tags = normaliseTagSelection(competitorDraft.tags);
+    const tags = normaliseTagSelection(competitorDraft.tags, availableTagOptions);
     competitorDrafts = [
       ...competitorDrafts,
       {
@@ -838,36 +438,18 @@ import { formatWeight } from '$lib/utils';
   function updateAttemptDraft(index: number, event: ContestEvent, value: number | null) {
     competitorDrafts = competitorDrafts.map((draft, idx) => {
       if (idx !== index) return draft;
-      const lifts = normaliseDraftEvents(draft.lifts);
+      const lifts = normaliseDraftEvents(draft.lifts, form.events);
       if (!lifts.includes(event)) {
         return { ...draft, lifts };
       }
-      const attempts = { ...syncAttemptPlan(draft.attempts, lifts) } as AttemptPlan;
+      const attempts: AttemptPlan = { ...syncAttemptPlan(draft.attempts, lifts) };
       attempts[event] = value && Number.isFinite(value) && value > 0 ? Number(value.toFixed(2)) : null;
       return { ...draft, lifts, attempts };
     });
   }
 
-  function buildNextLifts(current: ContestEvent[], target: ContestEvent): ContestEvent[] {
-    const allowed = Array.from(new Set(form.events)) as ContestEvent[];
-    if (!allowed.includes(target)) {
-      return normaliseDraftEvents(current);
-    }
-    const normalisedCurrent = normaliseDraftEvents(current);
-    let next: ContestEvent[];
-    if (normalisedCurrent.includes(target)) {
-      next = normalisedCurrent.filter((event) => event !== target);
-      if (next.length === 0) {
-        next = [target];
-      }
-    } else {
-      next = [...normalisedCurrent, target];
-    }
-    return normaliseDraftEvents(next);
-  }
-
   function toggleCompetitorDraftLift(lift: ContestEvent) {
-    const lifts = buildNextLifts(competitorDraft.lifts, lift);
+    const lifts = buildNextLifts(competitorDraft.lifts, lift, form.events);
     competitorDraft = {
       ...competitorDraft,
       lifts,
@@ -883,7 +465,7 @@ import { formatWeight } from '$lib/utils';
   function toggleSavedDraftLift(index: number, lift: ContestEvent) {
     competitorDrafts = competitorDrafts.map((draft, idx) => {
       if (idx !== index) return draft;
-      const lifts = buildNextLifts(draft.lifts, lift);
+      const lifts = buildNextLifts(draft.lifts, lift, form.events);
       return {
         ...draft,
         lifts,
@@ -898,13 +480,13 @@ import { formatWeight } from '$lib/utils';
   }
 
   function toggleCompetitorDraftTag(label: string, checked: boolean) {
-    const canonical = canonicaliseTagLabel(label);
+    const canonical = canonicaliseTagLabel(label, availableTagOptions);
     if (!canonical) return;
     const key = canonical.toLowerCase();
     if (key === MANDATORY_TAG_KEY) {
       competitorDraft = {
         ...competitorDraft,
-        tags: normaliseTagSelection([canonical, ...competitorDraft.tags]),
+        tags: normaliseTagSelection([canonical, ...competitorDraft.tags], availableTagOptions),
       };
       return;
     }
@@ -919,11 +501,11 @@ import { formatWeight } from '$lib/utils';
     } else {
       next = current.filter((tag) => tag.toLowerCase() !== key);
     }
-    competitorDraft = { ...competitorDraft, tags: normaliseTagSelection(next) };
+    competitorDraft = { ...competitorDraft, tags: normaliseTagSelection(next, availableTagOptions) };
   }
 
   function toggleSavedDraftTag(index: number, label: string, checked: boolean) {
-    const canonical = canonicaliseTagLabel(label);
+    const canonical = canonicaliseTagLabel(label, availableTagOptions);
     if (!canonical) return;
     const key = canonical.toLowerCase();
     if (key === MANDATORY_TAG_KEY) {
@@ -942,7 +524,7 @@ import { formatWeight } from '$lib/utils';
       } else {
         next = current.filter((tag) => tag.toLowerCase() !== key);
       }
-      const normalised = normaliseTagSelection(next);
+      const normalised = normaliseTagSelection(next, availableTagOptions);
       if (arraysEqual(draft.tags, normalised)) {
         return draft;
       }
@@ -952,39 +534,24 @@ import { formatWeight } from '$lib/utils';
 
   function replaceTagLabelAcrossDrafts(previousLabel: string, nextLabel: string) {
     const previousKey = previousLabel.trim().toLowerCase();
-    const trimmedNext = nextLabel.trim();
     if (!previousKey) {
       syncAllCompetitorTags();
       return;
     }
 
-    let draftChanged = false;
-    const updatedDraftTags = competitorDraft.tags.map((tag) => {
-      if (tag.toLowerCase() === previousKey) {
-        draftChanged = true;
-        return trimmedNext || tag;
-      }
-      return tag;
-    });
-    if (draftChanged) {
-      competitorDraft = { ...competitorDraft, tags: updatedDraftTags };
+    const draftTags = replaceTagLabelInTags(competitorDraft.tags, previousLabel, nextLabel);
+    if (draftTags.changed) {
+      competitorDraft = { ...competitorDraft, tags: draftTags.tags };
     }
 
     let listChanged = false;
     const nextDrafts = competitorDrafts.map((draft) => {
-      let changed = false;
-      const nextTags = draft.tags.map((tag) => {
-        if (tag.toLowerCase() === previousKey) {
-          changed = true;
-          return trimmedNext || tag;
-        }
-        return tag;
-      });
-      if (changed) {
-        listChanged = true;
-        return { ...draft, tags: nextTags };
+      const replaced = replaceTagLabelInTags(draft.tags, previousLabel, nextLabel);
+      if (!replaced.changed) {
+        return draft;
       }
-      return draft;
+      listChanged = true;
+      return { ...draft, tags: replaced.tags };
     });
     if (listChanged) {
       competitorDrafts = nextDrafts;
@@ -998,14 +565,11 @@ import { formatWeight } from '$lib/utils';
     if (!id) {
       return;
     }
-    let previousLabel: string | null = null;
-    tagDrafts = tagDrafts.map((draft) => {
-      if (draft.id === id) {
-        previousLabel = draft.label;
-        return { ...draft, label: value, error: null };
-      }
-      return draft;
-    });
+
+    const previousLabel = tagDrafts.find((draft) => draft.id === id)?.label ?? null;
+    tagDrafts = tagDrafts.map((draft) =>
+      draft.id === id ? { ...draft, label: value, error: null } : draft
+    );
 
     const prevKey = previousLabel?.trim().toLowerCase() ?? null;
     const nextKey = value.trim().toLowerCase();
@@ -1025,41 +589,7 @@ import { formatWeight } from '$lib/utils';
     };
   }
 
-  function collectAttemptIssues(): AttemptIssue[] {
-    const issues: AttemptIssue[] = [];
-    competitorDrafts.forEach((competitor, index) => {
-      const lifts = normaliseDraftEvents(competitor.lifts);
-      const attempts = syncAttemptPlan(competitor.attempts, lifts);
-      const displayName = [competitor.lastName, competitor.firstName].filter(Boolean).join(' ').trim() ||
-        translate('contest.wizard.attempts.unnamed', { values: { index: index + 1 } });
-      for (const event of lifts) {
-        const weight = attempts[event];
-        if (!weight || weight <= 0) {
-          issues.push({
-            competitorIndex: index,
-            name: displayName,
-            event,
-            type: 'missing',
-          });
-          continue;
-        }
-
-        const check = evaluateAttemptWeight(weight, competitor.gender);
-        if (!check.loadable) {
-          issues.push({
-            competitorIndex: index,
-            name: displayName,
-            event,
-            type: check.reason === 'below_bar' ? 'below_bar' : 'unloadable',
-            suggestedWeight: check.normalized,
-          });
-        }
-      }
-    });
-    return issues;
-  }
-
-  $: attemptIssues = collectAttemptIssues();
+  $: attemptIssues = collectAttemptIssues(competitorDrafts, form.events, translate);
 
   function fillMissingAttemptWeights() {
     if (competitorDrafts.length === 0) {
@@ -1067,7 +597,7 @@ import { formatWeight } from '$lib/utils';
     }
 
     competitorDrafts = competitorDrafts.map((draft) => {
-      const lifts = normaliseDraftEvents(draft.lifts);
+      const lifts = normaliseDraftEvents(draft.lifts, form.events);
       return {
         ...draft,
         lifts,
@@ -1078,13 +608,14 @@ import { formatWeight } from '$lib/utils';
       };
     });
 
+    const draftLifts = normaliseDraftEvents(competitorDraft.lifts, form.events);
     competitorDraft = {
       ...competitorDraft,
-      lifts: normaliseDraftEvents(competitorDraft.lifts),
+      lifts: draftLifts,
       attempts: normalizeAttemptPlanForGender(
         fillAttemptPlan(
-          syncAttemptPlan(competitorDraft.attempts, normaliseDraftEvents(competitorDraft.lifts)),
-          normaliseDraftEvents(competitorDraft.lifts),
+          syncAttemptPlan(competitorDraft.attempts, draftLifts),
+          draftLifts,
           competitorDraft.bodyweight,
           true,
         ),
@@ -1097,7 +628,7 @@ import { formatWeight } from '$lib/utils';
 
   function normalizeAllCompetitorAttempts() {
     competitorDrafts = competitorDrafts.map((draft) => {
-      const lifts = normaliseDraftEvents(draft.lifts);
+      const lifts = normaliseDraftEvents(draft.lifts, form.events);
       return {
         ...draft,
         lifts,
@@ -1108,36 +639,21 @@ import { formatWeight } from '$lib/utils';
       };
     });
 
+    const draftLifts = normaliseDraftEvents(competitorDraft.lifts, form.events);
     competitorDraft = {
       ...competitorDraft,
-      lifts: normaliseDraftEvents(competitorDraft.lifts),
+      lifts: draftLifts,
       attempts: normalizeAttemptPlanForGender(
-        syncAttemptPlan(competitorDraft.attempts, normaliseDraftEvents(competitorDraft.lifts)),
+        syncAttemptPlan(competitorDraft.attempts, draftLifts),
         competitorDraft.gender,
       ),
     };
   }
 
   function validateStep(stepNumber: number): boolean {
-    validationErrors = {};
-
-    if (stepNumber === 1) {
-      if (!form.name.trim()) {
-        validationErrors['name'] = translate('contest.wizard.validation.name_required');
-      }
-      if (!form.location.trim()) {
-        validationErrors['location'] = translate('contest.wizard.validation.location_required');
-      }
-      if (!form.date) {
-        validationErrors['date'] = translate('contest.wizard.validation.date_required');
-      }
-    }
+    validationErrors = collectStepErrors(stepNumber, form, translate);
 
     if (stepNumber === 2) {
-      if (!form.organizer.trim()) {
-        validationErrors['organizer'] = translate('contest.wizard.validation.organizer_required');
-      }
-
       const issues = validateCategories(ageCategoriesDraft, weightClassesDraft);
       if (issues.length > 0) {
         categoryIssues = formatCategoryIssues(issues, translate);
@@ -1156,10 +672,6 @@ import { formatWeight } from '$lib/utils';
       }
     }
 
-    if (stepNumber === 3 && competitorDrafts.length === 0) {
-      validationErrors = {};
-    }
-
     if (stepNumber === 4 && attemptIssues.length > 0) {
       return false;
     }
@@ -1176,6 +688,27 @@ import { formatWeight } from '$lib/utils';
     step = target;
   }
 
+  function reportSetupResult(result: SetupResult) {
+    for (const failure of result.failures) {
+      if (failure.kind === 'contest') {
+        continue;
+      }
+      if (failure.kind === 'attempt' && failure.event && failure.displayName) {
+        toast.error(`${failure.displayName} • ${translate(EVENT_LABEL_KEYS[failure.event])}: ${failure.message}`);
+        continue;
+      }
+      if (failure.displayName) {
+        toast.error(
+          translate('contest.wizard.messages.draft_failed', {
+            values: { name: failure.displayName, message: failure.message },
+          }),
+        );
+        continue;
+      }
+      toast.error(failure.message);
+    }
+  }
+
   async function submitContest() {
     normalizeAllCompetitorAttempts();
     await tick();
@@ -1189,40 +722,19 @@ import { formatWeight } from '$lib/utils';
     success = null;
     isSubmitting = true;
 
-    const issues = validateCategories(ageCategoriesDraft, weightClassesDraft);
-    if (issues.length > 0) {
-      categoryIssues = formatCategoryIssues(issues, translate);
-      isSubmitting = false;
-      return;
-    }
-
-    categoryIssues = [];
-
-    const tagsValid = validateTagDrafts();
-    if (!tagsValid) {
-      isSubmitting = false;
-      toast.error(translate('contest.wizard.validation.warning'));
-      return;
-    }
-
-    const payload = {
-      name: form.name.trim(),
-      date: form.date,
-      location: form.location.trim(),
-      discipline: form.discipline,
-      federationRules: form.federationRules.trim() || null,
-      organizer: form.organizer.trim(),
-      notes: form.notes.trim() || null,
-    };
-
     try {
-      const response = await apiClient.post<ContestSummary>('/contests', payload);
-      if (response.error || !response.data) {
-        throw new Error(response.error || translate('contest.wizard.messages.error'));
+      const issues = validateCategories(ageCategoriesDraft, weightClassesDraft);
+      if (issues.length > 0) {
+        categoryIssues = formatCategoryIssues(issues, translate);
+        return;
       }
 
-      const contest = response.data;
-      const attemptCreationErrors: string[] = [];
+      categoryIssues = [];
+
+      if (!validateTagDrafts()) {
+        toast.error(translate('contest.wizard.validation.warning'));
+        return;
+      }
 
       const draftCategories: ContestCategories = {
         ageCategories: ageCategoriesDraft,
@@ -1234,115 +746,61 @@ import { formatWeight } from '$lib/utils';
         weightClasses: createDefaultWeightClasses(),
       };
 
-      if (!categoriesEqual(defaultCategories, draftCategories)) {
-        const categoriesPayload = buildCategoryPayload(ageCategoriesDraft, weightClassesDraft);
-        const categoryResponse = await apiClient.put<ContestCategories>(
-          `/contests/${contest.id}/categories`,
-          categoriesPayload,
-        );
-        if (categoryResponse.error) {
-          throw new Error(categoryResponse.error);
+      const options: SetupOptions = {
+        fallbackError: translate('contest.wizard.messages.error'),
+      };
+      if (setupProgress) {
+        options.progress = setupProgress;
+      }
+
+      const result = await runContestSetup(
+        {
+          contest: {
+            name: form.name.trim(),
+            date: form.date,
+            location: form.location.trim(),
+            discipline: form.discipline,
+            federationRules: form.federationRules.trim() || null,
+            organizer: form.organizer.trim(),
+            notes: form.notes.trim() || null,
+          },
+          categories: categoriesEqual(defaultCategories, draftCategories)
+            ? null
+            : buildCategoryPayload(ageCategoriesDraft, weightClassesDraft),
+          tagLabels: collectExtraTagLabels(tagDrafts),
+          competitors: buildSubmissionCompetitors(
+            competitorDrafts,
+            form.events,
+            availableTagOptions,
+            (index) => translate('contest.wizard.attempts.unnamed', { values: { index: index + 1 } }),
+          ),
+        },
+        apiClient,
+        options,
+      );
+
+      setupProgress = result.progress;
+      reportSetupResult(result);
+
+      if (result.status === 'complete') {
+        success = translate('contest.wizard.messages.success');
+        resetForm();
+        competitorDrafts = [];
+        setupProgress = null;
+        if (result.contestId) {
+          await goto(`/contests/${result.contestId}`);
         }
+        return;
       }
 
-      const normalizedLabels = new Map<string, string>();
-      for (const draft of tagDrafts) {
-        const trimmed = draft.label.trim();
-        if (!trimmed) continue;
-        const key = trimmed.toLowerCase();
-        if (!normalizedLabels.has(key)) {
-          normalizedLabels.set(key, trimmed);
-        }
-      }
-      normalizedLabels.delete(MANDATORY_TAG_LABEL.toLowerCase());
-
-      for (const label of normalizedLabels.values()) {
-        const tagResponse = await apiClient.post(`/contests/${contest.id}/tags`, { label });
-        if (tagResponse.error) {
-          throw new Error(tagResponse.error);
-        }
+      if (result.status === 'partial') {
+        success = translate('contest.wizard.messages.success');
+        error = translate('contest.wizard.messages.partial');
+        competitorDrafts = pendingDrafts(competitorDrafts, result.createdDraftIds);
+        return;
       }
 
-      for (const [draftIndex, draft] of competitorDrafts.entries()) {
-        try {
-          const lifts = normaliseDraftEvents(draft.lifts);
-          const labels = normaliseTagSelection(draft.tags);
-          const competitorResponse = await apiClient.post<{ id: string }>('/competitors', {
-            firstName: draft.firstName.trim(),
-            lastName: draft.lastName.trim(),
-            birthDate: draft.birthDate,
-            gender: draft.gender,
-            club: draft.club.trim() || null,
-            city: draft.city.trim() || null,
-            notes: null,
-          });
-
-          if (competitorResponse.error || !competitorResponse.data) {
-            throw new Error(competitorResponse.error || translate('contest.wizard.messages.error'));
-          }
-
-          const competitorId = competitorResponse.data.id;
-
-          const includeSquat = lifts.includes('Squat');
-          const includeBench = lifts.includes('Bench');
-
-          const registrationResponse = await apiClient.post(`/contests/${contest.id}/registrations`, {
-            competitorId,
-            bodyweight: draft.bodyweight,
-            rackHeightSquat: includeSquat ? draft.rackHeightSquat : null,
-            rackHeightBench: includeBench ? draft.rackHeightBench : null,
-            lifts,
-            labels,
-          });
-          if (registrationResponse.error) {
-            throw new Error(registrationResponse.error);
-          }
-
-          const registrationData = registrationResponse.data as RegistrationSummary | undefined;
-          const registrationId = registrationData?.id;
-
-          if (registrationId) {
-            const displayName = [draft.lastName, draft.firstName].filter(Boolean).join(' ').trim() ||
-              translate('contest.wizard.attempts.unnamed', { values: { index: draftIndex + 1 } });
-            const attemptPlan = normalizeAttemptPlanForGender(
-              syncAttemptPlan(draft.attempts, lifts),
-              draft.gender,
-            );
-            for (const event of lifts) {
-              const weight = attemptPlan[event];
-              if (weight && weight > 0) {
-                try {
-                  const attemptPayload = {
-                    registrationId,
-                    liftType: event,
-                    attemptNumber: 1 as const,
-                    weight,
-                  };
-                  const attemptResponse = await apiClient.post(`/contests/${contest.id}/registrations/${registrationId}/attempts`, attemptPayload);
-                  if (attemptResponse.error) {
-                    throw new Error(attemptResponse.error);
-                  }
-                } catch (attemptError) {
-                  const message = attemptError instanceof Error ? attemptError.message : translate('contest.wizard.attempts.submit_error');
-                  attemptCreationErrors.push(`${displayName} • ${translate(EVENT_LABEL_KEYS[event])}: ${message}`);
-                }
-              }
-            }
-          }
-        } catch (competitorError) {
-          console.error('Failed to register competitor draft:', competitorError);
-        }
-      }
-
-      if (attemptCreationErrors.length > 0) {
-        attemptCreationErrors.forEach((message) => toast.error(message));
-      }
-
-      success = translate('contest.wizard.messages.success');
-      resetForm();
-      competitorDrafts = [];
-
-      await goto(`/contests/${contest.id}`);
+      error = result.failures[0]?.message ?? translate('contest.wizard.messages.error');
     } catch (err) {
       console.error(err);
       error = err instanceof Error ? err.message : translate('contest.wizard.messages.error');
@@ -2049,7 +1507,7 @@ import { formatWeight } from '$lib/utils';
 
             <div class="space-y-4">
               {#each competitorDrafts as competitor, index}
-                {@const lifts = normaliseDraftEvents(competitor.lifts)}
+                {@const lifts = normaliseDraftEvents(competitor.lifts, form.events)}
                 {@const attemptPlan = syncAttemptPlan(competitor.attempts, lifts)}
                 {@const competitorIssues = attemptIssues.filter((issue) => issue.competitorIndex === index)}
                 {@const issuesCount = competitorIssues.length}
