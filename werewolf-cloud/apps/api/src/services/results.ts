@@ -1,55 +1,11 @@
 import type { D1Database } from '@cloudflare/workers-types';
 import { executeMutation, executeQuery, executeQueryOne, generateId, getCurrentTimestamp } from '../utils/database';
 import { MANDATORY_TAG_LABEL } from '../utils/tags';
+import { compareResults, hasTag } from './results/ranking';
+import { parseLabelText } from './results/rows';
 
-export function parseLabelText(input: unknown): string[] {
-  if (Array.isArray(input)) {
-    return input.map(String);
-  }
-  if (typeof input === 'string') {
-    try {
-      const parsed = JSON.parse(input);
-      return Array.isArray(parsed) ? parsed.map(String) : [];
-    } catch {
-      return [];
-    }
-  }
-  return [];
-}
-
-export function hasTag(labels: readonly string[], tag: string): boolean {
-  if (tag === MANDATORY_TAG_LABEL) {
-    return labels.length === 0 || labels.includes(tag);
-  }
-  return labels.includes(tag);
-}
-
-export function compareResults(
-  a: { coefficientPoints?: number | null; totalWeight?: number | null; bodyweight?: number | null; registrationId?: string | null },
-  b: { coefficientPoints?: number | null; totalWeight?: number | null; bodyweight?: number | null; registrationId?: string | null },
-): number {
-  const pointsA = Number(a.coefficientPoints ?? 0);
-  const pointsB = Number(b.coefficientPoints ?? 0);
-  if (pointsA !== pointsB) {
-    return pointsB - pointsA;
-  }
-
-  const totalA = Number(a.totalWeight ?? 0);
-  const totalB = Number(b.totalWeight ?? 0);
-  if (totalA !== totalB) {
-    return totalB - totalA;
-  }
-
-  const bodyA = Number(a.bodyweight ?? 0);
-  const bodyB = Number(b.bodyweight ?? 0);
-  if (bodyA !== bodyB) {
-    return bodyA - bodyB;
-  }
-
-  const idA = a.registrationId ?? '';
-  const idB = b.registrationId ?? '';
-  return idA.localeCompare(idB);
-}
+export { compareResults, hasTag } from './results/ranking';
+export { parseLabelText } from './results/rows';
 
 function getLiftsForDiscipline(discipline: string): Array<'Squat' | 'Bench' | 'Deadlift'> {
   switch (discipline) {
@@ -145,16 +101,30 @@ export async function calculateRegistrationResults(db: D1Database, registrationI
 
   const now = getCurrentTimestamp();
 
+  // Upsert by id: INSERT OR REPLACE would delete the row first and silently
+  // reset the disqualification, record and placement columns set elsewhere.
   await executeMutation(
     db,
     `
-    INSERT OR REPLACE INTO results (
+    INSERT INTO results (
       id, registration_id, contest_id,
       best_squat, best_bench, best_deadlift,
       total_weight, coefficient_points,
       squat_points, bench_points, deadlift_points,
       calculated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      registration_id = excluded.registration_id,
+      contest_id = excluded.contest_id,
+      best_squat = excluded.best_squat,
+      best_bench = excluded.best_bench,
+      best_deadlift = excluded.best_deadlift,
+      total_weight = excluded.total_weight,
+      coefficient_points = excluded.coefficient_points,
+      squat_points = excluded.squat_points,
+      bench_points = excluded.bench_points,
+      deadlift_points = excluded.deadlift_points,
+      calculated_at = excluded.calculated_at
     `,
     [
       resultId, registrationId, registration.contest_id,
@@ -166,14 +136,41 @@ export async function calculateRegistrationResults(db: D1Database, registrationI
   );
 }
 
-// Helper to safely escape SQL identifiers (validates UUIDs)
-function escapeId(id: unknown): string {
-  const str = String(id);
-  // Validate UUID format to prevent SQL injection
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str)) {
-    throw new Error(`Invalid ID format: ${str}`);
+/**
+ * D1 caps a statement at 100 bound parameters. One placement entry costs two
+ * (id and value) plus one for the id list, so chunks stay well inside the cap
+ * instead of inlining ids the way the old CASE builder did.
+ */
+const MAX_BOUND_PARAMS_PER_STATEMENT = 90;
+const PLACEMENT_PARAMS_PER_ROW = 3;
+
+async function applyPlacementChanges(
+  db: D1Database,
+  column: 'place_open' | 'place_in_age_class' | 'place_in_weight_class',
+  changes: ReadonlyMap<string, number | null>,
+): Promise<void> {
+  const entries = Array.from(changes.entries());
+  const chunkSize = Math.max(1, Math.floor(MAX_BOUND_PARAMS_PER_STATEMENT / PLACEMENT_PARAMS_PER_ROW));
+
+  for (let start = 0; start < entries.length; start += chunkSize) {
+    const chunk = entries.slice(start, start + chunkSize);
+    const cases = chunk.map(() => 'WHEN ? THEN ?').join(' ');
+    const idPlaceholders = chunk.map(() => '?').join(', ');
+    const params: Array<string | number | null> = [];
+
+    for (const [id, value] of chunk) {
+      params.push(id, value);
+    }
+    for (const [id] of chunk) {
+      params.push(id);
+    }
+
+    await executeMutation(
+      db,
+      `UPDATE results SET ${column} = CASE id ${cases} ELSE ${column} END WHERE id IN (${idPlaceholders})`,
+      params
+    );
   }
-  return str;
 }
 
 export async function updateAllRankings(db: D1Database, contestId: string) {
@@ -238,7 +235,6 @@ export async function updateAllRankings(db: D1Database, contestId: string) {
     }
   }
 
-  const seenAgeIds = new Set<string>();
   const agePlacementMap = new Map<string, number>();
 
   for (const [, group] of ageGroups.entries()) {
@@ -249,10 +245,10 @@ export async function updateAllRankings(db: D1Database, contestId: string) {
     let rank = 1;
     for (const row of sortedGroup) {
       agePlacementMap.set(row.id, rank);
-      seenAgeIds.add(row.id);
       rank += 1;
     }
   }
+
   // Compute only-changed updates for place_in_age_class
   const ageChanges = new Map<string, number | null>();
   for (const row of enriched) {
@@ -274,7 +270,6 @@ export async function updateAllRankings(db: D1Database, contestId: string) {
     }
   }
 
-  const seenWeightIds = new Set<string>();
   const weightPlacementMap = new Map<string, number>();
 
   for (const [, group] of weightGroups.entries()) {
@@ -285,7 +280,6 @@ export async function updateAllRankings(db: D1Database, contestId: string) {
     let rank = 1;
     for (const row of sortedGroup) {
       weightPlacementMap.set(row.id, rank);
-      seenWeightIds.add(row.id);
       rank += 1;
     }
   }
@@ -305,48 +299,7 @@ export async function updateAllRankings(db: D1Database, contestId: string) {
     return;
   }
 
-  // Build a single UPDATE with three CASE blocks; only include columns that changed.
-  const allIds = new Set<string>();
-  const openCases: string[] = [];
-  const ageCases: string[] = [];
-  const weightCases: string[] = [];
-
-  for (const [id, value] of openChanges) {
-    const safeId = escapeId(id);
-    allIds.add(safeId);
-    openCases.push(value === null ? `WHEN '${safeId}' THEN NULL` : `WHEN '${safeId}' THEN ${value}`);
-  }
-  for (const [id, value] of ageChanges) {
-    const safeId = escapeId(id);
-    allIds.add(safeId);
-    ageCases.push(value === null ? `WHEN '${safeId}' THEN NULL` : `WHEN '${safeId}' THEN ${value}`);
-  }
-  for (const [id, value] of weightChanges) {
-    const safeId = escapeId(id);
-    allIds.add(safeId);
-    weightCases.push(value === null ? `WHEN '${safeId}' THEN NULL` : `WHEN '${safeId}' THEN ${value}`);
-  }
-
-  const assignments: string[] = [];
-  if (openCases.length > 0) {
-    assignments.push(`place_open = CASE id ${openCases.join(' ')} ELSE place_open END`);
-  }
-  if (ageCases.length > 0) {
-    assignments.push(`place_in_age_class = CASE id ${ageCases.join(' ')} ELSE place_in_age_class END`);
-  }
-  if (weightCases.length > 0) {
-    assignments.push(`place_in_weight_class = CASE id ${weightCases.join(' ')} ELSE place_in_weight_class END`);
-  }
-
-  if (assignments.length === 0) {
-    return;
-  }
-
-  const idList = Array.from(allIds).map((id) => `'${id}'`).join(', ');
-
-  await executeMutation(
-    db,
-    `UPDATE results SET ${assignments.join(', ')} WHERE id IN (${idList})`,
-    []
-  );
+  await applyPlacementChanges(db, 'place_open', openChanges);
+  await applyPlacementChanges(db, 'place_in_age_class', ageChanges);
+  await applyPlacementChanges(db, 'place_in_weight_class', weightChanges);
 }
