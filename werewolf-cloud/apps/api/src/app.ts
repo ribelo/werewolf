@@ -1,10 +1,11 @@
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 import { registerRoutes } from './routes';
 import { requestLogger } from './middleware/request-logger';
 import { errorHandler } from './middleware/error-handler';
-import type { WerewolfEnvironment } from './env';
+import { validationEnvelope } from './middleware/validation-envelope';
 import { requireAuth } from './middleware/auth';
-import { cors } from 'hono/cors';
+import type { WerewolfEnvironment } from './env';
 
 export const createApp = () => {
   const app = new Hono<WerewolfEnvironment>();
@@ -50,67 +51,9 @@ export const createApp = () => {
       credentials: true,
     }),
   );
+  app.use('*', validationEnvelope);
 
-  // Middleware to intercept and reformat zValidator responses
-  app.use('*', async (c, next) => {
-    await next();
-
-    // Check if this is a zValidator error response
-    if (c.res.status === 400) {
-      try {
-        type ZValidatorError = {
-          success?: boolean;
-          error?: {
-            issues?: Array<{ path: (string | number)[]; message: string }>;
-          };
-        };
-
-        const body = (await c.res.clone().json()) as unknown as ZValidatorError;
-
-        if (
-          body &&
-          body.success === false &&
-          Array.isArray(body.error?.issues)
-        ) {
-          const requestId = c.get('requestId');
-          const errorMessage = body.error.issues
-            .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
-            .join(', ');
-
-          c.res = new Response(JSON.stringify({
-            data: null,
-            error: `Validation failed: ${errorMessage}`,
-            requestId,
-          }), {
-            status: 400,
-            headers: { 'Content-Type': 'application/json' },
-          });
-        }
-      } catch (error) {
-        // Not a JSON response or not a zValidator error, leave as-is
-        if (error instanceof Error && !error.message.includes('Unexpected end of JSON')) {
-          console.warn('Failed to normalise validation error response:', error.message);
-        }
-      }
-    }
-  });
-
-  // Custom error handler for other errors
-  app.onError(async (err, c) => {
-    const requestId = c.get('requestId');
-
-    // Handle JSON parsing errors
-    if (err.message && err.message.includes('Malformed JSON')) {
-      return c.json({
-        data: null,
-        error: 'Invalid JSON in request body',
-        requestId,
-      }, 400);
-    }
-
-    // Handle other errors with the standard error handler
-    return errorHandler(err, c);
-  });
+  app.onError(errorHandler);
 
   app.get('/', (c) =>
     c.json({
@@ -134,8 +77,6 @@ export const createApp = () => {
       requestId: c.get('requestId'),
     }),
   );
-
-  app.onError(errorHandler);
 
   app.use('*', requireAuth);
 

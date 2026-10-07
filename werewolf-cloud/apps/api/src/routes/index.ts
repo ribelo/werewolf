@@ -24,7 +24,6 @@ export const registerRoutes = (app: Hono<WerewolfEnvironment>) => {
   app.route('/contests/:contestId/attempts', contestAttempts);
   app.route('/contests/:contestId/registrations/:registrationId/attempts', registrationAttempts);
   app.route('/results', results);
-  app.route('/registrations/:registrationId/results', results);
   app.route('/contests/:contestId/results', contestResults);
   app.route('/settings', settings);
   app.route('/system', system);
@@ -35,4 +34,15 @@ export const registerRoutes = (app: Hono<WerewolfEnvironment>) => {
   app.route('/contests/:contestId/display', contestDisplay);
   app.route('/', live);
   app.route('/auth', auth);
+
+  // results.ts registers GET /results/:registrationId; the registration-scoped
+  // alias hands the same request to that app with the mount prefix removed so
+  // the id is read from the route instead of a second path segment.
+  app.get('/registrations/:registrationId/results', async (c) => {
+    const registrationId = c.req.param('registrationId');
+    const url = new URL(c.req.url);
+    url.pathname = `/${registrationId}`;
+
+    return results.fetch(new Request(url, c.req.raw), c.env);
+  });
 };

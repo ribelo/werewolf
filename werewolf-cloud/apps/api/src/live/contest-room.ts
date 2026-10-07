@@ -1,9 +1,16 @@
 import type { LiveEvent } from './types';
 
+const contestIdFromPath = (pathname: string): string | undefined => {
+  const match = /\/contests\/([^/]+)/.exec(pathname);
+
+  return match?.[1];
+};
+
 export class ContestRoom {
   private readonly state: DurableObjectState;
   private readonly connections = new Set<WebSocket>();
   private heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+  private contestId: string | undefined;
 
   constructor(state: DurableObjectState, _env: unknown) {
     this.state = state;
@@ -14,6 +21,11 @@ export class ContestRoom {
     const upgrade = request.headers.get('Upgrade');
 
     if (upgrade === 'websocket') {
+      const contestId = contestIdFromPath(url.pathname);
+      if (contestId) {
+        this.contestId = contestId;
+      }
+
       const pair = new WebSocketPair();
       const client = pair[0];
       const server = pair[1];
@@ -31,6 +43,9 @@ export class ContestRoom {
     if (request.method === 'POST' && url.pathname.endsWith('/broadcast')) {
       try {
         const event = (await request.json()) as LiveEvent;
+        if (typeof event.contestId === 'string' && event.contestId.length > 0) {
+          this.contestId = event.contestId;
+        }
         this.broadcast(event);
         return new Response(JSON.stringify({ ok: true }), {
           headers: { 'Content-Type': 'application/json' },
@@ -73,9 +88,12 @@ export class ContestRoom {
   private ensureHeartbeat(): void {
     if (this.heartbeatTimer) return;
     this.heartbeatTimer = setInterval(() => {
-      const event: LiveEvent = {
+      const contestId = this.contestId;
+      if (!contestId) return;
+
+      const event: LiveEvent<'heartbeat'> = {
         type: 'heartbeat',
-        contestId: this.state.id.toString(),
+        contestId,
         timestamp: new Date().toISOString(),
         payload: { connections: this.connections.size },
       };
@@ -98,6 +116,7 @@ export class ContestRoom {
       } catch {
         try { ws.close(); } catch {}
         this.connections.delete(ws);
+        this.maybeStopHeartbeat();
       }
     }
   }

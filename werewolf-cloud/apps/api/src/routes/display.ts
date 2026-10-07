@@ -23,6 +23,7 @@ contestDisplay.post(
         {
           data: null,
           error: 'Contest ID is required',
+          requestId: c.get('requestId'),
         },
         400
       );
@@ -46,6 +47,7 @@ contestDisplay.post(
     return c.json({
       data: { ok: true, id: payload.id },
       error: null,
+      requestId: c.get('requestId'),
     });
   }
 );
@@ -60,6 +62,7 @@ contestDisplay.post(
         {
           data: null,
           error: 'Contest ID is required',
+          requestId: c.get('requestId'),
         },
         400
       );
@@ -75,6 +78,7 @@ contestDisplay.post(
     return c.json({
       data: { ok: true, action: payload.action },
       error: null,
+      requestId: c.get('requestId'),
     });
   }
 );
@@ -88,6 +92,7 @@ contestDisplay.get(
         {
           data: null,
           error: 'Contest ID is required',
+          requestId: c.get('requestId'),
         },
         400
       );
@@ -96,19 +101,20 @@ contestDisplay.get(
     try {
       const kvKey = `${KV_KEY_PREFIX}${contestId}`;
       const value = await c.env.KV.get(kvKey);
-      
+
       if (!value) {
         return new Response(null, { status: 204 });
       }
 
       const payload: DisplayFilterSync = JSON.parse(value);
-      return c.json({ data: payload, error: null });
+      return c.json({ data: payload, error: null, requestId: c.get('requestId') });
     } catch (error) {
       console.error('Failed to fetch display sync from KV:', error);
       return c.json(
         {
           data: null,
           error: 'Failed to fetch sync data',
+          requestId: c.get('requestId'),
         },
         500
       );

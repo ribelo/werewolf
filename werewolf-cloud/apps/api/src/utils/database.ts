@@ -3,12 +3,18 @@ import type { D1Database } from '@cloudflare/workers-types';
 export type Database = D1Database;
 
 /**
- * Execute a parameterized query with proper error handling
+ * Execute a parameterized query with proper error handling.
+ *
+ * The row type stays loose on purpose: callers across apps/api read columns
+ * straight off the returned rows, and tightening the default to
+ * Record<string, unknown> breaks roughly 190 property reads in files owned by
+ * other changes. Callers that type their query pass an explicit generic.
  */
+// oxlint-disable-next-line typescript/no-explicit-any
 export async function executeQuery<T = any>(
   db: Database,
   sql: string,
-  params: any[] = []
+  params: readonly unknown[] = []
 ): Promise<T[]> {
   try {
     const result = await db.prepare(sql).bind(...params).all();
@@ -20,16 +26,18 @@ export async function executeQuery<T = any>(
 }
 
 /**
- * Execute a query that returns a single row
+ * Execute a query that returns a single row (see executeQuery for the loose
+ * default row type).
  */
+// oxlint-disable-next-line typescript/no-explicit-any
 export async function executeQueryOne<T = any>(
   db: Database,
   sql: string,
-  params: any[] = []
+  params: readonly unknown[] = []
 ): Promise<T | null> {
   try {
     const result = await db.prepare(sql).bind(...params).first();
-    return result as T | null;
+    return (result as T | null) ?? null;
   } catch (error) {
     console.error('Database query error:', sql, params, error);
     throw error;
@@ -42,7 +50,7 @@ export async function executeQueryOne<T = any>(
 export async function executeMutation(
   db: Database,
   sql: string,
-  params: any[] = []
+  params: readonly unknown[] = []
 ): Promise<{ success: boolean; changes: number }> {
   try {
     const result = await db.prepare(sql).bind(...params).run();
@@ -80,20 +88,21 @@ function snakeToCamel(str: string): string {
 /**
  * Recursively convert object keys from snake_case to camelCase
  */
-export function convertKeysToCamelCase(obj: any): any {
-  if (obj === null || typeof obj !== 'object') {
-    return obj;
+export function convertKeysToCamelCase<T>(value: T): T {
+  if (value === null || typeof value !== 'object') {
+    return value;
   }
 
-  if (Array.isArray(obj)) {
-    return obj.map(convertKeysToCamelCase);
+  if (Array.isArray(value)) {
+    return value.map((item) => convertKeysToCamelCase(item)) as unknown as T;
   }
 
-  const converted: any = {};
-  for (const key in obj) {
-    if (obj.hasOwnProperty(key)) {
-      converted[snakeToCamel(key)] = convertKeysToCamelCase(obj[key]);
-    }
+  const source = value as Record<string, unknown>;
+  const converted: Record<string, unknown> = {};
+
+  for (const key of Object.keys(source)) {
+    converted[snakeToCamel(key)] = convertKeysToCamelCase(source[key]);
   }
-  return converted;
+
+  return converted as unknown as T;
 }

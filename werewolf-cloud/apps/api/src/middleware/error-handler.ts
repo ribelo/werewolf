@@ -1,16 +1,20 @@
 import type { ErrorHandler } from 'hono';
-import type { ContentfulStatusCode, StatusCode } from 'hono/utils/http-status';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
+import { HTTPException } from 'hono/http-exception';
 import { ApiError } from '../http/errors';
 import type { WerewolfEnvironment } from '../env';
 
-const isStatusCode = (value: number): value is StatusCode => value >= 100 && value <= 599;
-const isContentfulStatusCode = (value: number): value is ContentfulStatusCode => value >= 200 && value <= 599;
+const MALFORMED_JSON_ERROR = 'Invalid JSON in request body';
+
+const isErrorStatusCode = (value: number): value is ContentfulStatusCode => value >= 400 && value <= 599;
+
+const isMalformedJsonError = (err: Error): boolean => err.message.includes('Malformed JSON');
 
 export const errorHandler: ErrorHandler<WerewolfEnvironment> = (err, c) => {
   const requestId = c.get('requestId');
 
   if (err instanceof ApiError) {
-    const status: ContentfulStatusCode = isContentfulStatusCode(err.status) ? err.status : 500;
+    const status: ContentfulStatusCode = isErrorStatusCode(err.status) ? err.status : 500;
 
     return c.json({
       data: null,
@@ -18,6 +22,18 @@ export const errorHandler: ErrorHandler<WerewolfEnvironment> = (err, c) => {
       details: err.details,
       requestId,
     }, status);
+  }
+
+  if (err instanceof HTTPException) {
+    if (err.res) {
+      return err.res;
+    }
+
+    return c.json({
+      data: null,
+      error: isMalformedJsonError(err) ? MALFORMED_JSON_ERROR : err.message,
+      requestId,
+    }, err.status);
   }
 
   console.error('Unhandled error', {
