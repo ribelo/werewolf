@@ -151,7 +151,7 @@ Provisioned ids and environments are documented in
   `PATH`). It wipes the affected ranges and re-inserts:
   ```bash
   bun run scripts/seed-coefficients.ts --local                      # werewolf-d1-dev via wrangler.dev.toml
-  bun run scripts/seed-coefficients.ts --database werewolf-d1 --env production
+  bun run scripts/seed-coefficients.ts --remote --database werewolf-d1 --env production
   ```
 - After a reseed, call `POST /system/maintenance/recalculate-coefficients` and spot-check a few
   registrations with `GET /registrations/:id`.

@@ -1,7 +1,7 @@
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 
 interface ReshelDataset {
   gender: 'male' | 'female';
@@ -55,13 +55,55 @@ function buildSql(
   return lines.join('\n');
 }
 
+const USAGE = `Usage: bun run scripts/seed-coefficients.ts (--local | --remote) [options]
+
+  --local            seed the local wrangler D1 state (wrangler.dev.toml)
+  --remote           seed the deployed D1 database (wrangler.worker.toml)
+  --database <name>  D1 database name (default: werewolf-d1-dev)
+  --config <path>    wrangler config file (default depends on --local/--remote)
+  --env <name>       wrangler environment, --remote only`;
+
+const describeSpawnError = (error: unknown): Error => {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (message.includes('ENOENT') || message.includes('not found')) {
+    return new Error('wrangler was not found on PATH; install it or run this script through bunx wrangler');
+  }
+
+  return error instanceof Error ? error : new Error(message);
+};
+
+function runWrangler(args: string[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let child: ChildProcess | null = null;
+
+    try {
+      child = spawn('wrangler', args, { stdio: 'inherit' });
+    } catch (error) {
+      reject(describeSpawnError(error));
+      return;
+    }
+
+    child.on('error', (error) => reject(describeSpawnError(error)));
+
+    child.on('close', (code, signal) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      reject(new Error(signal ? `wrangler was terminated by ${signal}` : `wrangler exited with code ${code}`));
+    });
+  });
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const options: {
     database: string;
     config?: string;
     env?: string;
-    local?: boolean;
+    mode?: 'local' | 'remote';
   } = { database: 'werewolf-d1-dev' };
 
   for (let i = 0; i < args.length; i += 1) {
@@ -77,16 +119,29 @@ async function main() {
         options.env = args[++i];
         break;
       case '--local':
-        options.local = true;
+      case '--remote': {
+        const mode = arg === '--local' ? 'local' : 'remote';
+        if (options.mode && options.mode !== mode) {
+          throw new Error(`--local and --remote are mutually exclusive.\n\n${USAGE}`);
+        }
+        options.mode = mode;
         break;
+      }
       default:
-        throw new Error(`Unknown argument: ${arg}`);
+        throw new Error(`Unknown argument: ${arg}\n\n${USAGE}`);
     }
   }
 
-  if (!options.config) {
-    options.config = options.local ? 'wrangler.dev.toml' : 'wrangler.worker.toml';
+  if (!options.mode) {
+    throw new Error(`Choose the target: --local or --remote is required.\n\n${USAGE}`);
   }
+
+  if (options.mode === 'local' && options.env) {
+    throw new Error(`--env only applies to --remote.\n\n${USAGE}`);
+  }
+
+  const mode = options.mode;
+  const config = options.config ?? (mode === 'local' ? 'wrangler.dev.toml' : 'wrangler.worker.toml');
 
   const reshelMen = await loadJson<ReshelDataset>('packages/domain/src/data/reshel-men.json');
   const reshelWomen = await loadJson<ReshelDataset>('packages/domain/src/data/reshel-women.json');
@@ -94,31 +149,35 @@ async function main() {
 
   const sql = buildSql(reshelMen, reshelWomen, mccullough);
   const tmp = await mkdtemp(join(tmpdir(), 'werewolf-coefficients-'));
-  const sqlPath = join(tmp, 'seed.sql');
-  await writeFile(sqlPath, sql, 'utf8');
 
-  const argsList = ['d1', 'execute', options.database, '--config', options.config, '--file', sqlPath];
-  if (options.local) {
-    argsList.push('--local');
-  } else if (options.env) {
-    argsList.push('--env', options.env);
+  try {
+    const sqlPath = join(tmp, 'seed.sql');
+    await writeFile(sqlPath, sql, 'utf8');
+
+    const argsList = [
+      'd1',
+      'execute',
+      options.database,
+      '--config',
+      config,
+      '--file',
+      sqlPath,
+      `--${mode}`,
+    ];
+
+    if (mode === 'remote' && options.env) {
+      argsList.push('--env', options.env);
+    }
+
+    await runWrangler(argsList);
+  } finally {
+    await rm(tmp, { recursive: true, force: true });
   }
-
-  await new Promise<void>((resolve, reject) => {
-    const child = spawn('wrangler', argsList, { stdio: 'inherit' });
-    child.on('close', (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`wrangler exited with code ${code}`));
-      }
-    });
-  });
 
   console.log('Coefficient tables seeded successfully.');
 }
 
 main().catch((error) => {
-  console.error(error);
+  console.error(error instanceof Error ? error.message : error);
   process.exitCode = 1;
 });

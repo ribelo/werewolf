@@ -1,6 +1,7 @@
 import { Database } from 'bun:sqlite';
 
-const db = new Database('tmp/import-validation.sqlite');
+// Read-only: reporting must never create or modify the validation database.
+const db = new Database('tmp/import-validation.sqlite', { readonly: true });
 
 const tables = [
   'contests',
