@@ -248,6 +248,9 @@ for (const contest of contests) {
     if (!response.ok) throw new Error('Upload of ' + contest.id + ' failed with ' + response.status)
   }
 }
-const finished = report.join('\n') + '\n'
+const finished =
+  report.join('\n') +
+  '\n\n' +
+  readFileSync(new URL('./migration/report-notes.md', import.meta.url), 'utf8')
 if (reportPath) writeFileSync(reportPath, finished)
 else console.log(finished)

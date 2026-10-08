@@ -1,0 +1,16 @@
+## Notes on the conversion
+
+- Divisions come from the contest labels of 2025 (Open, MUNDUROWI, GÓRNIK, SAMORZĄDOWIEC, MONSTER, NIEPEŁNOSPRAWNI, and the four labels of the first contest). A registration without labels is entered in Open, as the old app treated it. A MONSTER-only lifter is not in the Open ranking; in the stored 2025 results such lifters had no place either, so the "MONSTER leak" did not show in the stored places (it showed in the old screens and exports). They get their own classification now.
+- The 2025 total adds the points of the lifts a lifter did (best weight × Reshel × McCullough per lift). The new result mode `sumDone` does exactly this. All stored points agree with the new points to 0.01.
+- Age classes: 2025 had "T16 (≤16)" and "T19 (16-19)", which both contain age 16. The migrated rulebook starts T19 at 17. Classes are now computed from the birth date on the contest date, as the specification says; the old app stored a class on each registration.
+- Did not start: 13 entry-lift pairs (second contest) had all three attempts at 20 kg and failed. The 2025 desk used that to mark a lifter who did not show up. They are converted to DNS (see the term in GLOSSARY.md); they have no attempts and no place. This is the main part of the "no good lift" differences above.
+- Women's bar: the database says 20 kg for the first contest, but a 20 kg opening is only legal on a 15 kg women's bar with two 2.5 kg clamps. The migrated rulebook of that contest has a 15 kg women's bar. The rule bar + clamps is unchanged.
+- Lot numbers are the old flight order (then registration time). Teams are the old club names; names that differ only in case or accents-of-case are merged automatically (for example Górnik and GÓRNIK). Different spellings such as "Wilkołak" and "WILKOŁAK ZŁOTORYJA" stay separate teams until the organizer merges them in the Teams panel.
+- Team classifications are not migrated: the 2025 database stores no team ranking rules.
+
+## Federation CSV compared with the 2025 exporter
+
+I ran the 2025 exporter (read-only, from the old repository) on the 2025 rows and the new export on the migrated contests, for Bench and Deadlift of both contests, restricted to Open lifters who entered the lift (221 rows in four files).
+
+- 212 of the 221 rows are identical in every column except Place; the other 9 are lifters who did not start (DNS). In 2025 they were listed with three failed 20 kg attempts and a place number; now the Place column says DNS and the attempts are empty. All other rows: identical in every column except Place (name, age, bodyweight, classes, attempts with failed ones negative, best lift, Reshel, McCoulogh points). The files have the same number of lines.
+- Differences: (1) The old file ordered each lift file by the lifter's combined Open place of both lifts, the new file orders by the points of that lift. Places inside a block are renumbered from the new order. (2) Blocks of the same sex were sorted by minimum age with the class without a minimum last; the new file keeps the rulebook order. (3) Lifters who did not enter the lift were listed with zeros in the old file; the new file omits them. These are not byte-identical. The owner decided on 2026-10-08 that the new order is enough.
