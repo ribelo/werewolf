@@ -5,11 +5,18 @@ import { useAtom } from '@effect/atom-react'
 import * as Schema from 'effect/Schema'
 import { useEffect, useState, type FormEvent } from 'react'
 import { useMessages, type MessageKey } from './i18n.ts'
+import { ContestCatalog } from './ContestCatalog.tsx'
+import { ContestDesk } from './ContestDesk.tsx'
+import { ContestId } from '@werewolf/sync'
+import * as Result from 'effect/Result'
 
 const authenticatedAtom = Atom.make(false)
 
 export function App() {
   const { locale, setLocale, t } = useMessages()
+  const viewPath = new RegExp('^/view/([^/]+)/(stage|announcer|results)$').exec(location.pathname)
+  const viewerId = Schema.decodeUnknownResult(ContestId)(viewPath?.[1])
+  const token = new URL(location.href).searchParams.get('token')
   const [authenticated, setAuthenticated] = useAtom(authenticatedAtom)
   const [password, setPassword] = useState('')
   const [error, setError] = useState<MessageKey | ''>('')
@@ -72,10 +79,11 @@ export function App() {
           </select>
         </label>
       </header>
-      {authenticated ? (
+      {Result.isSuccess(viewerId) && token ? (
+        <ContestDesk id={viewerId.success} access={{ _tag: 'Viewer', token }} />
+      ) : authenticated ? (
         <section>
-          <h2>{t('contests.title')}</h2>
-          <p>{t('contests.empty')}</p>
+          <ContestCatalog />
           <button
             onClick={() => {
               logout().catch(() => setError('request.failed'))

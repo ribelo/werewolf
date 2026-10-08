@@ -8,6 +8,8 @@
   },
   "dependencies": {
     "@effect/atom-react": "4.0.1",
+    "@werewolf/core": "workspace:*",
+    "@werewolf/sync": "workspace:*",
     "effect": "4.0.1",
     "react": "19.2.8",
     "react-dom": "19.2.8"

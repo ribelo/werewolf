@@ -539,3 +539,33 @@ export function replay(
   }
   return Result.succeed(state)
 }
+
+/** Incremental replay with the same command and targeted Undo semantics as restore. */
+export class ContestJournal {
+  readonly state: ContestState
+  readonly commands: ReadonlyArray<Command>
+  private constructor(state: ContestState, commands: ReadonlyArray<Command>) {
+    this.state = state
+    this.commands = commands
+  }
+  static restore(
+    rulebook: Rulebook,
+    date: CalendarDate,
+    commands: ReadonlyArray<Command>,
+  ): Result.Result<ContestJournal, ContestFailure> {
+    return Result.map(
+      replay(rulebook, date, commands),
+      (state) => new ContestJournal(state, commands),
+    )
+  }
+  append(command: Command): Result.Result<ContestJournal, ContestFailure> {
+    if (this.commands.some((past) => past.id === command.id)) return Result.succeed(this)
+    const commands = [...this.commands, command]
+    if (command._tag === 'Undo')
+      return ContestJournal.restore(this.state.rulebook, this.state.date, commands)
+    return Result.map(
+      applyMutation(this.state, command, commands.length),
+      (state) => new ContestJournal(state, commands),
+    )
+  }
+}

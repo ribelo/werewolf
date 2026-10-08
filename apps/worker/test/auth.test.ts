@@ -21,7 +21,7 @@ it('ww-029g ww-n7wy: organizer session protects the Worker API', async () => {
     headers: { Cookie: cookie },
   })
   expect(authorized.status).toBe(200)
-  expect(await authorized.json()).toEqual({ contests: [] })
+  expect(await authorized.json()).toMatchObject({ contests: expect.any(Array) })
   expect(
     (await SELF.fetch('https://app.example/api/contests', { headers: { Cookie: cookie + 'bad' } }))
       .status,

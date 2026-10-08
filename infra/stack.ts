@@ -1,5 +1,6 @@
 import * as Cloudflare from 'alchemy/Cloudflare'
 import * as Config from 'effect/Config'
+import type { ContestDO, ContestCatalogDO } from '../apps/worker/src/contest-do.ts'
 
 export const Edge = Cloudflare.Worker('Edge', {
   name: 'werewolf-v2',
@@ -12,6 +13,8 @@ export const Edge = Cloudflare.Worker('Edge', {
   },
   observability: { enabled: true },
   env: {
+    CONTESTS: Cloudflare.DurableObject<ContestDO>('ContestDO'),
+    CATALOG: Cloudflare.DurableObject<ContestCatalogDO>('ContestCatalogDO'),
     ORGANIZER_PASSWORD: Config.Redacted('ORGANIZER_PASSWORD'),
     SESSION_SECRET: Config.Redacted('SESSION_SECRET'),
   },

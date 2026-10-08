@@ -4,6 +4,7 @@
   "type": "module",
   "dependencies": {
     "@werewolf/core": "workspace:*",
+    "@werewolf/sync": "workspace:*",
     "effect": "4.0.1"
   }
 }

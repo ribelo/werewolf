@@ -5,6 +5,39 @@ import { useAtom } from '@effect/atom-react'
 
 const catalogs = {
   pl: {
+    'auth.readOnly': 'Tylko do odczytu.',
+    'contests.create': 'Utwórz zawody',
+    'contests.back': 'Wróć do zawodów',
+    'contests.name': 'Nazwa zawodów',
+    'desk.name': 'Imię i nazwisko',
+    'desk.date': 'Data zawodów',
+    'desk.preset': 'Wzorzec regulaminu',
+    'desk.sex': 'Płeć',
+    'desk.male': 'Mężczyzna',
+    'desk.female': 'Kobieta',
+    'desk.birthDate': 'Data urodzenia',
+    'desk.bodyweight': 'Masa ciała (kg)',
+    'desk.lotNumber': 'Numer losowania',
+    'desk.division': 'Dywizja',
+    'desk.lifts': 'Boje',
+    'desk.addEntry': 'Dodaj zgłoszenie',
+    'desk.weight': 'Ciężar (kg)',
+    'desk.declare': 'Zgłoś ciężar',
+    'desk.goodLift': 'Zaliczone',
+    'desk.noLift': 'Niezaliczone',
+    'desk.connecting': 'Łączenie…',
+    'desk.connected': 'Połączono',
+    'desk.disconnected': 'Rozłączono — odśwież stronę',
+    'desk.sequence': 'Komendy',
+    'desk.rejected': 'Zmiana odrzucona:',
+    'desk.stage': 'Ekran pomostu',
+    'desk.announcer': 'Ekran spikera',
+    'desk.results': 'Wyniki',
+    'desk.lift': 'Bój',
+    'desk.attempt': 'Podejście',
+    'desk.verdict': 'Werdykt',
+    'desk.actions': 'Obsługa',
+    'desk.pending': 'Bez sklasyfikowanego wyniku',
     'app.title': 'Werewolf',
     'auth.title': 'Logowanie organizatora',
     'auth.password': 'Hasło organizatora',
@@ -22,6 +55,39 @@ const catalogs = {
     'auth.pending': 'Logowanie…',
   },
   en: {
+    'auth.readOnly': 'Read only.',
+    'contests.create': 'Create contest',
+    'contests.back': 'Back to contests',
+    'contests.name': 'Contest name',
+    'desk.name': 'Name',
+    'desk.date': 'Contest date',
+    'desk.preset': 'Rulebook preset',
+    'desk.sex': 'Sex',
+    'desk.male': 'Male',
+    'desk.female': 'Female',
+    'desk.birthDate': 'Birth date',
+    'desk.bodyweight': 'Bodyweight (kg)',
+    'desk.lotNumber': 'Lot number',
+    'desk.division': 'Division',
+    'desk.lifts': 'Lifts',
+    'desk.addEntry': 'Add entry',
+    'desk.weight': 'Weight (kg)',
+    'desk.declare': 'Declare weight',
+    'desk.goodLift': 'Good lift',
+    'desk.noLift': 'No lift',
+    'desk.connecting': 'Connecting…',
+    'desk.connected': 'Connected',
+    'desk.disconnected': 'Disconnected — reload this page',
+    'desk.sequence': 'Commands',
+    'desk.rejected': 'Change rejected:',
+    'desk.stage': 'Stage screen',
+    'desk.announcer': 'Announcer screen',
+    'desk.results': 'Results',
+    'desk.lift': 'Lift',
+    'desk.attempt': 'Attempt',
+    'desk.verdict': 'Verdict',
+    'desk.actions': 'Actions',
+    'desk.pending': 'No ranked result',
     'app.title': 'Werewolf',
     'auth.title': 'Organizer login',
     'auth.password': 'Organizer password',
@@ -39,6 +105,77 @@ const catalogs = {
     'auth.pending': 'Logging in…',
   },
 } as const
+const rejectionMessages: Readonly<Record<string, { readonly pl: string; readonly en: string }>> = {
+  unknownEntry: { pl: 'Nie ma takiego zgłoszenia.', en: 'This entry does not exist.' },
+  duplicateDivision: { pl: 'Dywizja jest wybrana dwa razy.', en: 'A division is selected twice.' },
+  unknownAttempt: { pl: 'Nie ma takiego podejścia.', en: 'This attempt does not exist.' },
+  weightNotDeclared: { pl: 'Najpierw zgłoś ciężar.', en: 'Declare a weight first.' },
+  notPending: { pl: 'To podejście ma już werdykt.', en: 'This attempt has a verdict.' },
+  invalidOrderTarget: {
+    pl: 'Nie można przenieść podejścia w to miejsce.',
+    en: 'The attempt cannot move to this position.',
+  },
+  InvalidCommand: { pl: 'Ta komenda jest nieprawidłowa.', en: 'This command is invalid.' },
+  UndoConflict: {
+    pl: 'Cofnięcie zmiany koliduje z późniejszą pracą.',
+    en: 'Undo conflicts with later work.',
+  },
+  duplicateEntry: {
+    pl: 'To zgłoszenie już istnieje.',
+    en: 'This entry already exists.',
+  },
+  duplicateLotNumber: {
+    pl: 'Ten numer losowania jest już używany.',
+    en: 'This lot number is in use.',
+  },
+  duplicateLifter: {
+    pl: 'Ten zawodnik jest już zgłoszony.',
+    en: 'This lifter already has an entry.',
+  },
+  birthDateAfterContest: {
+    pl: 'Data urodzenia jest późniejsza niż zawody.',
+    en: 'Birth date is after the contest date.',
+  },
+  unknownTeam: {
+    pl: 'Nie ma takiej drużyny.',
+    en: 'This team does not exist.',
+  },
+  unknownDivision: {
+    pl: 'Nie ma takiej dywizji.',
+    en: 'This division does not exist.',
+  },
+  divisionCondition: {
+    pl: 'Zawodnik nie spełnia warunków dywizji.',
+    en: 'The lifter does not meet the division conditions.',
+  },
+  unknownLift: {
+    pl: 'Nie ma takiego boju.',
+    en: 'This lift does not exist.',
+  },
+  rackHeightNotUsed: {
+    pl: 'Ten bój nie używa wysokości stojaka.',
+    en: 'This lift does not use a rack height.',
+  },
+  UnloadableWeight: {
+    pl: 'Nie da się założyć tego ciężaru.',
+    en: 'This weight cannot be loaded.',
+  },
+  NothingToUndo: {
+    pl: 'Nie ma zmiany do cofnięcia.',
+    en: 'There is no change to undo.',
+  },
+  duplicateName: {
+    pl: 'Nazwa drużyny jest już używana.',
+    en: 'This team name is in use.',
+  },
+  invalidMerge: {
+    pl: 'Nie można połączyć tych drużyn.',
+    en: 'These teams cannot be merged.',
+  },
+}
+export function rejectionText(reason: string, locale: keyof typeof catalogs): string {
+  return rejectionMessages[reason]?.[locale] ?? reason
+}
 export type MessageKey = keyof typeof catalogs.pl
 type Locale = keyof typeof catalogs
 const localeAtom = Atom.make<Locale>('pl')

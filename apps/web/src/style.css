@@ -53,3 +53,42 @@ button:disabled {
 [role='alert'] {
   color: #a91c30;
 }
+.table-scroll {
+  overflow-x: auto;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+th,
+td {
+  text-align: left;
+  padding: 10px;
+  border-bottom: 1px solid #cad2dd;
+}
+.attempt-editor {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.attempt-editor form {
+  display: flex;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+}
+.attempt-editor input {
+  width: 100px;
+}
+.read-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+fieldset label {
+  display: flex;
+  align-items: center;
+}
+li {
+  margin-bottom: 10px;
+}
