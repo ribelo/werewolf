@@ -1,3 +1,4 @@
+import * as Option from 'effect/Option'
 import * as Result from 'effect/Result'
 import * as Schema from 'effect/Schema'
 import { Kilograms } from './barbell.ts'
@@ -173,34 +174,43 @@ function candidate(
   })
 }
 
+/** The rulebook age class of an entry on the contest date, if any class matches. */
+export function entryAgeClass(state: ContestState, entry: Entry): Option.Option<AgeClassId> {
+  const years = ageOnDate(entry.lifter.birthDate, state.date)
+  const group = state.rulebook.ageClasses.find(
+    (item) =>
+      (!item.sex || item.sex === entry.lifter.sex) &&
+      years >= item.from &&
+      years <= (item.through ?? Number.POSITIVE_INFINITY),
+  )
+  return group ? Option.some(group.id) : Option.none()
+}
+/** The rulebook weight class of an entry from its weigh-in, if it has one. */
+export function entryWeightClass(state: ContestState, entry: Entry): Option.Option<WeightClassId> {
+  const bodyweight = entry.bodyweight
+  if (!bodyweight) return Option.none()
+  const group = state.rulebook.weightClasses.find(
+    (item) =>
+      (!item.sex || item.sex === entry.lifter.sex) &&
+      bodyweight > (item.lowerExclusive ?? 0) &&
+      bodyweight <= (item.upperInclusive ?? Number.POSITIVE_INFINITY),
+  )
+  return group ? Option.some(group.id) : Option.none()
+}
+
 function bucket(
   state: ContestState,
   classification: IndividualClassification,
   entry: Entry,
 ): Result.Result<RankingBucket, PendingEntry> {
-  const age = (): Result.Result<AgeClassId, PendingEntry> => {
-    const years = ageOnDate(entry.lifter.birthDate, state.date)
-    const matched = state.rulebook.ageClasses.find(
-      (group) =>
-        (!group.sex || group.sex === entry.lifter.sex) &&
-        years >= group.from &&
-        years <= (group.through ?? Number.POSITIVE_INFINITY),
-    )
-    return matched ? Result.succeed(matched.id) : Result.fail(pending(entry.id, 'ageClassMissing'))
-  }
-  const weight = (): Result.Result<WeightClassId, PendingEntry> => {
-    const bodyweight = entry.bodyweight
-    if (!bodyweight) return Result.fail(pending(entry.id, 'bodyweightMissing'))
-    const matched = state.rulebook.weightClasses.find(
-      (group) =>
-        (!group.sex || group.sex === entry.lifter.sex) &&
-        bodyweight > (group.lowerExclusive ?? 0) &&
-        bodyweight <= (group.upperInclusive ?? Number.POSITIVE_INFINITY),
-    )
-    return matched
-      ? Result.succeed(matched.id)
-      : Result.fail(pending(entry.id, 'weightClassMissing'))
-  }
+  const age = (): Result.Result<AgeClassId, PendingEntry> =>
+    Result.fromOption(entryAgeClass(state, entry), () => pending(entry.id, 'ageClassMissing'))
+  const weight = (): Result.Result<WeightClassId, PendingEntry> =>
+    entry.bodyweight
+      ? Result.fromOption(entryWeightClass(state, entry), () =>
+          pending(entry.id, 'weightClassMissing'),
+        )
+      : Result.fail(pending(entry.id, 'bodyweightMissing'))
   switch (classification.split) {
     case 'none':
       return Result.succeed({ _tag: 'All' })

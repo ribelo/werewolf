@@ -499,3 +499,47 @@ it('ww-bjq1: peers negotiate through the actor with server-stamped roles and hea
     screen.socket.close()
   }
 })
+
+it('ww-l06a ww-8tai: a screen that connects late receives the pushed filter and QR with the snapshot', async () => {
+  const cookie = await organizer()
+  const id = crypto.randomUUID()
+  const path = origin + '/api/contests/' + id
+  const headers = { Origin: origin, Cookie: cookie, 'Content-Type': 'application/json' }
+  await SELF.fetch(origin + '/api/contests', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ id, name: 'Board', date: '2026-10-08', rulebook: client2026Rulebook }),
+  })
+  const push = await SELF.fetch(path + '/commands', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      _tag: 'Submit',
+      command: {
+        _tag: 'SetScoreboard',
+        id: 'board',
+        at: 1,
+        filter: { divisionId: 'monster' },
+        qrUrl: 'https://app.example/view/' + id + '/results?token=public',
+      },
+    }),
+  })
+  expect(push.status).toBe(200)
+  const links = Schema.decodeUnknownSync(ReadLinks)(
+    await (await SELF.fetch(path + '/links', { headers: { Cookie: cookie } })).json(),
+  )
+  const token = new URL(links.scoreboard).searchParams.get('token') ?? ''
+  const late = await open(path + '/events?token=' + token, '')
+  try {
+    const frame = await late.next()
+    if (frame._tag !== 'Snapshot') throw new Error('Expected a snapshot')
+    const replica = Result.getOrThrow(
+      ContestReplica.restore({ snapshot: frame.snapshot, pending: [], heard: [], rejected: [] }),
+    )
+    const board = replica.journal.state.scoreboard
+    expect(board.filter).toEqual({ divisionId: 'monster' })
+    expect(board.qrUrl._tag).toBe('Some')
+  } finally {
+    late.socket.close()
+  }
+})

@@ -30,7 +30,9 @@ const authAtom = Atom.make<Auth>({ _tag: 'Checking' })
 
 export function App() {
   const { locale, setLocale, t } = useMessages()
-  const viewPath = new RegExp('^/view/([^/]+)/(stage|announcer|results)$').exec(location.pathname)
+  const viewPath = new RegExp('^/view/([^/]+)/(stage|announcer|scoreboard|results)$').exec(
+    location.pathname,
+  )
   const viewerId = Schema.decodeUnknownResult(ContestId)(viewPath?.[1])
   const [deskId] = useState(() =>
     Schema.decodeUnknownResult(ContestId)(
@@ -156,7 +158,9 @@ export function App() {
         </label>
       </header>
       {Result.isSuccess(viewerId) && token ? (
-        viewPath?.[2] === 'stage' || viewPath?.[2] === 'announcer' ? (
+        viewPath?.[2] === 'stage' ||
+        viewPath?.[2] === 'announcer' ||
+        viewPath?.[2] === 'scoreboard' ? (
           <ViewerScreen id={viewerId.success} token={token} role={viewPath[2]} />
         ) : (
           <ContestDesk id={viewerId.success} access={{ _tag: 'Viewer', token }} />

@@ -33,12 +33,13 @@
         "@werewolf/core": "workspace:*",
         "@werewolf/sync": "workspace:*",
         "effect": "4.0.1",
+        "qrcode-generator": "^2.0.4",
         "react": "19.2.8",
         "react-dom": "19.2.8",
       },
       "devDependencies": {
-        "@testing-library/dom": "^10.4.2",
-        "@testing-library/react": "^16.3.3",
+        "@testing-library/dom": "10.4.2",
+        "@testing-library/react": "16.3.3",
         "@types/react": "19.2.18",
         "@types/react-dom": "19.2.7",
         "@vitejs/plugin-react": "6.1.1",
@@ -920,6 +921,8 @@
     "proper-lockfile": ["proper-lockfile@4.1.2", "", { "dependencies": { "graceful-fs": "^4.2.4", "retry": "^0.12.0", "signal-exit": "^3.0.2" } }, "sha512-TjNPblN4BwAWMXU8s9AEz4JmQxnD1NNL7bNOY/AKUzyamc379FWASUhc/K1pL2noVb+XmZKLL68cjzLsiOAMaA=="],
 
     "punycode": ["punycode@2.3.1", "", {}, "sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg=="],
+
+    "qrcode-generator": ["qrcode-generator@2.0.4", "", {}, "sha512-mZSiP6RnbHl4xL2Ap5HfkjLnmxfKcPWpWe/c+5XxCuetEenqmNFf1FH/ftXPCtFG5/TDobjsjz6sSNL0Sr8Z9g=="],
 
     "react": ["react@19.2.8", "", {}, "sha512-PWaYA1L/q9u2u7xYQi+Y3L3Yfnie7XyLeaJICV1MGD6LprsBxcAqGjYyr0eY3p+QdsA+x/Irkt4Qif8D63+Sbw=="],
 

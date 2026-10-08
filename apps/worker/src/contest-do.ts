@@ -44,6 +44,7 @@ const runResponse = (effect: Effect.Effect<Response, ActorFailure | InvalidActor
 const Tokens = Schema.Struct({
   stage: Schema.NonEmptyString,
   announcer: Schema.NonEmptyString,
+  scoreboard: Schema.NonEmptyString,
   results: Schema.NonEmptyString,
 })
 const StoredContest = Schema.Struct({ definition: ContestDefinition, tokens: Tokens })
@@ -170,6 +171,7 @@ export class ContestDO extends DurableObject {
               tokens: {
                 stage: crypto.randomUUID(),
                 announcer: crypto.randomUUID(),
+                scoreboard: crypto.randomUUID(),
                 results: crypto.randomUUID(),
               },
             }
@@ -235,6 +237,7 @@ export class ContestDO extends DurableObject {
           const links: ReadLinks = {
             stage: link('stage'),
             announcer: link('announcer'),
+            scoreboard: link('scoreboard'),
             results: link('results'),
           }
           return Response.json(links, { headers: { 'Cache-Control': 'no-store' } })

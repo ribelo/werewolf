@@ -16,13 +16,32 @@ import {
   Verdict,
   type Attempt,
 } from './entry.ts'
-import { ageOnDate, type CalendarDate, type TeamId } from './lifter.ts'
-import { DivisionId, LiftId, type Division, type Rulebook } from './rulebook.ts'
+import { ageOnDate, Sex, type CalendarDate, type TeamId } from './lifter.ts'
+import {
+  AgeClassId,
+  DivisionId,
+  LiftId,
+  WeightClassId,
+  type Division,
+  type Rulebook,
+} from './rulebook.ts'
 
 export const CommandId = Schema.NonEmptyString.pipe(Schema.brand('CommandId'))
 export type CommandId = typeof CommandId.Type
 /** Commands edit one field at a time. Their identifiers support transport deduplication. */
 const commandMetadata = { id: CommandId, at: Timestamp }
+export const ScoreboardFilter = Schema.Struct({
+  divisionId: Schema.optionalKey(DivisionId),
+  liftId: Schema.optionalKey(LiftId),
+  sex: Schema.optionalKey(Sex),
+  ageClassId: Schema.optionalKey(AgeClassId),
+  weightClassId: Schema.optionalKey(WeightClassId),
+})
+export type ScoreboardFilter = typeof ScoreboardFilter.Type
+export interface ScoreboardView {
+  readonly filter: ScoreboardFilter
+  readonly qrUrl: Option.Option<string>
+}
 export const Command = Schema.Union([
   Schema.TaggedStruct('AddEntry', { ...commandMetadata, entry: Entry }),
   Schema.TaggedStruct('SetBodyweight', {
@@ -79,6 +98,12 @@ export const Command = Schema.Union([
 
     from: Team.fields.id,
     into: Team.fields.id,
+  }),
+  /** What the TV shows. The last change wins, and a late screen replays it from the log. */
+  Schema.TaggedStruct('SetScoreboard', {
+    ...commandMetadata,
+    filter: ScoreboardFilter,
+    qrUrl: Schema.optionalKey(Schema.NonEmptyString),
   }),
   Schema.TaggedStruct('Undo', {
     ...commandMetadata,
@@ -147,6 +172,7 @@ export interface ContestState {
   readonly selected: Option.Option<AttemptRef>
   readonly orderOverrides: ReadonlyArray<OrderOverride>
   readonly warnings: ReadonlyArray<EntryWarning>
+  readonly scoreboard: ScoreboardView
 }
 
 /** Parse an external command without exceptions for malformed payloads. */
@@ -458,6 +484,21 @@ function applyMutation(
     }
     case 'ResetOrder':
       return Result.succeed({ ...state, orderOverrides: [] })
+    case 'SetScoreboard': {
+      const book = state.rulebook
+      const { filter } = command
+      const known =
+        (!filter.divisionId || book.divisions.some((item) => item.id === filter.divisionId)) &&
+        (!filter.liftId || book.lifts.some((item) => item.id === filter.liftId)) &&
+        (!filter.ageClassId || book.ageClasses.some((item) => item.id === filter.ageClassId)) &&
+        (!filter.weightClassId ||
+          book.weightClasses.some((item) => item.id === filter.weightClassId))
+      if (!known) return Result.fail(new InvalidCommand({ detail: 'unknownScoreboardFilter' }))
+      return Result.succeed({
+        ...state,
+        scoreboard: { filter, qrUrl: Option.fromUndefinedOr(command.qrUrl) },
+      })
+    }
     case 'UpsertTeam': {
       const canonical = command.team.name.trim().normalize('NFC').toLowerCase()
       if (
@@ -508,6 +549,7 @@ export function replay(
     selected: Option.none(),
     orderOverrides: [],
     warnings: [],
+    scoreboard: { filter: {}, qrUrl: Option.none() },
   }
   let state = initial
   let active: ReadonlyArray<{ readonly command: Mutation; readonly sequence: number }> = []

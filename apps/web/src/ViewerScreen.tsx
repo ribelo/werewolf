@@ -1,5 +1,6 @@
 import type { ContestId } from '@werewolf/sync'
 import { Announcer, Stage } from './LiveScreens.tsx'
+import { Scoreboard } from './Scoreboard.tsx'
 import { useMessages } from './i18n.ts'
 import { useLiveContest } from './live-contest.ts'
 
@@ -11,7 +12,7 @@ export function ViewerScreen({
 }: {
   readonly id: ContestId
   readonly token: string
-  readonly role: 'stage' | 'announcer'
+  readonly role: 'stage' | 'announcer' | 'scoreboard'
 }) {
   const { t } = useMessages()
   const live = useLiveContest(id, { _tag: 'Viewer', token })
@@ -27,7 +28,13 @@ export function ViewerScreen({
           {t('view.offline')}
         </p>
       )}
-      {role === 'stage' ? <Stage state={state} /> : <Announcer state={state} />}
+      {role === 'stage' ? (
+        <Stage state={state} />
+      ) : role === 'announcer' ? (
+        <Announcer state={state} />
+      ) : (
+        <Scoreboard state={state} />
+      )}
     </section>
   )
 }

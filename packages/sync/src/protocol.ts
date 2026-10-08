@@ -34,6 +34,7 @@ export type Snapshot = typeof Snapshot.Type
 export const ReadLinks = Schema.Struct({
   stage: Schema.NonEmptyString,
   announcer: Schema.NonEmptyString,
+  scoreboard: Schema.NonEmptyString,
   results: Schema.NonEmptyString,
 })
 export type ReadLinks = typeof ReadLinks.Type

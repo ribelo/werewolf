@@ -7,6 +7,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useMessages, rejectionText, type MessageKey } from './i18n.ts'
 import { requestJson, useLiveContest, type Access } from './live-contest.ts'
 import { MeetDay, WeightForm } from './MeetDay.tsx'
+import { ScoreboardControl } from './Scoreboard.tsx'
 
 function AttemptEditor({
   state,
@@ -211,6 +212,13 @@ export function ContestDesk({ id, access }: { readonly id: ContestId; readonly a
         </nav>
       )}
       {editor && <EntryForm state={state} submit={live.submit} />}
+      {editor && (
+        <ScoreboardControl
+          state={state}
+          resultsUrl={Option.map(links, (value) => value.results)}
+          submit={live.submit}
+        />
+      )}
       <MeetDay state={state} commands={journal.commands} submit={live.submit} editor={editor} />
       <details>
         <summary>{t('meet.corrections')}</summary>
