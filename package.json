@@ -35,6 +35,8 @@
     "@effect/tsgo": "0.50.0",
     "@types/bun": "latest",
     "@types/node": "^24.19.1",
+    "@werewolf/core": "workspace:*",
+    "@werewolf/sync": "workspace:*",
     "alchemy": "2.0.0-beta.81",
     "knip": "6.12.2",
     "oxfmt": "latest",

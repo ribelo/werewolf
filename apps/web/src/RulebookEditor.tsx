@@ -549,11 +549,18 @@ export function RulebookEditor({
                         className={box}
                         value={item.result}
                         onChange={(event) =>
-                          update({ ...item, result: event.target.value === 'sum' ? 'sum' : 'best' })
+                          update({
+                            ...item,
+                            result:
+                              event.target.value === 'sum' || event.target.value === 'sumDone'
+                                ? event.target.value
+                                : 'best',
+                          })
                         }
                       >
                         <option value="best">{t('rb.best')}</option>
                         <option value="sum">{t('rb.sum')}</option>
+                        <option value="sumDone">{t('rb.sumDone')}</option>
                       </select>
                     </label>
                     <label className="block">

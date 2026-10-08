@@ -22,6 +22,8 @@ const Lift = Schema.Struct({
   rackHeight: Schema.Boolean,
   /** Short code of the lift in federation exports, such as BP for bench press. */
   code: Schema.optionalKey(Schema.NonEmptyString),
+  /** Title word of a single-lift federation file, such as Bench; the English name when absent. */
+  exportName: Schema.optionalKey(Schema.NonEmptyString),
 })
 const Division = Schema.Struct({
   id: DivisionId,
@@ -71,7 +73,8 @@ const classificationFields = {
   name: LocalizedName,
   membership: Membership,
   liftIds: Schema.NonEmptyArray(LiftId),
-  result: Schema.Literals(['best', 'sum']),
+  /** sum needs every lift of the classification; sumDone adds up the lifts the lifter completed (the 2025 rule). */
+  result: Schema.Literals(['best', 'sum', 'sumDone']),
   formula: Formula,
   sex: Schema.optionalKey(Sex),
 } as const

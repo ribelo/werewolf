@@ -291,6 +291,7 @@ const catalogs = {
     'backup.failed': 'Operacja nie powiodła się. Plik może być błędny.',
     'backup.done': 'Gotowe.',
     'contests.restore': 'Przywróć zawody z kopii',
+    'rb.sumDone': 'Suma wykonanych bojów',
     'auth.pending': 'Logowanie…',
   },
   en: {
@@ -580,6 +581,7 @@ const catalogs = {
     'backup.failed': 'The operation failed. The file may be invalid.',
     'backup.done': 'Done.',
     'contests.restore': 'Restore a contest from a backup',
+    'rb.sumDone': 'Sum of the lifts done',
     'auth.pending': 'Logging in…',
   },
 } as const

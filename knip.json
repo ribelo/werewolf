@@ -1,8 +1,8 @@
 {
   "workspaces": {
     ".": {
-      "entry": ["alchemy.run.ts"],
-      "project": ["infra/**/*.ts", "*.ts"]
+      "entry": ["alchemy.run.ts", "scripts/migrate-2025.ts"],
+      "project": ["infra/**/*.ts", "scripts/**/*.ts", "*.ts"]
     },
     "apps/worker": {
       "project": ["src/**/*.ts", "test/**/*.ts"]

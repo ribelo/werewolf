@@ -94,7 +94,7 @@ describe('federation CSV', () => {
     const reshelF = 50 * reshelCoefficient(kg(62.5), 'female')
     const reshelM = 105 * reshelCoefficient(kg(90), 'male')
     const lines = [
-      '\uFEFFBENCH PRESS RESULTS' + ';'.repeat(15),
+      '\uFEFFBENCH RESULTS' + ';'.repeat(15),
       '',
       'WOMEN - Senior (24-39) RAW' + ';'.repeat(15),
       'Place;Name;Surname;Country;Age;Weight;Age Class;Weight Class;Div;BP1;BP2;BP3;BP4;TotalBP;ReshelBP;McCouloghBP',

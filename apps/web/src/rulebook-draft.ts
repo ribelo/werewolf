@@ -10,6 +10,7 @@ interface LiftDraft {
   attempts: number
   rackHeight: boolean
   code?: string
+  exportName?: string
 }
 export interface DivisionDraft {
   id: string
@@ -44,7 +45,7 @@ export interface ClassificationDraft {
   kind: 'individual' | 'team'
   membership: { kind: 'all' } | { kind: 'divisions'; ids: ReadonlyArray<string> }
   liftIds: ReadonlyArray<string>
-  result: 'best' | 'sum'
+  result: 'best' | 'sum' | 'sumDone'
   formula: 'kilograms' | 'reshel' | 'reshelMcCullough'
   sex?: 'male' | 'female'
   split?: 'none' | 'age' | 'weight' | 'ageAndWeight'

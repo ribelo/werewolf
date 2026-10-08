@@ -24,7 +24,7 @@
     "allowImportingTsExtensions": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "types": ["node", "@cloudflare/workers-types", "@cloudflare/vitest-plugin/types"],
+    "types": ["node", "bun", "@cloudflare/workers-types", "@cloudflare/vitest-plugin/types"],
     "plugins": [
       {
         "name": "@effect/language-service",
@@ -39,6 +39,7 @@
   },
   "include": [
     "apps/**/*.ts",
+    "scripts/**/*.ts",
     "apps/**/*.tsx",
     "packages/**/*.ts",
     "vitest.config.ts",

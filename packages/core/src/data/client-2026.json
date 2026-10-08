@@ -13,7 +13,8 @@
       },
       "attempts": 3,
       "rackHeight": true,
-      "code": "BP"
+      "code": "BP",
+      "exportName": "Bench"
     },
     {
       "id": "deadlift",
@@ -23,7 +24,8 @@
       },
       "attempts": 3,
       "rackHeight": false,
-      "code": "DL"
+      "code": "DL",
+      "exportName": "Deadlift"
     },
     {
       "id": "curl",
@@ -33,7 +35,8 @@
       },
       "attempts": 3,
       "rackHeight": false,
-      "code": "BC"
+      "code": "BC",
+      "exportName": "Biceps curl"
     }
   ],
   "divisions": [

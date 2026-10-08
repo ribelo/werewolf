@@ -96,7 +96,7 @@ export function federationCsv(
   const classification = state.rulebook.classifications.find(
     (item) => item.id === ranking.classificationId,
   )
-  const liftIds = classification?.liftIds ?? []
+  const liftIds: ReadonlyArray<string> = classification?.liftIds ?? []
   const codes = liftIds.map((id) => liftCode(state.rulebook, id))
   const first = codes[0] ?? ''
   const single = liftIds.length === 1
@@ -117,9 +117,11 @@ export function federationCsv(
       ? ['Total' + first, 'Reshel' + first, 'McCoulogh' + first]
       : ['Total', 'Reshel', 'McCoulogh']),
   ]
+  // A lifter who did not enter any lift of the classification has no place in its file.
+  const takesPart = (entry: Entry) => entry.lifts.some((item) => liftIds.includes(item.liftId))
   const ranked = ranking.groups.flatMap((group) => group.rows.map((row) => row.entry))
   const waiting = ranking.pending.flatMap((item) =>
-    state.entries.filter((entry) => entry.id === item.entryId),
+    state.entries.filter((entry) => entry.id === item.entryId && takesPart(entry)),
   )
   const blocks: Array<Block> = []
   for (const entry of [...ranked, ...waiting]) {
@@ -141,7 +143,10 @@ export function federationCsv(
     })
   blocks.sort((a, b) => (a.sex === b.sex ? ageOrder(a) - ageOrder(b) : a.sex === 'female' ? -1 : 1))
   const title = single
-    ? (state.rulebook.lifts.find((item) => item.id === liftIds[0])?.name.en ?? '')
+    ? (() => {
+        const lift = state.rulebook.lifts.find((item) => item.id === liftIds[0])
+        return lift?.exportName ?? lift?.name.en ?? ''
+      })()
     : (classification?.name.en ?? '')
   const pad = (text: string) => [escapeCsv(text), ...Array(columns.length - 1).fill('')].join(';')
   const lines: Array<string> = [pad(title.toUpperCase() + ' RESULTS')]
