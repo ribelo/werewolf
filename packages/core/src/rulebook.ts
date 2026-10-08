@@ -20,6 +20,8 @@ const Lift = Schema.Struct({
   name: LocalizedName,
   attempts: PositiveInt,
   rackHeight: Schema.Boolean,
+  /** Short code of the lift in federation exports, such as BP for bench press. */
+  code: Schema.optionalKey(Schema.NonEmptyString),
 })
 const Division = Schema.Struct({
   id: DivisionId,

@@ -9,6 +9,7 @@ interface LiftDraft {
   name: Name
   attempts: number
   rackHeight: boolean
+  code?: string
 }
 export interface DivisionDraft {
   id: string

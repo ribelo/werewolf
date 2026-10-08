@@ -1,5 +1,6 @@
 import type { ContestId } from '@werewolf/sync'
 import { Announcer, Stage } from './LiveScreens.tsx'
+import { Results } from './Results.tsx'
 import { Scoreboard } from './Scoreboard.tsx'
 import { useMessages } from './i18n.ts'
 import { useLiveContest } from './live-contest.ts'
@@ -12,7 +13,7 @@ export function ViewerScreen({
 }: {
   readonly id: ContestId
   readonly token: string
-  readonly role: 'stage' | 'announcer' | 'scoreboard'
+  readonly role: 'stage' | 'announcer' | 'scoreboard' | 'results'
 }) {
   const { t } = useMessages()
   const live = useLiveContest(id, { _tag: 'Viewer', token })
@@ -35,6 +36,20 @@ export function ViewerScreen({
         <Stage state={state} title={live.view.replica.state.snapshot.definition.name} />
       ) : role === 'announcer' ? (
         <Announcer state={state} />
+      ) : role === 'results' ? (
+        <div className="container-full py-4">
+          <h1 className="text-h1 mb-1 uppercase">
+            {live.view.replica.state.snapshot.definition.name}
+          </h1>
+          <p className="text-caption mb-4 tracking-[0.3em] text-text-secondary uppercase">
+            {t('res.live')}
+          </p>
+          <Results
+            state={state}
+            title={live.view.replica.state.snapshot.definition.name}
+            exports={false}
+          />
+        </div>
       ) : (
         <Scoreboard state={state} title={live.view.replica.state.snapshot.definition.name} />
       )}

@@ -175,7 +175,8 @@ export function App() {
         {Result.isSuccess(viewerId) && token ? (
           viewPath?.[2] === 'stage' ||
           viewPath?.[2] === 'announcer' ||
-          viewPath?.[2] === 'scoreboard' ? (
+          viewPath?.[2] === 'scoreboard' ||
+          viewPath?.[2] === 'results' ? (
             <ViewerScreen id={viewerId.success} token={token} role={viewPath[2]} />
           ) : (
             <ContestDesk id={viewerId.success} access={{ _tag: 'Viewer', token }} />

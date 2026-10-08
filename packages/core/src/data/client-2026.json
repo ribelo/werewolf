@@ -12,7 +12,8 @@
         "en": "Bench press"
       },
       "attempts": 3,
-      "rackHeight": true
+      "rackHeight": true,
+      "code": "BP"
     },
     {
       "id": "deadlift",
@@ -21,7 +22,8 @@
         "en": "Deadlift"
       },
       "attempts": 3,
-      "rackHeight": false
+      "rackHeight": false,
+      "code": "DL"
     },
     {
       "id": "curl",
@@ -30,7 +32,8 @@
         "en": "Biceps curl"
       },
       "attempts": 3,
-      "rackHeight": false
+      "rackHeight": false,
+      "code": "BC"
     }
   ],
   "divisions": [

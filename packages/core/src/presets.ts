@@ -6,11 +6,12 @@ import { InvalidRulebook, parseRulebook, Rulebook } from './rulebook.ts'
 /** Starting 2026 rules. Equipment and individual rankings remain editable; kids rules are not set. */
 export const client2026Rulebook = Schema.decodeUnknownSync(Rulebook)(clientInput)
 
-const lift = (id: string, pl: string, en: string, rackHeight: boolean) => ({
+const lift = (id: string, pl: string, en: string, rackHeight: boolean, code: string) => ({
   id,
   name: { pl, en },
   attempts: 3,
   rackHeight,
+  code,
 })
 const open = {
   id: 'open',
@@ -52,9 +53,9 @@ export const rulebookPresets = [
       ...base,
       name: { pl: 'Trójbój siłowy', en: 'Powerlifting' },
       lifts: [
-        lift('squat', 'Przysiad', 'Squat', true),
-        lift('bench', 'Wyciskanie leżąc', 'Bench press', true),
-        lift('deadlift', 'Martwy ciąg', 'Deadlift', false),
+        lift('squat', 'Przysiad', 'Squat', true, 'SQ'),
+        lift('bench', 'Wyciskanie leżąc', 'Bench press', true, 'BP'),
+        lift('deadlift', 'Martwy ciąg', 'Deadlift', false, 'DL'),
       ],
       classifications: [
         individual(
@@ -73,8 +74,8 @@ export const rulebookPresets = [
       ...base,
       name: { pl: 'Wyciskanie i martwy ciąg', en: 'Bench press and deadlift' },
       lifts: [
-        lift('bench', 'Wyciskanie leżąc', 'Bench press', true),
-        lift('deadlift', 'Martwy ciąg', 'Deadlift', false),
+        lift('bench', 'Wyciskanie leżąc', 'Bench press', true, 'BP'),
+        lift('deadlift', 'Martwy ciąg', 'Deadlift', false, 'DL'),
       ],
       classifications: [
         individual('open-bench', 'Open — wyciskanie', 'Open — bench', ['bench'], 'best'),
@@ -88,7 +89,7 @@ export const rulebookPresets = [
     rulebook: decode({
       ...base,
       name: { pl: 'Jeden bój', en: 'Single lift' },
-      lifts: [lift('lift', 'Bój', 'Lift', false)],
+      lifts: [lift('lift', 'Bój', 'Lift', false, 'LF')],
       classifications: [individual('open-lift', 'Open', 'Open', ['lift'], 'best')],
     }),
   },

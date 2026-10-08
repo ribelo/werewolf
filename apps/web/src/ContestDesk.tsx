@@ -1,4 +1,4 @@
-import { individualRankings, type Attempt, type ContestState } from '@werewolf/core'
+import { type Attempt, type ContestState } from '@werewolf/core'
 import { ReadLinks, type ContestId } from '@werewolf/sync'
 import * as Effect from 'effect/Effect'
 import * as Fiber from 'effect/Fiber'
@@ -8,6 +8,7 @@ import { useMessages, rejectionText, type MessageKey } from './i18n.ts'
 import { requestJson, useLiveContest, type Access } from './live-contest.ts'
 import { EntriesPanel } from './EntriesPanel.tsx'
 import { MeetDay, WeightForm } from './MeetDay.tsx'
+import { Results } from './Results.tsx'
 import { ScoreboardControl } from './Scoreboard.tsx'
 
 type Tab = 'desk' | 'entries' | 'results' | 'lifts' | 'plates'
@@ -197,30 +198,7 @@ export function ContestDesk({ id, access }: { readonly id: ContestId; readonly a
       {tab === 'entries' && editor && (
         <EntriesPanel state={state} journal={journal} submit={live.submit} />
       )}
-      {tab === 'results' &&
-        individualRankings(state).map((ranking) => (
-          <section key={ranking.classificationId} className="card">
-            <h3 className="text-h3 mb-2">
-              {
-                state.rulebook.classifications.find((item) => item.id === ranking.classificationId)
-                  ?.name[locale]
-              }
-            </h3>
-            {ranking.groups.map((group) => (
-              <ol key={JSON.stringify(group.bucket)} className="mb-3 divide-y divide-border-color">
-                {group.rows.map((row) => (
-                  <li key={row.entry.id} value={row.place} className="py-2">
-                    <span className="font-display text-xl text-text-secondary">{row.place}.</span>{' '}
-                    {row.entry.lifter.name} — <span className="font-mono">{row.points}</span>
-                  </li>
-                ))}
-              </ol>
-            ))}
-            <p className="text-xs text-text-secondary">
-              {t('desk.pending')}: {ranking.pending.length}
-            </p>
-          </section>
-        ))}
+      {tab === 'results' && <Results state={state} title={definition.name} exports={editor} />}
       {tab === 'lifts' &&
         state.rulebook.lifts.map((lift) => (
           <section key={lift.id} className="card">
