@@ -19,4 +19,5 @@
 - Core tests (`did-not-start.test.ts`, ww-9jq6): the entry leaves the order for that lift only and the next attempt becomes current; Undo and `value: false` restore the order; a judged lifter cannot be marked and a DNS lift refuses a verdict; the lift ranking has no row for the entry and lists it as pending with reason "didNotStart"; the results table and the CSV show DNS after the ranked rows without a number; the other lift is untouched.
 - Screen test (`MeetDay.test.tsx`): one click on "Nie wystartował (DNS)" moves the queue on; "Cofnij ostatnią zmianę" brings the lifter back. The scoreboard shows DNS across the attempt columns; the Lifts tab shows a DNS badge.
 - Migration (`convert.test.ts`): three failed 20 kg attempts become one DNS mark and no verdict commands, converting twice gives the same file. Real data: 13 pairs in the second 2025 contest (as the owner counted).
+- Live (https://werewolf-v2.r-krzywaznia-2c4.workers.dev, redeployed and both 2025 contests uploaded again): the scoreboard of the second contest shows 165 rows and 13 DNS cells; the Results tab shows DNS rows.
 - `bun run gate:full` passes.
