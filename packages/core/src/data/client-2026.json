@@ -1,0 +1,241 @@
+{
+  "version": 1,
+  "name": {
+    "pl": "Werewolf 2026",
+    "en": "Werewolf 2026"
+  },
+  "lifts": [
+    {
+      "id": "bench",
+      "name": {
+        "pl": "Wyciskanie leżąc",
+        "en": "Bench press"
+      },
+      "attempts": 3,
+      "rackHeight": true
+    },
+    {
+      "id": "deadlift",
+      "name": {
+        "pl": "Martwy ciąg",
+        "en": "Deadlift"
+      },
+      "attempts": 3,
+      "rackHeight": false
+    },
+    {
+      "id": "curl",
+      "name": {
+        "pl": "Uginanie ramion",
+        "en": "Biceps curl"
+      },
+      "attempts": 3,
+      "rackHeight": false
+    }
+  ],
+  "divisions": [
+    {
+      "id": "open",
+      "name": {
+        "pl": "Open",
+        "en": "Open"
+      },
+      "policy": "reject",
+      "conditions": {}
+    },
+    {
+      "id": "monster",
+      "name": {
+        "pl": "MONSTER",
+        "en": "MONSTER"
+      },
+      "policy": "reject",
+      "conditions": {}
+    }
+  ],
+  "ageClasses": [],
+  "weightClasses": [],
+  "classifications": [
+    {
+      "id": "open-bench",
+      "name": {
+        "pl": "Open — wyciskanie",
+        "en": "Open — bench"
+      },
+      "kind": "individual",
+      "membership": {
+        "kind": "divisions",
+        "ids": ["open"]
+      },
+      "liftIds": ["bench"],
+      "result": "best",
+      "formula": "reshelMcCullough",
+      "split": "none"
+    },
+    {
+      "id": "open-deadlift",
+      "name": {
+        "pl": "Open — martwy ciąg",
+        "en": "Open — deadlift"
+      },
+      "kind": "individual",
+      "membership": {
+        "kind": "divisions",
+        "ids": ["open"]
+      },
+      "liftIds": ["deadlift"],
+      "result": "best",
+      "formula": "reshelMcCullough",
+      "split": "none"
+    },
+    {
+      "id": "monster-total",
+      "name": {
+        "pl": "MONSTER — suma",
+        "en": "MONSTER — total"
+      },
+      "kind": "individual",
+      "membership": {
+        "kind": "divisions",
+        "ids": ["monster"]
+      },
+      "liftIds": ["bench", "deadlift"],
+      "result": "sum",
+      "formula": "kilograms",
+      "split": "none"
+    },
+    {
+      "id": "open-curl",
+      "name": {
+        "pl": "Open — uginanie ramion",
+        "en": "Open — curl"
+      },
+      "kind": "individual",
+      "membership": {
+        "kind": "divisions",
+        "ids": ["open"]
+      },
+      "liftIds": ["curl"],
+      "result": "best",
+      "formula": "kilograms",
+      "split": "none"
+    },
+    {
+      "name": {
+        "pl": "Mężczyźni — najlepsza piątka",
+        "en": "Men — best five"
+      },
+      "kind": "team",
+      "membership": {
+        "kind": "divisions",
+        "ids": ["open"]
+      },
+      "liftIds": ["bench", "deadlift"],
+      "result": "best",
+      "formula": "reshel",
+      "quota": {
+        "kind": "any",
+        "count": 5
+      },
+      "id": "men-best",
+      "sex": "male"
+    },
+    {
+      "name": {
+        "pl": "Kobiety — najlepsza piątka",
+        "en": "Women — best five"
+      },
+      "kind": "team",
+      "membership": {
+        "kind": "divisions",
+        "ids": ["open"]
+      },
+      "liftIds": ["bench", "deadlift"],
+      "result": "best",
+      "formula": "reshel",
+      "quota": {
+        "kind": "any",
+        "count": 5
+      },
+      "id": "women-best",
+      "sex": "female"
+    },
+    {
+      "name": {
+        "pl": "Wyciskanie — 4 mężczyzn i 1 kobieta",
+        "en": "Bench — 4 men and 1 woman"
+      },
+      "kind": "team",
+      "membership": {
+        "kind": "divisions",
+        "ids": ["open"]
+      },
+      "liftIds": ["bench"],
+      "result": "best",
+      "formula": "reshel",
+      "quota": {
+        "kind": "bySex",
+        "male": 4,
+        "female": 1
+      },
+      "id": "bench-mixed"
+    },
+    {
+      "name": {
+        "pl": "Martwy ciąg — 4 mężczyzn i 1 kobieta",
+        "en": "Deadlift — 4 men and 1 woman"
+      },
+      "kind": "team",
+      "membership": {
+        "kind": "divisions",
+        "ids": ["open"]
+      },
+      "liftIds": ["deadlift"],
+      "result": "best",
+      "formula": "reshel",
+      "quota": {
+        "kind": "bySex",
+        "male": 4,
+        "female": 1
+      },
+      "id": "deadlift-mixed"
+    }
+  ],
+  "barbell": {
+    "bars": {
+      "male": 20,
+      "female": 15
+    },
+    "clampsPerSide": 0,
+    "plates": [
+      {
+        "weight": 25,
+        "pairs": 8
+      },
+      {
+        "weight": 20,
+        "pairs": 2
+      },
+      {
+        "weight": 15,
+        "pairs": 2
+      },
+      {
+        "weight": 10,
+        "pairs": 2
+      },
+      {
+        "weight": 5,
+        "pairs": 2
+      },
+      {
+        "weight": 2.5,
+        "pairs": 2
+      },
+      {
+        "weight": 1.25,
+        "pairs": 2
+      }
+    ]
+  }
+}

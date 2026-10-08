@@ -3,15 +3,25 @@ import * as Schema from 'effect/Schema'
 import { Kilograms } from './barbell.ts'
 import { mcCulloughCoefficient, reshelCoefficient } from './coefficients.ts'
 import type { ContestState } from './contest.ts'
-import type { Entry, EntryId, Timestamp } from './entry.ts'
-import { ageOnDate } from './lifter.ts'
+import type { Entry, EntryId, Team, Timestamp } from './entry.ts'
+import { ageOnDate, type TeamId } from './lifter.ts'
 import type {
   AgeClassId,
   ClassificationId,
   IndividualClassification,
   LiftId,
+  Rulebook,
   WeightClassId,
 } from './rulebook.ts'
+
+export const RankingPoints = Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0)).pipe(
+  Schema.brand('RankingPoints'),
+)
+export type RankingPoints = typeof RankingPoints.Type
+// Gram precision and the two three-decimal coefficient tables yield at most nine decimal places.
+function canonicalPoints(value: number): RankingPoints {
+  return Schema.decodeSync(RankingPoints)(Number(value.toFixed(9)))
+}
 
 export type LiftResult =
   | { readonly _tag: 'NoResult'; readonly liftId: LiftId }
@@ -30,7 +40,7 @@ export interface EntryResults {
 export interface RankedEntry {
   readonly entry: Entry
   readonly kilograms: Kilograms
-  readonly points: number
+  readonly points: RankingPoints
   readonly achievedAt: Timestamp
   readonly sequence: number
 }
@@ -105,7 +115,7 @@ function pending(entryId: EntryId, reason: PendingEntry['reason']): PendingEntry
 
 function candidate(
   state: ContestState,
-  classification: IndividualClassification,
+  classification: Rulebook['classifications'][number],
   result: EntryResults,
 ): Result.Result<RankedEntry, PendingEntry> {
   const good = result.lifts
@@ -154,7 +164,13 @@ function candidate(
           : 1)
       break
   }
-  return Result.succeed({ entry: result.entry, kilograms, points, achievedAt, sequence })
+  return Result.succeed({
+    entry: result.entry,
+    kilograms,
+    points: canonicalPoints(points),
+    achievedAt,
+    sequence,
+  })
 }
 
 function bucket(
@@ -220,6 +236,14 @@ function compare(left: RankedEntry, right: RankedEntry): number {
   )
 }
 
+function belongsTo(classification: Rulebook['classifications'][number], entry: Entry): boolean {
+  return (
+    (!classification.sex || classification.sex === entry.lifter.sex) &&
+    (classification.membership.kind === 'all' ||
+      classification.membership.ids.some((id) => entry.divisions.includes(id)))
+  )
+}
+
 /** A classification has its own membership. MONSTER is not an implicit member of Open. */
 export function individualRankings(state: ContestState): ReadonlyArray<IndividualRanking> {
   const results = entryResults(state)
@@ -232,12 +256,7 @@ export function individualRankings(state: ContestState): ReadonlyArray<Individua
       >()
       const waiting: PendingEntry[] = []
       for (const result of results) {
-        if (classification.sex && classification.sex !== result.entry.lifter.sex) continue
-        if (
-          classification.membership.kind === 'divisions' &&
-          !classification.membership.ids.some((id) => result.entry.divisions.includes(id))
-        )
-          continue
+        if (!belongsTo(classification, result.entry)) continue
         const ranked = candidate(state, classification, result)
         if (Result.isFailure(ranked)) {
           waiting.push(ranked.failure)
@@ -259,6 +278,74 @@ export function individualRankings(state: ContestState): ReadonlyArray<Individua
           bucket: group.bucket,
           rows: group.rows.sort(compare).map((row, index) => ({ ...row, place: index + 1 })),
         })),
+        pending: waiting,
+      }
+    })
+}
+
+export interface TeamRankedRow {
+  readonly place: number
+  readonly team: Team
+  readonly points: RankingPoints
+  readonly counted: ReadonlyArray<RankedEntry>
+}
+export interface TeamRanking {
+  readonly classificationId: ClassificationId
+  readonly rows: ReadonlyArray<TeamRankedRow>
+  readonly pending: ReadonlyArray<PendingEntry>
+}
+
+/** Quotas select distinct lifters. An incomplete or empty roster stays in the ranking with its actual sum. */
+export function teamRankings(state: ContestState): ReadonlyArray<TeamRanking> {
+  const results = entryResults(state)
+  return state.rulebook.classifications
+    .filter((classification) => classification.kind === 'team')
+    .map((classification) => {
+      const teams = new Map<TeamId, { readonly team: Team; readonly candidates: RankedEntry[] }>()
+      const waiting: PendingEntry[] = []
+      for (const team of state.teams) teams.set(team.id, { team, candidates: [] })
+      for (const result of results) {
+        const teamId = result.entry.lifter.teamId
+        if (!teamId || !belongsTo(classification, result.entry)) continue
+        const team = teams.get(teamId)
+        if (!team) throw new Error('Contest state contains an unknown team reference')
+        const ranked = candidate(state, classification, result)
+        if (Result.isFailure(ranked)) {
+          waiting.push(ranked.failure)
+          continue
+        }
+        // Replay permits one entry per lifter; candidate selects that lifter's best configured result.
+        team.candidates.push(ranked.success)
+      }
+      const rows = [...teams.values()]
+        .map(({ team, candidates }) => {
+          const eligible = candidates.sort(compare)
+          const quota = classification.quota
+          const counted =
+            quota.kind === 'any'
+              ? eligible.slice(0, quota.count)
+              : [
+                  ...eligible.filter((row) => row.entry.lifter.sex === 'male').slice(0, quota.male),
+                  ...eligible
+                    .filter((row) => row.entry.lifter.sex === 'female')
+                    .slice(0, quota.female),
+                ].sort(compare)
+          return {
+            team,
+            counted,
+            points: canonicalPoints(counted.reduce((total, row) => total + row.points, 0)),
+          }
+        })
+        .sort(
+          (left, right) =>
+            right.points - left.points ||
+            (right.counted[0]?.points ?? 0) - (left.counted[0]?.points ?? 0) ||
+            (left.team.name < right.team.name ? -1 : left.team.name > right.team.name ? 1 : 0) ||
+            (left.team.id < right.team.id ? -1 : left.team.id > right.team.id ? 1 : 0),
+        )
+      return {
+        classificationId: classification.id,
+        rows: rows.map((row, index) => ({ ...row, place: index + 1 })),
         pending: waiting,
       }
     })
