@@ -6,39 +6,31 @@ import * as Option from 'effect/Option'
 import { useEffect, useState, type FormEvent } from 'react'
 import { useMessages, rejectionText, type MessageKey } from './i18n.ts'
 import { requestJson, useLiveContest, type Access } from './live-contest.ts'
+import { MeetDay, WeightForm } from './MeetDay.tsx'
 
 function AttemptEditor({
+  state,
   attempt,
   submit,
 }: {
+  readonly state: ContestState
   readonly attempt: Attempt
   readonly submit: (input: object) => void
 }) {
   const { t } = useMessages()
-  function declare(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    submit({
-      _tag: 'SetWeight',
-      attempt: { entryId: attempt.entryId, liftId: attempt.liftId, number: attempt.number },
-      weight: Number(new FormData(event.currentTarget).get('weight')),
-    })
-  }
+  const entry = state.entries.find((item) => item.id === attempt.entryId)
   const ref = { entryId: attempt.entryId, liftId: attempt.liftId, number: attempt.number }
   return (
     <div className="attempt-editor">
-      <form onSubmit={declare}>
-        <input
-          key={attempt._tag === 'Unannounced' ? '' : attempt.weight}
-          aria-label={t('desk.weight')}
-          name="weight"
-          type="number"
-          min="0"
-          step="0.001"
-          defaultValue={attempt._tag === 'Unannounced' ? '' : attempt.weight}
-          required
+      {entry && (
+        <WeightForm
+          state={state}
+          entry={entry}
+          attempt={ref}
+          initial={attempt._tag === 'Unannounced' ? '' : String(attempt.weight)}
+          submit={submit}
         />
-        <button type="submit">{t('desk.declare')}</button>
-      </form>
+      )}
       <button
         type="button"
         disabled={attempt._tag === 'Unannounced'}
@@ -219,46 +211,50 @@ export function ContestDesk({ id, access }: { readonly id: ContestId; readonly a
         </nav>
       )}
       {editor && <EntryForm state={state} submit={live.submit} />}
-      <div className="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>{t('desk.lotNumber')}</th>
-              <th>{t('desk.name')}</th>
-              <th>{t('desk.lift')}</th>
-              <th>{t('desk.attempt')}</th>
-              <th>{t('desk.weight')}</th>
-              <th>{t('desk.verdict')}</th>
-              {editor && <th>{t('desk.actions')}</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {state.attempts.map((attempt) => {
-              const entry = state.entries.find((item) => item.id === attempt.entryId)
-              const lift = state.rulebook.lifts.find((item) => item.id === attempt.liftId)
-              return (
-                <tr key={attempt.entryId + '/' + attempt.liftId + '/' + attempt.number}>
-                  <td>{entry?.lotNumber}</td>
-                  <td>{entry?.lifter.name}</td>
-                  <td>{lift?.name[locale]}</td>
-                  <td>{attempt.number}</td>
-                  <td>{attempt._tag === 'Unannounced' ? '—' : attempt.weight}</td>
-                  <td>
-                    {attempt._tag === 'Judged'
-                      ? t(attempt.verdict === 'goodLift' ? 'desk.goodLift' : 'desk.noLift')
-                      : '—'}
-                  </td>
-                  {editor && (
+      <MeetDay state={state} commands={journal.commands} submit={live.submit} editor={editor} />
+      <details>
+        <summary>{t('meet.corrections')}</summary>
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>{t('desk.lotNumber')}</th>
+                <th>{t('desk.name')}</th>
+                <th>{t('desk.lift')}</th>
+                <th>{t('desk.attempt')}</th>
+                <th>{t('desk.weight')}</th>
+                <th>{t('desk.verdict')}</th>
+                {editor && <th>{t('desk.actions')}</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {state.attempts.map((attempt) => {
+                const entry = state.entries.find((item) => item.id === attempt.entryId)
+                const lift = state.rulebook.lifts.find((item) => item.id === attempt.liftId)
+                return (
+                  <tr key={attempt.entryId + '/' + attempt.liftId + '/' + attempt.number}>
+                    <td>{entry?.lotNumber}</td>
+                    <td>{entry?.lifter.name}</td>
+                    <td>{lift?.name[locale]}</td>
+                    <td>{attempt.number}</td>
+                    <td>{attempt._tag === 'Unannounced' ? '—' : attempt.weight}</td>
                     <td>
-                      <AttemptEditor attempt={attempt} submit={live.submit} />
+                      {attempt._tag === 'Judged'
+                        ? t(attempt.verdict === 'goodLift' ? 'desk.goodLift' : 'desk.noLift')
+                        : '—'}
                     </td>
-                  )}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+                    {editor && (
+                      <td>
+                        <AttemptEditor state={state} attempt={attempt} submit={live.submit} />
+                      </td>
+                    )}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </details>
       {individualRankings(state).map((ranking) => (
         <section key={ranking.classificationId}>
           <h3>

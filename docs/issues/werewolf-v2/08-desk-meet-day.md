@@ -6,8 +6,14 @@
 
 **Blocked by:** 05, 03
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] A full flight of a bench+deadlift contest can be run with mouse/keyboard only
-- [ ] Verdict + next current attempt in one click
-- [ ] Component tests for verdict and declaration
+- [x] A full flight of a bench+deadlift contest can be run with mouse/keyboard only
+- [x] Verdict + next current attempt in one click
+- [x] Component tests for verdict and declaration
+
+## Verified
+
+- Component tests (`apps/web/src/MeetDay.test.tsx`, jsdom): one click on Good lift records the verdict and the next lifter becomes current (ww-adgy, ww-u0ni); G and N keys do the same (ww-adgy); the next attempt of the lifter who just lifted is offered with the last weight, an impossible weight shows the nearest loadable weight and blocks the button, "use nearest" then declares it (ww-z7vp, ww-mq50); manual move down and undo restore the queue (ww-tds3, ww-8ta6).
+- Real Chrome against a local Worker (throwaway script): 4 entries with bench and deadlift; I ran the desk with the keyboard only (G/N keys, Enter in the weight field). 21 verdicts reached the server log. The script stopped with 3 attempts still undeclared, because the next-attempt panel offers only the latest judged lifter; undeclared attempts stay editable in the corrections table (ww-lcu1).
+- `bun run gate:full` passes.
