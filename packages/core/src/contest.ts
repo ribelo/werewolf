@@ -62,6 +62,12 @@ export const Command = Schema.Union([
     entryId: EntryId,
     divisions: Schema.NonEmptyArray(DivisionId),
   }),
+  /** Absent team clears the team. */
+  Schema.TaggedStruct('SetEntryTeam', {
+    ...commandMetadata,
+    entryId: EntryId,
+    teamId: Schema.optionalKey(Team.fields.id),
+  }),
   Schema.TaggedStruct('SetRackHeight', {
     ...commandMetadata,
 
@@ -385,6 +391,14 @@ function applyMutation(
         ...entry,
         divisions: command.divisions,
       }))
+    case 'SetEntryTeam':
+      return editEntry(state, command.entryId, (entry) => {
+        const { teamId: _previous, ...lifter } = entry.lifter
+        return {
+          ...entry,
+          lifter: command.teamId ? { ...lifter, teamId: command.teamId } : lifter,
+        }
+      })
     case 'SetRackHeight': {
       const lift = state.rulebook.lifts.find((item) => item.id === command.liftId)
       const entry = state.entries.find((item) => item.id === command.entryId)
