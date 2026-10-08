@@ -1,0 +1,3 @@
+# Each contest is a Durable Object holding an ordered command log
+
+A contest's truth is the ordered list of commands accepted by its own Durable Object (stored in the object's SQLite), not rows in a shared D1 database. Every device replays the same log through the same pure contest core, so screens update from pushed commands instead of polling, and an offline device catches up by fetching the commands it missed. We chose this over D1 + polling because the old app was slow and fell out of sync on the hall's unstable 5G; a single ordered log per contest makes offline work and reconciliation simple.
