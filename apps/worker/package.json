@@ -1,0 +1,9 @@
+{
+  "name": "@werewolf/worker",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@werewolf/core": "workspace:*",
+    "effect": "4.0.1"
+  }
+}

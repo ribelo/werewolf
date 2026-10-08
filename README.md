@@ -1,70 +1,38 @@
-# Werewolf Cloud
+# Werewolf v2
 
-Powerlifting contest management for meet directors: a Cloudflare-native rewrite of the Werewolf
-desktop app (Worker API + D1 + KV + Durable Objects, SvelteKit UI). It keeps the scoring desk,
-announcer table, and big-screen displays in sync even when the gym WiFi flakes out.
+A rulebook-driven strength meet app. This rewrite runs beside the 2025 app.
 
----
+## Development
 
-## Quick start
+Use Bun 1.4 or later.
 
-Prerequisites: [Bun](https://bun.sh) 1.2+ — Wrangler, TypeScript and Vitest come from the workspace.
-
-```bash
-# 1. Worker API + local D1/KV/Durable Object state → http://127.0.0.1:8787
-cd werewolf-cloud
+```sh
 bun install
 bun run dev
-
-# 2. Web UI (second terminal) → http://127.0.0.1:5173
-cd werewolf-cloud/apps/web
-PUBLIC_API_BASE=http://127.0.0.1:8787 bun run dev
 ```
 
-Local D1 state lives in `werewolf-cloud/.wrangler/state`; delete it to start from an empty database.
+The Worker serves the API and React app at the address printed by Wrangler.
 
-## Checks
-
-```bash
-cd werewolf-cloud && bun run check                          # typecheck + oxlint + vitest
-cd werewolf-cloud/apps/web && bun run check && bun run test:run   # svelte-check + vitest
+```sh
+bun run check
 ```
 
-## Deploy
+This command checks lint, types, and tests. Worker tests run locally in workerd.
 
-```bash
-cd werewolf-cloud
-bun run cloudflare-login   # one time: Alchemy profile 'werewolf' → Cloudflare OAuth (no API tokens)
-bun run plan               # preview
-bun run deploy             # build web, then Alchemy deploys D1 migrations, Worker and Pages
+## Deployment
+
+The Alchemy stack is `WerewolfV2`. It does not adopt resources from the old `Werewolf` stack.
+
+Configure `ORGANIZER_PASSWORD` and `SESSION_SECRET` in an ignored `.env` file. Use a random session secret. Never commit secrets.
+
+```sh
+bun run cloudflare-login
+bun run plan
+bun run deploy
 ```
 
-Infrastructure is declared with Alchemy in `werewolf-cloud/alchemy.run.ts` and `werewolf-cloud/infra/stack.ts`;
-see [werewolf-cloud/docs/deployment.md](werewolf-cloud/docs/deployment.md).
-Cloudflare accounts, database/namespace IDs and credentials:
-[werewolf-cloud/docs/cloudflare-environments.md](werewolf-cloud/docs/cloudflare-environments.md).
+The existing `werewolf` OAuth profile can be reused. Deployment prints the new Worker URL.
 
----
+## Plan
 
-## Repository layout
-
-| Path | What it is |
-| --- | --- |
-| `werewolf-cloud/apps/api` | Cloudflare Worker (Hono, D1, KV, Durable Objects) |
-| `werewolf-cloud/apps/web` | SvelteKit + Svelte 4 frontend |
-| `werewolf-cloud/packages/domain` | Shared pure logic (`@werewolf/domain`) |
-| `werewolf-cloud/migrations` | D1 SQL migrations |
-| `docs/` | Architecture, user guide, roadmap |
-| `src/`, `src-tauri/` | Frozen legacy Tauri desktop app (reference only) |
-
-The desktop app is kept for historical comparison; it is not built, tested, or deployed by the
-default pipeline. All new work targets `werewolf-cloud/`.
-
-## Documentation
-
-- [Architecture](werewolf-cloud/docs/architecture.md)
-- [API endpoints](werewolf-cloud/docs/api-endpoints.md)
-- [User Guide](docs/USER_GUIDE.md)
-- [FAQ](docs/FAQ.md)
-- [Spec](werewolf-cloud/docs/SPEC.md) and [Backlog](werewolf-cloud/docs/BACKLOG.md)
-- Contributor conventions: [CLAUDE.md](CLAUDE.md), [AGENTS.md](AGENTS.md)
+See [the specification](docs/issues/werewolf-v2.md) and [the ticket index](docs/issues/werewolf-v2/README.md).

@@ -1,0 +1,35 @@
+{
+  "plugins": ["typescript", "react", "unicorn"],
+  "options": {
+    "typeAware": true,
+    "reportUnusedDisableDirectives": "error"
+  },
+  "ignorePatterns": ["**/dist/**", "**/node_modules/**"],
+  "rules": {
+    "unicorn/no-null": "error",
+    "eslint/no-undefined": "error",
+    "eslint/no-void": "error",
+    "typescript/no-explicit-any": "error",
+    "typescript/no-non-null-assertion": "error",
+    "typescript/no-unsafe-type-assertion": "error",
+    "typescript/no-floating-promises": "error",
+    "typescript/no-restricted-types": [
+      "error",
+      {
+        "types": {
+          "null": true,
+          "undefined": true
+        }
+      }
+    ],
+    "typescript/ban-ts-comment": [
+      "error",
+      {
+        "ts-ignore": true,
+        "ts-nocheck": true,
+        "ts-expect-error": "allow-with-description",
+        "minimumDescriptionLength": 10
+      }
+    ]
+  }
+}

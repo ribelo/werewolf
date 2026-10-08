@@ -1,39 +1,48 @@
 {
-  "name": "werewolf",
+  "name": "werewolf-v2",
   "private": true,
-  "version": "0.1.0",
-  "description": "Powerlifting contest management application",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "type": "module",
-  "packageManager": "bun@latest",
   "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
-    "preview": "vite preview",
-    "tauri": "RUSTC_WRAPPER='' RUSTFLAGS='-C target-cpu=native' tauri",
-    "tauri:dev": "./dev.sh",
-    "tauri:dev:direct": "RUSTC_WRAPPER='' RUSTFLAGS='-C target-cpu=native' tauri dev",
-    "tauri:build": "RUSTC_WRAPPER='' RUSTFLAGS='-C target-cpu=native' tauri build",
-    "check": "svelte-check --tsconfig ./tsconfig.json"
+    "postinstall": "effect-tsgo patch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "oxlint --deny-warnings .",
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
+    "precommit": "bun run lint && bun run typecheck",
+    "test": "vitest run",
+    "check": "bun run lint && bun run typecheck && bun run test",
+    "gate": "bun run check",
+    "gate:full": "bun run check && bun run format:check && knip",
+    "build": "bun run --filter @werewolf/web build",
+    "dev": "bun run build && wrangler dev --config apps/worker/wrangler.jsonc",
+    "plan": "bun run build && ALCHEMY_HOME=$HOME/.alchemy-werewolf ALCHEMY_PROFILE=werewolf alchemy plan",
+    "deploy": "bun run check && bun run build && ALCHEMY_HOME=$HOME/.alchemy-werewolf ALCHEMY_PROFILE=werewolf alchemy deploy --yes",
+    "cloudflare-login": "ALCHEMY_HOME=$HOME/.alchemy-werewolf ALCHEMY_PROFILE=werewolf alchemy profile edit --profile werewolf --add Cloudflare"
   },
   "dependencies": {
-    "@tauri-apps/api": "2.8",
-    "@tauri-apps/plugin-opener": "2.5",
-    "cropperjs": "1.6.2",
-    "lucide-svelte": "^0.542.0",
-    "svelte": "5.38",
-    "svelte-i18n": "^4.0.1"
+    "effect": "4.0.1"
   },
   "devDependencies": {
-    "@sveltejs/vite-plugin-svelte": "^6.1.3",
-    "@tailwindcss/typography": "0.5",
-    "@tauri-apps/cli": "2.8",
-    "@tsconfig/svelte": "^5.0.5",
-    "@types/node": "24.3",
-    "autoprefixer": "10.4",
-    "svelte-check": "^4.3.1",
-    "svelte-preprocess": "^6.0.3",
-    "tailwindcss": "3.4",
-    "typescript": "^5.9.2",
-    "vite": "^7.1.3"
-  }
+    "@cloudflare/vitest-plugin": "1.3.6",
+    "@cloudflare/workers-types": "5.20261006.1",
+    "@effect/language-service": "0.87.4",
+    "@effect/platform-bun": "4.0.1",
+    "@effect/platform-node": "4.0.1",
+    "@effect/tsgo": "0.50.0",
+    "@types/bun": "latest",
+    "@types/node": "^24.19.1",
+    "alchemy": "2.0.0-beta.81",
+    "knip": "6.12.2",
+    "oxfmt": "latest",
+    "oxlint": "1.56.0",
+    "oxlint-tsgolint": "0.17.3",
+    "typescript": "7.0.2",
+    "vitest": "4.1.11",
+    "wrangler": "4.147.0"
+  },
+  "packageManager": "bun@1.4.2"
 }

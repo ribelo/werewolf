@@ -1,0 +1,22 @@
+{
+  "name": "@werewolf/web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite"
+  },
+  "dependencies": {
+    "@effect/atom-react": "4.0.1",
+    "effect": "4.0.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "@vitejs/plugin-react": "6.1.1",
+    "jsdom": "latest",
+    "vite": "8.0.11"
+  }
+}

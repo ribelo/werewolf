@@ -1,0 +1,10 @@
+{
+  "name": "werewolf-v2-test",
+  "main": "../src/index.ts",
+  "compatibility_date": "2026-10-08",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "ORGANIZER_PASSWORD": "test-password",
+    "SESSION_SECRET": "test-session-secret-not-for-deployment",
+  },
+}
