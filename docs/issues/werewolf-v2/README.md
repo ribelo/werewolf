@@ -19,5 +19,5 @@ Spec: [../werewolf-v2.md](../werewolf-v2.md)
 | 13 | [Results pages, public results, exports](13-results-exports.md) | 04, 10 | in-progress |
 | 14 | [Backups: download, restore, automatic to R2](14-backups.md) | 05 | done |
 | 15 | [Migrate the 2025 contests](15-migrate-2025.md) | 04, 05 | done |
-| 16 | [Polish and English complete, open-source deployment guide](16-i18n-opensource.md) | 12, 13 | ready-for-agent |
-| 17 | [Rehearsal on real devices and cut-over](17-rehearsal-cutover.md) | 02–16 | ready-for-agent |
+| 16 | [Polish and English complete, open-source deployment guide](16-i18n-opensource.md) | 12, 13 | in-progress |
+| 17 | [Rehearsal on real devices and cut-over](17-rehearsal-cutover.md) | 02–16 | prepared |

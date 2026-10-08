@@ -70,6 +70,7 @@ This deletes the Worker, the contests and the R2 bucket. Download your backups f
 
 ## Problems
 
+- *An error on the very first request after the first deployment.* Cloudflare is still preparing the Durable Objects. Wait a few seconds and try again.
 - *"Unauthorized" after login.* The browser blocks cookies for the address. Use the HTTPS address.
 - *The deployment fails on R2.* Enable R2 in the Cloudflare dashboard, then run `bun run deploy` again.
 - *Peer sync between devices does not work.* The Wi-Fi blocks traffic between devices (client isolation). Turn it off on the router. Devices still sync through the Worker when the internet works.
