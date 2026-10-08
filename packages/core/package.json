@@ -2,5 +2,8 @@
   "name": "@werewolf/core",
   "private": true,
   "type": "module",
-  "exports": "./src/index.ts"
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "effect": "4.0.1"
+  }
 }

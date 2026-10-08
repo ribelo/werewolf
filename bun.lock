@@ -51,6 +51,9 @@
     },
     "packages/core": {
       "name": "@werewolf/core",
+      "dependencies": {
+        "effect": "4.0.1",
+      },
     },
   },
   "packages": {
