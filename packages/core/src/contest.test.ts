@@ -48,8 +48,8 @@ const date = Schema.decodeSync(CalendarDate)('2026-10-08')
 function book(value: unknown = input): Rulebook {
   return Result.getOrThrow(parseRulebook(value))
 }
-function command(value: unknown): Command {
-  return Result.getOrThrow(parseCommand(value))
+function command(value: Readonly<Record<string, unknown>>): Command {
+  return Result.getOrThrow(parseCommand({ at: 1_000, ...value }))
 }
 function add(
   id: string,
@@ -400,6 +400,7 @@ describe('portable contest core', () => {
     expect(
       parseCommand({
         id: 'invalid',
+        at: 1_000,
         _tag: 'SetWeight',
         attempt: ref('a', 'upper', 0),
         weight: 100,

@@ -12,6 +12,7 @@ import {
   LotNumber,
   RackHeight,
   Team,
+  Timestamp,
   Verdict,
   type Attempt,
 } from './entry.ts'
@@ -21,48 +22,49 @@ import { DivisionId, LiftId, type Division, type Rulebook } from './rulebook.ts'
 export const CommandId = Schema.NonEmptyString.pipe(Schema.brand('CommandId'))
 export type CommandId = typeof CommandId.Type
 /** Commands edit one field at a time. Their identifiers support transport deduplication. */
+const commandMetadata = { id: CommandId, at: Timestamp }
 export const Command = Schema.Union([
-  Schema.TaggedStruct('AddEntry', { id: CommandId, entry: Entry }),
+  Schema.TaggedStruct('AddEntry', { ...commandMetadata, entry: Entry }),
   Schema.TaggedStruct('SetBodyweight', {
-    id: CommandId,
+    ...commandMetadata,
 
     entryId: EntryId,
     bodyweight: Kilograms.check(Schema.isGreaterThan(0)),
   }),
   Schema.TaggedStruct('SetLotNumber', {
-    id: CommandId,
+    ...commandMetadata,
 
     entryId: EntryId,
     lotNumber: LotNumber,
   }),
   Schema.TaggedStruct('SetDivisions', {
-    id: CommandId,
+    ...commandMetadata,
 
     entryId: EntryId,
     divisions: Schema.NonEmptyArray(DivisionId),
   }),
   Schema.TaggedStruct('SetRackHeight', {
-    id: CommandId,
+    ...commandMetadata,
 
     entryId: EntryId,
     liftId: LiftId,
     rackHeight: RackHeight,
   }),
   Schema.TaggedStruct('SetWeight', {
-    id: CommandId,
+    ...commandMetadata,
 
     attempt: AttemptRef,
     weight: Kilograms,
   }),
   Schema.TaggedStruct('SetVerdict', {
-    id: CommandId,
+    ...commandMetadata,
 
     attempt: AttemptRef,
     verdict: Verdict,
   }),
-  Schema.TaggedStruct('SetCurrent', { id: CommandId, attempt: AttemptRef }),
+  Schema.TaggedStruct('SetCurrent', { ...commandMetadata, attempt: AttemptRef }),
   Schema.TaggedStruct('MoveAttempt', {
-    id: CommandId,
+    ...commandMetadata,
 
     attempt: AttemptRef,
     position: Schema.Union([
@@ -70,16 +72,16 @@ export const Command = Schema.Union([
       Schema.TaggedStruct('Last', {}),
     ]),
   }),
-  Schema.TaggedStruct('ResetOrder', { id: CommandId }),
-  Schema.TaggedStruct('UpsertTeam', { id: CommandId, team: Team }),
+  Schema.TaggedStruct('ResetOrder', commandMetadata),
+  Schema.TaggedStruct('UpsertTeam', { ...commandMetadata, team: Team }),
   Schema.TaggedStruct('MergeTeams', {
-    id: CommandId,
+    ...commandMetadata,
 
     from: Team.fields.id,
     into: Team.fields.id,
   }),
   Schema.TaggedStruct('Undo', {
-    id: CommandId,
+    ...commandMetadata,
 
     target: CommandId,
   }),
@@ -408,6 +410,7 @@ function applyMutation(
         weight: attempt.weight,
         verdict: command.verdict,
         sequence: attempt._tag === 'Judged' ? attempt.sequence : sequence,
+        achievedAt: attempt._tag === 'Judged' ? attempt.achievedAt : command.at,
       }
       const selected =
         Option.isSome(state.selected) && sameAttempt(state.selected.value, command.attempt)

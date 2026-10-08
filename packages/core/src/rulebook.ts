@@ -41,15 +41,19 @@ const Division = Schema.Struct({
   ),
 })
 export type Division = typeof Division.Type
+export const AgeClassId = Schema.NonEmptyString.pipe(Schema.brand('AgeClassId'))
+export type AgeClassId = typeof AgeClassId.Type
+export const WeightClassId = Schema.NonEmptyString.pipe(Schema.brand('WeightClassId'))
+export type WeightClassId = typeof WeightClassId.Type
 const AgeClass = Schema.Struct({
-  id: Schema.NonEmptyString,
+  id: AgeClassId,
   name: LocalizedName,
   sex: Schema.optionalKey(Sex),
   from: Natural,
   through: Schema.optionalKey(Natural),
 })
 const WeightClass = Schema.Struct({
-  id: Schema.NonEmptyString,
+  id: WeightClassId,
   name: LocalizedName,
   sex: Schema.optionalKey(Sex),
   lowerExclusive: Schema.optionalKey(Kilograms),
@@ -120,9 +124,35 @@ export const Rulebook = Schema.Struct({
               (unique(classification.membership.ids) &&
                 classification.membership.ids.every((id) => divisions.has(id)))),
         ) &&
-        book.ageClasses.every((item) => item.from <= (item.through ?? Number.POSITIVE_INFINITY)) &&
+        book.ageClasses.every(
+          (item, index) =>
+            item.from <= (item.through ?? Number.POSITIVE_INFINITY) &&
+            book.ageClasses
+              .slice(index + 1)
+              .every(
+                (other) =>
+                  (item.sex && other.sex && item.sex !== other.sex) ||
+                  Math.max(item.from, other.from) >
+                    Math.min(
+                      item.through ?? Number.POSITIVE_INFINITY,
+                      other.through ?? Number.POSITIVE_INFINITY,
+                    ),
+              ),
+        ) &&
         book.weightClasses.every(
-          (item) => (item.lowerExclusive ?? -1) < (item.upperInclusive ?? Number.POSITIVE_INFINITY),
+          (item, index) =>
+            (item.lowerExclusive ?? 0) < (item.upperInclusive ?? Number.POSITIVE_INFINITY) &&
+            book.weightClasses
+              .slice(index + 1)
+              .every(
+                (other) =>
+                  (item.sex && other.sex && item.sex !== other.sex) ||
+                  Math.max(item.lowerExclusive ?? 0, other.lowerExclusive ?? 0) >=
+                    Math.min(
+                      item.upperInclusive ?? Number.POSITIVE_INFINITY,
+                      other.upperInclusive ?? Number.POSITIVE_INFINITY,
+                    ),
+              ),
         )
       )
     },

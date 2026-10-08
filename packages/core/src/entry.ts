@@ -3,6 +3,12 @@ import { Kilograms } from './barbell.ts'
 import { Lifter, TeamId } from './lifter.ts'
 import { DivisionId, LiftId } from './rulebook.ts'
 
+/** UTC Unix milliseconds supplied by the command issuer, never by the core clock. */
+export const Timestamp = Schema.Int.check(
+  Schema.isGreaterThanOrEqualTo(0),
+  Schema.isLessThanOrEqualTo(Number.MAX_SAFE_INTEGER),
+).pipe(Schema.brand('Timestamp'))
+export type Timestamp = typeof Timestamp.Type
 export const EntryId = Schema.NonEmptyString.pipe(Schema.brand('EntryId'))
 export type EntryId = typeof EntryId.Type
 export const LotNumber = Schema.Int.check(Schema.isGreaterThan(0)).pipe(Schema.brand('LotNumber'))
@@ -47,7 +53,7 @@ export const AttemptRef = Schema.Struct({ entryId: EntryId, liftId: LiftId, numb
 export type AttemptRef = typeof AttemptRef.Type
 export const Verdict = Schema.Literals(['goodLift', 'noLift'])
 export type Verdict = typeof Verdict.Type
-/** A judged result keeps the log position where the attempt first received a verdict. */
+/** A judged result keeps the time and log position of its first verdict, including after corrections. */
 export type Attempt = AttemptRef &
   (
     | { readonly _tag: 'Unannounced' }
@@ -57,5 +63,6 @@ export type Attempt = AttemptRef &
         readonly weight: Kilograms
         readonly verdict: Verdict
         readonly sequence: number
+        readonly achievedAt: Timestamp
       }
   )
