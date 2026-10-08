@@ -5,6 +5,8 @@ import {
   ClientFrame,
   ContestDefinition,
   ContestSummary,
+  DeviceId,
+  PeerRole,
   type Accepted,
   type ReadLinks,
   type ServerFrame,
@@ -45,7 +47,8 @@ const Tokens = Schema.Struct({
   results: Schema.NonEmptyString,
 })
 const StoredContest = Schema.Struct({ definition: ContestDefinition, tokens: Tokens })
-const SocketAccess = Schema.Literals(['editor', 'viewer'])
+const SocketAttachment = Schema.Struct({ access: PeerRole, device: DeviceId })
+type SocketAttachment = typeof SocketAttachment.Type
 interface LoadedContest {
   readonly stored: typeof StoredContest.Type
   readonly journal: ContestJournal
@@ -92,6 +95,27 @@ export class ContestDO extends DurableObject {
   }
   private send(socket: WebSocket, frame: ServerFrame) {
     if (socket.readyState === 1) socket.send(JSON.stringify(frame))
+  }
+  private attachment(socket: WebSocket): Option.Option<SocketAttachment> {
+    return Option.fromUndefinedOr(
+      Schema.decodeUnknownOption(SocketAttachment)(socket.deserializeAttachment()).pipe(
+        Option.getOrUndefined,
+      ),
+    )
+  }
+  /** Tell every device who else is present so each pair can negotiate one data channel. */
+  private broadcastPresence(closing?: WebSocket) {
+    const devices = this.ctx
+      .getWebSockets()
+      .filter((socket) => socket !== closing)
+      .flatMap((socket) => {
+        const attachment = this.attachment(socket)
+        return Option.isSome(attachment)
+          ? [{ device: attachment.value.device, role: attachment.value.access }]
+          : []
+      })
+    for (const socket of this.ctx.getWebSockets())
+      if (socket !== closing) this.send(socket, { _tag: 'Presence', devices })
   }
   private accept(
     contest: LoadedContest,
@@ -177,7 +201,14 @@ export class ContestDO extends DurableObject {
             const pair = new WebSocketPair()
             const client = pair[0]
             const server = pair[1]
-            server.serializeAttachment(editor ? 'editor' : 'viewer')
+            const named = Schema.decodeUnknownOption(DeviceId)(url.searchParams.get('device'))
+            const attachment: SocketAttachment = {
+              access: editor ? 'editor' : 'viewer',
+              device: Option.getOrElse(named, () =>
+                Schema.decodeSync(DeviceId)(crypto.randomUUID()),
+              ),
+            }
+            server.serializeAttachment(attachment)
             this.ctx.acceptWebSocket(server)
             server.send(
               JSON.stringify({
@@ -185,6 +216,7 @@ export class ContestDO extends DurableObject {
                 snapshot: this.snapshot(contest),
               } satisfies ServerFrame),
             )
+            this.broadcastPresence()
             // oxlint-disable-next-line unicorn/no-null -- Workerd requires no HTTP body for a WebSocket upgrade.
             return new Response(null, { status: 101, webSocket: client })
           })
@@ -212,6 +244,7 @@ export class ContestDO extends DurableObject {
           const frame = yield* Schema.decodeUnknownEffect(ClientFrame)(input).pipe(
             Effect.mapError((cause) => new InvalidActorRequest({ cause })),
           )
+          if (frame._tag !== 'Submit') return failure('request.invalid', 400)
           return yield* io(() => {
             // Read again after body I/O. Another accepted command can arrive during that wait.
             const latest = this.load()
@@ -229,11 +262,9 @@ export class ContestDO extends DurableObject {
   }
   override webSocketMessage(socket: WebSocket, message: string | ArrayBuffer) {
     return Effect.gen({ self: this }, function* () {
-      const access = yield* io(() =>
-        Schema.decodeUnknownSync(SocketAccess)(socket.deserializeAttachment()),
+      const attachment = yield* io(() =>
+        Schema.decodeUnknownSync(SocketAttachment)(socket.deserializeAttachment()),
       )
-      if (access !== 'editor')
-        return { _tag: 'Failure', code: 'auth.readOnly' } satisfies ServerFrame
       const input = yield* Effect.try({
         try: () =>
           typeof message === 'string'
@@ -244,20 +275,44 @@ export class ContestDO extends DurableObject {
       const frame = yield* Schema.decodeUnknownEffect(ClientFrame)(input).pipe(
         Effect.mapError((cause) => new InvalidActorRequest({ cause })),
       )
+      if (frame._tag === 'Signal') {
+        // Negotiation text is not a contest change, so read-only screens may send it.
+        yield* io(() => {
+          for (const target of this.ctx.getWebSockets()) {
+            const other = this.attachment(target)
+            if (Option.isSome(other) && other.value.device === frame.to)
+              this.send(target, {
+                _tag: 'Signal',
+                from: attachment.device,
+                role: attachment.access,
+                payload: frame.payload,
+              })
+          }
+        })
+        return Option.none<ServerFrame>()
+      }
+      if (attachment.access !== 'editor')
+        return Option.some<ServerFrame>({ _tag: 'Failure', code: 'auth.readOnly' })
       return yield* io(() => {
         const loaded = this.load()
-        if (Option.isNone(loaded))
-          return { _tag: 'Failure', code: 'request.notFound' } satisfies ServerFrame
-        return this.accept(loaded.value, frame.command)
+        return Option.some<ServerFrame>(
+          Option.isNone(loaded)
+            ? { _tag: 'Failure', code: 'request.notFound' }
+            : this.accept(loaded.value, frame.command),
+        )
       })
     }).pipe(
       Effect.catchTags({
         ActorFailure: () =>
-          Effect.succeed({ _tag: 'Failure', code: 'request.failed' } satisfies ServerFrame),
+          Effect.succeedSome<ServerFrame>({ _tag: 'Failure', code: 'request.failed' }),
         InvalidActorRequest: () =>
-          Effect.succeed({ _tag: 'Failure', code: 'request.invalid' } satisfies ServerFrame),
+          Effect.succeedSome<ServerFrame>({ _tag: 'Failure', code: 'request.invalid' }),
       }),
-      Effect.flatMap((frame) => io(() => this.send(socket, frame))),
+      Effect.flatMap((frame) =>
+        io(() => {
+          if (Option.isSome(frame)) this.send(socket, frame.value)
+        }),
+      ),
       Effect.catchTag('ActorFailure', () =>
         Effect.sync(() => socket.close(1011, 'Connection failed')),
       ),
@@ -266,6 +321,7 @@ export class ContestDO extends DurableObject {
     )
   }
   override webSocketClose(socket: WebSocket) {
+    this.broadcastPresence(socket)
     socket.close()
   }
 }

@@ -2,7 +2,13 @@
 // @effect-diagnostics unstableApiUsage:off
 import { useAtom } from '@effect/atom-react'
 import { Command, type CommandId, type ContestFailure } from '@werewolf/core'
-import { ContestReplica, ServerFrame, type ContestId, type ReplicaConflict } from '@werewolf/sync'
+import {
+  ContestReplica,
+  DeviceId,
+  ServerFrame,
+  type ContestId,
+  type ReplicaConflict,
+} from '@werewolf/sync'
 import * as Atom from 'effect/reactivity/Atom'
 import * as Data from 'effect/Data'
 import * as Effect from 'effect/Effect'
@@ -12,7 +18,8 @@ import * as Queue from 'effect/Queue'
 import * as Result from 'effect/Result'
 import * as Schema from 'effect/Schema'
 import { useEffect, useRef, useState } from 'react'
-import { readReplica, saveReplica } from './replica-store.ts'
+import { createMesh, type PeerMesh } from './peer-mesh.ts'
+import { deviceId, readReplica, saveReplica } from './replica-store.ts'
 import type { MessageKey } from './i18n.ts'
 
 export type Access =
@@ -69,6 +76,7 @@ export function useLiveContest(id: ContestId, access: Access) {
   const [atom] = useState(() => Atom.make<View>({ _tag: 'Loading' }))
   const [view, setView] = useAtom(atom)
   const [connected, setConnected] = useState(false)
+  const [peers, setPeers] = useState(0)
   const [error, setError] = useState<MessageKey | ''>('')
   const [rejection, setRejection] = useState('')
   const dispatch = useRef<(input: object) => void>(() => {})
@@ -81,6 +89,8 @@ export function useLiveContest(id: ContestId, access: Access) {
     let link: Link = { _tag: 'Disconnected' }
     let retry: Option.Option<number> = Option.none()
     let active = true
+    let mesh: Option.Option<PeerMesh> = Option.none()
+    let device = Option.none<DeviceId>()
     function enqueue(operation: Effect.Effect<void, { readonly code: MessageKey }>) {
       Queue.offerUnsafe(inbox, operation)
     }
@@ -128,7 +138,8 @@ export function useLiveContest(id: ContestId, access: Access) {
             Option.isNone(current)
           )
             return
-          const command = current.value.state.pending[0]
+          // Commands heard from peers go first; the server accepts each identifier once.
+          const command = current.value.outbox[0]
           if (!command) return
           link = { ...link, inFlight: Option.some(command.id) }
           link.socket.send(JSON.stringify({ _tag: 'Submit', command }))
@@ -151,12 +162,25 @@ export function useLiveContest(id: ContestId, access: Access) {
           disconnect()
           return
         }
+        if (frame._tag === 'Presence') {
+          if (Option.isSome(mesh)) mesh.value.meet(frame.devices)
+          return
+        }
+        if (frame._tag === 'Signal') {
+          if (Option.isSome(mesh)) mesh.value.negotiate(frame.from, frame.role, frame.payload)
+          return
+        }
         const next: Result.Result<
           ContestReplica,
           ContestFailure | ReplicaConflict | DecodeFailure
         > = Option.isNone(current)
           ? frame._tag === 'Snapshot'
-            ? ContestReplica.restore({ snapshot: frame.snapshot, pending: [], rejected: [] })
+            ? ContestReplica.restore({
+                snapshot: frame.snapshot,
+                pending: [],
+                heard: [],
+                rejected: [],
+              })
             : Result.fail(new DecodeFailure({ code: 'request.invalid', cause: 'snapshotRequired' }))
           : current.value.receive(frame)
         if (Result.isFailure(next) || next.success.state.snapshot.definition.id !== id) {
@@ -188,6 +212,7 @@ export function useLiveContest(id: ContestId, access: Access) {
         try: () => {
           if (!active || !navigator.onLine || link._tag !== 'Disconnected') return
           const url = new URL('/api/contests/' + id + '/events', location.href)
+          if (Option.isSome(device)) url.searchParams.set('device', device.value)
           url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
           if (token) url.searchParams.set('token', token)
           const socket = new WebSocket(url)
@@ -254,14 +279,46 @@ export function useLiveContest(id: ContestId, access: Access) {
             return
           }
           yield* persist(queued.success)
+          if (Option.isSome(mesh)) mesh.value.broadcast([parsed.success])
           setError('')
           setRejection('')
           yield* flush()
         }),
       )
     }
+    function hear(commands: ReadonlyArray<Command>) {
+      enqueue(
+        Effect.gen(function* () {
+          if (Option.isNone(current)) return
+          const heard = current.value.hear(commands)
+          if (heard.fresh.length === 0) return
+          yield* persist(heard.replica)
+          // Pass news along so a third device that cannot reach the sender still converges.
+          if (Option.isSome(mesh)) mesh.value.broadcast(heard.fresh)
+          yield* flush()
+        }),
+      )
+    }
     enqueue(
       Effect.gen(function* () {
+        const self = Schema.decodeOption(DeviceId)(yield* deviceId)
+        if (Option.isSome(self) && typeof RTCPeerConnection !== 'undefined') {
+          device = self
+          mesh = Option.some(
+            createMesh({
+              self: self.value,
+              signal: (to, payload) => {
+                if (link._tag !== 'Disconnected' && link.socket.readyState === 1)
+                  link.socket.send(JSON.stringify({ _tag: 'Signal', to, payload }))
+              },
+              heard: hear,
+              backlog: () => (Option.isSome(current) ? current.value.outbox : []),
+              changed: () => {
+                if (Option.isSome(mesh)) setPeers(mesh.value.openCount())
+              },
+            }),
+          )
+        }
         const cached = yield* readReplica(id, scope)
         if (Option.isSome(cached)) {
           const restored = ContestReplica.restore(cached.value)
@@ -282,6 +339,7 @@ export function useLiveContest(id: ContestId, access: Access) {
     return () => {
       active = false
       dispatch.current = () => {}
+      if (Option.isSome(mesh)) mesh.value.close()
       if (Option.isSome(retry)) window.clearTimeout(retry.value)
       disconnect()
       Queue.shutdownUnsafe(inbox)
@@ -290,5 +348,12 @@ export function useLiveContest(id: ContestId, access: Access) {
       window.removeEventListener('offline', offline)
     }
   }, [id, role, token, setView])
-  return { view, connected, error, rejection, submit: (input: object) => dispatch.current(input) }
+  return {
+    view,
+    connected,
+    peers,
+    error,
+    rejection,
+    submit: (input: object) => dispatch.current(input),
+  }
 }

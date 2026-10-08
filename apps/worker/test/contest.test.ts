@@ -31,15 +31,25 @@ async function open(path: string, cookie: string) {
   if (!socket) throw new Error('Expected a workerd WebSocket upgrade')
   const frames: Array<ServerFrame> = []
   const waiting: Array<(frame: ServerFrame) => void> = []
+  const peerFrames: Array<ServerFrame> = []
+  const peerWaiting: Array<(frame: ServerFrame) => void> = []
   socket.addEventListener('message', (event) => {
     const frame = Schema.decodeUnknownSync(Schema.fromJsonString(ServerFrame))(event.data)
-    const receiver = waiting.shift()
+    const peer = frame._tag === 'Signal' || frame._tag === 'Presence'
+    const receiver = (peer ? peerWaiting : waiting).shift()
     if (receiver) receiver(frame)
-    else frames.push(frame)
+    else (peer ? peerFrames : frames).push(frame)
   })
   socket.accept()
   return {
     socket,
+    /** Presence and signalling frames, kept apart from the ordered contest log. */
+    nextPeer: (): Promise<ServerFrame> => {
+      const frame = peerFrames.shift()
+      return frame
+        ? Promise.resolve(frame)
+        : new Promise<ServerFrame>((resolve) => peerWaiting.push(resolve))
+    },
     next: async (sequence = 0): Promise<ServerFrame> => {
       // An issuer can receive both its broadcast and its idempotent acknowledgement.
       for (;;) {
@@ -52,7 +62,8 @@ async function open(path: string, cookie: string) {
 }
 
 function accept(replica: ContestReplica, frame: ServerFrame): ContestReplica {
-  if (frame._tag === 'Failure') throw new Error('Expected a replica frame')
+  if (frame._tag === 'Failure' || frame._tag === 'Signal' || frame._tag === 'Presence')
+    throw new Error('Expected a replica frame')
   return Result.getOrThrow(replica.receive(frame))
 }
 
@@ -256,7 +267,9 @@ it('ww-mned ww-yo7x ww-gouf: offline queues converge by server order, not client
   const stage = new URL(links.stage)
   const reader = await open(path + '/events?token=' + (stage.searchParams.get('token') ?? ''), '')
   const editor = await open(path + '/events', cookie)
-  let desk = Result.getOrThrow(ContestReplica.restore({ snapshot, pending: [], rejected: [] }))
+  let desk = Result.getOrThrow(
+    ContestReplica.restore({ snapshot, pending: [], heard: [], rejected: [] }),
+  )
   let remote = accept(desk, await editor.next())
   let screen = accept(desk, await reader.next())
   try {
@@ -349,5 +362,140 @@ it('ww-mned ww-yo7x ww-gouf: offline queues converge by server order, not client
   } finally {
     editor.socket.close()
     reader.socket.close()
+  }
+})
+
+it('ww-bjq1: peers negotiate through the actor with server-stamped roles and hear commands without duplicates', async () => {
+  const cookie = await organizer()
+  const id = crypto.randomUUID()
+  const path = origin + '/api/contests/' + id
+  const created = await SELF.fetch(origin + '/api/contests', {
+    method: 'POST',
+    headers: { Origin: origin, Cookie: cookie, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id,
+      name: 'Peer contest',
+      date: '2026-10-08',
+      rulebook: client2026Rulebook,
+    }),
+  })
+  expect(created.status).toBe(201)
+  const post = (command: Command) =>
+    SELF.fetch(path + '/commands', {
+      method: 'POST',
+      headers: { Origin: origin, Cookie: cookie, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ _tag: 'Submit', command }),
+    })
+  expect(
+    (
+      await post(
+        Schema.decodeSync(Command)({
+          _tag: 'AddEntry',
+          id: 'start',
+          at: 100,
+          entry: {
+            id: 'entry',
+            lifter: { id: 'lifter', name: 'Peer Lifter', sex: 'male', birthDate: '1990-01-01' },
+            bodyweight: 80,
+            lotNumber: 1,
+            divisions: ['open'],
+            lifts: [{ liftId: 'bench' }],
+          },
+        }),
+      )
+    ).status,
+  ).toBe(200)
+  const snapshot = Schema.decodeUnknownSync(Snapshot)(
+    await (await SELF.fetch(path + '/snapshot', { headers: { Cookie: cookie } })).json(),
+  )
+  const links = Schema.decodeUnknownSync(ReadLinks)(
+    await (await SELF.fetch(path + '/links', { headers: { Cookie: cookie } })).json(),
+  )
+  const token = new URL(links.announcer).searchParams.get('token') ?? ''
+  const desk = await open(path + '/events?device=desk-device-1', cookie)
+  const second = await open(path + '/events?device=desk-device-2', cookie)
+  const screen = await open(path + '/events?device=screen-device-1&token=' + token, '')
+  try {
+    for (const device of [desk, second, screen])
+      expect(await device.next()).toMatchObject({ _tag: 'Snapshot' })
+    // Every device learns who else is present, from the actor, not from itself.
+    let presence = await screen.nextPeer()
+    while (presence._tag !== 'Presence' || presence.devices.length < 3)
+      presence = await screen.nextPeer()
+    expect(presence.devices.map((item) => item.device).toSorted()).toEqual([
+      'desk-device-1',
+      'desk-device-2',
+      'screen-device-1',
+    ])
+    expect(presence.devices.find((item) => item.device === 'screen-device-1')?.role).toBe('viewer')
+    desk.socket.send(JSON.stringify({ _tag: 'Signal', to: 'screen-device-1', payload: 'offer' }))
+    let signal = await screen.nextPeer()
+    while (signal._tag !== 'Signal') signal = await screen.nextPeer()
+    expect(signal).toEqual({
+      _tag: 'Signal',
+      from: 'desk-device-1',
+      role: 'editor',
+      payload: 'offer',
+    })
+    // A read-only screen may negotiate, and the actor labels it read-only.
+    screen.socket.send(JSON.stringify({ _tag: 'Signal', to: 'desk-device-1', payload: 'answer' }))
+    let answer = await desk.nextPeer()
+    while (answer._tag !== 'Signal') answer = await desk.nextPeer()
+    expect(answer).toMatchObject({ from: 'screen-device-1', role: 'viewer' })
+    // Read-only screens cannot write, whatever they send.
+    screen.socket.send(
+      JSON.stringify({
+        _tag: 'Submit',
+        command: { _tag: 'ResetOrder', id: 'forbidden', at: 1 },
+      }),
+    )
+    expect(await screen.next()).toEqual({ _tag: 'Failure', code: 'auth.readOnly' })
+
+    // The desk is offline from the actor but reaches the screen and the second desk directly.
+    let deskReplica = Result.getOrThrow(
+      ContestReplica.restore({ snapshot, pending: [], heard: [], rejected: [] }),
+    )
+    const change = Schema.decodeSync(Command)({
+      _tag: 'SetBodyweight',
+      id: 'peer-weight',
+      at: 5,
+      entryId: 'entry',
+      bodyweight: 85,
+    })
+    deskReplica = Result.getOrThrow(deskReplica.enqueue(change))
+    const restore = () =>
+      Result.getOrThrow(ContestReplica.restore({ snapshot, pending: [], heard: [], rejected: [] }))
+    let screenReplica = restore()
+    let secondReplica = restore()
+    for (const delivery of [deskReplica.outbox, deskReplica.outbox]) {
+      const heard = screenReplica.hear(delivery)
+      screenReplica = heard.replica
+    }
+    expect(screenReplica.state.heard).toEqual([change])
+    expect(screenReplica.journal.state.entries[0]?.bodyweight).toBe(85)
+    // The screen passes news on; the second desk hears it once whoever sends it.
+    secondReplica = secondReplica.hear(screenReplica.outbox).replica
+    expect(secondReplica.hear(deskReplica.outbox).fresh).toEqual([])
+    expect(secondReplica.state.heard).toEqual([change])
+
+    // The internet returns while peers stay connected: both desks relay the same command.
+    for (const socket of [desk.socket, second.socket])
+      socket.send(JSON.stringify({ _tag: 'Submit', command: change }))
+    expect(await desk.next(2)).toMatchObject({ _tag: 'Accepted', sequence: 2 })
+    expect(await second.next(2)).toMatchObject({ _tag: 'Accepted', sequence: 2 })
+    const accepted = await screen.next()
+    screenReplica = accept(screenReplica, accepted)
+    secondReplica = accept(secondReplica, await second.next(2))
+    expect(screenReplica.state.heard).toEqual([])
+    expect(screenReplica.state.snapshot.commands).toHaveLength(2)
+    expect(secondReplica.journal.state).toEqual(screenReplica.journal.state)
+    const final = Schema.decodeUnknownSync(Snapshot)(
+      await (await SELF.fetch(path + '/snapshot', { headers: { Cookie: cookie } })).json(),
+    )
+    expect(final.commands.map((item) => item.command.id)).toEqual(['start', 'peer-weight'])
+  } finally {
+    desk.socket.close()
+    second.socket.close()
+    screen.socket.close()
   }
 })

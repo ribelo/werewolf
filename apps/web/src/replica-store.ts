@@ -11,7 +11,7 @@ class StorageFailure extends Data.TaggedError('StorageFailure')<{
 }> {}
 const ioFailure = (cause: unknown) => new StorageFailure({ code: 'storage.failed', cause })
 const invalid = (cause: unknown) => new StorageFailure({ code: 'storage.invalid', cause })
-const deviceId = Effect.try({
+export const deviceId = Effect.try({
   try: () => {
     const existing = sessionStorage.getItem('werewolf-v2-replica')
     if (existing) return existing

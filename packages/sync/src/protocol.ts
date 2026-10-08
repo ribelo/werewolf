@@ -37,7 +37,18 @@ export const ReadLinks = Schema.Struct({
   results: Schema.NonEmptyString,
 })
 export type ReadLinks = typeof ReadLinks.Type
-export const ClientFrame = Schema.TaggedStruct('Submit', { command: Command })
+/** A device names itself once per tab. Peers address each other by this name. */
+export const DeviceId = Schema.NonEmptyString.check(Schema.isPattern(/^[A-Za-z0-9_-]{8,64}$/)).pipe(
+  Schema.brand('DeviceId'),
+)
+export type DeviceId = typeof DeviceId.Type
+export const PeerRole = Schema.Literals(['editor', 'viewer'])
+export type PeerRole = typeof PeerRole.Type
+export const ClientFrame = Schema.Union([
+  Schema.TaggedStruct('Submit', { command: Command }),
+  /** Opaque WebRTC negotiation text for one other device of the same contest. */
+  Schema.TaggedStruct('Signal', { to: DeviceId, payload: Schema.NonEmptyString }),
+])
 export type ClientFrame = typeof ClientFrame.Type
 export const Failure = Schema.TaggedStruct('Failure', {
   code: Schema.Literals([
@@ -54,7 +65,18 @@ export const Rejected = Schema.TaggedStruct('Rejected', {
   commandId: CommandId,
   reason: Schema.NonEmptyString,
 })
+/** The Durable Object states the sender's role; a peer cannot claim a role itself. */
+export const SignalFrame = Schema.TaggedStruct('Signal', {
+  from: DeviceId,
+  role: PeerRole,
+  payload: Schema.NonEmptyString,
+})
+export const PresenceFrame = Schema.TaggedStruct('Presence', {
+  devices: Schema.Array(Schema.Struct({ device: DeviceId, role: PeerRole })),
+})
 export const ServerFrame = Schema.Union([
+  SignalFrame,
+  PresenceFrame,
   Schema.TaggedStruct('Snapshot', { snapshot: Snapshot }),
   Accepted,
   Rejected,

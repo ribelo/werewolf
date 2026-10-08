@@ -183,7 +183,7 @@ export function ContestDesk({ id, access }: { readonly id: ContestId; readonly a
       <p role="status">
         {t(live.connected ? 'desk.connected' : 'desk.disconnected')} · {t('desk.sequence')}:{' '}
         {replica.state.snapshot.commands.length} · {t('sync.pending')}:{' '}
-        {replica.state.pending.length}
+        {replica.state.pending.length} · {t('sync.peers')}: {live.peers}
         {!editor && ' · ' + t('auth.readOnly')}
       </p>
       {live.error && <p role="alert">{t(live.error)}</p>}
