@@ -127,6 +127,7 @@ Rewrite the app from scratch in a new worktree, keeping only the concepts that p
 - **Web app.** React SPA with Effect Atom state over the local replica; routes: contests, wizard, desk, entries/weigh-in, results, settings, and read-only stage/announcer/scoreboard/public results. Polish default, English complete.
 - **Exports.** CSV in last year's federation format (semicolon, BOM, failed attempts negative), PDF and JPG of any ranking.
 - **Migration.** A one-off script converts the 2025 production data (D1 export) into rulebooks + command logs; results must match the old rankings except where the old app was wrong (MONSTER leak), and those differences are listed.
+- **UI continuity.** The interface uses Tailwind CSS and keeps the visual language and layout of the 2025 app: black background, blood red accent, Bebas Neue headings, mono weights, desk tabs (desk, entries, results, lifts, plates), the attempt table, the stage screen with one card per attempt and the plates, the announcer table and the scoreboard table with status boxes. The operator does not relearn the screens. Fonts ship with the app so that screens work offline.
 - **Deployment.** Alchemy stack: one Worker (API + static assets), the contest Durable Object class, R2 for backups, optional D1 index; Cloudflare OAuth profile; new URL beside the old app until cut-over.
 
 ## Testing Decisions

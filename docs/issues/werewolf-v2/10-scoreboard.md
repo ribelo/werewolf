@@ -18,4 +18,5 @@
 - Screen tests (`Scoreboard.test.tsx`): only members of the chosen division are listed, MONSTER-only included only when chosen (ww-8tai, ww-zpeu); a pushed QR code is drawn (ww-l06a). Workerd test: a screen that connects after the push receives filter and QR in its snapshot (ww-l06a, ww-uewf).
 - Real Chrome with a local Worker (throwaway script): the desk chose division MONSTER; the TV went from 4 rows to 2 in 64 ms; QR shown by the desk appeared on the TV; a screen opened afterwards showed 2 rows and the QR. The TV opens from its own read-only link without a password.
 - Auto-scroll is a timer (1 px / 40 ms, back to the top); not checked on a real TV.
+- Tailwind restyle: the scoreboard table follows the 2025 /display/table screenshot (dark rows, status box above each attempt weight, Reshel, McC., best result, QR in the top-right corner). Differences: no sort arrows, no filter chips, no points column yet.
 - `bun run gate:full` passes.

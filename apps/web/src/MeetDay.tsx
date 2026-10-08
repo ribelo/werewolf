@@ -3,7 +3,6 @@ import {
   Kilograms,
   liftingOrder,
   loadBarbell,
-  type Attempt,
   type AttemptRef,
   type Command,
   type ContestState,
@@ -56,8 +55,9 @@ export function WeightForm({
       submit({ _tag: 'SetWeight', attempt: reference(attempt), weight: parsed.success })
   }
   return (
-    <form className="weight-form" onSubmit={declare}>
+    <form className="weight-form flex flex-wrap items-center gap-2" onSubmit={declare}>
       <input
+        className="input-field w-28 font-mono"
         aria-label={t('desk.weight')}
         name="weight"
         type="number"
@@ -67,13 +67,21 @@ export function WeightForm({
         onChange={(event) => setText(event.target.value)}
         required
       />
-      <button type="submit" disabled={!Result.isSuccess(parsed) || Option.isSome(nearest)}>
+      <button
+        className="btn-primary"
+        type="submit"
+        disabled={!Result.isSuccess(parsed) || Option.isSome(nearest)}
+      >
         {t('desk.declare')}
       </button>
       {Option.isSome(nearest) && (
         <span role="alert">
           {t('meet.unloadable')} {t('meet.nearest')}: {nearest.value}{' '}
-          <button type="button" onClick={() => setText(String(nearest.value))}>
+          <button
+            type="button"
+            className="btn-secondary px-2 py-1 text-xs"
+            onClick={() => setText(String(nearest.value))}
+          >
             {t('meet.useNearest')}
           </button>
         </span>
@@ -97,24 +105,13 @@ function Plates({
   )
   if (Result.isFailure(load)) return <></>
   return (
-    <p className="plates">
+    <p className="plates font-mono text-sm text-text-secondary">
       {t('meet.plates')}:{' '}
       {load.success.platesPerSide.length === 0
         ? t('meet.bar')
         : load.success.platesPerSide.map((stack) => stack.count + '×' + stack.weight).join(' + ')}
     </p>
   )
-}
-
-function lastJudged(state: ContestState): Option.Option<Attempt & { readonly _tag: 'Judged' }> {
-  let best: Option.Option<Attempt & { readonly _tag: 'Judged' }> = Option.none()
-  for (const attempt of state.attempts)
-    if (
-      attempt._tag === 'Judged' &&
-      (Option.isNone(best) || attempt.achievedAt >= best.value.achievedAt)
-    )
-      best = Option.some(attempt)
-  return best
 }
 
 export function MeetDay({
@@ -156,37 +153,34 @@ export function MeetDay({
     window.addEventListener('keydown', key)
     return () => window.removeEventListener('keydown', key)
   })
-  const judged = lastJudged(state)
-  const following = Option.flatMap(judged, (past) =>
-    Option.fromUndefinedOr(
-      state.attempts.find(
-        (item) =>
-          item._tag === 'Unannounced' &&
-          item.entryId === past.entryId &&
-          item.liftId === past.liftId &&
-          item.number === past.number + 1,
-      ),
-    ),
-  )
+  // Every lifter whose last attempt has a verdict and whose next attempt has no weight yet waits here.
+  const awaiting = state.attempts
+    .flatMap((item) => {
+      if (item._tag !== 'Unannounced') return []
+      const before = state.attempts.find(
+        (past) =>
+          past.entryId === item.entryId &&
+          past.liftId === item.liftId &&
+          past.number === item.number - 1,
+      )
+      return before?._tag === 'Judged' ? [{ next: item, before }] : []
+    })
+    .toSorted((left, right) => right.before.sequence - left.before.sequence)
   const undoTarget = commands.findLast(
     (command) =>
       command._tag !== 'Undo' &&
       !commands.some((other) => other._tag === 'Undo' && other.target === command.id),
   )
-  const followingEntry = Option.flatMap(following, (attempt) =>
-    Option.fromUndefinedOr(entryOf(attempt)),
-  )
   const currentEntry = Option.flatMap(current, (attempt) =>
     Option.fromUndefinedOr(entryOf(attempt)),
   )
   return (
-    <section aria-label={t('meet.title')}>
-      <h3>{t('meet.title')}</h3>
-      <div className="current">
-        <h4>{t('meet.current')}</h4>
+    <section className="space-y-4" aria-label={t('meet.title')}>
+      <div className="current card">
+        <h4 className="text-h3 mb-2 text-text-secondary">{t('meet.current')}</h4>
         {Option.isSome(current) && Option.isSome(currentEntry) ? (
           <>
-            <p className="current-line">
+            <p className="current-line font-mono text-2xl">
               <strong>{currentEntry.value.lifter.name}</strong> — {liftName(current.value)} #
               {current.value.number}: <strong>{current.value.weight} kg</strong>
               {teamName(currentEntry.value) && <> · {teamName(currentEntry.value)}</>}
@@ -194,125 +188,147 @@ export function MeetDay({
             <Plates state={state} entry={currentEntry.value} weight={current.value.weight} />
             {editor && (
               <p>
-                <button type="button" className="good" onClick={() => verdict('goodLift')}>
+                <button
+                  type="button"
+                  className="btn-good text-lg"
+                  onClick={() => verdict('goodLift')}
+                >
                   {t('desk.goodLift')}
                 </button>{' '}
-                <button type="button" className="bad" onClick={() => verdict('noLift')}>
+                <button type="button" className="btn-bad text-lg" onClick={() => verdict('noLift')}>
                   {t('desk.noLift')}
                 </button>
               </p>
             )}
-            {editor && <small>{t('meet.shortcuts')}</small>}
+            {editor && <small className="text-xs text-text-secondary">{t('meet.shortcuts')}</small>}
           </>
         ) : (
           <p>{t('meet.none')}</p>
         )}
       </div>
-      {editor && Option.isSome(following) && Option.isSome(judged) && (
-        <div className="next-attempt">
-          <h4>{t('meet.next')}</h4>
-          <p>
-            {entryOf(following.value)?.lifter.name} — {liftName(following.value)} #
-            {following.value.number}
-          </p>
-          {Option.isSome(followingEntry) && (
-            <WeightForm
-              state={state}
-              entry={followingEntry.value}
-              attempt={following.value}
-              initial={String(judged.value.weight)}
-              submit={submit}
-            />
-          )}
+      {editor && awaiting.length > 0 && (
+        <div className="next-attempt card border-primary-red">
+          <h4 className="text-h3 mb-2">{t('meet.next')}</h4>
+          {awaiting.map(({ next, before }) => {
+            const entry = entryOf(next)
+            return (
+              entry && (
+                <div key={next.entryId + '/' + next.liftId} className="mb-3">
+                  <p>
+                    {entry.lifter.name} — {liftName(next)} #{next.number}
+                  </p>
+                  <WeightForm
+                    state={state}
+                    entry={entry}
+                    attempt={next}
+                    initial={String(before.weight)}
+                    submit={submit}
+                  />
+                </div>
+              )
+            )
+          })}
         </div>
       )}
       {editor && (
         <p>
           <button
             type="button"
+            className="btn-secondary"
             disabled={!undoTarget}
             onClick={() => undoTarget && submit({ _tag: 'Undo', target: undoTarget.id })}
           >
             {t('meet.undo')}
           </button>{' '}
-          <button type="button" onClick={() => submit({ _tag: 'ResetOrder' })}>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => submit({ _tag: 'ResetOrder' })}
+          >
             {t('meet.resetOrder')}
           </button>
         </p>
       )}
-      <h4>{t('meet.order')}</h4>
-      <div className="table-scroll">
-        <table>
-          <thead>
-            <tr>
-              <th>{t('meet.position')}</th>
-              <th>{t('desk.name')}</th>
-              <th>{t('desk.lift')}</th>
-              <th>{t('desk.attempt')}</th>
-              <th>{t('desk.weight')}</th>
-              {editor && <th>{t('desk.actions')}</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {order.map((attempt, index) => {
-              const isCurrent = Option.isSome(current) && same(current.value, attempt)
-              const previous = order[index - 1]
-              const after = order[index + 2]
-              return (
-                <tr
-                  key={attempt.entryId + '/' + attempt.liftId + '/' + attempt.number}
-                  aria-current={isCurrent}
-                >
-                  <td>{index + 1}</td>
-                  <td>{entryOf(attempt)?.lifter.name}</td>
-                  <td>{liftName(attempt)}</td>
-                  <td>{attempt.number}</td>
-                  <td>{attempt.weight}</td>
-                  {editor && (
-                    <td>
-                      <button
-                        type="button"
-                        disabled={isCurrent}
-                        onClick={() => submit({ _tag: 'SetCurrent', attempt: reference(attempt) })}
-                      >
-                        {t('meet.setCurrent')}
-                      </button>{' '}
-                      <button
-                        type="button"
-                        disabled={!previous}
-                        onClick={() =>
-                          previous &&
-                          submit({
-                            _tag: 'MoveAttempt',
-                            attempt: reference(attempt),
-                            position: { _tag: 'Before', attempt: reference(previous) },
-                          })
-                        }
-                      >
-                        {t('meet.up')}
-                      </button>{' '}
-                      <button
-                        type="button"
-                        disabled={index === order.length - 1}
-                        onClick={() =>
-                          submit({
-                            _tag: 'MoveAttempt',
-                            attempt: reference(attempt),
-                            position: after
-                              ? { _tag: 'Before', attempt: reference(after) }
-                              : { _tag: 'Last' },
-                          })
-                        }
-                      >
-                        {t('meet.down')}
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+      <div className="card">
+        <h4 className="text-h3 mb-2">{t('meet.order')}</h4>
+        <div className="table-scroll overflow-x-auto">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>{t('meet.position')}</th>
+                <th>{t('desk.name')}</th>
+                <th>{t('desk.lift')}</th>
+                <th>{t('desk.attempt')}</th>
+                <th>{t('desk.weight')}</th>
+                {editor && <th>{t('desk.actions')}</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {order.map((attempt, index) => {
+                const isCurrent = Option.isSome(current) && same(current.value, attempt)
+                const previous = order[index - 1]
+                const after = order[index + 2]
+                return (
+                  <tr
+                    key={attempt.entryId + '/' + attempt.liftId + '/' + attempt.number}
+                    aria-current={isCurrent}
+                  >
+                    <td>{index + 1}</td>
+                    <td>{entryOf(attempt)?.lifter.name}</td>
+                    <td>{liftName(attempt)}</td>
+                    <td>{attempt.number}</td>
+                    <td>{attempt.weight}</td>
+                    {editor && (
+                      <td>
+                        <button
+                          type="button"
+                          className="btn-secondary px-2 py-1 text-xs"
+                          disabled={isCurrent}
+                          onClick={() =>
+                            submit({ _tag: 'SetCurrent', attempt: reference(attempt) })
+                          }
+                        >
+                          {t('meet.setCurrent')}
+                        </button>{' '}
+                        <button
+                          type="button"
+                          className="btn-secondary px-2 py-1 text-xs"
+                          disabled={!previous}
+                          onClick={() =>
+                            previous &&
+                            submit({
+                              _tag: 'MoveAttempt',
+                              attempt: reference(attempt),
+                              position: { _tag: 'Before', attempt: reference(previous) },
+                            })
+                          }
+                        >
+                          {t('meet.up')}
+                        </button>{' '}
+                        <button
+                          type="button"
+                          className="btn-secondary px-2 py-1 text-xs"
+                          disabled={index === order.length - 1}
+                          onClick={() =>
+                            submit({
+                              _tag: 'MoveAttempt',
+                              attempt: reference(attempt),
+                              position: after
+                                ? { _tag: 'Before', attempt: reference(after) }
+                                : { _tag: 'Last' },
+                            })
+                          }
+                        >
+                          {t('meet.down')}
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
   )

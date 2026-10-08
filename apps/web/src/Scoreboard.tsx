@@ -1,11 +1,17 @@
 import {
+  ageOnDate,
   entryAgeClass,
   entryWeightClass,
+  Kilograms,
+  mcCulloughCoefficient,
+  reshelCoefficient,
+  type Attempt,
   type ContestState,
   type Entry,
   type ScoreboardFilter,
 } from '@werewolf/core'
 import * as Option from 'effect/Option'
+import * as Schema from 'effect/Schema'
 import qrcode from 'qrcode-generator'
 import { Fragment, useEffect, useRef, type FormEvent } from 'react'
 import { useMessages } from './i18n.ts'
@@ -57,70 +63,175 @@ function useAutoScroll(active: boolean) {
   return box
 }
 
-export function Scoreboard({ state }: { readonly state: ContestState }) {
+function AttemptBox({ attempt }: { readonly attempt: Attempt }) {
+  const judged = attempt._tag === 'Judged'
+  const good = judged && attempt.verdict === 'goodLift'
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <span
+        className={
+          'flex h-7 w-7 items-center justify-center border text-sm ' +
+          (!judged
+            ? 'border-border-color text-text-secondary'
+            : good
+              ? 'border-green-600 bg-[#1b3a2a] text-green-400'
+              : 'border-red-600 bg-[#3a1b1b] text-red-400')
+        }
+        aria-hidden="true"
+      >
+        {!judged ? '·' : good ? '✓' : '✗'}
+      </span>
+      <span
+        className={
+          'min-w-16 border border-border-color bg-element-bg px-2 py-1 text-center font-mono text-xs ' +
+          (judged
+            ? good
+              ? 'good text-text-primary'
+              : 'noLift text-text-secondary line-through'
+            : 'pending text-text-secondary')
+        }
+      >
+        {attempt._tag === 'Unannounced' ? '—' : attempt.weight + 'kg'}
+      </span>
+    </div>
+  )
+}
+
+/** The TV table, laid out like the 2025 one: dark rows, status boxes over the weights. */
+export function Scoreboard({
+  state,
+  title,
+}: {
+  readonly state: ContestState
+  readonly title: string
+}) {
   const { locale, t } = useMessages()
   const { filter, qrUrl } = state.scoreboard
   const rows = scoreboardRows(state, filter)
-  const lifts = state.rulebook.lifts.filter((lift) => !filter.liftId || lift.id === filter.liftId)
+  const lifts = state.rulebook.lifts.filter(
+    (lift) =>
+      (!filter.liftId || lift.id === filter.liftId) &&
+      state.entries.some((entry) => entry.lifts.some((item) => item.liftId === lift.id)),
+  )
   const box = useAutoScroll(true)
+  const className = (
+    id: string,
+    list: ReadonlyArray<{
+      readonly id: string
+      readonly name: { readonly pl: string; readonly en: string }
+    }>,
+  ) => list.find((item) => item.id === id)?.name[locale] ?? ''
   return (
-    <div className="scoreboard">
-      <div className="table-scroll scoreboard-scroll" ref={box}>
-        <table>
-          <thead>
-            <tr>
-              <th>{t('desk.lotNumber')}</th>
-              <th>{t('desk.name')}</th>
-              <th>{t('meet.team')}</th>
-              {lifts.map((lift) => (
-                <th key={lift.id} colSpan={lift.attempts + 1}>
-                  {lift.name[locale]}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((entry) => (
-              <tr key={entry.id}>
-                <td>{entry.lotNumber}</td>
-                <td>{entry.lifter.name}</td>
-                <td>{state.teams.find((team) => team.id === entry.lifter.teamId)?.name ?? ''}</td>
-                {lifts.map((lift) => {
-                  const mine = state.attempts.filter(
-                    (a) => a.entryId === entry.id && a.liftId === lift.id,
-                  )
-                  const best = Math.max(
-                    0,
-                    ...mine.map((a) =>
-                      a._tag === 'Judged' && a.verdict === 'goodLift' ? a.weight : 0,
-                    ),
-                  )
-                  return (
-                    <Fragment key={lift.id}>
-                      {mine.length === 0
-                        ? Array.from({ length: lift.attempts }, (_, index) => (
-                            <td key={lift.id + index}>·</td>
-                          ))
-                        : mine.map((a) => (
-                            <td
-                              key={a.number}
-                              className={a._tag === 'Judged' ? a.verdict : 'pending'}
-                            >
-                              {a._tag === 'Unannounced' ? '—' : a.weight}
-                            </td>
-                          ))}
-                      <td key={lift.id + 'best'}>
-                        <strong>{best > 0 ? best : '—'}</strong>
-                      </td>
-                    </Fragment>
-                  )
-                })}
+    <div className="scoreboard display-view p-4">
+      <header className="relative mb-4 text-center">
+        <h1 className="text-h1 tracking-[0.2em] uppercase [text-shadow:0_0_14px_rgba(255,0,64,0.6)]">
+          {title}
+        </h1>
+        {Option.isSome(qrUrl) && (
+          <div className="absolute top-0 right-0">
+            <QrCode url={qrUrl.value} />
+          </div>
+        )}
+      </header>
+      <div className="card">
+        <div className="table-scroll scoreboard-scroll max-h-[75vh] overflow-y-auto" ref={box}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>{t('desk.name')}</th>
+                <th>{t('board.sexShort')}</th>
+                <th>{t('board.age')}</th>
+                <th>{t('board.bodyweight')}</th>
+                <th>{t('board.weightClass')}</th>
+                <th>{t('board.ageClass')}</th>
+                <th>{t('board.reshel')}</th>
+                <th>{t('board.mcc')}</th>
+                {lifts.map((lift) => (
+                  <th key={lift.id} className="text-center" colSpan={lift.attempts + 1}>
+                    {lift.name[locale]}
+                  </th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((entry) => {
+                const bodyweight = Schema.decodeUnknownOption(Kilograms)(entry.bodyweight)
+                return (
+                  <tr key={entry.id}>
+                    <td className="text-text-secondary">{entry.lotNumber}</td>
+                    <td>
+                      <div className="font-semibold uppercase">{entry.lifter.name}</div>
+                      <div className="text-xxs text-text-secondary uppercase">
+                        {state.teams.find((team) => team.id === entry.lifter.teamId)?.name ?? ''}
+                      </div>
+                    </td>
+                    <td className="text-center text-xs">
+                      {entry.lifter.sex === 'male' ? 'M' : 'K'}
+                    </td>
+                    <td className="text-center">{ageOnDate(entry.lifter.birthDate, state.date)}</td>
+                    <td className="text-center">
+                      {typeof entry.bodyweight === 'number' ? entry.bodyweight + 'kg' : '—'}
+                    </td>
+                    <td className="text-center">
+                      {Option.match(entryWeightClass(state, entry), {
+                        onNone: () => '—',
+                        onSome: (id) => className(id, state.rulebook.weightClasses),
+                      })}
+                    </td>
+                    <td className="text-center">
+                      {Option.match(entryAgeClass(state, entry), {
+                        onNone: () => '—',
+                        onSome: (id) => className(id, state.rulebook.ageClasses),
+                      })}
+                    </td>
+                    <td className="text-center font-mono">
+                      {Option.isSome(bodyweight)
+                        ? reshelCoefficient(bodyweight.value, entry.lifter.sex).toFixed(3)
+                        : '—'}
+                    </td>
+                    <td className="text-center font-mono">
+                      {mcCulloughCoefficient(entry.lifter.birthDate, state.date).toFixed(3)}
+                    </td>
+                    {lifts.map((lift) => {
+                      const mine = state.attempts.filter(
+                        (a) => a.entryId === entry.id && a.liftId === lift.id,
+                      )
+                      const best = Math.max(
+                        0,
+                        ...mine.map((a) =>
+                          a._tag === 'Judged' && a.verdict === 'goodLift' ? a.weight : 0,
+                        ),
+                      )
+                      return (
+                        <Fragment key={lift.id}>
+                          {mine.length === 0
+                            ? Array.from({ length: lift.attempts }, (_, index) => (
+                                <td
+                                  key={lift.id + index}
+                                  className="text-center text-text-secondary"
+                                >
+                                  ·
+                                </td>
+                              ))
+                            : mine.map((a) => (
+                                <td key={a.number} className="text-center">
+                                  <AttemptBox attempt={a} />
+                                </td>
+                              ))}
+                          <td className="text-center font-mono font-bold">
+                            {best > 0 ? best + 'kg' : '—'}
+                          </td>
+                        </Fragment>
+                      )
+                    })}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
-      {Option.isSome(qrUrl) && <QrCode url={qrUrl.value} />}
     </div>
   )
 }
@@ -158,9 +269,14 @@ export function ScoreboardControl({
     current: string,
     options: ReadonlyArray<{ id: string; label: string }>,
   ) => (
-    <label>
-      {label}
-      <select name={name} defaultValue={current} key={name + current}>
+    <label className="mb-3 block">
+      <span className="input-label">{label}</span>
+      <select
+        className="input-field w-full"
+        name={name}
+        defaultValue={current}
+        key={name + current}
+      >
         <option value="">{t('board.all')}</option>
         {options.map((option) => (
           <option key={option.id} value={option.id}>
@@ -171,8 +287,8 @@ export function ScoreboardControl({
     </label>
   )
   return (
-    <form className="scoreboard-control" onSubmit={push} aria-label={t('board.filter')}>
-      <h3>{t('board.filter')}</h3>
+    <form className="scoreboard-control card" onSubmit={push} aria-label={t('board.filter')}>
+      <h3 className="text-h3 mb-3">{t('board.filter')}</h3>
       {choice(
         'divisionId',
         t('desk.division'),
@@ -201,10 +317,13 @@ export function ScoreboardControl({
         filter.weightClassId ?? '',
         book.weightClasses.map((c) => ({ id: c.id, label: c.name[locale] })),
       )}
-      <button type="submit">{t('board.apply')}</button>{' '}
+      <button className="btn-primary" type="submit">
+        {t('board.apply')}
+      </button>{' '}
       {Option.isSome(resultsUrl) && (
         <button
           type="button"
+          className="btn-secondary"
           onClick={() =>
             submit({
               _tag: 'SetScoreboard',

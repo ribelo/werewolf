@@ -142,65 +142,89 @@ export function App() {
       ),
     )
   }
+  const viewing = Result.isSuccess(viewerId) && !!token
   return (
-    <main>
-      <header>
-        <h1>{t('app.title')}</h1>
-        <label>
-          {t('language.label')}
-          <select
-            value={locale}
-            onChange={(event) => setLocale(event.target.value === 'en' ? 'en' : 'pl')}
-          >
-            <option value="pl">Polski</option>
-            <option value="en">English</option>
-          </select>
-        </label>
-      </header>
-      {Result.isSuccess(viewerId) && token ? (
-        viewPath?.[2] === 'stage' ||
-        viewPath?.[2] === 'announcer' ||
-        viewPath?.[2] === 'scoreboard' ? (
-          <ViewerScreen id={viewerId.success} token={token} role={viewPath[2]} />
-        ) : (
-          <ContestDesk id={viewerId.success} access={{ _tag: 'Viewer', token }} />
-        )
-      ) : auth._tag === 'Editor' || auth._tag === 'OfflineEditor' ? (
-        <section>
-          {auth._tag === 'OfflineEditor' ? (
+    <main className={viewing ? '' : 'min-h-screen bg-main-bg text-text-primary'}>
+      {!viewing && (
+        <header className="border-b-2 border-border-color bg-main-bg">
+          <div className="container-full flex flex-wrap items-end justify-between gap-6 py-6">
+            <h1 className="text-display tracking-[0.25em] uppercase">{t('app.title')}</h1>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2">
+                <span className="input-label mb-0">{t('language.label')}</span>
+                <select
+                  className="input-field"
+                  value={locale}
+                  onChange={(event) => setLocale(event.target.value === 'en' ? 'en' : 'pl')}
+                >
+                  <option value="pl">Polski</option>
+                  <option value="en">English</option>
+                </select>
+              </label>
+              {(auth._tag === 'Editor' || auth._tag === 'OfflineEditor') && (
+                <button className="btn-secondary" onClick={logout}>
+                  {t('auth.logout')}
+                </button>
+              )}
+            </div>
+          </div>
+        </header>
+      )}
+      <div className={viewing ? '' : 'container-full py-6'}>
+        {Result.isSuccess(viewerId) && token ? (
+          viewPath?.[2] === 'stage' ||
+          viewPath?.[2] === 'announcer' ||
+          viewPath?.[2] === 'scoreboard' ? (
+            <ViewerScreen id={viewerId.success} token={token} role={viewPath[2]} />
+          ) : (
+            <ContestDesk id={viewerId.success} access={{ _tag: 'Viewer', token }} />
+          )
+        ) : auth._tag === 'Editor' || auth._tag === 'OfflineEditor' ? (
+          auth._tag === 'OfflineEditor' ? (
             <ContestDesk id={auth.id} access={{ _tag: 'Editor' }} />
           ) : Result.isSuccess(deskId) ? (
             <>
-              <a href="/">{t('contests.back')}</a>
+              <a
+                className="mb-4 inline-block text-xs tracking-[0.3em] text-text-secondary uppercase hover:text-primary-red"
+                href="/"
+              >
+                {t('contests.back')}
+              </a>
               <ContestDesk id={deskId.success} access={{ _tag: 'Editor' }} />
             </>
           ) : (
             <ContestCatalog />
-          )}
-          <button onClick={logout}>{t('auth.logout')}</button>
-        </section>
-      ) : auth._tag === 'Checking' ? (
-        <p role="status">{t('desk.connecting')}</p>
-      ) : (
-        <form onSubmit={login}>
-          <h2>{t('auth.title')}</h2>
-          <label>
-            {t('auth.password')}
-            <input
-              type="password"
-              name="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-            />
-          </label>
-          <button disabled={pending} type="submit">
-            {t(pending ? 'auth.pending' : 'auth.login')}
-          </button>
-        </form>
-      )}
-      {error && <p role="alert">{t(error)}</p>}
+          )
+        ) : auth._tag === 'Checking' ? (
+          <p role="status" className="text-text-secondary">
+            {t('desk.connecting')}
+          </p>
+        ) : (
+          <form className="card mx-auto mt-12 max-w-md" onSubmit={login}>
+            <h2 className="text-h2 mb-4">{t('auth.title')}</h2>
+            <label className="mb-4 block">
+              <span className="input-label">{t('auth.password')}</span>
+              <input
+                className="input-field w-full"
+                type="password"
+                name="password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </label>
+            <button className="btn-primary" disabled={pending} type="submit">
+              {t(pending ? 'auth.pending' : 'auth.login')}
+            </button>
+          </form>
+        )}
+        {error && (
+          <p role="alert" className="mt-4">
+            {t(error)}
+          </p>
+        )}
+      </div>
     </main>
   )
 }

@@ -8,12 +8,17 @@
   },
   "dependencies": {
     "@effect/atom-react": "4.0.1",
+    "@fontsource/bebas-neue": "5.3.0",
+    "@fontsource/inter": "5.3.0",
+    "@fontsource/jetbrains-mono": "5.3.0",
+    "@tailwindcss/vite": "4.3.3",
     "@werewolf/core": "workspace:*",
     "@werewolf/sync": "workspace:*",
     "effect": "4.0.1",
     "qrcode-generator": "2.0.4",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "tailwindcss": "4.3.3"
   },
   "devDependencies": {
     "@testing-library/dom": "10.4.2",

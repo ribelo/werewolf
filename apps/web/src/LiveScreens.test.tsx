@@ -46,22 +46,22 @@ const judged = decode({
 
 it('ww-widg: the stage shows the lifter, weight and a barbell matching the plate plan', () => {
   const state = journal(base).state
-  wrap(<Stage state={state} />)
+  wrap(<Stage state={state} title="Test" />)
   expect(screen.getByRole('heading', { name: 'Anna Alpha' })).toBeDefined()
-  expect(screen.getByText('100 kg')).toBeDefined()
-  // 100 kg on a 20 kg bar is 40 kg per side; the drawing has the same plates on both sides.
+  expect(screen.getByText(/^100\.00/)).toBeDefined()
+  // 100 kg on a 20 kg bar is 40 kg per side; the drawing has the same plates on one side.
   const plates = (screen.getByRole('img', { name: 'barbell' }).getAttribute('data-plates') ?? '')
     .split(',')
     .map(Number)
   expect(plates.reduce((sum, weight) => sum + weight, 0)).toBe(40)
-  expect(document.querySelectorAll('.plate')).toHaveLength(plates.length * 2)
+  expect(document.querySelectorAll('.plate')).toHaveLength(plates.length)
 })
 
 it('ww-ufi7 ww-6pk1: both screens show the verdict and the new current attempt as soon as it is recorded', () => {
   const state = journal([...base, judged]).state
   wrap(
     <>
-      <Stage state={state} />
+      <Stage state={state} title="Test" />
       <Announcer state={state} />
     </>,
   )

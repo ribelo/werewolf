@@ -1,125 +1,177 @@
-* {
-  box-sizing: border-box;
+@import 'tailwindcss';
+
+/* The visual language of the 2025 app: black, blood red, Bebas Neue headings, mono weights. */
+@theme {
+  --color-primary-red: #dc143c;
+  --color-secondary-red: #8b0000;
+  --color-accent-red: #ff0040;
+  --color-main-bg: #000000;
+  --color-card-bg: #1a1a1a;
+  --color-element-bg: #2c2c2c;
+  --color-border-color: #404040;
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #b0b0b0;
+  --color-status-success: #0f4c0f;
+  --color-status-warning: #ffa500;
+  --color-status-error: #8b0000;
+  --font-display: 'Bebas Neue', sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', Monaco, Consolas, monospace;
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 20px rgba(220, 20, 60, 0.5);
 }
-body {
-  margin: 0;
-  font-family: system-ui, sans-serif;
-  background: #f3f4f6;
-  color: #182332;
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+    scrollbar-gutter: stable;
+  }
+  body {
+    @apply bg-main-bg text-text-primary antialiased;
+    margin: 0;
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #404040 transparent;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+  [role='alert'] {
+    @apply text-xs text-red-400;
+  }
 }
-main {
-  max-width: 1100px;
-  margin: auto;
-  padding: 24px;
-}
-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 24px;
-}
-form,
-section {
-  padding: 24px;
-  background: white;
-  border-radius: 12px;
-  margin-top: 24px;
-}
-form {
-  max-width: 480px;
-  margin: 48px auto;
-}
-label {
-  display: grid;
-  gap: 8px;
-  margin-bottom: 20px;
-}
-input,
-select,
-button {
-  font: inherit;
-  padding: 12px;
-  border: 1px solid #cad2dd;
-  border-radius: 6px;
-}
-button {
-  background: #253e7d;
-  color: white;
-  cursor: pointer;
-}
-button:disabled {
-  opacity: 0.6;
-}
-[role='alert'] {
-  color: #a91c30;
-}
-.table-scroll {
-  overflow-x: auto;
-}
-table {
-  border-collapse: collapse;
-  width: 100%;
-}
-th,
-td {
-  text-align: left;
-  padding: 10px;
-  border-bottom: 1px solid #cad2dd;
-}
-.attempt-editor {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.attempt-editor form {
-  display: flex;
-  gap: 8px;
-  padding: 0;
-  margin: 0;
-}
-.attempt-editor input {
-  width: 100px;
-}
-.read-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
-}
-fieldset label {
-  display: flex;
-  align-items: center;
-}
-li {
-  margin-bottom: 10px;
-}
-.screen.stage {
-  background: #0b1220;
-  color: white;
-  min-height: 80vh;
-  text-align: center;
-}
-.stage-name {
-  font-size: 4rem;
-  margin: 0;
-}
-.stage-weight {
-  font-size: 6rem;
-  font-weight: 700;
-  margin: 0;
-}
-.barbell {
-  width: 100%;
-  max-height: 260px;
-}
-.verdict.goodLift {
-  color: #22c55e;
-}
-.verdict.noLift {
-  color: #ef4444;
-}
-.offline {
-  color: #f59e0b;
-}
-.announcer h2 {
-  font-size: 2rem;
+
+@layer components {
+  .text-hero {
+    @apply font-display font-normal tracking-[0.25rem] text-[64px] leading-none;
+  }
+  .text-display {
+    @apply font-display font-normal tracking-[0.125rem] text-[48px] leading-none;
+  }
+  .text-h1 {
+    @apply text-3xl font-display font-normal tracking-wider;
+  }
+  .text-h2 {
+    @apply text-2xl font-display font-normal tracking-wide;
+  }
+  .text-h3 {
+    @apply text-xl font-display font-normal tracking-wide;
+  }
+  .weight-hero {
+    @apply font-mono font-bold leading-none text-[64px];
+  }
+  .weight-large {
+    @apply font-mono font-bold leading-none text-[48px];
+  }
+  .weight-medium {
+    @apply font-mono font-semibold leading-none text-[24px];
+  }
+  .text-label {
+    @apply text-xs font-body font-semibold uppercase tracking-widest;
+  }
+  .text-caption {
+    @apply text-xs font-body font-medium leading-tight;
+  }
+  .text-xxs {
+    font-size: 0.6875rem;
+    line-height: 1rem;
+  }
+  .container-full {
+    @apply w-full px-4 md:px-6 lg:px-8;
+  }
+
+  .card {
+    @apply bg-card-bg border-2 border-border-color p-4 shadow-card relative mt-4;
+  }
+  .card::before {
+    content: '';
+    @apply absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-primary-red to-transparent;
+  }
+  .card-header {
+    @apply border-b-2 border-border-color pb-3 mb-3;
+  }
+
+  .btn-primary {
+    @apply bg-primary-red text-black border-2 border-primary-red px-4 py-2 font-display text-sm tracking-wider uppercase
+           transition-all duration-300 hover:bg-accent-red hover:border-accent-red;
+  }
+  .btn-secondary {
+    @apply bg-transparent text-text-secondary border-2 border-border-color px-4 py-2 font-display text-sm tracking-wider uppercase
+           transition-all duration-300 hover:text-text-primary hover:border-primary-red hover:bg-red-500/10;
+  }
+  .btn-good {
+    @apply bg-status-success text-green-100 border-2 border-green-700 px-4 py-2 font-display text-sm tracking-wider uppercase hover:bg-green-800;
+  }
+  .btn-bad {
+    @apply bg-status-error text-red-100 border-2 border-red-700 px-4 py-2 font-display text-sm tracking-wider uppercase hover:bg-red-800;
+  }
+
+  .input-field {
+    @apply bg-element-bg border-2 border-border-color text-text-primary px-3 py-2 font-body text-sm
+           transition-all duration-300 focus:border-primary-red focus:outline-none focus:ring-0;
+  }
+  .input-field:focus {
+    box-shadow: 0 0 0 3px rgba(220, 20, 60, 0.2);
+  }
+  select.input-field {
+    color-scheme: dark;
+  }
+  .input-label {
+    @apply block text-xs font-semibold uppercase tracking-widest text-text-secondary mb-1;
+  }
+
+  .status-badge {
+    @apply inline-flex items-center px-3 py-1 font-display text-xs tracking-wider uppercase;
+  }
+  .status-active {
+    @apply bg-status-success text-green-100;
+  }
+  .status-warning {
+    @apply bg-status-warning text-orange-100;
+  }
+  .status-error {
+    @apply bg-status-error text-red-100;
+  }
+  .status-neutral {
+    @apply bg-element-bg text-text-secondary;
+  }
+
+  .attempt-pending {
+    @apply text-gray-400 bg-element-bg px-2 py-1 font-mono text-xs;
+  }
+  .attempt-good {
+    @apply text-green-100 bg-status-success px-2 py-1 font-mono text-xs font-bold;
+  }
+  .attempt-failed {
+    @apply text-red-100 bg-status-error px-2 py-1 font-mono text-xs line-through;
+  }
+
+  .data-table {
+    @apply w-full border-collapse text-sm;
+  }
+  .data-table thead th {
+    @apply bg-element-bg text-text-secondary text-xs font-semibold uppercase tracking-widest px-3 py-3 text-left border-b-2 border-border-color;
+  }
+  .data-table tbody td {
+    @apply px-3 py-2 border-b border-border-color;
+  }
+  .data-table tbody tr:hover {
+    @apply bg-card-bg;
+  }
+  .data-table tr[aria-current='true'] {
+    @apply bg-primary-red/20;
+  }
+
+  .display-view {
+    @apply bg-main-bg text-text-primary min-h-screen;
+  }
+  .divider-accent {
+    @apply h-1 bg-gradient-to-r from-transparent via-primary-red to-transparent my-4;
+  }
 }

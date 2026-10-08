@@ -59,43 +59,48 @@ export function ContestCatalog() {
     )
   }
   return (
-    <section>
-      <h2>{t('contests.title')}</h2>
+    <section className="space-y-6">
+      <h2 className="text-h1 uppercase">{t('contests.title')}</h2>
       {catalog.contests.length === 0 ? (
-        <p>{t('contests.empty')}</p>
+        <p className="text-text-secondary">{t('contests.empty')}</p>
       ) : (
-        <ul>
+        <ul className="grid gap-3 md:grid-cols-2">
           {catalog.contests.map((contest) => (
             <li key={contest.id}>
-              <button type="button" onClick={() => location.assign('/desk/' + contest.id)}>
+              <button
+                type="button"
+                className="card w-full text-left font-display text-xl tracking-wide uppercase hover:border-primary-red"
+                onClick={() => location.assign('/desk/' + contest.id)}
+              >
                 {contest.name} — {contest.date}
               </button>
             </li>
           ))}
         </ul>
       )}
-      <form onSubmit={create}>
-        <h3>{t('contests.create')}</h3>
-        <label>
-          {t('contests.name')}
-          <input name="name" required />
+      <form className="card max-w-xl" onSubmit={create}>
+        <h3 className="text-h3 mb-3">{t('contests.create')}</h3>
+        <label className="mb-3 block">
+          <span className="input-label">{t('contests.name')}</span>
+          <input className="input-field w-full" name="name" required />
         </label>
-        <label>
-          {t('desk.date')}
+        <label className="mb-3 block">
+          <span className="input-label">{t('desk.date')}</span>
           <input
+            className="input-field w-full"
             name="date"
             type="date"
             defaultValue={new Intl.DateTimeFormat('sv-SE').format(new Date())}
             required
           />
         </label>
-        <label>
-          {t('desk.preset')}
-          <select name="preset">
+        <label className="mb-3 block">
+          <span className="input-label">{t('desk.preset')}</span>
+          <select className="input-field w-full" name="preset">
             <option>{client2026Rulebook.name[locale]}</option>
           </select>
         </label>
-        <button disabled={pending} type="submit">
+        <button className="btn-primary" disabled={pending} type="submit">
           {t('contests.create')}
         </button>
       </form>

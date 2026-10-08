@@ -22,18 +22,21 @@ export function ViewerScreen({
     )
   const state = live.view.replica.journal.state
   return (
-    <section className={'screen ' + role}>
+    <section className={'screen display-view ' + role}>
       {!live.connected && (
-        <p role="status" className="offline">
+        <p
+          role="status"
+          className="offline bg-status-warning px-4 py-1 text-center font-display text-sm tracking-widest text-black uppercase"
+        >
           {t('view.offline')}
         </p>
       )}
       {role === 'stage' ? (
-        <Stage state={state} />
+        <Stage state={state} title={live.view.replica.state.snapshot.definition.name} />
       ) : role === 'announcer' ? (
         <Announcer state={state} />
       ) : (
-        <Scoreboard state={state} />
+        <Scoreboard state={state} title={live.view.replica.state.snapshot.definition.name} />
       )}
     </section>
   )

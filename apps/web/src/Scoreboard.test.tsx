@@ -31,6 +31,7 @@ const show = (commands: ReadonlyArray<Command>) =>
   render(
     <RegistryProvider>
       <Scoreboard
+        title="Test"
         state={
           Result.getOrThrow(
             ContestJournal.restore(
