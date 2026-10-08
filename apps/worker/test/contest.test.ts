@@ -1,6 +1,13 @@
 import { SELF } from 'cloudflare:test'
 import { client2026Rulebook, Command, replay } from '@werewolf/core'
-import { Catalog, ReadLinks, ServerFrame, Snapshot } from '@werewolf/sync'
+import {
+  Catalog,
+  ContestReplica,
+  ReadLinks,
+  ReplicaState,
+  ServerFrame,
+  Snapshot,
+} from '@werewolf/sync'
 import * as Result from 'effect/Result'
 import * as Schema from 'effect/Schema'
 import { expect, it } from 'vitest'
@@ -33,13 +40,20 @@ async function open(path: string, cookie: string) {
   socket.accept()
   return {
     socket,
-    next: () => {
-      const frame = frames.shift()
-      return frame
-        ? Promise.resolve(frame)
-        : new Promise<ServerFrame>((resolve) => waiting.push(resolve))
+    next: async (sequence = 0): Promise<ServerFrame> => {
+      // An issuer can receive both its broadcast and its idempotent acknowledgement.
+      for (;;) {
+        const frame =
+          frames.shift() ?? (await new Promise<ServerFrame>((resolve) => waiting.push(resolve)))
+        if (frame._tag !== 'Accepted' || frame.sequence >= sequence) return frame
+      }
     },
   }
+}
+
+function accept(replica: ContestReplica, frame: ServerFrame): ContestReplica {
+  if (frame._tag === 'Failure') throw new Error('Expected a replica frame')
+  return Result.getOrThrow(replica.receive(frame))
 }
 
 it('ww-bdzb ww-uewf: two workerd clients receive the ordered core log and capability clients cannot write', async () => {
@@ -194,6 +208,146 @@ it('ww-bdzb ww-uewf: two workerd clients receive the ordered core log and capabi
     }
   } finally {
     writer.socket.close()
+    reader.socket.close()
+  }
+})
+
+it('ww-mned ww-yo7x ww-gouf: offline queues converge by server order, not client clocks', async () => {
+  const cookie = await organizer()
+  const path = origin + '/api/contests/' + crypto.randomUUID()
+  const created = await SELF.fetch(origin + '/api/contests', {
+    method: 'POST',
+    headers: { Origin: origin, Cookie: cookie, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: path.split('/').at(-1),
+      name: 'Offline integration contest',
+      date: '2026-10-08',
+      rulebook: client2026Rulebook,
+    }),
+  })
+  expect(created.status).toBe(201)
+  const post = (command: Command) =>
+    SELF.fetch(path + '/commands', {
+      method: 'POST',
+      headers: { Origin: origin, Cookie: cookie, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ _tag: 'Submit', command }),
+    })
+  await post(
+    Schema.decodeSync(Command)({
+      _tag: 'AddEntry',
+      id: 'start',
+      at: 100,
+      entry: {
+        id: 'entry',
+        lifter: { id: 'lifter', name: 'Offline Lifter', sex: 'male', birthDate: '1990-01-01' },
+        bodyweight: 80,
+        lotNumber: 1,
+        divisions: ['open'],
+        lifts: [{ liftId: 'bench' }],
+      },
+    }),
+  )
+  const snapshot = Schema.decodeUnknownSync(Snapshot)(
+    await (await SELF.fetch(path + '/snapshot', { headers: { Cookie: cookie } })).json(),
+  )
+  const links = Schema.decodeUnknownSync(ReadLinks)(
+    await (await SELF.fetch(path + '/links', { headers: { Cookie: cookie } })).json(),
+  )
+  const stage = new URL(links.stage)
+  const reader = await open(path + '/events?token=' + (stage.searchParams.get('token') ?? ''), '')
+  const editor = await open(path + '/events', cookie)
+  let desk = Result.getOrThrow(ContestReplica.restore({ snapshot, pending: [], rejected: [] }))
+  let remote = accept(desk, await editor.next())
+  let screen = accept(desk, await reader.next())
+  try {
+    // The offline desk has no connection. Its twenty changes are durable serializable state.
+    for (let index = 0; index < 20; index++) {
+      desk = Result.getOrThrow(
+        desk.enqueue(
+          Schema.decodeSync(Command)({
+            _tag: 'SetBodyweight',
+            id: 'offline-' + index,
+            at: 2_000_000_000 + index,
+            entryId: 'entry',
+            bodyweight: 81 + index,
+          }),
+        ),
+      )
+    }
+    expect(desk.state.pending).toHaveLength(20)
+    const saved = Schema.encodeSync(Schema.fromJsonString(ReplicaState))(desk.state)
+    const changes = [
+      { _tag: 'SetLotNumber', id: 'remote-lot', at: 1, entryId: 'entry', lotNumber: 7 },
+      { _tag: 'SetBodyweight', id: 'remote-weight', at: 2, entryId: 'entry', bodyweight: 90 },
+    ].map((command) => Schema.decodeUnknownSync(Command)(command))
+    for (const [index, command] of changes.entries()) {
+      editor.socket.send(JSON.stringify({ _tag: 'Submit', command }))
+      remote = accept(remote, await editor.next(index + 2))
+      screen = accept(screen, await reader.next())
+    }
+    desk = Result.getOrThrow(
+      ContestReplica.restore(Schema.decodeSync(Schema.fromJsonString(ReplicaState))(saved)),
+    )
+    const reconnected = await open(path + '/events', cookie)
+    try {
+      // Receive the authoritative snapshot before submitting any pending command.
+      desk = accept(desk, await reconnected.next())
+      expect(desk.journal.state.entries[0]).toMatchObject({ bodyweight: 100, lotNumber: 7 })
+      const pending = desk.state.pending
+      for (const [index, command] of pending.entries()) {
+        reconnected.socket.send(JSON.stringify({ _tag: 'Submit', command }))
+        const acknowledgement = await reconnected.next(index + 4)
+        expect(acknowledgement).toEqual({ _tag: 'Accepted', sequence: index + 4, command })
+        desk = accept(desk, acknowledgement)
+        remote = accept(remote, await editor.next(index + 4))
+        screen = accept(screen, await reader.next())
+      }
+      expect(desk.state.pending).toEqual([])
+      expect(desk.journal.state.entries[0]).toMatchObject({ bodyweight: 100, lotNumber: 7 })
+      // The last server acceptance wins even when its client clock is earlier.
+      const last = Schema.decodeSync(Command)({
+        _tag: 'SetBodyweight',
+        id: 'last',
+        at: 0,
+        entryId: 'entry',
+        bodyweight: 91,
+      })
+      editor.socket.send(JSON.stringify({ _tag: 'Submit', command: last }))
+      remote = accept(remote, await editor.next(24))
+      screen = accept(screen, await reader.next())
+      desk = accept(desk, await reconnected.next(24))
+      expect(desk.journal.state.entries[0]).toMatchObject({ bodyweight: 91, lotNumber: 7 })
+      expect(remote.state.snapshot).toEqual(desk.state.snapshot)
+      expect(screen.journal.state).toEqual(desk.journal.state)
+      reconnected.socket.close()
+      // Acceptance with a lost client acknowledgement must not create a duplicate on reconnect.
+      const unacknowledged = Schema.decodeSync(Command)({
+        _tag: 'SetLotNumber',
+        id: 'lost-ack',
+        at: 3,
+        entryId: 'entry',
+        lotNumber: 9,
+      })
+      desk = Result.getOrThrow(desk.enqueue(unacknowledged))
+      expect((await post(unacknowledged)).status).toBe(200)
+      remote = accept(remote, await editor.next(25))
+      screen = accept(screen, await reader.next())
+      const recovered = await open(path + '/events', cookie)
+      try {
+        desk = accept(desk, await recovered.next())
+        expect(desk.state.pending).toEqual([])
+        expect(desk.state.snapshot.commands).toHaveLength(25)
+        expect(desk.journal.state.entries[0]).toMatchObject({ bodyweight: 91, lotNumber: 9 })
+        expect(desk.journal.state).toEqual(remote.journal.state)
+        expect(desk.journal.state).toEqual(screen.journal.state)
+      } finally {
+        recovered.socket.close()
+      }
+    } finally {
+      reconnected.socket.close()
+    }
+  } finally {
+    editor.socket.close()
     reader.socket.close()
   }
 })

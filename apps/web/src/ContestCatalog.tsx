@@ -1,17 +1,14 @@
 import { client2026Rulebook } from '@werewolf/core'
-import { Catalog, Snapshot, type ContestId } from '@werewolf/sync'
+import { Catalog, Snapshot } from '@werewolf/sync'
 import * as Effect from 'effect/Effect'
 import * as Fiber from 'effect/Fiber'
-import * as Option from 'effect/Option'
 import { useEffect, useState, type FormEvent } from 'react'
-import { ContestDesk } from './ContestDesk.tsx'
 import { requestJson } from './live-contest.ts'
 import { useMessages, type MessageKey } from './i18n.ts'
 
 export function ContestCatalog() {
   const { locale, t } = useMessages()
   const [catalog, setCatalog] = useState<typeof Catalog.Type>({ contests: [] })
-  const [selected, setSelected] = useState<Option.Option<ContestId>>(Option.none())
   const [draftId, setDraftId] = useState(() => crypto.randomUUID())
   const [error, setError] = useState<MessageKey | ''>('')
   const [pending, setPending] = useState(false)
@@ -53,7 +50,7 @@ export function ContestCatalog() {
                 snapshot.definition,
               ],
             }))
-            setSelected(Option.some(snapshot.definition.id))
+            location.assign('/desk/' + snapshot.definition.id)
             setDraftId(crypto.randomUUID())
             setPending(false)
           },
@@ -61,15 +58,6 @@ export function ContestCatalog() {
       ),
     )
   }
-  if (Option.isSome(selected))
-    return (
-      <>
-        <button type="button" onClick={() => setSelected(Option.none())}>
-          {t('contests.back')}
-        </button>
-        <ContestDesk key={selected.value} id={selected.value} access={{ _tag: 'Editor' }} />
-      </>
-    )
   return (
     <section>
       <h2>{t('contests.title')}</h2>
@@ -79,7 +67,7 @@ export function ContestCatalog() {
         <ul>
           {catalog.contests.map((contest) => (
             <li key={contest.id}>
-              <button type="button" onClick={() => setSelected(Option.some(contest.id))}>
+              <button type="button" onClick={() => location.assign('/desk/' + contest.id)}>
                 {contest.name} — {contest.date}
               </button>
             </li>

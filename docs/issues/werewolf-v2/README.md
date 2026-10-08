@@ -9,7 +9,7 @@ Spec: [../werewolf-v2.md](../werewolf-v2.md)
 | 03 | [Contest core: results and individual classifications](03-core-individual-results.md) | 02 | done |
 | 04 | [Contest core: team classifications incl. the client's four](04-core-team-results.md) | 03 | done |
 | 05 | [Contest Durable Object, WebSocket push, minimal online desk](05-contest-do-sync-online.md) | 01, 02 | done |
-| 06 | [Offline replica, catch-up and merging](06-offline-replica.md) | 05 | ready-for-agent |
+| 06 | [Offline replica, catch-up and merging](06-offline-replica.md) | 05 | done |
 | 07 | [Peer-to-peer sync over the venue Wi-Fi (WebRTC)](07-webrtc-lan.md) | 06 | ready-for-agent |
 | 08 | [Desk: full meet-day flow](08-desk-meet-day.md) | 05, 03 | ready-for-agent |
 | 09 | [Stage screen with barbell, announcer view](09-stage-announcer.md) | 08 | ready-for-agent |

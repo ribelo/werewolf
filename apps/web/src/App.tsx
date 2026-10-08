@@ -3,66 +3,141 @@
 import * as Atom from 'effect/reactivity/Atom'
 import { useAtom } from '@effect/atom-react'
 import * as Schema from 'effect/Schema'
+import * as Data from 'effect/Data'
+import * as Effect from 'effect/Effect'
+import * as Fiber from 'effect/Fiber'
+import * as Option from 'effect/Option'
+import * as Result from 'effect/Result'
 import { useEffect, useState, type FormEvent } from 'react'
 import { useMessages, type MessageKey } from './i18n.ts'
 import { ContestCatalog } from './ContestCatalog.tsx'
 import { ContestDesk } from './ContestDesk.tsx'
 import { ContestId } from '@werewolf/sync'
-import * as Result from 'effect/Result'
+import { requestJson } from './live-contest.ts'
+import { hasEditorGrant, readReplica, setEditorGrant } from './replica-store.ts'
 
-const authenticatedAtom = Atom.make(false)
+class ShellCacheUnavailable extends Data.TaggedError('ShellCacheUnavailable')<{
+  readonly cause: unknown
+}> {
+  override readonly message = 'Offline shell cache unavailable'
+}
+const Session = Schema.Struct({ authenticated: Schema.Boolean })
+type Auth =
+  | { readonly _tag: 'Checking' | 'Guest' | 'Editor' }
+  | { readonly _tag: 'OfflineEditor'; readonly id: ContestId }
+const authAtom = Atom.make<Auth>({ _tag: 'Checking' })
 
 export function App() {
   const { locale, setLocale, t } = useMessages()
   const viewPath = new RegExp('^/view/([^/]+)/(stage|announcer|results)$').exec(location.pathname)
   const viewerId = Schema.decodeUnknownResult(ContestId)(viewPath?.[1])
+  const [deskId] = useState(() =>
+    Schema.decodeUnknownResult(ContestId)(
+      new RegExp('^/desk/([^/]+)$').exec(location.pathname)?.[1],
+    ),
+  )
   const token = new URL(location.href).searchParams.get('token')
-  const [authenticated, setAuthenticated] = useAtom(authenticatedAtom)
+  const isViewer = Result.isSuccess(viewerId) && !!token
+  const [auth, setAuth] = useAtom(authAtom)
   const [password, setPassword] = useState('')
   const [error, setError] = useState<MessageKey | ''>('')
   const [pending, setPending] = useState(false)
   useEffect(() => {
+    if (!('serviceWorker' in navigator)) {
+      setError('storage.failed')
+      return
+    }
+    const fiber = Effect.runFork(
+      Effect.tryPromise({
+        try: () => navigator.serviceWorker.register('/sw.js'),
+        catch: (cause) => new ShellCacheUnavailable({ cause }),
+      }).pipe(
+        Effect.catchTag('ShellCacheUnavailable', () =>
+          Effect.sync(() => setError('storage.failed')),
+        ),
+      ),
+    )
+    return () => {
+      Effect.runFork(Fiber.interrupt(fiber))
+    }
+  }, [])
+  useEffect(() => {
     document.documentElement.lang = locale
   }, [locale])
   useEffect(() => {
-    fetch('/api/session')
-      .then((response) => response.json())
-      .then((body: unknown) =>
-        setAuthenticated(
-          Schema.decodeUnknownSync(Schema.Struct({ authenticated: Schema.Boolean }))(body)
-            .authenticated,
-        ),
-      )
-      .catch(() => setError('request.failed'))
-  }, [setAuthenticated])
-  async function login(event: FormEvent<HTMLFormElement>) {
+    if (isViewer) return
+    const check = requestJson(Session, '/api/session').pipe(
+      Effect.matchEffect({
+        onSuccess: (session) =>
+          Effect.gen(function* () {
+            setAuth({ _tag: session.authenticated ? 'Editor' : 'Guest' })
+            yield* setEditorGrant(session.authenticated)
+          }),
+        onFailure: (failure) =>
+          Effect.gen(function* () {
+            if (
+              failure._tag === 'NetworkFailure' &&
+              Result.isSuccess(deskId) &&
+              (yield* hasEditorGrant)
+            ) {
+              const cached = yield* readReplica(deskId.success, { _tag: 'Editor' })
+              if (Option.isSome(cached)) {
+                setAuth({ _tag: 'OfflineEditor', id: deskId.success })
+                return
+              }
+            }
+            setAuth({ _tag: 'Guest' })
+            setError(failure.code)
+          }),
+      }),
+      Effect.catch((failure) => Effect.sync(() => setError(failure.code))),
+    )
+    const fiber = Effect.runFork(check)
+    const online = () => Effect.runFork(check)
+    window.addEventListener('online', online)
+    return () => {
+      window.removeEventListener('online', online)
+      Effect.runFork(Fiber.interrupt(fiber))
+    }
+  }, [setAuth, isViewer, deskId])
+  function login(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setPending(true)
     setError('')
-    try {
-      const response = await fetch('/api/session', {
+    Effect.runFork(
+      requestJson(Session, '/api/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),
-      })
-      if (response.ok) {
-        setAuthenticated(true)
-        setPassword('')
-      } else setError('auth.invalid')
-    } catch {
-      setError('request.failed')
-    } finally {
-      setPending(false)
-    }
+      }).pipe(
+        Effect.andThen((session) =>
+          Effect.gen(function* () {
+            if (!session.authenticated) {
+              setError('auth.invalid')
+              return
+            }
+            setAuth({ _tag: 'Editor' })
+            setPassword('')
+            yield* setEditorGrant(true)
+          }),
+        ),
+        Effect.catch((failure) =>
+          Effect.sync(() =>
+            setError(failure._tag === 'HttpFailure' ? 'auth.invalid' : failure.code),
+          ),
+        ),
+        Effect.ensuring(Effect.sync(() => setPending(false))),
+      ),
+    )
   }
-  async function logout() {
-    try {
-      const response = await fetch('/api/session', { method: 'DELETE' })
-      if (response.ok) setAuthenticated(false)
-      else setError('request.failed')
-    } catch {
-      setError('request.failed')
-    }
+  function logout() {
+    Effect.runFork(
+      requestJson(Session, '/api/session', { method: 'DELETE' }).pipe(
+        Effect.andThen(() => setEditorGrant(false)),
+        Effect.andThen(Effect.sync(() => setAuth({ _tag: 'Guest' }))),
+        Effect.catch((failure) => Effect.sync(() => setError(failure.code))),
+      ),
+    )
   }
   return (
     <main>
@@ -81,23 +156,24 @@ export function App() {
       </header>
       {Result.isSuccess(viewerId) && token ? (
         <ContestDesk id={viewerId.success} access={{ _tag: 'Viewer', token }} />
-      ) : authenticated ? (
+      ) : auth._tag === 'Editor' || auth._tag === 'OfflineEditor' ? (
         <section>
-          <ContestCatalog />
-          <button
-            onClick={() => {
-              logout().catch(() => setError('request.failed'))
-            }}
-          >
-            {t('auth.logout')}
-          </button>
+          {auth._tag === 'OfflineEditor' ? (
+            <ContestDesk id={auth.id} access={{ _tag: 'Editor' }} />
+          ) : Result.isSuccess(deskId) ? (
+            <>
+              <a href="/">{t('contests.back')}</a>
+              <ContestDesk id={deskId.success} access={{ _tag: 'Editor' }} />
+            </>
+          ) : (
+            <ContestCatalog />
+          )}
+          <button onClick={logout}>{t('auth.logout')}</button>
         </section>
+      ) : auth._tag === 'Checking' ? (
+        <p role="status">{t('desk.connecting')}</p>
       ) : (
-        <form
-          onSubmit={(event) => {
-            login(event).catch(() => setError('request.failed'))
-          }}
-        >
+        <form onSubmit={login}>
           <h2>{t('auth.title')}</h2>
           <label>
             {t('auth.password')}

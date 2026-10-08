@@ -1,15 +1,18 @@
 // ADR 0004 requires Effect Atom. Pin its version because the API is unstable.
 // @effect-diagnostics unstableApiUsage:off
 import { useAtom } from '@effect/atom-react'
-import { Command, ContestJournal } from '@werewolf/core'
-import { ServerFrame, type ContestDefinition, type ContestId } from '@werewolf/sync'
+import { Command, type CommandId, type ContestFailure } from '@werewolf/core'
+import { ContestReplica, ServerFrame, type ContestId, type ReplicaConflict } from '@werewolf/sync'
 import * as Atom from 'effect/reactivity/Atom'
 import * as Data from 'effect/Data'
 import * as Effect from 'effect/Effect'
+import * as Fiber from 'effect/Fiber'
 import * as Option from 'effect/Option'
+import * as Queue from 'effect/Queue'
 import * as Result from 'effect/Result'
 import * as Schema from 'effect/Schema'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { readReplica, saveReplica } from './replica-store.ts'
 import type { MessageKey } from './i18n.ts'
 
 export type Access =
@@ -18,135 +21,274 @@ export type Access =
 type View =
   | { readonly _tag: 'Loading' }
   | { readonly _tag: 'Invalid' }
-  | {
-      readonly _tag: 'Ready'
-      readonly definition: ContestDefinition
-      readonly journal: ContestJournal
-    }
-class UiFailure extends Data.TaggedError('UiFailure')<{
-  readonly code: MessageKey
+  | { readonly _tag: 'Ready'; readonly replica: ContestReplica }
+class NetworkFailure extends Data.TaggedError('NetworkFailure')<{
+  readonly code: 'request.failed'
   readonly cause: unknown
 }> {}
-export function requestJson<A>(schema: Schema.Decoder<A>, path: string, init: RequestInit = {}) {
+class HttpFailure extends Data.TaggedError('HttpFailure')<{
+  readonly code: 'request.failed'
+  readonly status: number
+}> {}
+class DecodeFailure extends Data.TaggedError('DecodeFailure')<{
+  readonly code: 'request.invalid'
+  readonly cause: unknown
+}> {}
+const networkFailure = (cause: unknown) => new NetworkFailure({ code: 'request.failed', cause })
+export function requestJson<A>(
+  schema: Schema.Decoder<A>,
+  path: string,
+  init: RequestInit = {},
+): Effect.Effect<A, NetworkFailure | HttpFailure | DecodeFailure> {
   return Effect.gen(function* () {
     const response = yield* Effect.tryPromise({
       try: (signal) => fetch(path, { ...init, signal }),
-      catch: (cause) => new UiFailure({ code: 'request.failed', cause }),
+      catch: networkFailure,
     })
     if (!response.ok)
-      return yield* new UiFailure({ code: 'request.failed', cause: response.status })
+      return yield* new HttpFailure({ code: 'request.failed', status: response.status })
     const raw = yield* Effect.tryPromise({
       try: () => response.json(),
-      catch: (cause) => new UiFailure({ code: 'request.invalid', cause }),
+      catch: (cause) => new DecodeFailure({ code: 'request.invalid', cause }),
     })
     return yield* Schema.decodeUnknownEffect(schema)(raw).pipe(
-      Effect.mapError((cause) => new UiFailure({ code: 'request.invalid', cause })),
+      Effect.mapError((cause) => new DecodeFailure({ code: 'request.invalid', cause })),
     )
   })
 }
+type Link =
+  | { readonly _tag: 'Disconnected' }
+  | { readonly _tag: 'Connecting' | 'CatchingUp'; readonly socket: WebSocket }
+  | {
+      readonly _tag: 'Online'
+      readonly socket: WebSocket
+      readonly inFlight: Option.Option<CommandId>
+    }
 
 export function useLiveContest(id: ContestId, access: Access) {
   const [atom] = useState(() => Atom.make<View>({ _tag: 'Loading' }))
   const [view, setView] = useAtom(atom)
-  const [socket, setSocket] = useState<Option.Option<WebSocket>>(Option.none())
   const [connected, setConnected] = useState(false)
   const [error, setError] = useState<MessageKey | ''>('')
   const [rejection, setRejection] = useState('')
+  const dispatch = useRef<(input: object) => void>(() => {})
+  const role = access._tag
   const token = access._tag === 'Viewer' ? access.token : ''
   useEffect(() => {
-    const url = new URL('/api/contests/' + id + '/events', location.href)
-    url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-    if (token) url.searchParams.set('token', token)
-    const ws = new WebSocket(url)
-    setSocket(Option.some(ws))
-    const opened = () => {
-      setConnected(true)
-      setError('')
+    const scope: Access = role === 'Editor' ? { _tag: 'Editor' } : { _tag: 'Viewer', token }
+    const inbox = Effect.runSync(Queue.make<Effect.Effect<void, { readonly code: MessageKey }>>())
+    let current: Option.Option<ContestReplica> = Option.none()
+    let link: Link = { _tag: 'Disconnected' }
+    let retry: Option.Option<number> = Option.none()
+    let active = true
+    function enqueue(operation: Effect.Effect<void, { readonly code: MessageKey }>) {
+      Queue.offerUnsafe(inbox, operation)
     }
-    const closed = () => setConnected(false)
-    const failed = () => setError('request.failed')
-    const received = (event: MessageEvent<unknown>) => {
-      const parsed = Schema.decodeUnknownResult(Schema.fromJsonString(ServerFrame))(event.data)
+    const worker = Effect.runFork(
+      Effect.forever(
+        Effect.gen(function* () {
+          const operation = yield* Queue.take(inbox)
+          yield* operation.pipe(
+            Effect.catch((failure) => Effect.sync(() => setError(failure.code))),
+          )
+        }),
+      ),
+    )
+    function schedule() {
+      if (!active || !navigator.onLine || Option.isSome(retry)) return
+      retry = Option.some(
+        window.setTimeout(() => {
+          retry = Option.none()
+          enqueue(connect())
+        }, 1500),
+      )
+    }
+    function disconnect() {
+      if (link._tag !== 'Disconnected') link.socket.close()
+      link = { _tag: 'Disconnected' }
+      setConnected(false)
+    }
+    function persist(replica: ContestReplica) {
+      return saveReplica(id, scope, replica.state).pipe(
+        Effect.andThen(
+          Effect.sync(() => {
+            current = Option.some(replica)
+            setView({ _tag: 'Ready', replica })
+          }),
+        ),
+      )
+    }
+    function flush() {
+      return Effect.try({
+        try: () => {
+          if (
+            role !== 'Editor' ||
+            link._tag !== 'Online' ||
+            Option.isSome(link.inFlight) ||
+            Option.isNone(current)
+          )
+            return
+          const command = current.value.state.pending[0]
+          if (!command) return
+          link = { ...link, inFlight: Option.some(command.id) }
+          link.socket.send(JSON.stringify({ _tag: 'Submit', command }))
+        },
+        catch: networkFailure,
+      }).pipe(
+        Effect.catch((failure) =>
+          Effect.sync(() => {
+            setError(failure.code)
+            disconnect()
+            schedule()
+          }),
+        ),
+      )
+    }
+    function receive(frame: ServerFrame) {
+      return Effect.gen(function* () {
+        if (frame._tag === 'Failure') {
+          setError(frame.code)
+          disconnect()
+          return
+        }
+        const next: Result.Result<
+          ContestReplica,
+          ContestFailure | ReplicaConflict | DecodeFailure
+        > = Option.isNone(current)
+          ? frame._tag === 'Snapshot'
+            ? ContestReplica.restore({ snapshot: frame.snapshot, pending: [], rejected: [] })
+            : Result.fail(new DecodeFailure({ code: 'request.invalid', cause: 'snapshotRequired' }))
+          : current.value.receive(frame)
+        if (Result.isFailure(next) || next.success.state.snapshot.definition.id !== id) {
+          setError('request.invalid')
+          disconnect()
+          schedule()
+          return
+        }
+        yield* persist(next.success)
+        if (frame._tag === 'Snapshot' && link._tag === 'CatchingUp') {
+          link = { _tag: 'Online', socket: link.socket, inFlight: Option.none() }
+          setConnected(true)
+          setError('')
+        }
+        const acknowledged =
+          frame._tag === 'Accepted'
+            ? frame.command.id
+            : frame._tag === 'Rejected'
+              ? frame.commandId
+              : ''
+        if (link._tag === 'Online' && Option.contains(link.inFlight, acknowledged))
+          link = { ...link, inFlight: Option.none() }
+        if (frame._tag === 'Rejected') setRejection(frame.reason)
+        yield* flush()
+      })
+    }
+    function connect() {
+      return Effect.try({
+        try: () => {
+          if (!active || !navigator.onLine || link._tag !== 'Disconnected') return
+          const url = new URL('/api/contests/' + id + '/events', location.href)
+          url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
+          if (token) url.searchParams.set('token', token)
+          const socket = new WebSocket(url)
+          link = { _tag: 'Connecting', socket }
+          socket.addEventListener('open', () => {
+            if (active && link._tag !== 'Disconnected' && link.socket === socket)
+              link = { _tag: 'CatchingUp', socket }
+          })
+          socket.addEventListener('close', () => {
+            if (!active || link._tag === 'Disconnected' || link.socket !== socket) return
+            link = { _tag: 'Disconnected' }
+            setConnected(false)
+            schedule()
+          })
+          socket.addEventListener('error', () => {
+            if (active && link._tag !== 'Disconnected' && link.socket === socket)
+              setError('request.failed')
+          })
+          socket.addEventListener('message', (event: MessageEvent<unknown>) => {
+            if (!active || link._tag === 'Disconnected' || link.socket !== socket) return
+            const parsed = Schema.decodeUnknownResult(Schema.fromJsonString(ServerFrame))(
+              event.data,
+            )
+            if (Result.isFailure(parsed)) {
+              setError('request.invalid')
+              disconnect()
+              schedule()
+            } else enqueue(receive(parsed.success))
+          })
+        },
+        catch: networkFailure,
+      }).pipe(
+        Effect.catch((failure) =>
+          Effect.sync(() => {
+            setError(failure.code)
+            schedule()
+          }),
+        ),
+      )
+    }
+    dispatch.current = (input) => {
+      const parsed = Schema.decodeUnknownResult(Command)({
+        ...input,
+        id: crypto.randomUUID(),
+        at: Date.now(),
+      })
       if (Result.isFailure(parsed)) {
         setError('request.invalid')
         return
       }
-      const frame = parsed.success
-      switch (frame._tag) {
-        case 'Failure':
-          setError(frame.code)
-          return
-        case 'Rejected':
-          setRejection(frame.reason)
-          return
-        case 'Snapshot': {
-          const restored = ContestJournal.restore(
-            frame.snapshot.definition.rulebook,
-            frame.snapshot.definition.date,
-            frame.snapshot.commands.map((item) => item.command),
-          )
-          if (Result.isFailure(restored) || frame.snapshot.definition.id !== id) {
+      enqueue(
+        Effect.gen(function* () {
+          if (role !== 'Editor') {
+            setError('auth.readOnly')
+            return
+          }
+          if (Option.isNone(current)) {
+            setError('request.failed')
+            return
+          }
+          const queued = current.value.enqueue(parsed.success)
+          if (Result.isFailure(queued)) {
+            setRejection('reason' in queued.failure ? queued.failure.reason : queued.failure._tag)
+            return
+          }
+          yield* persist(queued.success)
+          setError('')
+          setRejection('')
+          yield* flush()
+        }),
+      )
+    }
+    enqueue(
+      Effect.gen(function* () {
+        const cached = yield* readReplica(id, scope)
+        if (Option.isSome(cached)) {
+          const restored = ContestReplica.restore(cached.value)
+          if (Result.isFailure(restored)) {
             setView({ _tag: 'Invalid' })
             return
           }
-          setView({
-            _tag: 'Ready',
-            definition: frame.snapshot.definition,
-            journal: restored.success,
-          })
-          return
+          current = Option.some(restored.success)
+          setView({ _tag: 'Ready', replica: restored.success })
         }
-        case 'Accepted':
-          setView((previous) => {
-            if (previous._tag !== 'Ready') return { _tag: 'Invalid' }
-            if (frame.sequence <= previous.journal.commands.length) return previous
-            if (frame.sequence !== previous.journal.commands.length + 1) return { _tag: 'Invalid' }
-            const appended = previous.journal.append(frame.command)
-            return Result.isFailure(appended)
-              ? { _tag: 'Invalid' }
-              : { ...previous, journal: appended.success }
-          })
-      }
-    }
-    ws.addEventListener('open', opened)
-    ws.addEventListener('close', closed)
-    ws.addEventListener('error', failed)
-    ws.addEventListener('message', received)
-    return () => {
-      ws.removeEventListener('open', opened)
-      ws.removeEventListener('close', closed)
-      ws.removeEventListener('error', failed)
-      ws.removeEventListener('message', received)
-      ws.close()
-    }
-  }, [id, token, setView])
-  function submit(input: object) {
-    if (access._tag !== 'Editor') {
-      setError('auth.readOnly')
-      return
-    }
-    const parsed = Schema.decodeUnknownResult(Command)({
-      ...input,
-      id: crypto.randomUUID(),
-      at: Date.now(),
-    })
-    if (Result.isFailure(parsed)) {
-      setError('request.invalid')
-      return
-    }
-    if (Option.isNone(socket) || socket.value.readyState !== WebSocket.OPEN) {
-      setError('request.failed')
-      return
-    }
-    setError('')
-    setRejection('')
-    Effect.try({
-      try: () => socket.value.send(JSON.stringify({ _tag: 'Submit', command: parsed.success })),
-      catch: (cause) => new UiFailure({ code: 'request.failed', cause }),
-    }).pipe(
-      Effect.match({ onFailure: (failure) => setError(failure.code), onSuccess: () => {} }),
-      Effect.runSync,
+        yield* connect()
+      }),
     )
-  }
-  return { view, connected, error, rejection, submit }
+    const online = () => enqueue(connect())
+    const offline = () => disconnect()
+    window.addEventListener('online', online)
+    window.addEventListener('offline', offline)
+    return () => {
+      active = false
+      dispatch.current = () => {}
+      if (Option.isSome(retry)) window.clearTimeout(retry.value)
+      disconnect()
+      Queue.shutdownUnsafe(inbox)
+      Effect.runFork(Fiber.interrupt(worker))
+      window.removeEventListener('online', online)
+      window.removeEventListener('offline', offline)
+    }
+  }, [id, role, token, setView])
+  return { view, connected, error, rejection, submit: (input: object) => dispatch.current(input) }
 }

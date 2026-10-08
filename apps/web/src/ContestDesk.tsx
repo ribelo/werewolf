@@ -10,11 +10,9 @@ import { requestJson, useLiveContest, type Access } from './live-contest.ts'
 function AttemptEditor({
   attempt,
   submit,
-  connected,
 }: {
   readonly attempt: Attempt
   readonly submit: (input: object) => void
-  readonly connected: boolean
 }) {
   const { t } = useMessages()
   function declare(event: FormEvent<HTMLFormElement>) {
@@ -39,20 +37,18 @@ function AttemptEditor({
           defaultValue={attempt._tag === 'Unannounced' ? '' : attempt.weight}
           required
         />
-        <button disabled={!connected} type="submit">
-          {t('desk.declare')}
-        </button>
+        <button type="submit">{t('desk.declare')}</button>
       </form>
       <button
         type="button"
-        disabled={!connected || attempt._tag === 'Unannounced'}
+        disabled={attempt._tag === 'Unannounced'}
         onClick={() => submit({ _tag: 'SetVerdict', attempt: ref, verdict: 'goodLift' })}
       >
         {t('desk.goodLift')}
       </button>
       <button
         type="button"
-        disabled={!connected || attempt._tag === 'Unannounced'}
+        disabled={attempt._tag === 'Unannounced'}
         onClick={() => submit({ _tag: 'SetVerdict', attempt: ref, verdict: 'noLift' })}
       >
         {t('desk.noLift')}
@@ -63,11 +59,9 @@ function AttemptEditor({
 function EntryForm({
   state,
   submit,
-  connected,
 }: {
   readonly state: ContestState
   readonly submit: (input: object) => void
-  readonly connected: boolean
 }) {
   const { locale, t } = useMessages()
   function add(event: FormEvent<HTMLFormElement>) {
@@ -144,9 +138,7 @@ function EntryForm({
           </label>
         ))}
       </fieldset>
-      <button disabled={!connected} type="submit">
-        {t('desk.addEntry')}
-      </button>
+      <button type="submit">{t('desk.addEntry')}</button>
     </form>
   )
 }
@@ -179,7 +171,9 @@ export function ContestDesk({ id, access }: { readonly id: ContestId; readonly a
         {live.error && <p role="alert">{t(live.error)}</p>}
       </section>
     )
-  const { definition, journal } = live.view
+  const { replica } = live.view
+  const { definition } = replica.state.snapshot
+  const { journal } = replica
   const state = journal.state
   return (
     <section>
@@ -188,7 +182,8 @@ export function ContestDesk({ id, access }: { readonly id: ContestId; readonly a
       </h2>
       <p role="status">
         {t(live.connected ? 'desk.connected' : 'desk.disconnected')} · {t('desk.sequence')}:{' '}
-        {journal.commands.length}
+        {replica.state.snapshot.commands.length} · {t('sync.pending')}:{' '}
+        {replica.state.pending.length}
         {!editor && ' · ' + t('auth.readOnly')}
       </p>
       {live.error && <p role="alert">{t(live.error)}</p>}
@@ -196,6 +191,16 @@ export function ContestDesk({ id, access }: { readonly id: ContestId; readonly a
         <p role="alert">
           {t('desk.rejected')} {rejectionText(live.rejection, locale)}
         </p>
+      )}
+      {(replica.state.rejected.length > 0 || replica.conflicts.length > 0) && (
+        <aside role="status">
+          <h3>{t('sync.review')}</h3>
+          <ul>
+            {[...replica.state.rejected, ...replica.conflicts].map((item) => (
+              <li key={item.command.id}>{rejectionText(item.reason, locale)}</li>
+            ))}
+          </ul>
+        </aside>
       )}
       {error && <p role="alert">{t(error)}</p>}
       {Option.isSome(links) && (
@@ -213,7 +218,7 @@ export function ContestDesk({ id, access }: { readonly id: ContestId; readonly a
           ))}
         </nav>
       )}
-      {editor && <EntryForm state={state} submit={live.submit} connected={live.connected} />}
+      {editor && <EntryForm state={state} submit={live.submit} />}
       <div className="table-scroll">
         <table>
           <thead>
@@ -245,11 +250,7 @@ export function ContestDesk({ id, access }: { readonly id: ContestId; readonly a
                   </td>
                   {editor && (
                     <td>
-                      <AttemptEditor
-                        attempt={attempt}
-                        submit={live.submit}
-                        connected={live.connected}
-                      />
+                      <AttemptEditor attempt={attempt} submit={live.submit} />
                     </td>
                   )}
                 </tr>
