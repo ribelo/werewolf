@@ -11,10 +11,7 @@ import { Fragment, useEffect, useRef, type FormEvent } from 'react'
 import { useMessages } from './i18n.ts'
 
 /** Only entries that belong to the chosen division, lift, sex and classes are shown. */
-export function scoreboardRows(
-  state: ContestState,
-  filter: ScoreboardFilter,
-): ReadonlyArray<Entry> {
+function scoreboardRows(state: ContestState, filter: ScoreboardFilter): ReadonlyArray<Entry> {
   return state.entries
     .filter(
       (entry) =>
