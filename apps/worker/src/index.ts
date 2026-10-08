@@ -18,6 +18,7 @@ export interface Env extends AuthEnv {
   readonly ASSETS: Fetcher
   readonly CONTESTS: DurableObjectNamespace
   readonly CATALOG: DurableObjectNamespace
+  readonly BACKUPS: R2Bucket
 }
 
 class InvalidRequest extends Data.TaggedError('InvalidRequest')<{ readonly cause: unknown }> {
@@ -27,6 +28,47 @@ class WorkerFailure extends Data.TaggedError('WorkerFailure')<{ readonly cause: 
   override readonly message = 'Worker adapter failed'
 }
 const Login = Schema.Struct({ password: Schema.NonEmptyString })
+
+/** Send a validated backup to the contest actor and list the contest in the catalog. */
+function restoreInto(
+  env: Env,
+  origin: string,
+  headers: Headers,
+  id: string,
+  backup: Snapshot,
+): Effect.Effect<Response, WorkerFailure> {
+  return Effect.gen(function* () {
+    const restored = yield* Effect.tryPromise({
+      try: () =>
+        env.CONTESTS.getByName(id).fetch(
+          new Request(origin + '/api/contests/' + id + '/restore', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(backup),
+          }),
+        ),
+      catch: (cause) => new WorkerFailure({ cause }),
+    })
+    if (!restored.ok) return restored
+    const summary = {
+      id: backup.definition.id,
+      name: backup.definition.name,
+      date: backup.definition.date,
+    }
+    const registered = yield* Effect.tryPromise({
+      try: () =>
+        env.CATALOG.getByName('all').fetch(
+          new Request(origin + '/api/contests', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(summary),
+          }),
+        ),
+      catch: (cause) => new WorkerFailure({ cause }),
+    })
+    return registered.ok ? restored : registered
+  })
+}
 
 function route(
   request: Request,
@@ -81,19 +123,48 @@ function route(
     const headers = new Headers(request.headers)
     headers.delete(editorHeader)
     if (authenticated && !url.searchParams.has('token')) headers.set(editorHeader, '1')
-    const contestPath = new RegExp('^/api/contests/([^/]+)/(snapshot|events|commands|links)$').exec(
-      url.pathname,
-    )
+    const contestPath = new RegExp(
+      '^/api/contests/([^/]+)/(snapshot|events|commands|links|backup|restore)$',
+    ).exec(url.pathname)
     if (contestPath) {
       const id = yield* Schema.decodeUnknownEffect(ContestId)(contestPath[1]).pipe(
         Effect.mapError((cause) => new InvalidRequest({ cause })),
       )
+      if (contestPath[2] === 'restore' && request.method === 'POST') {
+        if (!authenticated) return Response.json({ error: 'auth.required' }, { status: 401 })
+        const input = yield* Effect.tryPromise({
+          try: () => request.json(),
+          catch: (cause) => new InvalidRequest({ cause }),
+        })
+        const backup = yield* Schema.decodeUnknownEffect(Snapshot)(input).pipe(
+          Effect.mapError((cause) => new InvalidRequest({ cause })),
+        )
+        return yield* restoreInto(env, url.origin, headers, id, {
+          ...backup,
+          definition: { ...backup.definition, id },
+        })
+      }
       return yield* Effect.tryPromise({
         try: () => env.CONTESTS.getByName(id).fetch(new Request(request, { headers })),
         catch: (cause) => new WorkerFailure({ cause }),
       })
     }
     if (!authenticated) return Response.json({ error: 'auth.required' }, { status: 401 })
+    if (url.pathname === '/api/restore' && request.method === 'POST') {
+      // A backup restored into a new contest gets a new identifier, so it never overwrites another contest.
+      const input = yield* Effect.tryPromise({
+        try: () => request.json(),
+        catch: (cause) => new InvalidRequest({ cause }),
+      })
+      const backup = yield* Schema.decodeUnknownEffect(Snapshot)(input).pipe(
+        Effect.mapError((cause) => new InvalidRequest({ cause })),
+      )
+      const id = crypto.randomUUID()
+      return yield* restoreInto(env, url.origin, headers, id, {
+        ...backup,
+        definition: { ...backup.definition, id: Schema.decodeSync(ContestId)(id) },
+      })
+    }
     if (url.pathname === '/api/contests' && request.method === 'GET')
       return yield* Effect.tryPromise({
         try: () => env.CATALOG.getByName('all').fetch(new Request(request, { headers })),

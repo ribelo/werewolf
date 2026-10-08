@@ -3,6 +3,7 @@
   "main": "../src/index.ts",
   "compatibility_date": "2026-10-08",
   "compatibility_flags": ["nodejs_compat"],
+  "r2_buckets": [{ "binding": "BACKUPS", "bucket_name": "werewolf-v2-backups" }],
   "durable_objects": {
     "bindings": [
       { "name": "CONTESTS", "class_name": "ContestDO" },

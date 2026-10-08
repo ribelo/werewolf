@@ -6,18 +6,20 @@ import * as Option from 'effect/Option'
 import { useEffect, useState } from 'react'
 import { useMessages, rejectionText, type MessageKey } from './i18n.ts'
 import { requestJson, useLiveContest, type Access } from './live-contest.ts'
+import { BackupPanel } from './Backup.tsx'
 import { EntriesPanel } from './EntriesPanel.tsx'
 import { MeetDay, WeightForm } from './MeetDay.tsx'
 import { Results } from './Results.tsx'
 import { ScoreboardControl } from './Scoreboard.tsx'
 
-type Tab = 'desk' | 'entries' | 'results' | 'lifts' | 'plates'
+type Tab = 'desk' | 'entries' | 'results' | 'lifts' | 'plates' | 'backup'
 const tabKeys: ReadonlyArray<readonly [Tab, MessageKey]> = [
   ['desk', 'tab.desk'],
   ['entries', 'tab.entries'],
   ['results', 'tab.results'],
   ['lifts', 'tab.lifts'],
   ['plates', 'tab.plates'],
+  ['backup', 'tab.backup'],
 ]
 
 function AttemptEditor({
@@ -256,6 +258,7 @@ export function ContestDesk({ id, access }: { readonly id: ContestId; readonly a
             </div>
           </section>
         ))}
+      {tab === 'backup' && editor && <BackupPanel id={id} online={live.connected} />}
       {tab === 'plates' && (
         <section className="card">
           <h3 className="text-h3 mb-2">{t('plates.inventory')}</h3>

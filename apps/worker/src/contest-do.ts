@@ -9,8 +9,8 @@ import {
   PeerRole,
   type Accepted,
   type ReadLinks,
+  Snapshot,
   type ServerFrame,
-  type Snapshot,
 } from '@werewolf/sync'
 import * as Data from 'effect/Data'
 import * as Effect from 'effect/Effect'
@@ -58,7 +58,13 @@ interface LoadedContest {
 /** The Worker overwrites this private access header before it calls either actor. */
 export const editorHeader = 'X-Werewolf-Editor'
 
-export class ContestDO extends DurableObject {
+/** Automatic backups go to R2 at most this often while commands keep arriving. */
+const backupIntervalMs = 5 * 60 * 1000
+export interface ContestEnv {
+  readonly BACKUPS: R2Bucket
+}
+
+export class ContestDO extends DurableObject<ContestEnv> {
   private current: Option.Option<LoadedContest> = Option.none()
   private load(): Option.Option<LoadedContest> {
     if (Option.isSome(this.current)) return this.current
@@ -93,6 +99,77 @@ export class ContestDO extends DurableObject {
         command,
       })),
     }
+  }
+  /** One alarm at a time: the next backup is due an interval after the first unsaved command. */
+  private armBackup() {
+    return Effect.tryPromise({
+      try: async () => {
+        if ((await this.ctx.storage.getAlarm()) === null)
+          await this.ctx.storage.setAlarm(Date.now() + backupIntervalMs)
+      },
+      catch: (cause) => new ActorFailure({ cause }),
+    })
+  }
+  override async alarm() {
+    const loaded = this.load()
+    if (Option.isNone(loaded)) return
+    const snapshot = this.snapshot(loaded.value)
+    const sequence = snapshot.commands.length
+    const saved = this.ctx.storage.kv.get<number>('backedUp') ?? 0
+    if (sequence <= saved) return
+    const stamp = new Date().toISOString()
+    await this.env.BACKUPS.put(
+      'contests/' +
+        loaded.value.stored.definition.id +
+        '/' +
+        String(sequence).padStart(8, '0') +
+        '-' +
+        stamp +
+        '.json',
+      JSON.stringify(snapshot),
+    )
+    this.ctx.storage.kv.put('backedUp', sequence)
+    // Commands that arrived while the file was written wait for the next interval.
+    if (this.snapshot(this.load().pipe(Option.getOrThrow)).commands.length > sequence)
+      await this.ctx.storage.setAlarm(Date.now() + backupIntervalMs)
+  }
+  /** Replace the log of this contest, or create it, from a validated backup. Tokens survive a restore. */
+  private restoreFrom(backup: Snapshot): Result.Result<Snapshot, string> {
+    const restored = ContestJournal.restore(
+      backup.definition.rulebook,
+      backup.definition.date,
+      backup.commands.map((item) => item.command),
+    )
+    if (Result.isFailure(restored)) return Result.fail('backup.invalid')
+    const existing = this.load()
+    const tokens = Option.isSome(existing)
+      ? existing.value.stored.tokens
+      : {
+          stage: crypto.randomUUID(),
+          announcer: crypto.randomUUID(),
+          scoreboard: crypto.randomUUID(),
+          results: crypto.randomUUID(),
+        }
+    const stored = { definition: backup.definition, tokens }
+    this.ctx.storage.sql.exec('DELETE FROM commands')
+    this.ctx.storage.sql.exec('DELETE FROM contest')
+    this.ctx.storage.sql.exec(
+      'INSERT INTO contest(singleton, data) VALUES (1, ?)',
+      JSON.stringify(stored),
+    )
+    for (const [index, command] of restored.success.commands.entries())
+      this.ctx.storage.sql.exec(
+        'INSERT INTO commands(sequence, id, data) VALUES (?, ?, ?)',
+        index + 1,
+        command.id,
+        JSON.stringify(command),
+      )
+    this.ctx.storage.kv.put('backedUp', 0)
+    const contest: LoadedContest = { stored, journal: restored.success }
+    this.current = Option.some(contest)
+    const snapshot = this.snapshot(contest)
+    for (const socket of this.ctx.getWebSockets()) this.send(socket, { _tag: 'Snapshot', snapshot })
+    return Result.succeed(snapshot)
   }
   private send(socket: WebSocket, frame: ServerFrame) {
     if (socket.readyState === 1) socket.send(JSON.stringify(frame))
@@ -145,6 +222,11 @@ export class ContestDO extends DurableObject {
       JSON.stringify(command),
     )
     this.current = Option.some({ stored: contest.stored, journal: next.success })
+    this.ctx.waitUntil(
+      this.ctx.storage.getAlarm().then(async (alarm) => {
+        if (alarm === null) await this.ctx.storage.setAlarm(Date.now() + backupIntervalMs)
+      }),
+    )
     const frame: Accepted = { _tag: 'Accepted', sequence, command }
     for (const socket of this.ctx.getWebSockets()) this.send(socket, frame)
     return frame
@@ -189,6 +271,20 @@ export class ContestDO extends DurableObject {
             })
           })
         }
+        if (url.pathname.endsWith('/restore') && request.method === 'POST') {
+          if (!editor) return failure('auth.required', 401)
+          const input = yield* body(request)
+          const backup = yield* Schema.decodeUnknownEffect(Snapshot)(input).pipe(
+            Effect.mapError((cause) => new InvalidActorRequest({ cause })),
+          )
+          const restored = yield* io(() => {
+            this.load()
+            return this.restoreFrom(backup)
+          })
+          if (Result.isFailure(restored)) return failure('request.invalid', 422)
+          yield* this.armBackup()
+          return Response.json(restored.success, { headers: { 'Cache-Control': 'no-store' } })
+        }
         const loaded = yield* io(() => this.load())
         if (Option.isNone(loaded)) return failure('request.notFound', 404)
         const contest = loaded.value
@@ -225,6 +321,15 @@ export class ContestDO extends DurableObject {
         if (url.pathname.endsWith('/snapshot') && request.method === 'GET')
           return Response.json(this.snapshot(contest), { headers: { 'Cache-Control': 'no-store' } })
         if (!editor) return failure('auth.readOnly', 403)
+        if (url.pathname.endsWith('/backup') && request.method === 'GET') {
+          return Response.json(this.snapshot(contest), {
+            headers: {
+              'Cache-Control': 'no-store',
+              'Content-Disposition':
+                'attachment; filename="backup-' + contest.stored.definition.id + '.json"',
+            },
+          })
+        }
         if (url.pathname.endsWith('/links') && request.method === 'GET') {
           const link = (role: keyof typeof contest.stored.tokens) =>
             url.origin +
