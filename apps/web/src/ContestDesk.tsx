@@ -3,9 +3,10 @@ import { ReadLinks, type ContestId } from '@werewolf/sync'
 import * as Effect from 'effect/Effect'
 import * as Fiber from 'effect/Fiber'
 import * as Option from 'effect/Option'
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState } from 'react'
 import { useMessages, rejectionText, type MessageKey } from './i18n.ts'
 import { requestJson, useLiveContest, type Access } from './live-contest.ts'
+import { EntriesPanel } from './EntriesPanel.tsx'
 import { MeetDay, WeightForm } from './MeetDay.tsx'
 import { ScoreboardControl } from './Scoreboard.tsx'
 
@@ -58,107 +59,6 @@ function AttemptEditor({
         {t('desk.noLift')}
       </button>
     </div>
-  )
-}
-function EntryForm({
-  state,
-  submit,
-}: {
-  readonly state: ContestState
-  readonly submit: (input: object) => void
-}) {
-  const { locale, t } = useMessages()
-  function add(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const form = new FormData(event.currentTarget)
-    const bodyweight = form.get('bodyweight')
-    submit({
-      _tag: 'AddEntry',
-      entry: {
-        id: crypto.randomUUID(),
-        lifter: {
-          id: crypto.randomUUID(),
-          name: form.get('name'),
-          sex: form.get('sex'),
-          birthDate: form.get('birthDate'),
-        },
-        lotNumber: Number(form.get('lotNumber')),
-        ...(bodyweight === '' ? {} : { bodyweight: Number(bodyweight) }),
-        divisions: [form.get('division')],
-        lifts: form.getAll('lifts').map((liftId) => ({ liftId })),
-      },
-    })
-  }
-  return (
-    <form className="card grid max-w-xl gap-1" onSubmit={add}>
-      <h3 className="text-h3 mb-2">{t('desk.addEntry')}</h3>
-      <label className="mb-2 block">
-        <span className="input-label">{t('desk.name')}</span>
-        <input className="input-field w-full" name="name" required />
-      </label>
-      <label className="mb-2 block">
-        <span className="input-label">{t('desk.sex')}</span>
-        <select className="input-field w-full" name="sex">
-          <option value="male">{t('desk.male')}</option>
-          <option value="female">{t('desk.female')}</option>
-        </select>
-      </label>
-      <label className="mb-2 block">
-        <span className="input-label">{t('desk.birthDate')}</span>
-        <input className="input-field w-full" name="birthDate" type="date" required />
-      </label>
-      <label className="mb-2 block">
-        <span className="input-label">{t('desk.bodyweight')}</span>
-        <input
-          className="input-field w-full"
-          name="bodyweight"
-          type="number"
-          min="0.001"
-          step="0.001"
-        />
-      </label>
-      <label className="mb-2 block">
-        <span className="input-label">{t('desk.lotNumber')}</span>
-        <input
-          className="input-field w-full"
-          key={state.entries.length}
-          name="lotNumber"
-          type="number"
-          min="1"
-          step="1"
-          defaultValue={Math.max(0, ...state.entries.map((entry) => entry.lotNumber)) + 1}
-          required
-        />
-      </label>
-      <label className="mb-2 block">
-        <span className="input-label">{t('desk.division')}</span>
-        <select className="input-field w-full" name="division">
-          {state.rulebook.divisions.map((division) => (
-            <option key={division.id} value={division.id}>
-              {division.name[locale]}
-            </option>
-          ))}
-        </select>
-      </label>
-      <fieldset className="mb-2">
-        <legend className="input-label">{t('desk.lifts')}</legend>
-        {state.rulebook.lifts.map((lift) => (
-          <label key={lift.id} className="mr-4 inline-flex items-center gap-2 text-sm">
-            <input
-              className="input-field w-full"
-              name="lifts"
-              type="checkbox"
-              value={lift.id}
-              defaultChecked
-            />
-            {lift.name[locale]}
-          </label>
-        ))}
-      </fieldset>
-      <button className="btn-primary mt-2" type="submit">
-        {t('desk.addEntry')}
-      </button>
-    </form>
   )
 }
 export function ContestDesk({ id, access }: { readonly id: ContestId; readonly access: Access }) {
@@ -294,7 +194,9 @@ export function ContestDesk({ id, access }: { readonly id: ContestId; readonly a
           )}
         </>
       )}
-      {tab === 'entries' && editor && <EntryForm state={state} submit={live.submit} />}
+      {tab === 'entries' && editor && (
+        <EntriesPanel state={state} journal={journal} submit={live.submit} />
+      )}
       {tab === 'results' &&
         individualRankings(state).map((ranking) => (
           <section key={ranking.classificationId} className="card">
