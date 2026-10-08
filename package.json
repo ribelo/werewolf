@@ -19,9 +19,9 @@
     "gate:full": "bun run check && bun run format:check && knip",
     "build": "bun run --filter @werewolf/web build",
     "dev": "bun run build && wrangler dev --config apps/worker/wrangler.jsonc",
-    "plan": "bun run build && ALCHEMY_HOME=$HOME/.alchemy-werewolf ALCHEMY_PROFILE=werewolf alchemy plan",
-    "deploy": "bun run check && bun run build && ALCHEMY_HOME=$HOME/.alchemy-werewolf ALCHEMY_PROFILE=werewolf alchemy deploy --yes",
-    "cloudflare-login": "ALCHEMY_HOME=$HOME/.alchemy-werewolf ALCHEMY_PROFILE=werewolf alchemy profile edit --profile werewolf --add Cloudflare"
+    "plan": "bun run build && ALCHEMY_HOME=${ALCHEMY_HOME:-$HOME/.alchemy-werewolf} ALCHEMY_PROFILE=${ALCHEMY_PROFILE:-werewolf} alchemy plan",
+    "deploy": "bun run check && bun run build && ALCHEMY_HOME=${ALCHEMY_HOME:-$HOME/.alchemy-werewolf} ALCHEMY_PROFILE=${ALCHEMY_PROFILE:-werewolf} alchemy deploy --yes",
+    "cloudflare-login": "ALCHEMY_HOME=${ALCHEMY_HOME:-$HOME/.alchemy-werewolf} ALCHEMY_PROFILE=${ALCHEMY_PROFILE:-werewolf} alchemy profile edit --profile ${ALCHEMY_PROFILE:-werewolf} --add Cloudflare"
   },
   "dependencies": {
     "effect": "4.0.1"

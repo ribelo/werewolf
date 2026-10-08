@@ -3,7 +3,7 @@
 import * as Atom from 'effect/reactivity/Atom'
 import { useAtom } from '@effect/atom-react'
 
-const catalogs = {
+export const catalogs = {
   pl: {
     'auth.readOnly': 'Tylko do odczytu.',
     'contests.create': 'Utwórz zawody',
@@ -292,6 +292,10 @@ const catalogs = {
     'backup.done': 'Gotowe.',
     'contests.restore': 'Przywróć zawody z kopii',
     'rb.sumDone': 'Suma wykonanych bojów',
+    'a11y.barbell': 'Sztanga z talerzami',
+    'a11y.qr': 'Kod QR',
+    'board.male': 'M',
+    'board.female': 'K',
     'auth.pending': 'Logowanie…',
   },
   en: {
@@ -582,6 +586,10 @@ const catalogs = {
     'backup.done': 'Done.',
     'contests.restore': 'Restore a contest from a backup',
     'rb.sumDone': 'Sum of the lifts done',
+    'a11y.barbell': 'Barbell with plates',
+    'a11y.qr': 'QR code',
+    'board.male': 'M',
+    'board.female': 'F',
     'auth.pending': 'Logging in…',
   },
 } as const

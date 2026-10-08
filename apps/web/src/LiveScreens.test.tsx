@@ -50,7 +50,9 @@ it('ww-widg: the stage shows the lifter, weight and a barbell matching the plate
   expect(screen.getByRole('heading', { name: 'Anna Alpha' })).toBeDefined()
   expect(screen.getByText(/^100\.00/)).toBeDefined()
   // 100 kg on a 20 kg bar is 40 kg per side; the drawing has the same plates on one side.
-  const plates = (screen.getByRole('img', { name: 'barbell' }).getAttribute('data-plates') ?? '')
+  const plates = (
+    screen.getByRole('img', { name: 'Sztanga z talerzami' }).getAttribute('data-plates') ?? ''
+  )
     .split(',')
     .map(Number)
   expect(plates.reduce((sum, weight) => sum + weight, 0)).toBe(40)

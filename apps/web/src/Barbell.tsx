@@ -1,4 +1,5 @@
 import type { PlateStack } from '@werewolf/core'
+import { useMessages } from './i18n.ts'
 
 /** Plate colours follow the international plate colour code. */
 const colours: Readonly<Record<number, string>> = {
@@ -13,11 +14,12 @@ const colours: Readonly<Record<number, string>> = {
 const heaviest = 25
 /** Plates for one side, heaviest next to the collar; wider and taller for heavier plates, as on the 2025 stage screen. */
 export function Barbell({ plates }: { readonly plates: ReadonlyArray<PlateStack> }) {
+  const { t } = useMessages()
   const flat = plates.flatMap((stack) => Array.from({ length: stack.count }, () => stack.weight))
   return (
     <div
       role="img"
-      aria-label="barbell"
+      aria-label={t('a11y.barbell')}
       data-plates={flat.join(',')}
       className="flex h-32 items-center justify-start overflow-hidden"
     >

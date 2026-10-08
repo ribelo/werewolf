@@ -62,7 +62,7 @@ it('ww-l06a: a pushed QR code is drawn from the replayed log', () => {
       qrUrl: 'https://example.test/view/x/results?token=t',
     }),
   ])
-  expect(screen.getByRole('img', { name: 'QR' }).getAttribute('data-url')).toBe(
+  expect(screen.getByRole('img', { name: 'Kod QR' }).getAttribute('data-url')).toBe(
     'https://example.test/view/x/results?token=t',
   )
 })

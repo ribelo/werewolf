@@ -32,6 +32,7 @@ function scoreboardRows(state: ContestState, filter: ScoreboardFilter): Readonly
 }
 
 function QrCode({ url }: { readonly url: string }) {
+  const { t } = useMessages()
   const code = qrcode(0, 'M')
   code.addData(url)
   code.make()
@@ -39,7 +40,7 @@ function QrCode({ url }: { readonly url: string }) {
     <div
       className="qr"
       role="img"
-      aria-label="QR"
+      aria-label={t('a11y.qr')}
       data-url={url}
       // The generator returns trusted SVG markup built from its own matrix.
       dangerouslySetInnerHTML={{ __html: code.createSvgTag({ cellSize: 6, scalable: true }) }}
@@ -167,7 +168,7 @@ export function Scoreboard({
                       </div>
                     </td>
                     <td className="text-center text-xs">
-                      {entry.lifter.sex === 'male' ? 'M' : 'K'}
+                      {t(entry.lifter.sex === 'male' ? 'board.male' : 'board.female')}
                     </td>
                     <td className="text-center">{ageOnDate(entry.lifter.birthDate, state.date)}</td>
                     <td className="text-center">
