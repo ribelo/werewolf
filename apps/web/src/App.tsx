@@ -12,6 +12,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useMessages, type MessageKey } from './i18n.ts'
 import { ContestCatalog } from './ContestCatalog.tsx'
 import { ContestDesk } from './ContestDesk.tsx'
+import { ViewerScreen } from './ViewerScreen.tsx'
 import { ContestId } from '@werewolf/sync'
 import { requestJson } from './live-contest.ts'
 import { hasEditorGrant, readReplica, setEditorGrant } from './replica-store.ts'
@@ -155,7 +156,11 @@ export function App() {
         </label>
       </header>
       {Result.isSuccess(viewerId) && token ? (
-        <ContestDesk id={viewerId.success} access={{ _tag: 'Viewer', token }} />
+        viewPath?.[2] === 'stage' || viewPath?.[2] === 'announcer' ? (
+          <ViewerScreen id={viewerId.success} token={token} role={viewPath[2]} />
+        ) : (
+          <ContestDesk id={viewerId.success} access={{ _tag: 'Viewer', token }} />
+        )
       ) : auth._tag === 'Editor' || auth._tag === 'OfflineEditor' ? (
         <section>
           {auth._tag === 'OfflineEditor' ? (

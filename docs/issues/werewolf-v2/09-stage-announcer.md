@@ -6,8 +6,14 @@
 
 **Blocked by:** 08
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Verdict appears on both screens as soon as the desk records it
-- [ ] Barbell drawing matches the plate plan for bar + clamps
-- [ ] Opens from a read-only link/QR without password
+- [x] Verdict appears on both screens as soon as the desk records it
+- [x] Barbell drawing matches the plate plan for bar + clamps
+- [x] Opens from a read-only link/QR without password
+
+## Verified
+
+- Component tests (`apps/web/src/LiveScreens.test.tsx`): stage shows lifter, weight and a barbell whose plates sum to the loadable plate plan per side and are drawn on both sides (ww-widg); after a verdict both screens show it and the next lifter at once (ww-ufi7, ww-6pk1); the announcer lists the next lifters and the lifter's divisions and places (ww-6pk1).
+- Real Chrome against a local Worker (throwaway script): stage and announcer opened in fresh browser contexts from the read-only links, without a password and without a login form. A desk verdict reached both within 36 ms. The stage showed plates 10 + 2.5 per side for 40 kg.
+- `bun run gate:full` passes.
