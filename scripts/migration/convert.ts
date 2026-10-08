@@ -80,6 +80,8 @@ export interface Conversion {
   /** A backup file the restore endpoint accepts. */
   readonly backup: unknown
   readonly divisions: ReadonlyArray<{ readonly id: string; readonly label: string }>
+  /** Entry and lift pairs converted to DNS. */
+  readonly didNotStart: number
 }
 
 const liftIds: Readonly<Record<string, string>> = { Bench: 'bench', Deadlift: 'deadlift' }
@@ -103,7 +105,7 @@ const clean = (text: string) => text.replace(/\s+/g, ' ').trim()
 function buildRulebook(
   source: SourceData,
   divisions: ReadonlyArray<{ id: string; label: string }>,
-  clampsPerSide: number,
+  womensBar: number,
 ) {
   const ageClasses = source.ageCategories
     .toSorted((left, right) => left.sort_order - right.sort_order)
@@ -197,8 +199,8 @@ function buildRulebook(
         .map((item) => classification(item.id, item.label, [item.id], 'none')),
     ],
     barbell: {
-      bars: { male: source.contest.mens_bar_weight, female: source.contest.womens_bar_weight },
-      clampsPerSide,
+      bars: { male: source.contest.mens_bar_weight, female: womensBar },
+      clampsPerSide: source.contest.clamp_weight,
       plates: source.plates.map((plate) => ({ weight: plate.plate_weight, pairs: plate.quantity })),
     },
   })
@@ -227,7 +229,7 @@ export function convertContest(source: SourceData): Conversion {
   if (!divisions.some((item) => item.id === 'open'))
     divisions.unshift({ id: 'open', label: 'Open' })
   const adjustments: Array<string> = []
-  let rulebook = buildRulebook(source, divisions, source.contest.clamp_weight)
+  let rulebook = buildRulebook(source, divisions, source.contest.womens_bar_weight)
   const commands: Array<unknown> = []
   const teams = new Map<string, string>()
   const team = (name: typeof OptionalText.Type) => {
@@ -256,6 +258,11 @@ export function convertContest(source: SourceData): Conversion {
     source.attempts
       .filter((a) => a.registration_id === registrationId && a.lift_type === lift)
       .toSorted((a, b) => a.attempt_number - b.attempt_number)
+  const noShows: Array<string> = []
+  const noShow = (registrationId: string, lift: string) => {
+    const own = attemptsOf(registrationId, lift)
+    return own.length > 0 && own.every((a) => a.weight === 20 && a.status === 'Failed')
+  }
   const entryCommands: Array<unknown> = []
   const later: Array<{ at: number; command: unknown }> = []
   for (const [index, registration] of ordered.entries()) {
@@ -296,7 +303,10 @@ export function convertContest(source: SourceData): Conversion {
           const rack = type === 'Bench' && typeof registration.rack_height_bench === 'number'
           return {
             liftId: liftIds[type],
-            ...(first && typeof first.weight === 'number' && first.weight > 0
+            ...(first &&
+            !noShow(registration.id, type) &&
+            typeof first.weight === 'number' &&
+            first.weight > 0
               ? { openingWeight: first.weight }
               : {}),
             ...(rack ? { rackHeight: registration.rack_height_bench } : {}),
@@ -304,8 +314,29 @@ export function convertContest(source: SourceData): Conversion {
         }),
       },
     })
-    for (const type of lifts)
-      for (const attempt of attemptsOf(registration.id, type)) {
+    for (const type of lifts) {
+      const own = attemptsOf(registration.id, type)
+      // Three burned 20 kg attempts were how the 2025 desk marked a lifter who did not show up.
+      if (noShow(registration.id, type)) {
+        const first = own[0]
+        const at = first
+          ? millis(first.timestamp, first.created_at)
+          : Date.parse(registration.created_at)
+        later.push({
+          at,
+          command: {
+            _tag: 'SetDidNotStart',
+            id: 'mig-dns-' + registration.id + '-' + type,
+            at,
+            entryId: registration.id,
+            liftId: liftIds[type],
+            value: true,
+          },
+        })
+        noShows.push(registration.id)
+        continue
+      }
+      for (const attempt of own) {
         if (typeof attempt.weight !== 'number' || attempt.weight <= 0) continue
         const ref = {
           entryId: registration.id,
@@ -336,6 +367,7 @@ export function convertContest(source: SourceData): Conversion {
             },
           })
       }
+    }
   }
   commands.push(...entryCommands)
   // Time order of the real meet keeps "who reached the result first" meaningful.
@@ -345,14 +377,14 @@ export function convertContest(source: SourceData): Conversion {
   const day = Schema.decodeSync(CalendarDate)(date)
   let restored = ContestJournal.restore(rulebook, day, decoded)
   if (Result.isFailure(restored) && restored.failure._tag === 'UnloadableWeight') {
-    // The 2025 desk did not check weights: a bare 20 kg bar was lifted. The 2026 rule (bar + clamps minimum)
-    // would reject it, so the migrated rulebook drops the clamps and every recorded weight stays as it was.
-    rulebook = buildRulebook(source, divisions, 0)
+    // The 2025 database says 20 kg for the women's bar, but the women's bar is 15 kg: with two 2.5 kg
+    // clamps a woman's 20 kg opening is legal. Bar plus clamps stays the rule.
+    rulebook = buildRulebook(source, divisions, 15)
     restored = ContestJournal.restore(rulebook, day, decoded)
     adjustments.push(
-      'Clamp weight set to 0 kg in the migrated rulebook (it was ' +
-        source.contest.clamp_weight +
-        ' kg per side): a recorded weight is below bar + clamps.',
+      "Women's bar set to 15 kg in the migrated rulebook (the database said " +
+        source.contest.womens_bar_weight +
+        ' kg): 20 kg is a legal weight on 15 kg + 2 clamps.',
     )
   }
   const reason = (error: ContestFailure) => ('reason' in error ? error.reason : error._tag)
@@ -374,5 +406,6 @@ export function convertContest(source: SourceData): Conversion {
       })),
     },
     divisions,
+    didNotStart: noShows.length,
   }
 }

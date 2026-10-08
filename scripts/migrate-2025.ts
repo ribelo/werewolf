@@ -195,6 +195,9 @@ for (const contest of contests) {
       ' slots; commands: ' +
       backup.commands.length,
     '- Divisions: ' + conversion.divisions.map((item) => item.label).join(', '),
+    '- Did not start (DNS): ' +
+      conversion.didNotStart +
+      ' entry-lift pairs (all attempts were 20 kg and failed in 2025).',
     ...conversion.adjustments.map((line) => '- Adjustment: ' + line),
     '- Stored old results: ' +
       old.length +
@@ -214,7 +217,7 @@ for (const contest of contests) {
       ', unexplained: ' +
       count('other') +
       ')',
-    '  - "no good lift": the old app gave places to lifters with 0 points; the new app ranks only lifters with a good lift.',
+    '  - "no good lift": the old app gave places to lifters with 0 points, including lifters who did not start (DNS); the new app ranks only lifters with a good lift and shows DNS.',
     '  - "tie-break": equal points; the new order is bodyweight (lighter first), then who reached the result first.',
     ...differences
       .filter((item) => item.kind === 'other')

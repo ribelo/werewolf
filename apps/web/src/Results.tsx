@@ -50,6 +50,7 @@ function useLabels(): TableLabels {
     result: t('res.result'),
     points: t('res.points'),
     counted: t('res.counted'),
+    didNotStart: t('res.dns'),
   }
 }
 
@@ -202,7 +203,15 @@ export function Results({
                 </div>
               )
             })}
-            {ranking.groups.length === 0 && <p className="text-text-secondary">{t('res.empty')}</p>}
+            {ranking.groups.length === 0 &&
+              !ranking.pending.some((item) => item.reason === 'didNotStart') && (
+                <p className="text-text-secondary">{t('res.empty')}</p>
+              )}
+            {ranking.pending.some((item) => item.reason === 'didNotStart') && (
+              <TableView
+                model={individualTable(state, { ...ranking, groups: [] }, locale, labels)}
+              />
+            )}
             {pending > 0 && (
               <p className="text-xs text-text-secondary">
                 {t('res.pending')}: {pending}

@@ -76,6 +76,7 @@ Rewrite the app from scratch in a new worktree, keeping only the concepts that p
 37. As the desk, I want my offline changes sent automatically when the connection returns, in the order I made them, so that nothing is lost or reordered ^ww-gouf
 38. As a second editing device, I want my changes merged with the desk's: different fields both apply, the same field takes the later change, so that two editors never corrupt the contest ^ww-9hlk
 39. As the desk, I want undo of my last change, so that a misclick costs one click ^ww-8ta6
+65. As the desk, I want to mark an entry as did not start (DNS) in a lift with one click, so that it leaves the lifting order, gets no place in that lift, shows DNS in tables and exports, and the mark can be undone ^ww-9jq6
 
 ### Live screens
 
@@ -133,14 +134,14 @@ Rewrite the app from scratch in a new worktree, keeping only the concepts that p
 ## Testing Decisions
 
 - Test external behaviour only: commands in, views out; protocol messages in and out; what a user sees on screen. No tests of internal helpers.
-- **Seam 1 — contest core (pure, fast, most tests).** Scenario tests built from a rulebook + commands asserting lifting order, results and classifications. Covers ww-s8ny, ww-dwfd, ww-8fz8, ww-ot23, ww-lxn4, ww-ym25, ww-m7xy, ww-4yp8, ww-fwnw, ww-gybz, ww-ub7m, ww-dtzk, ww-eje4, ww-90sr, ww-tzv6, ww-sy28, ww-7s20, ww-3vpp, ww-ss5k, ww-s8zx, ww-1mwv, ww-nmgu, ww-y3gt, ww-cdxd, ww-tds3, ww-u0ni, ww-adgy, ww-z7vp, ww-mq50, ww-lcu1, ww-9hlk, ww-8ta6, ww-sbfk, ww-zpeu, ww-1pjp, ww-6hvn, ww-e1fo, ww-03e1. Prior art: the old domain team-results and coefficient tests, the old results snapshot (fixture for ww-zchn).
+- **Seam 1 — contest core (pure, fast, most tests).** Scenario tests built from a rulebook + commands asserting lifting order, results and classifications. Covers ww-s8ny, ww-dwfd, ww-8fz8, ww-ot23, ww-lxn4, ww-ym25, ww-m7xy, ww-4yp8, ww-fwnw, ww-gybz, ww-ub7m, ww-dtzk, ww-eje4, ww-90sr, ww-tzv6, ww-sy28, ww-7s20, ww-3vpp, ww-ss5k, ww-s8zx, ww-1mwv, ww-nmgu, ww-y3gt, ww-cdxd, ww-tds3, ww-u0ni, ww-adgy, ww-z7vp, ww-mq50, ww-lcu1, ww-9hlk, ww-8ta6, ww-9jq6, ww-sbfk, ww-zpeu, ww-1pjp, ww-6hvn, ww-e1fo, ww-03e1. Prior art: the old domain team-results and coefficient tests, the old results snapshot (fixture for ww-zchn).
 - **Seam 2 — sync (Durable Object + client replica in the Workers runtime).** Two simulated devices, dropped connections, reordered delivery, peer relay. Covers ww-mned, ww-yo7x, ww-gouf, ww-9hlk, ww-bjq1, ww-6oq1, ww-bdzb, ww-6ft3, ww-edqp, ww-n7wy, ww-uewf. Prior art: mr.robot's workerd Durable Object tests.
 - **Seam 3 — screens (a few React component tests) + one manual rehearsal** with real devices on one Wi-Fi and the internet cut. Covers ww-r2tx, ww-2jxr, ww-8pme, ww-ewrn, ww-widg, ww-ufi7, ww-6pk1, ww-8tai, ww-l06a, ww-gr75, ww-254l, ww-52g7, ww-dh53, ww-029g, ww-4g2a. Prior art: wiser's React tests.
 - Migration (ww-zchn) is verified by comparing the migrated rankings with the old app's results snapshot.
 
 ## Out of Scope
 
-- Flights, timers, judge lights, records, fourth attempts, disqualification management, photos.
+- Flights, timers, judge lights, records, fourth attempts, disqualification management, photos. (Did not start is in scope; disqualification is not.)
 - Multi-organizer hosting, accounts and roles beyond the organizer password.
 - A local server or LAN-only operation without any prior internet contact.
 - Keeping the old API or database shape; the old app is retired after cut-over.

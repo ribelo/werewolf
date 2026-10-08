@@ -2,6 +2,7 @@ import * as Option from 'effect/Option'
 import { mcCulloughCoefficient, reshelCoefficient } from './coefficients.ts'
 import type { ContestState } from './contest.ts'
 import type { Attempt, Entry } from './entry.ts'
+import { isDidNotStart } from './contest.ts'
 import { ageOnDate } from './lifter.ts'
 import {
   entryAgeClass,
@@ -29,6 +30,8 @@ export interface TableLabels {
   readonly result: string
   readonly points: string
   readonly counted: string
+  /** The short text DNS (did not start). */
+  readonly didNotStart: string
 }
 
 /** Trailing zeros are dropped, as in the 2025 export: 370, 58.5, 145.68. */
@@ -120,9 +123,15 @@ export function federationCsv(
   // A lifter who did not enter any lift of the classification has no place in its file.
   const takesPart = (entry: Entry) => entry.lifts.some((item) => liftIds.includes(item.liftId))
   const ranked = ranking.groups.flatMap((group) => group.rows.map((row) => row.entry))
-  const waiting = ranking.pending.flatMap((item) =>
-    state.entries.filter((entry) => entry.id === item.entryId && takesPart(entry)),
+  const dns = new Set(
+    ranking.pending.filter((item) => item.reason === 'didNotStart').map((item) => item.entryId),
   )
+  // Lifters who did not start come last; they get the place text DNS and no number.
+  const waiting = ranking.pending
+    .toSorted((a, b) => Number(dns.has(a.entryId)) - Number(dns.has(b.entryId)))
+    .flatMap((item) =>
+      state.entries.filter((entry) => entry.id === item.entryId && takesPart(entry)),
+    )
   const blocks: Array<Block> = []
   for (const entry of [...ranked, ...waiting]) {
     const age = entryAgeClass(state, entry)
@@ -160,7 +169,8 @@ export function federationCsv(
       pad((block.sex === 'male' ? 'MEN' : 'WOMEN') + ' - ' + ageLabel + ' RAW'),
       columns.join(';'),
     )
-    for (const [index, entry] of block.entries.entries()) {
+    let place = 0
+    for (const entry of block.entries) {
       const [given, family] = splitName(entry.lifter.name)
       const best = liftIds.reduce((sum, id) => sum + bestGood(state, entry, id), 0)
       const reshel =
@@ -168,7 +178,7 @@ export function federationCsv(
           ? best * reshelCoefficient(entry.bodyweight, entry.lifter.sex)
           : 0
       const cells = [
-        String(index + 1),
+        dns.has(entry.id) ? 'DNS' : String(++place),
         given,
         family,
         '',
@@ -208,32 +218,44 @@ export function individualTable(
     (item) => item.id === ranking.classificationId,
   )
   const liftIds = classification?.liftIds ?? []
-  const rows = ranking.groups.flatMap((group) =>
-    group.rows.map((row) => {
-      const entry = row.entry
-      return [
-        String(row.place),
-        entry.lifter.name,
-        state.teams.find((team) => team.id === entry.lifter.teamId)?.name ?? '',
-        Option.match(entryAgeClass(state, entry), {
-          onNone: () => '',
-          onSome: (id) => nameIn(state.rulebook.ageClasses, id, locale),
-        }),
-        Option.match(entryWeightClass(state, entry), {
-          onNone: () => '',
-          onSome: (id) => nameIn(state.rulebook.weightClasses, id, locale),
-        }),
-        typeof entry.bodyweight === 'number' ? formatDecimal(entry.bodyweight, 2) : '',
-        ...liftIds.map((id) =>
-          attemptsOf(state, entry, id)
-            .map((_, n, all) => attemptCell(all, n) || '—')
-            .join(' / '),
-        ),
-        formatDecimal(row.kilograms, 2),
-        formatDecimal(row.points, 3),
-      ]
+  const person = (entry: Entry) => [
+    entry.lifter.name,
+    state.teams.find((team) => team.id === entry.lifter.teamId)?.name ?? '',
+    Option.match(entryAgeClass(state, entry), {
+      onNone: () => '',
+      onSome: (id) => nameIn(state.rulebook.ageClasses, id, locale),
     }),
+    Option.match(entryWeightClass(state, entry), {
+      onNone: () => '',
+      onSome: (id) => nameIn(state.rulebook.weightClasses, id, locale),
+    }),
+    typeof entry.bodyweight === 'number' ? formatDecimal(entry.bodyweight, 2) : '',
+  ]
+  const ranked = ranking.groups.flatMap((group) =>
+    group.rows.map((row) => [
+      String(row.place),
+      ...person(row.entry),
+      ...liftIds.map((id) =>
+        attemptsOf(state, row.entry, id)
+          .map((_, n, all) => attemptCell(all, n) || '—')
+          .join(' / '),
+      ),
+      formatDecimal(row.kilograms, 2),
+      formatDecimal(row.points, 3),
+    ]),
   )
+  // Entries that did not start are listed after the ranked ones with the text DNS instead of a place.
+  const notStarted = ranking.pending
+    .filter((item) => item.reason === 'didNotStart')
+    .flatMap((item) => state.entries.filter((entry) => entry.id === item.entryId))
+    .map((entry) => [
+      labels.didNotStart,
+      ...person(entry),
+      ...liftIds.map((id) => (isDidNotStart(state, entry.id, id) ? labels.didNotStart : '—')),
+      '',
+      '',
+    ])
+  const rows = [...ranked, ...notStarted]
   return {
     title: classification?.name[locale] ?? ranking.classificationId,
     columns: [

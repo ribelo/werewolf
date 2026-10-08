@@ -2,6 +2,7 @@ import {
   ageOnDate,
   entryAgeClass,
   entryWeightClass,
+  isDidNotStart,
   Kilograms,
   mcCulloughCoefficient,
   reshelCoefficient,
@@ -204,6 +205,18 @@ export function Scoreboard({
                           a._tag === 'Judged' && a.verdict === 'goodLift' ? a.weight : 0,
                         ),
                       )
+                      if (isDidNotStart(state, entry.id, lift.id))
+                        return (
+                          <Fragment key={lift.id}>
+                            <td
+                              colSpan={lift.attempts}
+                              className="dns text-center font-display tracking-widest text-status-warning"
+                            >
+                              {t('res.dns')}
+                            </td>
+                            <td className="text-center font-mono font-bold">—</td>
+                          </Fragment>
+                        )
                       return (
                         <Fragment key={lift.id}>
                           {mine.length === 0

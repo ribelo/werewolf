@@ -84,7 +84,8 @@ const source = Schema.decodeUnknownSync(SourceData)({
     registration('r1', 'Both', '1990-01-01', 90, '["Open"]', 'Górnik'),
     registration('r2', 'BenchOnly', '1990-01-01', 90, '["Open"]', 'GÓRNIK'),
     registration('r3', 'MonsterOnly', '1990-01-01', 90, '["MONSTER"]', 'Górnik'),
-    registration('r4', 'Light', '1990-01-01', 90, '[]', ''),
+    registration('r4', 'Light', '1990-01-01', 60, '[]', '', 'Female'),
+    registration('r5', 'NoShow', '1990-01-01', 90, '["Open"]', ''),
   ],
   lifts: [
     { registration_id: 'r1', lift_type: 'Bench' },
@@ -92,6 +93,7 @@ const source = Schema.decodeUnknownSync(SourceData)({
     { registration_id: 'r2', lift_type: 'Bench' },
     { registration_id: 'r3', lift_type: 'Bench' },
     { registration_id: 'r4', lift_type: 'Bench' },
+    { registration_id: 'r5', lift_type: 'Bench' },
   ],
   attempts: [
     attempt('r1', 'Bench', 1, 100, 'Successful', 1),
@@ -103,6 +105,9 @@ const source = Schema.decodeUnknownSync(SourceData)({
     attempt('r2', 'Bench', 1, 120, 'Successful', 7),
     attempt('r3', 'Bench', 1, 200, 'Successful', 8),
     attempt('r4', 'Bench', 1, 20, 'Successful', 9),
+    attempt('r5', 'Bench', 1, 20, 'Failed', 10),
+    attempt('r5', 'Bench', 2, 20, 'Failed', 11),
+    attempt('r5', 'Bench', 3, 20, 'Failed', 12),
   ],
 })
 
@@ -118,8 +123,11 @@ it('ww-zchn: a 2025 contest converts to a log that replays with the old scoring 
     ),
   )
   // Every registration and attempt arrived; a pending attempt keeps its weight without a verdict.
-  expect(state.entries).toHaveLength(4)
+  expect(state.entries).toHaveLength(5)
   expect(state.attempts.filter((a) => a._tag !== 'Unannounced')).toHaveLength(9)
+  // Three burned 20 kg attempts became DNS, not three failed lifts.
+  expect(state.didNotStart).toEqual([{ entryId: 'r5', liftId: 'bench' }])
+  expect(conversion.didNotStart).toBe(1)
   expect(
     state.attempts.find((a) => a.entryId === 'r1' && a.liftId === 'deadlift' && a.number === 3)
       ?._tag,
@@ -141,9 +149,10 @@ it('ww-zchn: a 2025 contest converts to a log that replays with the old scoring 
     'r2',
     'r4',
   ])
-  // The 20 kg opening needed the clamp adjustment, and it is reported.
+  // A woman's 20 kg opening needs the 15 kg women's bar (bar + two clamps); the change is reported, clamps stay.
   expect(conversion.adjustments).toHaveLength(1)
-  expect(backup.definition.rulebook.barbell.clampsPerSide).toBe(0)
+  expect(backup.definition.rulebook.barbell.bars.female).toBe(15)
+  expect(backup.definition.rulebook.barbell.clampsPerSide).toBe(2.5)
 })
 
 it('ww-zchn: converting the same data twice gives the same file, so an upload can be repeated', () => {

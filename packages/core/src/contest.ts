@@ -98,6 +98,13 @@ export const Command = Schema.Union([
     ]),
   }),
   Schema.TaggedStruct('ResetOrder', commandMetadata),
+  /** The entry did not start in this lift. false takes the mark back. */
+  Schema.TaggedStruct('SetDidNotStart', {
+    ...commandMetadata,
+    entryId: EntryId,
+    liftId: LiftId,
+    value: Schema.Boolean,
+  }),
   Schema.TaggedStruct('UpsertTeam', { ...commandMetadata, team: Team }),
   Schema.TaggedStruct('MergeTeams', {
     ...commandMetadata,
@@ -139,7 +146,12 @@ export class EntryRejected extends Data.TaggedError('EntryRejected')<{
 }> {}
 export class AttemptUnavailable extends Data.TaggedError('AttemptUnavailable')<{
   readonly attempt: AttemptRef
-  readonly reason: 'unknownAttempt' | 'weightNotDeclared' | 'notPending' | 'invalidOrderTarget'
+  readonly reason:
+    | 'unknownAttempt'
+    | 'weightNotDeclared'
+    | 'notPending'
+    | 'invalidOrderTarget'
+    | 'alreadyJudged'
 }> {}
 export class UnloadableWeight extends Data.TaggedError('UnloadableWeight')<{
   readonly requested: Kilograms
@@ -177,6 +189,8 @@ export interface ContestState {
   readonly attempts: ReadonlyArray<Attempt>
   readonly selected: Option.Option<AttemptRef>
   readonly orderOverrides: ReadonlyArray<OrderOverride>
+  /** Entries that did not start in a lift (DNS). They have no place in the order and no result. */
+  readonly didNotStart: ReadonlyArray<{ readonly entryId: EntryId; readonly liftId: LiftId }>
   readonly warnings: ReadonlyArray<EntryWarning>
   readonly scoreboard: ScoreboardView
 }
@@ -297,6 +311,11 @@ function entryAttempts(book: Rulebook, entry: Entry): ReadonlyArray<Attempt> {
   })
 }
 
+/** True when the entry is marked as not started in the lift. */
+export function isDidNotStart(state: ContestState, entryId: EntryId, liftId: LiftId): boolean {
+  return state.didNotStart.some((item) => item.entryId === entryId && item.liftId === liftId)
+}
+
 /** Pending declared attempts sort by configured lift, round, weight and lot. Overrides move only their target. */
 export function liftingOrder(
   state: ContestState,
@@ -305,7 +324,8 @@ export function liftingOrder(
   const lots = new Map(state.entries.map((entry) => [entry.id, entry.lotNumber]))
   const order = state.attempts
     .filter(
-      (attempt): attempt is Attempt & { readonly _tag: 'Declared' } => attempt._tag === 'Declared',
+      (attempt): attempt is Attempt & { readonly _tag: 'Declared' } =>
+        attempt._tag === 'Declared' && !isDidNotStart(state, attempt.entryId, attempt.liftId),
     )
     .toSorted(
       (left, right) =>
@@ -439,6 +459,10 @@ function applyMutation(
       })
     }
     case 'SetVerdict': {
+      if (isDidNotStart(state, command.attempt.entryId, command.attempt.liftId))
+        return Result.fail(
+          new AttemptUnavailable({ attempt: command.attempt, reason: 'notPending' }),
+        )
       const attempt = state.attempts.find((item) => sameAttempt(item, command.attempt))
       if (!attempt || attempt._tag === 'Unannounced')
         return Result.fail(
@@ -498,6 +522,30 @@ function applyMutation(
     }
     case 'ResetOrder':
       return Result.succeed({ ...state, orderOverrides: [] })
+    case 'SetDidNotStart': {
+      const entry = state.entries.find((item) => item.id === command.entryId)
+      if (!entry)
+        return Result.fail(new EntryRejected({ entryId: command.entryId, reason: 'unknownEntry' }))
+      if (!entry.lifts.some((item) => item.liftId === command.liftId))
+        return Result.fail(new EntryRejected({ entryId: command.entryId, reason: 'unknownLift' }))
+      const others = state.didNotStart.filter(
+        (item) => !(item.entryId === command.entryId && item.liftId === command.liftId),
+      )
+      if (!command.value) return Result.succeed({ ...state, didNotStart: others })
+      // A lifter who has been judged in this lift did start.
+      const judged = state.attempts.find(
+        (item) =>
+          item._tag === 'Judged' &&
+          item.entryId === command.entryId &&
+          item.liftId === command.liftId,
+      )
+      if (judged)
+        return Result.fail(new AttemptUnavailable({ attempt: judged, reason: 'alreadyJudged' }))
+      return Result.succeed({
+        ...state,
+        didNotStart: [...others, { entryId: command.entryId, liftId: command.liftId }],
+      })
+    }
     case 'SetScoreboard': {
       const book = state.rulebook
       const { filter } = command
@@ -562,6 +610,7 @@ export function replay(
     attempts: [],
     selected: Option.none(),
     orderOverrides: [],
+    didNotStart: [],
     warnings: [],
     scoreboard: { filter: {}, qrUrl: Option.none() },
   }

@@ -1,4 +1,4 @@
-import { type Attempt, type ContestState } from '@werewolf/core'
+import { isDidNotStart, type Attempt, type ContestState } from '@werewolf/core'
 import { ReadLinks, type ContestId } from '@werewolf/sync'
 import * as Effect from 'effect/Effect'
 import * as Fiber from 'effect/Fiber'
@@ -231,7 +231,9 @@ export function ContestDesk({ id, access }: { readonly id: ContestId; readonly a
                             {attempt._tag === 'Unannounced' ? '—' : attempt.weight}
                           </td>
                           <td>
-                            {attempt._tag === 'Judged' ? (
+                            {isDidNotStart(state, attempt.entryId, attempt.liftId) ? (
+                              <span className="attempt-pending text-status-warning">DNS</span>
+                            ) : attempt._tag === 'Judged' ? (
                               <span
                                 className={
                                   attempt.verdict === 'goodLift' ? 'attempt-good' : 'attempt-failed'

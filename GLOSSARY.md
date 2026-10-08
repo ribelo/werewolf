@@ -47,6 +47,10 @@ _Avoid_: start number, competition order
 **Attempt**:
 One try at one lift by one entry, numbered 1..N, with a declared weight and a verdict.
 
+**Did not start (DNS)**:
+A mark on an entry in one lift: the lifter did not take part in that lift. The entry leaves the lifting order for that lift and has no result and no place in it; tables and exports show DNS. It is not a failed attempt. The desk can take the mark back, and it cannot be set after a verdict in that lift.
+_Avoid_: no show, absent, withdrawn
+
 **Verdict**:
 The outcome of an attempt: pending, good or no lift.
 _Avoid_: status, result

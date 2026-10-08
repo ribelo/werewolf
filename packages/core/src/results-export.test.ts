@@ -86,6 +86,7 @@ const labels = {
   result: 'Wynik',
   points: 'Punkty',
   counted: 'Liczeni',
+  didNotStart: 'DNS',
 }
 
 describe('federation CSV', () => {

@@ -296,6 +296,10 @@ export const catalogs = {
     'a11y.qr': 'Kod QR',
     'board.male': 'M',
     'board.female': 'K',
+    'res.dns': 'DNS',
+    'meet.dns': 'Nie wystartował (DNS)',
+    'meet.dnsUndo': 'Cofnij DNS',
+    'meet.dnsMark': 'DNS',
     'auth.pending': 'Logowanie…',
   },
   en: {
@@ -590,6 +594,10 @@ export const catalogs = {
     'a11y.qr': 'QR code',
     'board.male': 'M',
     'board.female': 'F',
+    'res.dns': 'DNS',
+    'meet.dns': 'Did not start (DNS)',
+    'meet.dnsUndo': 'Undo DNS',
+    'meet.dnsMark': 'DNS',
     'auth.pending': 'Logging in…',
   },
 } as const

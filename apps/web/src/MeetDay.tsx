@@ -197,6 +197,20 @@ export function MeetDay({
                 </button>{' '}
                 <button type="button" className="btn-bad text-lg" onClick={() => verdict('noLift')}>
                   {t('desk.noLift')}
+                </button>{' '}
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() =>
+                    submit({
+                      _tag: 'SetDidNotStart',
+                      entryId: current.value.entryId,
+                      liftId: current.value.liftId,
+                      value: true,
+                    })
+                  }
+                >
+                  {t('meet.dns')}
                 </button>
               </p>
             )}

@@ -3,7 +3,7 @@ import * as Result from 'effect/Result'
 import * as Schema from 'effect/Schema'
 import { Kilograms } from './barbell.ts'
 import { mcCulloughCoefficient, reshelCoefficient } from './coefficients.ts'
-import type { ContestState } from './contest.ts'
+import { isDidNotStart, type ContestState } from './contest.ts'
 import type { Entry, EntryId, Team, Timestamp } from './entry.ts'
 import { ageOnDate, type TeamId } from './lifter.ts'
 import type {
@@ -51,6 +51,7 @@ export interface PendingEntry {
   readonly reason:
     | 'noGoodLift'
     | 'incompleteLifts'
+    | 'didNotStart'
     | 'bodyweightMissing'
     | 'ageClassMissing'
     | 'weightClassMissing'
@@ -119,6 +120,12 @@ function candidate(
   classification: Rulebook['classifications'][number],
   result: EntryResults,
 ): Result.Result<RankedEntry, PendingEntry> {
+  // An entry that did not start in any lift of the classification it entered has no result there.
+  const taken = classification.liftIds.filter((id) =>
+    result.entry.lifts.some((l) => l.liftId === id),
+  )
+  if (taken.length > 0 && taken.every((id) => isDidNotStart(state, result.entry.id, id)))
+    return Result.fail(pending(result.entry.id, 'didNotStart'))
   const good = result.lifts
     .filter((lift) => lift._tag === 'GoodResult')
     .filter((lift) => classification.liftIds.includes(lift.liftId))

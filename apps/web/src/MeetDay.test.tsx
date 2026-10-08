@@ -113,3 +113,12 @@ it('ww-tds3 ww-8ta6: a lifter moves down the queue by hand and undo restores the
   fireEvent.click(screen.getByRole('button', { name: 'Cofnij ostatnią zmianę' }))
   expect(queue()).toEqual(['Anna Alpha', 'Bartek Beta', 'Czesław Gamma'])
 })
+
+it('ww-9jq6: one click marks the current lifter as did not start and the queue moves on', () => {
+  mount()
+  fireEvent.click(screen.getByRole('button', { name: 'Nie wystartował (DNS)' }))
+  expect(currentLine()).toContain('Bartek Beta')
+  expect(queue()).toEqual(['Bartek Beta', 'Czesław Gamma'])
+  fireEvent.click(screen.getByRole('button', { name: 'Cofnij ostatnią zmianę' }))
+  expect(queue()).toEqual(['Anna Alpha', 'Bartek Beta', 'Czesław Gamma'])
+})
