@@ -17,7 +17,7 @@ Goal: run a mock meet with the desk, an announcer screen, a TV and a phone on on
 3. Restore the internet. Check that the waiting changes go to zero and the TV and phone catch up.
 4. Repeat the cut three times. Once, reload the desk page while the internet is cut. Once, cut the internet while the desk and the announcer both show the same attempt.
 5. Change the scoreboard filter from the desk. Show the QR code. Scan it with the phone.
-6. Export the results: CSV, PDF, JPG. Send the CSV to the person who sends it to the federation and ask whether the file is what they need (see "Questions").
+6. Export the results: CSV, PDF, JPG. Try the clean-account deployment from `docs/deployment.md` once on a second Cloudflare account (open criterion of ticket 16).
 
 ## Check at the end
 
@@ -27,9 +27,7 @@ Goal: run a mock meet with the desk, an announcer screen, a TV and a phone on on
 
 ## Questions for the owner
 
-1. Does the federation need the old order of rows in the lift files? The new files list rows by the points of that lift. The old files used the combined place of both lifts. See `docs/migration/2025-report.md`.
-2. Which license should the project have?
-3. Is the Kids division still empty after the meeting on 2026-10-10? Add its rules to the rulebook in the wizard.
+1. Is the Kids division still empty after the meeting on 2026-10-10? Add its rules to the rulebook in the wizard.
 
 ## Cut-over (only after sign-off)
 

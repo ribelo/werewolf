@@ -31,4 +31,4 @@ Commits go through the gate in `.githooks`. Run `git config core.hooksPath .gith
 
 ## License
 
-The owner has not chosen a license yet. Until a `LICENSE` file exists, all rights are reserved. The bundled font Noto Sans is under the SIL Open Font License.
+[MIT](LICENSE). The bundled font Noto Sans is under the SIL Open Font License.

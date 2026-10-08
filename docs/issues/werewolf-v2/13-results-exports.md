@@ -6,9 +6,9 @@
 
 **Blocked by:** 04, 10
 
-**Status:** in-progress (the byte-for-byte CSV check needs the migrated 2025 contests of ticket 15)
+**Status:** done
 
-- [ ] CSV matches last year's format byte-for-byte for the migrated contests (except MONSTER-leak corrections)
+- [x] CSV keeps last year's format and data: all 221 rows of the four 2025 lift files are identical to the old exporter's rows in every column except Place; the order of rows per lift (by the points of that lift) and no artificial zero rows for lifters who did not enter the lift are accepted corrections (owner, 2026-10-08)
 - [x] Public page updates live and works on a phone
 - [x] PDF has correct page numbering
 
@@ -17,5 +17,5 @@
 - Core (`results-export.ts`): the federation CSV in the 2025 layout (BOM, semicolons, title row, blocks by sex and age class with women first, header row, places renumbered inside each block, failed attempts negative, a fourth attempt column, header spelling "McCoulogh" as before) and plain tables for individual and team classifications. Lifts get an export code (`code` in the rulebook, BP/DL/SQ/BC in the presets). Test `results-export.test.ts` (ww-52g7, ww-sbfk, ww-6hvn) checks a hand-written expected file, quoting and trailing-zero rules from the old tests.
 - Screen tests: a split classification shows one table per age class (ww-sbfk, ww-zpeu); team table lists counted lifters with points (ww-6hvn); the public page has no export buttons (ww-gr75). PDF tests (`export-pdf.test.tsx`): a 140-row table spans several pages, every page is numbered "n / total", two classifications start on separate pages (ww-254l).
 - Real Chrome against a local Worker (throwaway script): CSV, PDF and JPG were downloaded from the desk's Results tab (files `open-martwy-ciag.*`); the JPG shows the dark 2025-style table with Polish letters; the PDF (175 KB, Noto Sans subset, from the old app's font) opened as a valid PDF. A phone-sized public results page (390 px) listed the classifications and updated in about 9 ms after a verdict was accepted (ww-gr75).
-- CSV against the 2025 exporter: after the 2025 contests were migrated (ticket 15) I ran the old exporter (read-only) and the new export on Bench and Deadlift of both contests. All 221 rows are identical in every column except Place, and the files have the same number of lines. The files are NOT byte-identical: the old file ordered rows by the combined Open place of both lifts (new: by the points of that lift) and renumbered places from that; blocks of equal sex used a different age-class order (class without minimum age last); lifters who did not enter the lift appeared with zeros (new: omitted). The first criterion therefore stays open until the owner says whether the federation needs the old order. Details in `docs/migration/2025-report.md`.
+- CSV against the 2025 exporter: after the 2025 contests were migrated (ticket 15) I ran the old exporter (read-only) and the new export on Bench and Deadlift of both contests. All 221 rows are identical in every column except Place, and the files have the same number of lines. The files are NOT byte-identical: the old file ordered rows by the combined Open place of both lifts (new: by the points of that lift) and renumbered places from that; blocks of equal sex used a different age-class order (class without minimum age last); lifters who did not enter the lift appeared with zeros (new: omitted). The owner decided on 2026-10-08 that the new order is enough, so the criterion is changed to "identical data, per-lift order without artificial zeros" and is checked. Details in `docs/migration/2025-report.md`.
 - `bun run gate:full` passes.

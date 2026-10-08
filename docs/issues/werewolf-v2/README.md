@@ -16,7 +16,7 @@ Spec: [../werewolf-v2.md](../werewolf-v2.md)
 | 10 | [Scoreboard on TV with remote filter and QR](10-scoreboard.md) | 08 | done |
 | 11 | [Entries, teams, weigh-in and CSV/Excel import](11-entries-teams-import.md) | 05 | done |
 | 12 | [Contest wizard, rulebook editor and presets](12-wizard-rulebook.md) | 04, 11 | done |
-| 13 | [Results pages, public results, exports](13-results-exports.md) | 04, 10 | in-progress |
+| 13 | [Results pages, public results, exports](13-results-exports.md) | 04, 10 | done |
 | 14 | [Backups: download, restore, automatic to R2](14-backups.md) | 05 | done |
 | 15 | [Migrate the 2025 contests](15-migrate-2025.md) | 04, 05 | done |
 | 16 | [Polish and English complete, open-source deployment guide](16-i18n-opensource.md) | 12, 13 | in-progress |
