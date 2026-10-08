@@ -1,17 +1,14 @@
-import { client2026Rulebook } from '@werewolf/core'
-import { Catalog, Snapshot } from '@werewolf/sync'
+import { Catalog } from '@werewolf/sync'
 import * as Effect from 'effect/Effect'
 import * as Fiber from 'effect/Fiber'
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useState } from 'react'
 import { requestJson } from './live-contest.ts'
 import { useMessages, type MessageKey } from './i18n.ts'
 
 export function ContestCatalog() {
-  const { locale, t } = useMessages()
+  const { t } = useMessages()
   const [catalog, setCatalog] = useState<typeof Catalog.Type>({ contests: [] })
-  const [draftId, setDraftId] = useState(() => crypto.randomUUID())
   const [error, setError] = useState<MessageKey | ''>('')
-  const [pending, setPending] = useState(false)
   useEffect(() => {
     const fiber = Effect.runFork(
       requestJson(Catalog, '/api/contests').pipe(
@@ -22,42 +19,6 @@ export function ContestCatalog() {
       Effect.runFork(Fiber.interrupt(fiber))
     }
   }, [])
-  function create(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const form = new FormData(event.currentTarget)
-    setPending(true)
-    setError('')
-    Effect.runFork(
-      requestJson(Snapshot, '/api/contests', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: draftId,
-          name: form.get('name'),
-          date: form.get('date'),
-          rulebook: client2026Rulebook,
-        }),
-      }).pipe(
-        Effect.match({
-          onFailure: (failure) => {
-            setPending(false)
-            setError(failure.code)
-          },
-          onSuccess: (snapshot) => {
-            setCatalog((previous) => ({
-              contests: [
-                ...previous.contests.filter((contest) => contest.id !== snapshot.definition.id),
-                snapshot.definition,
-              ],
-            }))
-            location.assign('/desk/' + snapshot.definition.id)
-            setDraftId(crypto.randomUUID())
-            setPending(false)
-          },
-        }),
-      ),
-    )
-  }
   return (
     <section className="space-y-6">
       <h2 className="text-h1 uppercase">{t('contests.title')}</h2>
@@ -78,32 +39,9 @@ export function ContestCatalog() {
           ))}
         </ul>
       )}
-      <form className="card max-w-xl" onSubmit={create}>
-        <h3 className="text-h3 mb-3">{t('contests.create')}</h3>
-        <label className="mb-3 block">
-          <span className="input-label">{t('contests.name')}</span>
-          <input className="input-field w-full" name="name" required />
-        </label>
-        <label className="mb-3 block">
-          <span className="input-label">{t('desk.date')}</span>
-          <input
-            className="input-field w-full"
-            name="date"
-            type="date"
-            defaultValue={new Intl.DateTimeFormat('sv-SE').format(new Date())}
-            required
-          />
-        </label>
-        <label className="mb-3 block">
-          <span className="input-label">{t('desk.preset')}</span>
-          <select className="input-field w-full" name="preset">
-            <option>{client2026Rulebook.name[locale]}</option>
-          </select>
-        </label>
-        <button className="btn-primary" disabled={pending} type="submit">
-          {t('contests.create')}
-        </button>
-      </form>
+      <a className="btn-primary inline-block" href="/new">
+        {t('contests.new')}
+      </a>
       {error && <p role="alert">{t(error)}</p>}
     </section>
   )

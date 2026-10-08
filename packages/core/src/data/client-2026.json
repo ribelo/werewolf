@@ -51,6 +51,15 @@
       },
       "policy": "reject",
       "conditions": {}
+    },
+    {
+      "id": "kids",
+      "name": {
+        "pl": "Dzieci",
+        "en": "Kids"
+      },
+      "policy": "warn",
+      "conditions": {}
     }
   ],
   "ageClasses": [],

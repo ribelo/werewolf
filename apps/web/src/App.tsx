@@ -13,6 +13,7 @@ import { useMessages, type MessageKey } from './i18n.ts'
 import { ContestCatalog } from './ContestCatalog.tsx'
 import { ContestDesk } from './ContestDesk.tsx'
 import { ViewerScreen } from './ViewerScreen.tsx'
+import { Wizard } from './Wizard.tsx'
 import { ContestId } from '@werewolf/sync'
 import { requestJson } from './live-contest.ts'
 import { hasEditorGrant, readReplica, setEditorGrant } from './replica-store.ts'
@@ -182,6 +183,8 @@ export function App() {
         ) : auth._tag === 'Editor' || auth._tag === 'OfflineEditor' ? (
           auth._tag === 'OfflineEditor' ? (
             <ContestDesk id={auth.id} access={{ _tag: 'Editor' }} />
+          ) : location.pathname === '/new' ? (
+            <Wizard />
           ) : Result.isSuccess(deskId) ? (
             <>
               <a

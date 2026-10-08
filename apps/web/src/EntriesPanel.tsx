@@ -326,7 +326,13 @@ function EntryRow({
   )
 }
 
-function TeamsPanel({ state, submit }: { readonly state: ContestState; readonly submit: Submit }) {
+export function TeamsPanel({
+  state,
+  submit,
+}: {
+  readonly state: ContestState
+  readonly submit: Submit
+}) {
   const { t } = useMessages()
   function add(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -598,10 +604,12 @@ export function EntriesPanel({
   state,
   journal,
   submit,
+  withTeams = true,
 }: {
   readonly state: ContestState
   readonly journal: ContestJournal
   readonly submit: Submit
+  readonly withTeams?: boolean
 }) {
   const { t } = useMessages()
   return (
@@ -632,7 +640,7 @@ export function EntriesPanel({
         )}
       </section>
       <EntryForm state={state} submit={submit} />
-      <TeamsPanel state={state} submit={submit} />
+      {withTeams && <TeamsPanel state={state} submit={submit} />}
       <ImportPanel state={state} journal={journal} submit={submit} />
     </div>
   )

@@ -15,7 +15,7 @@ Spec: [../werewolf-v2.md](../werewolf-v2.md)
 | 09 | [Stage screen with barbell, announcer view](09-stage-announcer.md) | 08 | done |
 | 10 | [Scoreboard on TV with remote filter and QR](10-scoreboard.md) | 08 | done |
 | 11 | [Entries, teams, weigh-in and CSV/Excel import](11-entries-teams-import.md) | 05 | done |
-| 12 | [Contest wizard, rulebook editor and presets](12-wizard-rulebook.md) | 04, 11 | ready-for-agent |
+| 12 | [Contest wizard, rulebook editor and presets](12-wizard-rulebook.md) | 04, 11 | done |
 | 13 | [Results pages, public results, exports](13-results-exports.md) | 04, 10 | ready-for-agent |
 | 14 | [Backups: download, restore, automatic to R2](14-backups.md) | 05 | ready-for-agent |
 | 15 | [Migrate the 2025 contests](15-migrate-2025.md) | 04, 05 | ready-for-agent |
