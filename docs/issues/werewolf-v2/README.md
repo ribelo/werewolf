@@ -22,3 +22,4 @@ Spec: [../werewolf-v2.md](../werewolf-v2.md)
 | 16 | [Polish and English complete, open-source deployment guide](16-i18n-opensource.md) | 12, 13 | in-progress |
 | 17 | [Rehearsal on real devices and cut-over](17-rehearsal-cutover.md) | 02–16 | prepared |
 | 18 | [Did not start (DNS)](18-did-not-start.md) | 08, 13, 15 | done |
+| 19 | [UI parity with the old app](19-ui-parity.md) | 18 | in-progress |
