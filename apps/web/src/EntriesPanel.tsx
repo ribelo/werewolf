@@ -419,7 +419,7 @@ const cellText = (cell: unknown): string =>
       ? String(cell)
       : ''
 
-function ImportPanel({
+export function ImportPanel({
   state,
   journal,
   submit,

@@ -522,31 +522,38 @@
     "plates": [
       {
         "weight": 25,
-        "pairs": 4
+        "pairs": 4,
+        "color": "#DC2626"
       },
       {
         "weight": 20,
-        "pairs": 4
+        "pairs": 4,
+        "color": "#1500B3"
       },
       {
         "weight": 15,
-        "pairs": 4
+        "pairs": 4,
+        "color": "#EAB308"
       },
       {
         "weight": 10,
-        "pairs": 6
+        "pairs": 6,
+        "color": "#16A34A"
       },
       {
         "weight": 5,
-        "pairs": 6
+        "pairs": 6,
+        "color": "#F8FAFC"
       },
       {
         "weight": 2.5,
-        "pairs": 6
+        "pairs": 6,
+        "color": "#000000"
       },
       {
         "weight": 1.25,
-        "pairs": 4
+        "pairs": 4,
+        "color": "#6B6B6B"
       }
     ]
   },

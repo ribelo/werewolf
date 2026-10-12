@@ -41,7 +41,13 @@ export const SourceData = Schema.Struct({
       sort_order: Schema.Number,
     }),
   ),
-  plates: Schema.Array(Schema.Struct({ plate_weight: Schema.Number, quantity: Schema.Number })),
+  plates: Schema.Array(
+    Schema.Struct({
+      plate_weight: Schema.Number,
+      quantity: Schema.Number,
+      color: Schema.optionalKey(Schema.NullOr(Schema.String)),
+    }),
+  ),
   registrations: Schema.Array(
     Schema.Struct({
       id: Schema.String,
@@ -201,7 +207,11 @@ function buildRulebook(
     barbell: {
       bars: { male: source.contest.mens_bar_weight, female: womensBar },
       clampsPerSide: source.contest.clamp_weight,
-      plates: source.plates.map((plate) => ({ weight: plate.plate_weight, pairs: plate.quantity })),
+      plates: source.plates.map((plate) => ({
+        weight: plate.plate_weight,
+        pairs: plate.quantity,
+        ...(plate.color && /^#[0-9a-fA-F]{6}$/.test(plate.color) ? { color: plate.color } : {}),
+      })),
     },
   })
 }

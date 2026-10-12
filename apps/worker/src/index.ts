@@ -50,11 +50,7 @@ function restoreInto(
       catch: (cause) => new WorkerFailure({ cause }),
     })
     if (!restored.ok) return restored
-    const summary = {
-      id: backup.definition.id,
-      name: backup.definition.name,
-      date: backup.definition.date,
-    }
+    const { rulebook: _rulebook, ...summary } = backup.definition
     const registered = yield* Effect.tryPromise({
       try: () =>
         env.CATALOG.getByName('all').fetch(
@@ -149,6 +145,66 @@ function route(
         catch: (cause) => new WorkerFailure({ cause }),
       })
     }
+    // Videos for the stage screen after a verdict: one library per deployment, kept in R2.
+    const video = new RegExp('^/api/videos(?:/(good|bad)(?:/([A-Za-z0-9._-]+))?)?$').exec(
+      url.pathname,
+    )
+    if (video) {
+      const kind = video[1]
+      const name = video[2]
+      if (request.method === 'GET' && !kind)
+        return yield* Effect.tryPromise({
+          try: async () => {
+            const listed = await env.BACKUPS.list({ prefix: 'videos/' })
+            const items = listed.objects.map((item) => {
+              const [, group = '', file = ''] = item.key.split('/')
+              return { kind: group, name: file, size: item.size }
+            })
+            return Response.json(
+              {
+                good: items.filter((i) => i.kind === 'good'),
+                bad: items.filter((i) => i.kind === 'bad'),
+              },
+              { headers: { 'Cache-Control': 'no-store' } },
+            )
+          },
+          catch: (cause) => new WorkerFailure({ cause }),
+        })
+      if (request.method === 'GET' && kind && name)
+        return yield* Effect.tryPromise({
+          try: async () => {
+            const object = await env.BACKUPS.get('videos/' + kind + '/' + name)
+            if (!object) return Response.json({ error: 'request.notFound' }, { status: 404 })
+            return new Response(object.body, {
+              headers: {
+                'Content-Type': object.httpMetadata?.contentType ?? 'video/mp4',
+                'Cache-Control': 'public, max-age=86400',
+              },
+            })
+          },
+          catch: (cause) => new WorkerFailure({ cause }),
+        })
+      if (!authenticated) return Response.json({ error: 'auth.required' }, { status: 401 })
+      if (request.method === 'PUT' && kind && name)
+        return yield* Effect.tryPromise({
+          try: async () => {
+            await env.BACKUPS.put('videos/' + kind + '/' + name, request.body, {
+              httpMetadata: { contentType: request.headers.get('Content-Type') ?? 'video/mp4' },
+            })
+            return Response.json({ saved: true })
+          },
+          catch: (cause) => new WorkerFailure({ cause }),
+        })
+      if (request.method === 'DELETE' && kind && name)
+        return yield* Effect.tryPromise({
+          try: async () => {
+            await env.BACKUPS.delete('videos/' + kind + '/' + name)
+            return Response.json({ deleted: true })
+          },
+          catch: (cause) => new WorkerFailure({ cause }),
+        })
+      return Response.json({ error: 'request.notFound' }, { status: 404 })
+    }
     if (!authenticated) return Response.json({ error: 'auth.required' }, { status: 401 })
     if (url.pathname === '/api/restore' && request.method === 'POST') {
       // A backup restored into a new contest gets a new identifier, so it never overwrites another contest.
@@ -197,11 +253,7 @@ function route(
       const snapshot = yield* Schema.decodeUnknownEffect(Snapshot)(raw).pipe(
         Effect.mapError((cause) => new WorkerFailure({ cause })),
       )
-      const summary = {
-        id: snapshot.definition.id,
-        name: snapshot.definition.name,
-        date: snapshot.definition.date,
-      }
+      const { rulebook: _rulebook, ...summary } = snapshot.definition
       const registered = yield* Effect.tryPromise({
         try: () =>
           env.CATALOG.getByName('all').fetch(

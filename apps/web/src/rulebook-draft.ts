@@ -50,6 +50,7 @@ export interface ClassificationDraft {
   sex?: 'male' | 'female'
   split?: 'none' | 'age' | 'weight' | 'ageAndWeight'
   quota?: { kind: 'any'; count: number } | { kind: 'bySex'; male: number; female: number }
+  ageClassIds?: ReadonlyArray<string>
 }
 export interface RulebookDraft {
   name: Name
@@ -61,8 +62,9 @@ export interface RulebookDraft {
   barbell: {
     bars: { male: number; female: number }
     clampsPerSide: number
-    plates: ReadonlyArray<{ weight: number; pairs: number }>
+    plates: ReadonlyArray<{ weight: number; pairs: number; color?: string }>
   }
+  clockSeconds?: number
 }
 
 export function toDraft(book: Rulebook): RulebookDraft {
@@ -76,6 +78,7 @@ export function toDraft(book: Rulebook): RulebookDraft {
     weightClasses: [...encoded.weightClasses],
     classifications: [...encoded.classifications],
     barbell: encoded.barbell,
+    ...(typeof encoded.clockSeconds === 'number' ? { clockSeconds: encoded.clockSeconds } : {}),
   })
 }
 export function fromDraft(draft: RulebookDraft): Result.Result<Rulebook, InvalidRulebook> {

@@ -18,11 +18,13 @@
     "html-to-image": "1.11.13",
     "jspdf": "4.2.1",
     "jspdf-autotable": "5.0.8",
+    "lucide-react": "0.471.0",
     "qrcode-generator": "2.0.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "read-excel-file": "9.3.12",
-    "tailwindcss": "4.3.3"
+    "tailwindcss": "4.3.3",
+    "write-excel-file": "^4.1.1"
   },
   "devDependencies": {
     "@testing-library/dom": "10.4.2",

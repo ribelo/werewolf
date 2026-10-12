@@ -16,7 +16,7 @@ import {
   Verdict,
   type Attempt,
 } from './entry.ts'
-import { ageOnDate, Sex, type CalendarDate, type TeamId } from './lifter.ts'
+import { ageOnDate, CalendarDate, Lifter, Sex, type TeamId } from './lifter.ts'
 import {
   AgeClassId,
   DivisionId,
@@ -61,6 +61,22 @@ export const Command = Schema.Union([
 
     entryId: EntryId,
     divisions: Schema.Array(DivisionId),
+  }),
+  /** Deletes an entry that has no verdict yet. */
+  Schema.TaggedStruct('RemoveEntry', { ...commandMetadata, entryId: EntryId }),
+  /** Which lifts the entry takes. A lift with a verdict cannot be removed. */
+  Schema.TaggedStruct('SetEntryLifts', {
+    ...commandMetadata,
+    entryId: EntryId,
+    liftIds: Schema.NonEmptyArray(LiftId),
+  }),
+  /** Corrects the lifter's name, sex or birth date; the team stays. */
+  Schema.TaggedStruct('SetLifter', {
+    ...commandMetadata,
+    entryId: EntryId,
+    name: Lifter.fields.name,
+    sex: Sex,
+    birthDate: CalendarDate,
   }),
   /** Contest settings edited after creation. Lifts in use must keep their attempts. */
   Schema.TaggedStruct('SetRulebook', { ...commandMetadata, rulebook: Rulebook }),
@@ -422,6 +438,87 @@ function applyMutation(
       return editEntry(state, command.entryId, (entry) => ({
         ...entry,
         divisions: command.divisions,
+      }))
+    case 'RemoveEntry': {
+      if (!state.entries.some((item) => item.id === command.entryId))
+        return Result.fail(new EntryRejected({ entryId: command.entryId, reason: 'unknownEntry' }))
+      const judged = state.attempts.find(
+        (item) => item.entryId === command.entryId && item._tag === 'Judged',
+      )
+      if (judged)
+        return Result.fail(new AttemptUnavailable({ attempt: judged, reason: 'alreadyJudged' }))
+      const other = (entryId: string) => entryId !== command.entryId
+      return Result.succeed({
+        ...state,
+        entries: state.entries.filter((item) => other(item.id)),
+        attempts: state.attempts.filter((item) => other(item.entryId)),
+        didNotStart: state.didNotStart.filter((item) => other(item.entryId)),
+        orderOverrides: state.orderOverrides.filter((item) => other(item.attempt.entryId)),
+        selected: Option.filter(state.selected, (item) => other(item.entryId)),
+        warnings: state.warnings.filter((item) => other(item.entryId)),
+      })
+    }
+    case 'SetEntryLifts': {
+      const entry = state.entries.find((item) => item.id === command.entryId)
+      if (!entry)
+        return Result.fail(new EntryRejected({ entryId: command.entryId, reason: 'unknownEntry' }))
+      const wanted = new Set<string>(command.liftIds)
+      if (wanted.size !== command.liftIds.length)
+        return Result.fail(new InvalidCommand({ detail: 'duplicateLift' }))
+      const judged = state.attempts.find(
+        (item) => item.entryId === entry.id && item._tag === 'Judged' && !wanted.has(item.liftId),
+      )
+      if (judged)
+        return Result.fail(new AttemptUnavailable({ attempt: judged, reason: 'alreadyJudged' }))
+      const kept = state.rulebook.lifts
+        .filter((lift) => wanted.has(lift.id))
+        .map(
+          (lift) =>
+            entry.lifts.find((selected) => selected.liftId === lift.id) ?? { liftId: lift.id },
+        )
+      if (kept.length !== wanted.size)
+        return Result.fail(new EntryRejected({ entryId: entry.id, reason: 'unknownLift' }))
+      const [first, ...rest] = kept
+      if (!first) return Result.fail(new InvalidCommand({ detail: 'noLift' }))
+      const updated: Entry = { ...entry, lifts: [first, ...rest] }
+      const added = entryAttempts(state.rulebook, updated).filter(
+        (attempt) => !entry.lifts.some((selected) => selected.liftId === attempt.liftId),
+      )
+      const removed = (liftId: string) => !wanted.has(liftId)
+      return replaceEntries(
+        state,
+        state.entries.map((item) => (item.id === entry.id ? updated : item)),
+      ).pipe(
+        Result.map((next) => ({
+          ...next,
+          attempts: [
+            ...state.attempts.filter(
+              (item) => !(item.entryId === entry.id && removed(item.liftId)),
+            ),
+            ...added,
+          ],
+          didNotStart: state.didNotStart.filter(
+            (item) => !(item.entryId === entry.id && removed(item.liftId)),
+          ),
+          orderOverrides: state.orderOverrides.filter(
+            (item) => !(item.attempt.entryId === entry.id && removed(item.attempt.liftId)),
+          ),
+          selected: Option.filter(
+            state.selected,
+            (item) => !(item.entryId === entry.id && removed(item.liftId)),
+          ),
+        })),
+      )
+    }
+    case 'SetLifter':
+      return editEntry(state, command.entryId, (entry) => ({
+        ...entry,
+        lifter: {
+          ...entry.lifter,
+          name: command.name,
+          sex: command.sex,
+          birthDate: command.birthDate,
+        },
       }))
     case 'SetRulebook': {
       const next = command.rulebook

@@ -15,6 +15,8 @@ const PositiveKilograms = Kilograms.check(Schema.isGreaterThan(0))
 const Plate = Schema.Struct({
   weight: PositiveKilograms,
   pairs: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  /** CSS colour of the plate in the barbell picture, such as #dc2626. */
+  color: Schema.optionalKey(Schema.String.check(Schema.isPattern(/^#[0-9a-fA-F]{6}$/))),
 })
 /** clampsPerSide is one clamp's weight; pairs is the number of matched plate pairs. */
 export const Barbell = Schema.Struct({

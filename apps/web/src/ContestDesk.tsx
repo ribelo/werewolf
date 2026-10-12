@@ -1,70 +1,36 @@
-import { isDidNotStart, type Attempt, type ContestState } from '@werewolf/core'
+import { currentAttempt } from '@werewolf/core'
 import { ReadLinks, type ContestId } from '@werewolf/sync'
 import * as Effect from 'effect/Effect'
 import * as Fiber from 'effect/Fiber'
 import * as Option from 'effect/Option'
 import { useEffect, useState } from 'react'
-import { useMessages, rejectionText, type MessageKey } from './i18n.ts'
-import { requestJson, useLiveContest, type Access } from './live-contest.ts'
 import { BackupPanel } from './Backup.tsx'
-import { EntriesPanel } from './EntriesPanel.tsx'
-import { MeetDay, WeightForm } from './MeetDay.tsx'
-import { Results } from './Results.tsx'
-import { ScoreboardControl } from './Scoreboard.tsx'
+import { CompetitorModal } from './CompetitorModal.tsx'
+import { CategorySettings, ContestSettings } from './ContestSettings.tsx'
+import { DeskHub, type DeskAction } from './DeskHub.tsx'
+import { useMessages, rejectionText, type MessageKey } from './i18n.ts'
 import { AppHeader } from './Layout.tsx'
+import { useLegacy } from './legacy-i18n.ts'
+import { LiftPanel } from './LiftPanel.tsx'
+import { requestJson, useLiveContest, type Access } from './live-contest.ts'
+import { Modal } from './Modal.tsx'
+import { PlatesPanel } from './PlatesPanel.tsx'
+import { Registrations } from './Registrations.tsx'
+import { TeamResults } from './TeamResults.tsx'
 
-type Tab = 'desk' | 'entries' | 'results' | 'lifts' | 'plates' | 'backup'
-const tabKeys: ReadonlyArray<readonly [Tab, MessageKey]> = [
-  ['desk', 'tab.desk'],
-  ['entries', 'tab.entries'],
-  ['results', 'tab.results'],
-  ['plates', 'tab.plates'],
-  ['lifts', 'tab.lifts'],
-  ['backup', 'tab.backup'],
-]
-
-function AttemptEditor({
-  state,
-  attempt,
-  submit,
-}: {
-  readonly state: ContestState
-  readonly attempt: Attempt
-  readonly submit: (input: object) => void
-}) {
-  const { t } = useMessages()
-  const entry = state.entries.find((item) => item.id === attempt.entryId)
-  const ref = { entryId: attempt.entryId, liftId: attempt.liftId, number: attempt.number }
-  return (
-    <div className="attempt-editor flex flex-wrap items-center gap-2">
-      {entry && (
-        <WeightForm
-          state={state}
-          entry={entry}
-          attempt={ref}
-          initial={attempt._tag === 'Unannounced' ? '' : String(attempt.weight)}
-          submit={submit}
-        />
-      )}
-      <button
-        type="button"
-        className="btn-good"
-        disabled={attempt._tag === 'Unannounced'}
-        onClick={() => submit({ _tag: 'SetVerdict', attempt: ref, verdict: 'goodLift' })}
-      >
-        {t('desk.goodLift')}
-      </button>
-      <button
-        type="button"
-        className="btn-bad"
-        disabled={attempt._tag === 'Unannounced'}
-        onClick={() => submit({ _tag: 'SetVerdict', attempt: ref, verdict: 'noLift' })}
-      >
-        {t('desk.noLift')}
-      </button>
-    </div>
-  )
+type Tab = 'desk' | 'registrations' | 'team_results' | 'plates' | { readonly lift: string }
+const legacyLiftTab: Readonly<Record<string, string>> = {
+  squat: 'contest_detail.tabs.squat_table',
+  bench: 'contest_detail.tabs.bench_table',
+  deadlift: 'contest_detail.tabs.deadlift_table',
 }
+const tabClass = (active: boolean) =>
+  'px-4 py-2 font-display text-xs uppercase tracking-[0.4em] border-2 transition ' +
+  (active
+    ? 'bg-primary-red text-black border-primary-red'
+    : 'border-border-color text-text-secondary hover:text-text-primary hover:border-primary-red')
+
+/** The contest pages of 2025: Stanowisko, Rejestracja, team results, plates and one table per lift. */
 export function ContestDesk({
   id,
   access,
@@ -74,11 +40,16 @@ export function ContestDesk({
   readonly access: Access
   readonly onLogout?: () => void
 }) {
-  const { locale, t } = useMessages()
+  const { t } = useMessages()
+  const { lt, locale } = useLegacy()
   const live = useLiveContest(id, access)
   const [links, setLinks] = useState<Option.Option<ReadLinks>>(Option.none())
   const [error, setError] = useState<MessageKey | ''>('')
   const [tab, setTab] = useState<Tab>('desk')
+  const [modal, setModal] = useState<Option.Option<Exclude<DeskAction, 'plates'>>>(Option.none())
+  /** The entry in the competitor dialog; NEW_ENTRY opens an empty one. */
+  const [editing, setEditing] = useState<Option.Option<string>>(Option.none())
+  const closeModal = () => setModal(Option.none())
   const editor = access._tag === 'Editor'
   useEffect(() => {
     if (!editor) return
@@ -96,20 +67,51 @@ export function ContestDesk({
   }, [id, editor])
   if (live.view._tag !== 'Ready')
     return (
-      <section className="card">
-        <p role="status" className="text-text-secondary">
-          {t(live.view._tag === 'Invalid' ? 'request.invalid' : 'desk.connecting')}
-        </p>
-        {live.error && <p role="alert">{t(live.error)}</p>}
+      <section className="container-full py-8">
+        <div className="card">
+          <p role="status" className="text-text-secondary">
+            {t(live.view._tag === 'Invalid' ? 'request.invalid' : 'desk.connecting')}
+          </p>
+          {live.error && <p role="alert">{t(live.error)}</p>}
+        </div>
       </section>
     )
   const { replica } = live.view
-  const { definition } = replica.state.snapshot
+  const snapshot = replica.state.snapshot
+  const { definition } = snapshot
   const { journal } = replica
   const state = journal.state
-  const badge = (tone: string, text: string) => (
-    <span className={'status-badge ' + tone}>{text}</span>
-  )
+  const current = currentAttempt(state)
+  const qrVisible = Option.isSome(state.scoreboard.qrUrl)
+  const qr = {
+    visible: qrVisible,
+    available: Option.isSome(links),
+    toggle: () =>
+      Option.match(links, {
+        onNone: () => {},
+        onSome: (value) =>
+          live.submit(
+            qrVisible
+              ? { _tag: 'SetScoreboard', filter: state.scoreboard.filter }
+              : { _tag: 'SetScoreboard', filter: state.scoreboard.filter, qrUrl: value.results },
+          ),
+      }),
+  }
+  const tabs: ReadonlyArray<readonly [Tab, string]> = [
+    ['desk', lt('contest_detail.tabs.desk')],
+    ['registrations', lt('contest_detail.tabs.main_table')],
+    ['team_results', lt('contest_detail.tabs.team_results')],
+    ['plates', lt('contest_detail.tabs.plates')],
+    ...state.rulebook.lifts.map(
+      (lift) =>
+        [
+          { lift: lift.id },
+          legacyLiftTab[lift.id] ? lt(legacyLiftTab[lift.id] ?? '') : lift.name[locale],
+        ] as const,
+    ),
+  ]
+  const same = (a: Tab, b: Tab) =>
+    typeof a === 'string' || typeof b === 'string' ? a === b : a.lift === b.lift
   return (
     <section>
       {editor && onLogout && (
@@ -120,208 +122,111 @@ export function ContestDesk({
           onLogout={onLogout}
         />
       )}
-      <div className="container-full space-y-6 py-8">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          {!editor && (
-            <div>
-              <h2 className="text-display uppercase tracking-[0.25em]">{definition.name}</h2>
-              <p className="text-caption tracking-[0.4em] text-text-secondary uppercase">
-                {definition.date}
-              </p>
-            </div>
-          )}
-          <p
-            role="status"
-            className="flex flex-wrap items-center gap-3 text-xs tracking-[0.3em] text-text-secondary uppercase"
-          >
-            {badge(
-              live.connected ? 'status-active' : 'status-error',
-              t(live.connected ? 'desk.connected' : 'desk.disconnected'),
-            )}
-            <span>
-              {t('desk.sequence')}: {replica.state.snapshot.commands.length}
-            </span>
-            {badge(
-              replica.state.pending.length > 0 ? 'status-warning' : 'status-neutral',
-              t('sync.pending') + ': ' + replica.state.pending.length,
-            )}
-            {badge('status-neutral', t('sync.peers') + ': ' + live.peers)}
-            {!editor && <span>{t('auth.readOnly')}</span>}
-          </p>
-        </div>
-        {live.error && <p role="alert">{t(live.error)}</p>}
-        {live.rejection && (
-          <p role="alert">
-            {t('desk.rejected')} {rejectionText(live.rejection, locale)}
-          </p>
-        )}
-        {(replica.state.rejected.length > 0 || replica.conflicts.length > 0) && (
-          <aside role="status" className="card border-status-warning">
-            <h3 className="text-h3">{t('sync.review')}</h3>
-            <ul>
-              {[...replica.state.rejected, ...replica.conflicts].map((item) => (
-                <li key={item.command.id}>{rejectionText(item.reason, locale)}</li>
-              ))}
-            </ul>
-          </aside>
-        )}
-        {error && <p role="alert">{t(error)}</p>}
-        <nav className="flex flex-wrap gap-3 border-b-2 border-border-color pb-3" role="tablist">
-          {tabKeys.map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              role="tab"
-              aria-selected={tab === key}
-              onClick={() => setTab(key)}
-              className={
-                'border-2 px-4 py-2 font-display text-xs tracking-[0.4em] uppercase transition ' +
-                (tab === key
-                  ? 'border-primary-red bg-primary-red text-black'
-                  : 'border-border-color text-text-secondary hover:border-primary-red hover:text-text-primary')
-              }
-            >
-              {t(label)}
-            </button>
-          ))}
-          {Option.isSome(links) &&
-            Object.entries(links.value).map(([role, url]) => (
-              <a
-                key={role}
-                href={url}
-                target="_blank"
-                rel="noreferrer"
-                className="ml-auto border-2 border-transparent px-3 py-2 font-display text-xs tracking-[0.3em] text-text-secondary uppercase hover:text-primary-red"
-              >
-                {t(
-                  role === 'stage'
-                    ? 'desk.stage'
-                    : role === 'announcer'
-                      ? 'desk.announcer'
-                      : role === 'scoreboard'
-                        ? 'desk.scoreboardLink'
-                        : 'desk.results',
-                )}
-              </a>
-            ))}
-        </nav>
-        {tab === 'desk' && (
-          <>
-            <MeetDay
-              state={state}
-              commands={journal.commands}
-              submit={live.submit}
-              editor={editor}
-            />
-            {editor && (
-              <ScoreboardControl
-                state={state}
-                resultsUrl={Option.map(links, (value) => value.results)}
-                submit={live.submit}
-              />
-            )}
-          </>
-        )}
-        {tab === 'entries' && editor && (
-          <EntriesPanel state={state} journal={journal} submit={live.submit} />
-        )}
-        {tab === 'results' && <Results state={state} title={definition.name} exports={editor} />}
-        {tab === 'lifts' &&
-          state.rulebook.lifts.map((lift) => (
-            <section key={lift.id} className="card">
-              <h3 className="text-h3 mb-2">{lift.name[locale]}</h3>
-              <div className="table-scroll overflow-x-auto">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>{t('desk.lotNumber')}</th>
-                      <th>{t('desk.name')}</th>
-                      <th>{t('desk.attempt')}</th>
-                      <th>{t('desk.weight')}</th>
-                      <th>{t('desk.verdict')}</th>
-                      {editor && <th>{t('desk.actions')}</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {state.attempts
-                      .filter((attempt) => attempt.liftId === lift.id)
-                      .map((attempt) => {
-                        const entry = state.entries.find((item) => item.id === attempt.entryId)
-                        return (
-                          <tr key={attempt.entryId + '/' + attempt.number}>
-                            <td>{entry?.lotNumber}</td>
-                            <td className="font-semibold uppercase">{entry?.lifter.name}</td>
-                            <td>{attempt.number}</td>
-                            <td className="font-mono">
-                              {attempt._tag === 'Unannounced' ? '—' : attempt.weight}
-                            </td>
-                            <td>
-                              {isDidNotStart(state, attempt.entryId, attempt.liftId) ? (
-                                <span className="attempt-pending text-status-warning">DNS</span>
-                              ) : attempt._tag === 'Judged' ? (
-                                <span
-                                  className={
-                                    attempt.verdict === 'goodLift'
-                                      ? 'attempt-good'
-                                      : 'attempt-failed'
-                                  }
-                                >
-                                  {t(
-                                    attempt.verdict === 'goodLift'
-                                      ? 'desk.goodLift'
-                                      : 'desk.noLift',
-                                  )}
-                                </span>
-                              ) : (
-                                <span className="attempt-pending">—</span>
-                              )}
-                            </td>
-                            {editor && (
-                              <td>
-                                <AttemptEditor
-                                  state={state}
-                                  attempt={attempt}
-                                  submit={live.submit}
-                                />
-                              </td>
-                            )}
-                          </tr>
-                        )
-                      })}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          ))}
-        {tab === 'backup' && editor && <BackupPanel id={id} online={live.connected} />}
-        {tab === 'plates' && (
-          <section className="card">
-            <h3 className="text-h3 mb-2">{t('plates.inventory')}</h3>
-            <p className="text-text-secondary">
-              {t('plates.bar')}:{' '}
-              <span className="font-mono text-text-primary">
-                {state.rulebook.barbell.bars.male} / {state.rulebook.barbell.bars.female} kg
-              </span>{' '}
-              · {t('plates.clamps')}:{' '}
-              <span className="font-mono text-text-primary">
-                {state.rulebook.barbell.clampsPerSide} kg
-              </span>
+      <div className="container-full py-8">
+        <div className="space-y-8">
+          {live.error && <p role="alert">{t(live.error)}</p>}
+          {live.rejection && (
+            <p role="alert">
+              {t('desk.rejected')} {rejectionText(live.rejection, locale)}
             </p>
-            <table className="data-table mt-3 max-w-md">
-              <tbody>
-                {state.rulebook.barbell.plates.map((plate) => (
-                  <tr key={plate.weight}>
-                    <td className="font-mono">{plate.weight} kg</td>
-                    <td>
-                      {plate.pairs} {t('plates.pairs')}
-                    </td>
-                  </tr>
+          )}
+          {(replica.state.rejected.length > 0 || replica.conflicts.length > 0) && (
+            <aside role="status" className="card border-status-warning">
+              <h3 className="text-h3">{t('sync.review')}</h3>
+              <ul>
+                {[...replica.state.rejected, ...replica.conflicts].map((item) => (
+                  <li key={item.command.id}>{rejectionText(item.reason, locale)}</li>
                 ))}
-              </tbody>
-            </table>
-          </section>
-        )}
+              </ul>
+            </aside>
+          )}
+          {error && <p role="alert">{t(error)}</p>}
+          <nav className="flex flex-wrap gap-3 border-b-2 border-border-color pb-3" role="tablist">
+            {tabs.map(([key, label]) => (
+              <button
+                key={typeof key === 'string' ? key : key.lift}
+                type="button"
+                role="tab"
+                aria-selected={same(tab, key)}
+                onClick={() => setTab(key)}
+                className={tabClass(same(tab, key))}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+          {tab === 'desk' && (
+            <DeskHub
+              state={state}
+              definition={definition}
+              links={links}
+              connected={live.connected}
+              submit={live.submit}
+              onAction={(action) =>
+                action === 'plates' ? setTab('plates') : setModal(Option.some(action))
+              }
+            />
+          )}
+          {tab === 'registrations' && (
+            <Registrations
+              state={state}
+              journal={journal}
+              submit={live.submit}
+              editing={editing}
+              onEdit={setEditing}
+            />
+          )}
+          {tab === 'team_results' && <TeamResults state={state} contestName={definition.name} />}
+          {tab === 'plates' && <PlatesPanel state={state} submit={live.submit} editor={editor} />}
+          {typeof tab !== 'string' && (
+            <>
+              <LiftPanel
+                state={state}
+                contestName={definition.name}
+                liftId={tab.lift}
+                current={current}
+                submit={live.submit}
+                qr={qr}
+                onEditCompetitor={(entryId) => setEditing(Option.some(entryId))}
+              />
+              {Option.match(
+                Option.flatMap(editing, (entryId) =>
+                  Option.fromUndefinedOr(state.entries.find((entry) => entry.id === entryId)),
+                ),
+                {
+                  onNone: () => <></>,
+                  onSome: (entry) => (
+                    <CompetitorModal
+                      key={entry.id}
+                      state={state}
+                      entry={Option.some(entry)}
+                      submit={live.submit}
+                      onClose={() => setEditing(Option.none())}
+                    />
+                  ),
+                },
+              )}
+            </>
+          )}
+        </div>
       </div>
+      {Option.contains(modal, 'edit') && (
+        <ContestSettings
+          state={state}
+          snapshot={snapshot}
+          pending={replica.state.pending.length}
+          submit={live.submit}
+          onClose={closeModal}
+        />
+      )}
+      {Option.contains(modal, 'categories') && (
+        <CategorySettings state={state} submit={live.submit} onClose={closeModal} />
+      )}
+      {Option.contains(modal, 'backups') && (
+        <Modal title={lt('v2.tiles.backups_title')} onClose={closeModal}>
+          <BackupPanel id={id} online={live.connected} />
+        </Modal>
+      )}
     </section>
   )
 }

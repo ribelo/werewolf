@@ -64,7 +64,10 @@ for (const contest of contests) {
       'select gender, code, name, max_weight, sort_order from contest_weight_classes where contest_id = ?',
       contest.id,
     ),
-    plates: rows('select plate_weight, quantity from plate_sets where contest_id = ?', contest.id),
+    plates: rows(
+      'select plate_weight, quantity, color from plate_sets where contest_id = ?',
+      contest.id,
+    ),
     registrations: rows(
       `select r.id, r.competitor_id, r.bodyweight, r.rack_height_bench, r.flight_order, r.created_at, r.labels,
               c.first_name, c.last_name, c.birth_date, c.gender, c.club

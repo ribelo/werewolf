@@ -9,6 +9,8 @@ export const ContestSummary = Schema.Struct({
   id: ContestId,
   name: Schema.NonEmptyString,
   date: CalendarDate,
+  /** Town of the contest, shown on the contest list and the desk as in 2025. */
+  location: Schema.optionalKey(Schema.String),
 })
 export type ContestSummary = typeof ContestSummary.Type
 export const ContestDefinition = Schema.Struct({ ...ContestSummary.fields, rulebook: Rulebook })
