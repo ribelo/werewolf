@@ -10,6 +10,7 @@ import * as Option from 'effect/Option'
 import * as Result from 'effect/Result'
 import { useEffect, useState, type FormEvent } from 'react'
 import { useMessages, type MessageKey } from './i18n.ts'
+import { legacyText } from './legacy-i18n.ts'
 import { ContestCatalog } from './ContestCatalog.tsx'
 import { ContestDesk } from './ContestDesk.tsx'
 import { Settings } from './Settings.tsx'
@@ -171,7 +172,12 @@ export function App() {
             <ContestDesk id={auth.id} access={{ _tag: 'Editor' }} onLogout={logout} />
           ) : location.pathname === '/new' ? (
             <>
-              <AppHeader title={t('contests.create')} current="contests" onLogout={logout} />
+              <AppHeader
+                title={legacyText(locale, 'contest.wizard.layout_title')}
+                subtitle={legacyText(locale, 'contest.wizard.layout_subtitle')}
+                current="contests"
+                onLogout={logout}
+              />
               <div className="container-full py-8">
                 <Wizard />
               </div>

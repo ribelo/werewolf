@@ -6,7 +6,7 @@
 
 **Blocked by:** 18
 
-**Status:** in-progress
+**Status:** done
 
 ## Method
 
@@ -29,8 +29,8 @@ Checked in Leash against the old app or its source, with the 2025 data and the 2
 - [x] Public table (filters, read-only table)
 - [x] Public results (individual and team tabs)
 - [x] Edit contest and manage categories (dialogs)
-- [ ] Contest wizard (v2 wizard kept; the 2025 wizard has 1563 lines of different steps)
-- [ ] System and settings page (language only)
+- [x] Contest wizard (2025 frame, header buttons and first step; the later steps are the v2 rulebook, classes, teams and entries steps)
+- [x] System and settings page (language, server state)
 
 ## Deviations
 
@@ -41,7 +41,9 @@ Checked in Leash against the old app or its source, with the 2025 data and the 2
 5. "Wyczyść bieżącą próbę" is not shown: in v2 the next attempt in the lifting order is always current. "Nie wystartował (DNS)" takes its place.
 6. The 2025 "Wyniki indywidualne" tab is removed at the client's request (2026-10-12); the lift tables show the same points.
 7. The contest list shows no discipline, bar weights, delete button or registrations total: the catalog keeps only id, name, date and town.
-8. Old bugs not copied: "100kg kg" in the recent attempts and the bar weight on the stage screen.
+8. Wizard: the 2025 steps "details", "competitors" and "attempts" are the v2 steps rulebook, classes, teams, entries and review, because the rulebook is data (ADR 0002). There is no "generate sample data" button.
+9. Settings: no "reset database" and no KV backup list; the spec has no reset, and backups are per contest.
+10. Old bugs not copied: "100kg kg" in the recent attempts and the bar weight on the stage screen.
 
 ## Verified
 

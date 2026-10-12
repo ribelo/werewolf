@@ -14,6 +14,7 @@ import * as Schema from 'effect/Schema'
 import { useState } from 'react'
 import { EntriesPanel, TeamsPanel } from './EntriesPanel.tsx'
 import { useMessages } from './i18n.ts'
+import { useLegacy } from './legacy-i18n.ts'
 import { RulebookEditor } from './RulebookEditor.tsx'
 import { fromDraft, toDraft, type RulebookDraft } from './rulebook-draft.ts'
 
@@ -34,7 +35,9 @@ const post = (path: string, body: unknown) =>
 export function Wizard() {
   const { locale, t, tx } = useMessages()
   const [step, setStep] = useState<Step>('basics')
+  const { lt } = useLegacy()
   const [name, setName] = useState('')
+  const [place, setPlace] = useState('')
   const [date, setDate] = useState(() => new Intl.DateTimeFormat('sv-SE').format(new Date()))
   const [presetId, setPresetId] = useState<string>(rulebookPresets[0].id)
   const [draft, setDraft] = useState<RulebookDraft>(() => toDraft(rulebookPresets[0].rulebook))
@@ -82,6 +85,7 @@ export function Wizard() {
         id,
         name: name.trim(),
         date,
+        ...(place.trim() ? { location: place.trim() } : {}),
         rulebook: Schema.encodeSync(Rulebook)(rulebook),
       })
       for (const command of Option.isSome(journalOption) ? journalOption.value.commands : [])
@@ -102,149 +106,185 @@ export function Wizard() {
       ),
     )
   }
+  const nextDisabled =
+    (step === 'basics' && (name.trim() === '' || Result.isFailure(parsedDate))) ||
+    (step !== 'basics' && Result.isFailure(book))
   return (
-    <section className="space-y-6">
-      <h2 className="text-h1 uppercase">{t('wizard.title')}</h2>
-      <ol className="flex flex-wrap gap-3 border-b-2 border-border-color pb-3">
-        {steps.map((item, position) => (
-          <li
-            key={item}
-            aria-current={item === step}
-            className={
-              'border-2 px-4 py-2 font-display text-xs tracking-[0.3em] uppercase ' +
-              (item === step
-                ? 'border-primary-red bg-primary-red text-black'
-                : position < index
-                  ? 'border-border-color text-text-primary'
-                  : 'border-border-color text-text-secondary')
-            }
-          >
-            {position + 1}. {tx('wizard.step.' + item)}
-          </li>
-        ))}
-      </ol>
-      {step === 'basics' && (
-        <form className="card max-w-xl" onSubmit={(event) => event.preventDefault()}>
-          <label className="mb-3 block">
-            <span className="input-label">{t('contests.name')}</span>
-            <input
-              className="input-field w-full"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              required
-            />
-          </label>
-          <label className="mb-3 block">
-            <span className="input-label">{t('desk.date')}</span>
-            <input
-              className="input-field w-full"
-              type="date"
-              value={date}
-              onChange={(event) => setDate(event.target.value)}
-              required
-            />
-          </label>
-          <label className="mb-3 block">
-            <span className="input-label">{t('desk.preset')}</span>
-            <select
-              className="input-field w-full"
-              value={presetId}
-              onChange={(event) => {
-                const preset = rulebookPresets.find((item) => item.id === event.target.value)
-                if (!preset) return
-                setPresetId(preset.id)
-                setDraft(toDraft(preset.rulebook))
-                setCommands([])
-              }}
-            >
-              {rulebookPresets.map((preset) => (
-                <option key={preset.id} value={preset.id}>
-                  {tx('rb.preset.' + preset.id)} — {preset.rulebook.name[locale]}
-                </option>
-              ))}
-            </select>
-          </label>
-        </form>
-      )}
-      {step === 'rulebook' && <RulebookEditor draft={draft} onChange={setDraft} part="rulebook" />}
-      {step === 'classes' && <RulebookEditor draft={draft} onChange={setDraft} part="classes" />}
-      {step === 'teams' && Option.isSome(journalOption) && (
-        <TeamsPanel state={journalOption.value.state} submit={submit} />
-      )}
-      {step === 'entries' && Option.isSome(journalOption) && (
-        <EntriesPanel
-          state={journalOption.value.state}
-          journal={journalOption.value}
-          submit={submit}
-          withTeams={false}
-        />
-      )}
-      {step === 'review' && (
-        <section className="card">
-          <h3 className="text-h3 mb-2">{t('wizard.summary')}</h3>
-          {Result.isSuccess(book) && (
-            <ul className="mb-4 text-sm">
-              <li>
-                {name} — {date}
-              </li>
-              <li>
-                {t('rb.lifts')}: {book.success.lifts.map((lift) => lift.name[locale]).join(', ')}
-              </li>
-              <li>
-                {t('rb.divisions')}:{' '}
-                {book.success.divisions.map((division) => division.name[locale]).join(', ')}
-              </li>
-              <li>
-                {t('rb.classifications')}: {book.success.classifications.length}
-              </li>
-              <li>
-                {t('teams.title')}:{' '}
-                {Option.isSome(journalOption) ? journalOption.value.state.teams.length : 0}
-              </li>
-              <li>
-                {t('entries.title')}:{' '}
-                {Option.isSome(journalOption) ? journalOption.value.state.entries.length : 0}
-              </li>
-            </ul>
-          )}
-          <button
-            type="button"
-            className="btn-primary"
-            disabled={!ready || busy}
-            onClick={() => Result.isSuccess(book) && create(book.success)}
-          >
-            {t(busy ? 'wizard.creating' : 'wizard.create')}
-          </button>
-          {failed && (
-            <p role="alert" className="mt-2">
-              {t('wizard.failed')}
+    <div className="space-y-8">
+      <div className="card">
+        <header className="card-header flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h2 className="text-h2 text-text-primary">{lt('contest.wizard.title')}</h2>
+            <p className="text-body text-text-secondary">
+              {lt('contest.wizard.step_label')} {index + 1} {lt('contest.wizard.step_connector')}{' '}
+              {steps.length}
             </p>
+          </div>
+          <div className="flex flex-wrap gap-2 justify-end">
+            <button
+              className="btn-secondary"
+              type="button"
+              disabled={index === 0}
+              onClick={() => setStep(steps[index - 1] ?? 'basics')}
+            >
+              {lt('contest.wizard.actions.previous')}
+            </button>
+            <button
+              className="btn-primary"
+              type="button"
+              disabled={index < steps.length - 1 ? nextDisabled : !ready || busy}
+              onClick={() =>
+                index < steps.length - 1
+                  ? setStep(steps[index + 1] ?? 'review')
+                  : Result.isSuccess(book) && create(book.success)
+              }
+            >
+              {index < steps.length - 1
+                ? lt('contest.wizard.actions.next')
+                : busy
+                  ? lt('contest.wizard.actions.submitting')
+                  : lt('contest.wizard.actions.submit')}
+            </button>
+          </div>
+        </header>
+        {failed && (
+          <div
+            role="alert"
+            className="bg-status-error/20 border border-status-error text-status-error px-4 py-3 mb-4"
+          >
+            {t('wizard.failed')}
+          </div>
+        )}
+        <section className="space-y-6">
+          <div className="space-y-2">
+            <h3 className="text-h3 text-text-primary">
+              {step === 'basics' ? lt('contest.wizard.steps.basic') : tx('wizard.step.' + step)}
+            </h3>
+            {step === 'basics' && (
+              <p className="text-caption text-text-secondary">
+                {lt('contest.wizard.steps.basic_hint')}
+              </p>
+            )}
+          </div>
+          {step === 'basics' && (
+            <form className="space-y-4" onSubmit={(event) => event.preventDefault()}>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="input-label" htmlFor="contest-name">
+                    {lt('contest.wizard.fields.name.label')}
+                  </label>
+                  <input
+                    id="contest-name"
+                    className="input-field w-full"
+                    value={name}
+                    placeholder={lt('contest.wizard.fields.name.placeholder')}
+                    onChange={(event) => setName(event.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="input-label" htmlFor="contest-date">
+                    {lt('contest.wizard.fields.date.label')}
+                  </label>
+                  <input
+                    id="contest-date"
+                    className="input-field w-full"
+                    type="date"
+                    value={date}
+                    onChange={(event) => setDate(event.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="input-label" htmlFor="location">
+                    {lt('contest.wizard.fields.location.label')}
+                  </label>
+                  <input
+                    id="location"
+                    className="input-field w-full"
+                    value={place}
+                    placeholder={lt('contest.wizard.fields.location.placeholder')}
+                    onChange={(event) => setPlace(event.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="input-label" htmlFor="preset">
+                    {t('desk.preset')}
+                  </label>
+                  <select
+                    id="preset"
+                    className="input-field w-full"
+                    value={presetId}
+                    onChange={(event) => {
+                      const preset = rulebookPresets.find((item) => item.id === event.target.value)
+                      if (!preset) return
+                      setPresetId(preset.id)
+                      setDraft(toDraft(preset.rulebook))
+                      setCommands([])
+                    }}
+                  >
+                    {rulebookPresets.map((preset) => (
+                      <option key={preset.id} value={preset.id}>
+                        {tx('rb.preset.' + preset.id)} — {preset.rulebook.name[locale]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </form>
+          )}
+          {step === 'rulebook' && (
+            <RulebookEditor draft={draft} onChange={setDraft} part="rulebook" />
+          )}
+          {step === 'classes' && (
+            <RulebookEditor draft={draft} onChange={setDraft} part="classes" />
+          )}
+          {step === 'teams' && Option.isSome(journalOption) && (
+            <TeamsPanel state={journalOption.value.state} submit={submit} />
+          )}
+          {step === 'entries' && Option.isSome(journalOption) && (
+            <EntriesPanel
+              state={journalOption.value.state}
+              journal={journalOption.value}
+              submit={submit}
+              withTeams={false}
+            />
+          )}
+          {step === 'review' && (
+            <section className="card">
+              <h3 className="text-h3 mb-2">{t('wizard.summary')}</h3>
+              {Result.isSuccess(book) && (
+                <ul className="mb-4 text-sm">
+                  <li>
+                    {name} — {date}
+                  </li>
+                  <li>
+                    {t('rb.lifts')}:{' '}
+                    {book.success.lifts.map((lift) => lift.name[locale]).join(', ')}
+                  </li>
+                  <li>
+                    {t('rb.divisions')}:{' '}
+                    {book.success.divisions.map((division) => division.name[locale]).join(', ')}
+                  </li>
+                  <li>
+                    {t('rb.classifications')}: {book.success.classifications.length}
+                  </li>
+                  <li>
+                    {t('teams.title')}:{' '}
+                    {Option.isSome(journalOption) ? journalOption.value.state.teams.length : 0}
+                  </li>
+                  <li>
+                    {t('entries.title')}:{' '}
+                    {Option.isSome(journalOption) ? journalOption.value.state.entries.length : 0}
+                  </li>
+                </ul>
+              )}
+            </section>
           )}
         </section>
-      )}
-      <div className="flex gap-3">
-        <button
-          type="button"
-          className="btn-secondary"
-          disabled={index === 0}
-          onClick={() => setStep(steps[index - 1] ?? 'basics')}
-        >
-          {t('wizard.back')}
-        </button>
-        {index < steps.length - 1 && (
-          <button
-            type="button"
-            className="btn-primary"
-            disabled={
-              (step === 'basics' && (name.trim() === '' || Result.isFailure(parsedDate))) ||
-              (step !== 'basics' && Result.isFailure(book))
-            }
-            onClick={() => setStep(steps[index + 1] ?? 'review')}
-          >
-            {t('wizard.next')}
-          </button>
-        )}
       </div>
-    </section>
+    </div>
   )
 }

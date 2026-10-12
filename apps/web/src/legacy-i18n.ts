@@ -42,6 +42,8 @@ const extra = {
         saved: 'Ustawienia zapisane.',
         pending: 'Poczekaj, aż wszystkie zmiany trafią na serwer, i spróbuj ponownie.',
         failed: 'Nie udało się zapisać ustawień.',
+        database_description:
+          'Stan serwera i liczba zawodów. Kopie zapasowe są w każdych zawodach (Stanowisko → Kopie zapasowe).',
         name: 'Nazwa',
       },
     },
@@ -80,6 +82,8 @@ const extra = {
         name: 'Name',
         pending: 'Wait until every change reaches the server, then try again.',
         failed: 'The settings could not be saved.',
+        database_description:
+          'Server state and number of contests. Backups are in each contest (Desk → Backups).',
       },
     },
   },
