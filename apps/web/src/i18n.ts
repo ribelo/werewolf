@@ -301,6 +301,14 @@ export const catalogs = {
     'meet.dnsUndo': 'Cofnij DNS',
     'meet.dnsMark': 'DNS',
     'auth.pending': 'Logowanie…',
+    'login.eyebrow': 'Dostęp organizatora',
+    'login.title': 'Werewolf Cloud',
+    'login.subtitle':
+      'Zaloguj się hasłem organizatora, aby zarządzać zawodami, wpisywać wyniki i zmieniać ustawienia.',
+    'login.password_label': 'Hasło administratora',
+    'login.password_placeholder': 'Podaj hasło organizatora',
+    'login.submit': 'Wejdź do pokoju sterowania',
+    'login.submitting': 'Logowanie…',
   },
   en: {
     'auth.readOnly': 'Read only.',
@@ -599,6 +607,14 @@ export const catalogs = {
     'meet.dnsUndo': 'Undo DNS',
     'meet.dnsMark': 'DNS',
     'auth.pending': 'Logging in…',
+    'login.eyebrow': 'Organizer access',
+    'login.title': 'Werewolf Cloud',
+    'login.subtitle':
+      'Sign in with the organizer password to unlock contest management, results entry, and settings.',
+    'login.password_label': 'Admin password',
+    'login.password_placeholder': 'Enter organizer password',
+    'login.submit': 'Enter control room',
+    'login.submitting': 'Signing in…',
   },
 } as const
 const rejectionMessages: Readonly<Record<string, { readonly pl: string; readonly en: string }>> = {

@@ -38,7 +38,7 @@ Old app: `~/projects/ribelo/werewolf/werewolf-cloud` (read only). v2: this workt
 
 Each box is ticked only after the view was checked in Leash (desk and organizer 1440x900, stage and scoreboard 1920x1080, public results and read-only links 390x844, both languages).
 
-- [ ] Login
+- [x] Login
 - [ ] Contest list
 - [ ] System and settings
 - [ ] Contest wizard

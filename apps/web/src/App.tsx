@@ -146,7 +146,7 @@ export function App() {
   const viewing = Result.isSuccess(viewerId) && !!token
   return (
     <main className={viewing ? '' : 'min-h-screen bg-main-bg text-text-primary'}>
-      {!viewing && (
+      {!viewing && (auth._tag === 'Editor' || auth._tag === 'OfflineEditor') && (
         <header className="border-b-2 border-border-color bg-main-bg">
           <div className="container-full flex flex-wrap items-end justify-between gap-6 py-6">
             <h1 className="text-display tracking-[0.25em] uppercase">{t('app.title')}</h1>
@@ -204,24 +204,39 @@ export function App() {
             {t('desk.connecting')}
           </p>
         ) : (
-          <form className="card mx-auto mt-12 max-w-md" onSubmit={login}>
-            <h2 className="text-h2 mb-4">{t('auth.title')}</h2>
-            <label className="mb-4 block">
-              <span className="input-label">{t('auth.password')}</span>
-              <input
-                className="input-field w-full"
-                type="password"
-                name="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-              />
-            </label>
-            <button className="btn-primary" disabled={pending} type="submit">
-              {t(pending ? 'auth.pending' : 'auth.login')}
-            </button>
-          </form>
+          <div className="flex min-h-[calc(100vh-3rem)] items-center justify-center">
+            <form className="card mx-auto mt-0 max-w-lg" onSubmit={login}>
+              <header className="card-header flex flex-col gap-2">
+                <span className="text-label text-text-secondary uppercase tracking-[0.4em]">
+                  {t('login.eyebrow')}
+                </span>
+                <h1 className="text-display text-text-primary">{t('login.title')}</h1>
+                <p className="text-body text-text-secondary max-w-md">{t('login.subtitle')}</p>
+              </header>
+              <div className="space-y-6">
+                <label className="block space-y-2">
+                  <span className="input-label">{t('login.password_label')}</span>
+                  <input
+                    className="input-field w-full"
+                    type="password"
+                    name="password"
+                    autoComplete="current-password"
+                    placeholder={t('login.password_placeholder')}
+                    required
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                  />
+                </label>
+                <button
+                  className="btn-primary w-full text-center justify-center"
+                  disabled={pending}
+                  type="submit"
+                >
+                  {t(pending ? 'login.submitting' : 'login.submit')}
+                </button>
+              </div>
+            </form>
+          </div>
         )}
         {error && (
           <p role="alert" className="mt-4">
