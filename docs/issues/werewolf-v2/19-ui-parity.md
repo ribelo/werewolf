@@ -60,8 +60,26 @@ Each box is ticked only after the view was checked in Leash (desk and organizer 
 
 ## Deviations
 
-To be listed at the end of the ticket, each with its reason.
+Status: in-progress. Open views: contest list, system and settings, contest tabs, desk, registrations, individual results, team results, plates, lift tables, stage screen, announcer view, scoreboard, share screen and QR, public results, exports, backups, dialogs. Screenshots of the open views are in `/tmp/ww-parity/`.
+
+Deviations found so far, each with its reason:
+
+1. Contest list: location, discipline, bar weights, status badge and the delete button are not shown. Reason: the catalog response has only id, name and date. Adding fields changes the catalog response, so the owner must decide.
+2. Contest list: only the contest count is shown. The registrations total and the database status card are not shown. Reason: v2 keeps one Durable Object per contest and has no global totals.
+3. Contest list: the restore-from-backup control stays under the list. Reason: v2 keeps it there; the old app has no restore control on that page.
+4. Page header: the API status line (URL, status, Check button) is not shown. Reason: v2 has no separate API base. Live status is shown on the desk.
+5. Settings: only the language choice exists. Reason: the old database panel (health, KV backups, reset) has no v2 counterpart. A reset is not in the specification. Contest backups are in the desk tab "Kopie zapasowe".
+6. Tile "System i ustawienia": the text is "Wybierz język interfejsu." Reason: the old text describes scoring and bar settings, which in v2 belong to each rulebook.
+7. Desk: the tab "Boje" shows all lifts in one table. The old app has one tab per lift ("Wyciskanie", "Martwy ciąg"). Pending.
+8. Fonts: the old app loads Bebas Neue, Inter and JetBrains Mono from Google Fonts. The test machine had no internet, so old screenshots show fallback fonts. v2 ships the same families.
+9. Old login shows a "Real-time connection lost" toast. v2 does not show it yet.
+10. Viewports: Leash windows are about 1884 x 943. Leash has no viewport option, so the requested 1440 x 900, 1920 x 1080 and 390 x 844 checks are not done yet.
+11. Test data: the local v2 state has an extra contest "Ticket 05 browser proof" from earlier tests. The old app does not have it.
 
 ## Verified
+
+- Login (Leash, Polish, both apps): same card, eyebrow, title, subtitle, field label, placeholder and button text. The card height is 316 px in v2 and 318 px in the old app. The button has the same red glow. The header is hidden on the login page, as in the old app.
+- Contest list: header, two tiles, count card, section heading with the total, and the contest cards with START rows match the old structure. The deviations 1 to 4 apply.
+- Desk tabs: the old labels and order are used (STANOWISKO, REJESTRACJA, WYNIKI INDYWIDUALNE, OBCIĄŻENIA, BOJE, KOPIE ZAPASOWE). The header and subtitle match the old desk. The desk body is not yet matched (deviations 7 and onward).
 
 Screenshots are kept in `/tmp/ww-parity/` (not in the repository).

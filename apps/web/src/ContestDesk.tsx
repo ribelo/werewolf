@@ -18,8 +18,8 @@ const tabKeys: ReadonlyArray<readonly [Tab, MessageKey]> = [
   ['desk', 'tab.desk'],
   ['entries', 'tab.entries'],
   ['results', 'tab.results'],
-  ['lifts', 'tab.lifts'],
   ['plates', 'tab.plates'],
+  ['lifts', 'tab.lifts'],
   ['backup', 'tab.backup'],
 ]
 
