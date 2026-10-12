@@ -10,7 +10,7 @@ import {
 describe('rulebook presets and JSON', () => {
   it('ww-s8ny: every preset is a valid rulebook with its own lifts', () => {
     expect(rulebookPresets.map((preset) => preset.rulebook.lifts.map((lift) => lift.id))).toEqual([
-      ['bench', 'deadlift', 'curl'],
+      ['bench', 'monster', 'deadlift', 'curl'],
       ['squat', 'bench', 'deadlift'],
       ['bench', 'deadlift'],
       ['lift'],
@@ -36,13 +36,18 @@ describe('rulebook presets and JSON', () => {
     expect(Result.isFailure(reference) && reference.failure.detail).not.toContain('\n')
   })
 
-  it('ww-e1fo: the 2026 preset has a kids division as a placeholder without invented rules', () => {
-    const kids = client2026Rulebook.divisions.find((division) => division.id === 'kids')
-    expect(kids?.conditions).toEqual({})
+  it('ww-e1fo: kids are the age classes 2–8, 9–12 and 13–15, and teams leave out kids up to 12', () => {
     expect(
-      client2026Rulebook.classifications.some(
-        (c) => c.kind === 'individual' && c.name.en.includes('Kids'),
-      ),
-    ).toBe(false)
+      client2026Rulebook.ageClasses.slice(0, 3).map((item) => [item.id, item.from, item.through]),
+    ).toEqual([
+      ['k2-8', 2, 8],
+      ['k9-12', 9, 12],
+      ['k13-15', 13, 15],
+    ])
+    for (const team of client2026Rulebook.classifications.filter((c) => c.kind === 'team')) {
+      expect(team.ageClassIds).toContain('k13-15')
+      expect(team.ageClassIds).not.toContain('k2-8')
+      expect(team.ageClassIds).not.toContain('k9-12')
+    }
   })
 })

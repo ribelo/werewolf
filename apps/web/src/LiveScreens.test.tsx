@@ -23,9 +23,9 @@ const add = (id: string, name: string, lot: number, weight: number, divisions: s
     },
   })
 const base = [
-  add('a', 'Anna Alpha', 1, 100, ['open', 'monster']),
-  add('b', 'Bartek Beta', 2, 110, ['open']),
-  add('c', 'Czesław Gamma', 3, 120, ['open']),
+  add('a', 'Anna Alpha', 1, 100, ['mundurowi']),
+  add('b', 'Bartek Beta', 2, 110, []),
+  add('c', 'Czesław Gamma', 3, 120, []),
 ]
 const journal = (commands: ReadonlyArray<Command>) =>
   Result.getOrThrow(
@@ -49,13 +49,13 @@ it('ww-widg: the stage shows the lifter, weight and a barbell matching the plate
   wrap(<Stage state={state} title="Test" />)
   expect(screen.getByRole('heading', { name: 'Anna Alpha' })).toBeDefined()
   expect(screen.getByText(/^100\.00/)).toBeDefined()
-  // 100 kg on a 20 kg bar is 40 kg per side; the drawing has the same plates on one side.
+  // 100 kg on a 20 kg bar with two 2.5 kg clamps is 37.5 kg per side; the drawing has the same plates.
   const plates = (
     screen.getByRole('img', { name: 'Sztanga z talerzami' }).getAttribute('data-plates') ?? ''
   )
     .split(',')
     .map(Number)
-  expect(plates.reduce((sum, weight) => sum + weight, 0)).toBe(40)
+  expect(plates.reduce((sum, weight) => sum + weight, 0)).toBe(37.5)
   expect(document.querySelectorAll('.plate')).toHaveLength(plates.length)
 })
 
@@ -87,5 +87,4 @@ it('ww-6pk1: the announcer lists the next lifters and the places in the lifter d
   expect(
     screen.getAllByRole('listitem').some((item) => /Czesław Gamma/.test(item.textContent)),
   ).toBe(true)
-  expect(screen.getByText(/Open/)).toBeDefined()
 })

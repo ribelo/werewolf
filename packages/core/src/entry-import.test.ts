@@ -45,7 +45,7 @@ describe('entry import', () => {
       journal,
       table.slice(1),
       mapping,
-      { divisions: ['open'], lifts: ['bench', 'deadlift'] },
+      { divisions: [], lifts: ['bench', 'deadlift'] },
       env,
     )
     expect(plan.rows.map((row) => [row.row, row.problems.map((p) => p.problem)])).toEqual([
@@ -73,7 +73,7 @@ describe('entry import', () => {
       { liftId: 'deadlift', openingWeight: 80 },
     ])
     expect(entries[1]?.lifts).toEqual([{ liftId: 'bench', openingWeight: 100 }])
-    expect(entries.every((entry) => entry.divisions.join() === 'open')).toBe(true)
+    expect(entries.every((entry) => entry.divisions.length === 0)).toBe(true)
   })
 
   it('ww-nmgu ww-3vpp: lot numbers are drawn without clashes and a single-lift entry is accepted', () => {
@@ -89,7 +89,7 @@ describe('entry import', () => {
       journal,
       rows,
       mapping,
-      { divisions: ['open'], lifts: [] },
+      { divisions: [], lifts: [] },
       env,
     )
     const added = plan.commands.filter((command) => command._tag === 'AddEntry')
@@ -97,22 +97,6 @@ describe('entry import', () => {
     const lots = added.map((command) => command.entry.lotNumber)
     expect(new Set(lots).size).toBe(2)
     expect(added.every((command) => command.entry.lifts.length === 1)).toBe(true)
-  })
-
-  it('ww-s8zx ww-ss5k: a row without a division is rejected, never put in a division silently', () => {
-    const mapping = suggestMapping(['Name', 'Sex', 'Birth date', 'Lifts'], {
-      rulebook: client2026Rulebook,
-    })
-    const plan = planImport(
-      journal.state,
-      journal,
-      [['Ola', 'F', '2000-05-05', 'bench']],
-      mapping,
-      { divisions: [], lifts: [] },
-      env,
-    )
-    expect(plan.commands).toEqual([])
-    expect(plan.rows[0]?.problems.map((p) => p.problem)).toEqual(['divisionMissing'])
   })
 
   it('ww-tzv6: merging a team moves every entry and a team can be cleared', () => {
@@ -125,7 +109,7 @@ describe('entry import', () => {
           id,
           lifter: { id: 'l' + id, name: id, sex: 'male', birthDate: '1990-01-01', teamId: team },
           lotNumber: lot,
-          divisions: ['open'],
+          divisions: [],
           lifts: [{ liftId: 'bench' }],
         },
       })

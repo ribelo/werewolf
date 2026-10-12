@@ -253,15 +253,25 @@ function compare(left: RankedEntry, right: RankedEntry): number {
   )
 }
 
-function belongsTo(classification: Rulebook['classifications'][number], entry: Entry): boolean {
+function belongsTo(
+  state: ContestState,
+  classification: Rulebook['classifications'][number],
+  entry: Entry,
+): boolean {
+  const eligible = classification.ageClassIds
   return (
     (!classification.sex || classification.sex === entry.lifter.sex) &&
+    (!eligible ||
+      Option.match(entryAgeClass(state, entry), {
+        onNone: () => false,
+        onSome: (id) => eligible.includes(id),
+      })) &&
     (classification.membership.kind === 'all' ||
       classification.membership.ids.some((id) => entry.divisions.includes(id)))
   )
 }
 
-/** A classification has its own membership. MONSTER is not an implicit member of Open. */
+/** A classification has its own membership: everybody, or the entries tagged with its divisions. */
 export function individualRankings(state: ContestState): ReadonlyArray<IndividualRanking> {
   const results = entryResults(state)
   return state.rulebook.classifications
@@ -273,7 +283,7 @@ export function individualRankings(state: ContestState): ReadonlyArray<Individua
       >()
       const waiting: PendingEntry[] = []
       for (const result of results) {
-        if (!belongsTo(classification, result.entry)) continue
+        if (!belongsTo(state, classification, result.entry)) continue
         const ranked = candidate(state, classification, result)
         if (Result.isFailure(ranked)) {
           waiting.push(ranked.failure)
@@ -323,7 +333,7 @@ export function teamRankings(state: ContestState): ReadonlyArray<TeamRanking> {
       for (const team of state.teams) teams.set(team.id, { team, candidates: [] })
       for (const result of results) {
         const teamId = result.entry.lifter.teamId
-        if (!teamId || !belongsTo(classification, result.entry)) continue
+        if (!teamId || !belongsTo(state, classification, result.entry)) continue
         const team = teams.get(teamId)
         if (!team) throw new Error('Contest state contains an unknown team reference')
         const ranked = candidate(state, classification, result)

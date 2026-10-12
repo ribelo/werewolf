@@ -23,9 +23,9 @@ const add = (id: string, name: string, lot: number, divisions: string[]) =>
     },
   })
 const base = [
-  add('a', 'Open Only', 1, ['open']),
-  add('b', 'Monster Only', 2, ['monster']),
-  add('c', 'Both Divisions', 3, ['open', 'monster']),
+  add('a', 'Open Only', 1, []),
+  add('b', 'Monster Only', 2, ['mundurowi']),
+  add('c', 'Both Divisions', 3, ['mundurowi']),
 ]
 const show = (commands: ReadonlyArray<Command>) =>
   render(
@@ -46,7 +46,7 @@ const show = (commands: ReadonlyArray<Command>) =>
   )
 
 it('ww-8tai ww-zpeu: only members of the chosen division appear on the scoreboard', () => {
-  show([decode({ _tag: 'SetScoreboard', id: 'f', at: 10, filter: { divisionId: 'monster' } })])
+  show([decode({ _tag: 'SetScoreboard', id: 'f', at: 10, filter: { divisionId: 'mundurowi' } })])
   expect(screen.queryByText('Open Only')).toBeNull()
   expect(screen.getByText('Monster Only')).toBeDefined()
   expect(screen.getByText('Both Divisions')).toBeDefined()

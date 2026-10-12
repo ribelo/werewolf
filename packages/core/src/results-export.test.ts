@@ -12,6 +12,9 @@ import { Kilograms } from './barbell.ts'
 
 const book = Schema.decodeUnknownSync(Rulebook)({
   ...client2026Rulebook,
+  classifications: client2026Rulebook.classifications.map(
+    ({ ageClassIds: _ages, ...item }) => item,
+  ),
   ageClasses: [
     { id: 'senior', name: { pl: 'Senior (24-39)', en: 'Senior (24-39)' }, from: 24, through: 39 },
   ],
@@ -39,7 +42,7 @@ const entry = (
       lifter: { id: 'l' + id, name, sex, birthDate: birth },
       bodyweight: bw,
       lotNumber: lot,
-      divisions: ['open'],
+      divisions: [],
       lifts: [{ liftId: 'bench', openingWeight: open }],
     },
   })

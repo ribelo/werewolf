@@ -22,13 +22,13 @@ export const RackHeight = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)).pip
 )
 export type RackHeight = typeof RackHeight.Type
 
-/** Missing bodyweight means that weigh-in is not complete. Membership is always explicit. */
+/** Missing bodyweight means that weigh-in is not complete. Divisions are tags such as Uniformed services; Open is everybody. */
 export const Entry = Schema.Struct({
   id: EntryId,
   lifter: Lifter,
   lotNumber: LotNumber,
   bodyweight: Schema.optionalKey(Kilograms.check(Schema.isGreaterThan(0))),
-  divisions: Schema.NonEmptyArray(DivisionId),
+  divisions: Schema.Array(DivisionId),
   lifts: Schema.NonEmptyArray(
     Schema.Struct({
       liftId: LiftId,

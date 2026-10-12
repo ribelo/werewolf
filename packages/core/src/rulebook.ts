@@ -77,6 +77,8 @@ const classificationFields = {
   result: Schema.Literals(['best', 'sum', 'sumDone']),
   formula: Formula,
   sex: Schema.optionalKey(Sex),
+  /** Only entries in these age classes count; absent means every entry. Kids are excluded this way. */
+  ageClassIds: Schema.optionalKey(Schema.Array(AgeClassId)),
 } as const
 export const IndividualClassification = Schema.Struct({
   ...classificationFields,
@@ -106,12 +108,15 @@ export const Rulebook = Schema.Struct({
   weightClasses: Schema.Array(WeightClass),
   classifications: Schema.Array(Schema.Union([IndividualClassification, TeamClassification])),
   barbell: Barbell,
+  /** Length of the attempt clock in seconds; 60 when absent. */
+  clockSeconds: Schema.optionalKey(PositiveInt),
 }).check(
   Schema.makeFilter(
     (book) => {
       const unique = (ids: ReadonlyArray<string>): boolean => new Set(ids).size === ids.length
       const lifts = new Set(book.lifts.map((lift) => lift.id))
       const divisions = new Set(book.divisions.map((division) => division.id))
+      const ageClasses = new Set(book.ageClasses.map((item) => item.id))
       return (
         unique(book.lifts.map((lift) => lift.id)) &&
         unique(book.divisions.map((division) => division.id)) &&
@@ -125,6 +130,7 @@ export const Rulebook = Schema.Struct({
           (classification) =>
             unique(classification.liftIds) &&
             classification.liftIds.every((id) => lifts.has(id)) &&
+            (classification.ageClassIds ?? []).every((id) => ageClasses.has(id)) &&
             (classification.membership.kind === 'all' ||
               (unique(classification.membership.ids) &&
                 classification.membership.ids.every((id) => divisions.has(id)))),

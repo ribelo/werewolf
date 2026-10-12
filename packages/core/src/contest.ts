@@ -21,9 +21,9 @@ import {
   AgeClassId,
   DivisionId,
   LiftId,
+  Rulebook,
   WeightClassId,
   type Division,
-  type Rulebook,
 } from './rulebook.ts'
 
 export const CommandId = Schema.NonEmptyString.pipe(Schema.brand('CommandId'))
@@ -60,8 +60,16 @@ export const Command = Schema.Union([
     ...commandMetadata,
 
     entryId: EntryId,
-    divisions: Schema.NonEmptyArray(DivisionId),
+    divisions: Schema.Array(DivisionId),
   }),
+  /** Contest settings edited after creation. Lifts in use must keep their attempts. */
+  Schema.TaggedStruct('SetRulebook', { ...commandMetadata, rulebook: Rulebook }),
+  /** The desk starts the attempt clock by hand; screens count down from the command time. */
+  Schema.TaggedStruct('StartClock', {
+    ...commandMetadata,
+    seconds: Schema.Int.check(Schema.isGreaterThan(0)),
+  }),
+  Schema.TaggedStruct('StopClock', commandMetadata),
   /** Absent team clears the team. */
   Schema.TaggedStruct('SetEntryTeam', {
     ...commandMetadata,
@@ -87,6 +95,8 @@ export const Command = Schema.Union([
     attempt: AttemptRef,
     verdict: Verdict,
   }),
+  /** Takes a verdict back: the attempt is declared again with the same weight. */
+  Schema.TaggedStruct('ClearVerdict', { ...commandMetadata, attempt: AttemptRef }),
   Schema.TaggedStruct('SetCurrent', { ...commandMetadata, attempt: AttemptRef }),
   Schema.TaggedStruct('MoveAttempt', {
     ...commandMetadata,
@@ -193,6 +203,8 @@ export interface ContestState {
   readonly didNotStart: ReadonlyArray<{ readonly entryId: EntryId; readonly liftId: LiftId }>
   readonly warnings: ReadonlyArray<EntryWarning>
   readonly scoreboard: ScoreboardView
+  /** A running attempt clock: it ends seconds after startedAt. */
+  readonly clock: Option.Option<{ readonly startedAt: Timestamp; readonly seconds: number }>
 }
 
 /** Parse an external command without exceptions for malformed payloads. */
@@ -411,6 +423,41 @@ function applyMutation(
         ...entry,
         divisions: command.divisions,
       }))
+    case 'SetRulebook': {
+      const next = command.rulebook
+      const compatible = state.entries.every((entry) =>
+        entry.lifts.every((selected) => {
+          const before = state.rulebook.lifts.find((lift) => lift.id === selected.liftId)
+          const after = next.lifts.find((lift) => lift.id === selected.liftId)
+          return !!after && after.attempts === before?.attempts
+        }),
+      )
+      if (!compatible) return Result.fail(new InvalidCommand({ detail: 'rulebookIncompatible' }))
+      const scoreboard = state.scoreboard.filter
+      const known =
+        (!scoreboard.divisionId ||
+          next.divisions.some((item) => item.id === scoreboard.divisionId)) &&
+        (!scoreboard.liftId || next.lifts.some((item) => item.id === scoreboard.liftId)) &&
+        (!scoreboard.ageClassId ||
+          next.ageClasses.some((item) => item.id === scoreboard.ageClassId)) &&
+        (!scoreboard.weightClassId ||
+          next.weightClasses.some((item) => item.id === scoreboard.weightClassId))
+      return replaceEntries(
+        {
+          ...state,
+          rulebook: next,
+          scoreboard: known ? state.scoreboard : { ...state.scoreboard, filter: {} },
+        },
+        state.entries,
+      )
+    }
+    case 'StartClock':
+      return Result.succeed({
+        ...state,
+        clock: Option.some({ startedAt: command.at, seconds: command.seconds }),
+      })
+    case 'StopClock':
+      return Result.succeed({ ...state, clock: Option.none() })
     case 'SetEntryTeam':
       return editEntry(state, command.entryId, (entry) => {
         const { teamId: _previous, ...lifter } = entry.lifter
@@ -483,8 +530,23 @@ function applyMutation(
       return Result.succeed({
         ...state,
         selected,
+        clock: Option.none(),
         attempts: state.attempts.map((item) =>
           sameAttempt(item, command.attempt) ? updated : item,
+        ),
+      })
+    }
+    case 'ClearVerdict': {
+      const attempt = state.attempts.find((item) => sameAttempt(item, command.attempt))
+      if (!attempt || attempt._tag !== 'Judged')
+        return Result.fail(
+          new AttemptUnavailable({ attempt: command.attempt, reason: 'notPending' }),
+        )
+      const declared: Attempt = { ...command.attempt, _tag: 'Declared', weight: attempt.weight }
+      return Result.succeed({
+        ...state,
+        attempts: state.attempts.map((item) =>
+          sameAttempt(item, command.attempt) ? declared : item,
         ),
       })
     }
@@ -613,6 +675,7 @@ export function replay(
     didNotStart: [],
     warnings: [],
     scoreboard: { filter: {}, qrUrl: Option.none() },
+    clock: Option.none(),
   }
   let state = initial
   let active: ReadonlyArray<{ readonly command: Mutation; readonly sequence: number }> = []

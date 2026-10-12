@@ -34,7 +34,7 @@ const entry = (id: string, name: string, lot: number, opening: number) =>
       lifter: { id: 'lifter-' + id, name, sex: 'male', birthDate: '1990-01-01' },
       bodyweight: 90,
       lotNumber: lot,
-      divisions: ['open'],
+      divisions: [],
       lifts: [{ liftId: 'bench', openingWeight: opening }],
     },
   })

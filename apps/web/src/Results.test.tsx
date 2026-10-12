@@ -14,7 +14,7 @@ const book = Schema.decodeUnknownSync(Rulebook)({
     { id: 'junior', name: { pl: 'Junior', en: 'Junior' }, from: 0, through: 23 },
     { id: 'senior', name: { pl: 'Senior', en: 'Senior' }, from: 24 },
   ],
-  classifications: client2026Rulebook.classifications.map((item) =>
+  classifications: client2026Rulebook.classifications.map(({ ageClassIds: _ages, ...item }) =>
     item.id === 'open-bench'
       ? { ...Schema.encodeSync(Rulebook.fields.classifications)([item])[0], split: 'age' }
       : Schema.encodeSync(Rulebook.fields.classifications)([item])[0],
@@ -30,7 +30,7 @@ const add = (id: string, name: string, birth: string, lot: number, open: number,
       lifter: { id: 'l' + id, name, sex: 'male', birthDate: birth, teamId: team },
       bodyweight: 90,
       lotNumber: lot,
-      divisions: ['open'],
+      divisions: [],
       lifts: [{ liftId: 'bench', openingWeight: open }],
     },
   })

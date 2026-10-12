@@ -17,6 +17,17 @@
       "exportName": "Bench"
     },
     {
+      "id": "monster",
+      "name": {
+        "pl": "MONSTER",
+        "en": "MONSTER (shirt bench)"
+      },
+      "attempts": 3,
+      "rackHeight": true,
+      "code": "MB",
+      "exportName": "Monster bench"
+    },
+    {
       "id": "deadlift",
       "name": {
         "pl": "Martwy ciąg",
@@ -30,47 +41,259 @@
     {
       "id": "curl",
       "name": {
-        "pl": "Uginanie ramion",
-        "en": "Biceps curl"
+        "pl": "Strict curl",
+        "en": "Strict curl"
       },
       "attempts": 3,
       "rackHeight": false,
-      "code": "BC",
-      "exportName": "Biceps curl"
+      "code": "SC",
+      "exportName": "Strict curl"
     }
   ],
   "divisions": [
+    {
+      "id": "mundurowi",
+      "name": {
+        "pl": "MUNDUROWI",
+        "en": "Uniformed services"
+      },
+      "policy": "warn",
+      "conditions": {}
+    },
+    {
+      "id": "gornik",
+      "name": {
+        "pl": "GÓRNIK",
+        "en": "Miners"
+      },
+      "policy": "warn",
+      "conditions": {}
+    },
+    {
+      "id": "niepelnosprawni",
+      "name": {
+        "pl": "NIEPEŁNOSPRAWNI",
+        "en": "Disabled"
+      },
+      "policy": "warn",
+      "conditions": {}
+    }
+  ],
+  "ageClasses": [
+    {
+      "id": "k2-8",
+      "name": {
+        "pl": "Dzieci 2–8",
+        "en": "Dzieci 2–8"
+      },
+      "from": 2,
+      "through": 8
+    },
+    {
+      "id": "k9-12",
+      "name": {
+        "pl": "Dzieci 9–12",
+        "en": "Dzieci 9–12"
+      },
+      "from": 9,
+      "through": 12
+    },
+    {
+      "id": "k13-15",
+      "name": {
+        "pl": "Dzieci 13–15",
+        "en": "Dzieci 13–15"
+      },
+      "from": 13,
+      "through": 15
+    },
+    {
+      "id": "t16",
+      "name": {
+        "pl": "T16 (16)",
+        "en": "T16 (16)"
+      },
+      "from": 16,
+      "through": 16
+    },
+    {
+      "id": "t19",
+      "name": {
+        "pl": "T19 (17-19)",
+        "en": "T19 (17-19)"
+      },
+      "from": 17,
+      "through": 19
+    },
+    {
+      "id": "junior",
+      "name": {
+        "pl": "Junior (20-23)",
+        "en": "Junior (20-23)"
+      },
+      "from": 20,
+      "through": 23
+    },
+    {
+      "id": "senior",
+      "name": {
+        "pl": "Senior (24-39)",
+        "en": "Senior (24-39)"
+      },
+      "from": 24,
+      "through": 39
+    },
+    {
+      "id": "m40",
+      "name": {
+        "pl": "Master 40-49",
+        "en": "Master 40-49"
+      },
+      "from": 40,
+      "through": 49
+    },
+    {
+      "id": "m50",
+      "name": {
+        "pl": "Master 50-59",
+        "en": "Master 50-59"
+      },
+      "from": 50,
+      "through": 59
+    },
+    {
+      "id": "m60",
+      "name": {
+        "pl": "Master 60+",
+        "en": "Master 60+"
+      },
+      "from": 60
+    }
+  ],
+  "weightClasses": [
+    {
+      "id": "f-52",
+      "name": {
+        "pl": "Do 52 kg",
+        "en": "Do 52 kg"
+      },
+      "sex": "female",
+      "upperInclusive": 52
+    },
+    {
+      "id": "f-60",
+      "name": {
+        "pl": "Do 60 kg",
+        "en": "Do 60 kg"
+      },
+      "sex": "female",
+      "lowerExclusive": 52,
+      "upperInclusive": 60
+    },
+    {
+      "id": "f-67-5",
+      "name": {
+        "pl": "Do 67.5 kg",
+        "en": "Do 67.5 kg"
+      },
+      "sex": "female",
+      "lowerExclusive": 60,
+      "upperInclusive": 67.5
+    },
+    {
+      "id": "f-82-5",
+      "name": {
+        "pl": "Do 82.5 kg",
+        "en": "Do 82.5 kg"
+      },
+      "sex": "female",
+      "lowerExclusive": 67.5,
+      "upperInclusive": 82.5
+    },
+    {
+      "id": "f-82-5-plus",
+      "name": {
+        "pl": "82.5+ kg",
+        "en": "82.5+ kg"
+      },
+      "sex": "female",
+      "lowerExclusive": 82.5
+    },
+    {
+      "id": "m-67-5",
+      "name": {
+        "pl": "Do 67.5 kg",
+        "en": "Do 67.5 kg"
+      },
+      "sex": "male",
+      "upperInclusive": 67.5
+    },
+    {
+      "id": "m-82-5",
+      "name": {
+        "pl": "Do 82.5 kg",
+        "en": "Do 82.5 kg"
+      },
+      "sex": "male",
+      "lowerExclusive": 67.5,
+      "upperInclusive": 82.5
+    },
+    {
+      "id": "m-95",
+      "name": {
+        "pl": "Do 95 kg",
+        "en": "Do 95 kg"
+      },
+      "sex": "male",
+      "lowerExclusive": 82.5,
+      "upperInclusive": 95
+    },
+    {
+      "id": "m-110",
+      "name": {
+        "pl": "Do 110 kg",
+        "en": "Do 110 kg"
+      },
+      "sex": "male",
+      "lowerExclusive": 95,
+      "upperInclusive": 110
+    },
+    {
+      "id": "m-125",
+      "name": {
+        "pl": "Do 125 kg",
+        "en": "Do 125 kg"
+      },
+      "sex": "male",
+      "lowerExclusive": 110,
+      "upperInclusive": 125
+    },
+    {
+      "id": "m-125-plus",
+      "name": {
+        "pl": "125+ kg",
+        "en": "125+ kg"
+      },
+      "sex": "male",
+      "lowerExclusive": 125
+    }
+  ],
+  "classifications": [
     {
       "id": "open",
       "name": {
         "pl": "Open",
         "en": "Open"
       },
-      "policy": "reject",
-      "conditions": {}
-    },
-    {
-      "id": "monster",
-      "name": {
-        "pl": "MONSTER",
-        "en": "MONSTER"
+      "kind": "individual",
+      "membership": {
+        "kind": "all"
       },
-      "policy": "reject",
-      "conditions": {}
+      "liftIds": ["bench", "deadlift"],
+      "result": "sumDone",
+      "formula": "reshelMcCullough",
+      "split": "none"
     },
-    {
-      "id": "kids",
-      "name": {
-        "pl": "Dzieci",
-        "en": "Kids"
-      },
-      "policy": "warn",
-      "conditions": {}
-    }
-  ],
-  "ageClasses": [],
-  "weightClasses": [],
-  "classifications": [
     {
       "id": "open-bench",
       "name": {
@@ -79,8 +302,7 @@
       },
       "kind": "individual",
       "membership": {
-        "kind": "divisions",
-        "ids": ["open"]
+        "kind": "all"
       },
       "liftIds": ["bench"],
       "result": "best",
@@ -95,8 +317,7 @@
       },
       "kind": "individual",
       "membership": {
-        "kind": "divisions",
-        "ids": ["open"]
+        "kind": "all"
       },
       "liftIds": ["deadlift"],
       "result": "best",
@@ -104,46 +325,122 @@
       "split": "none"
     },
     {
-      "id": "monster-total",
+      "id": "open-age",
       "name": {
-        "pl": "MONSTER — suma",
-        "en": "MONSTER — total"
+        "pl": "Open — kategorie wiekowe",
+        "en": "Open — age classes"
       },
       "kind": "individual",
       "membership": {
-        "kind": "divisions",
-        "ids": ["monster"]
+        "kind": "all"
       },
       "liftIds": ["bench", "deadlift"],
-      "result": "sum",
-      "formula": "kilograms",
+      "result": "sumDone",
+      "formula": "reshelMcCullough",
+      "split": "age"
+    },
+    {
+      "id": "open-weight",
+      "name": {
+        "pl": "Open — kategorie wagowe",
+        "en": "Open — weight classes"
+      },
+      "kind": "individual",
+      "membership": {
+        "kind": "all"
+      },
+      "liftIds": ["bench", "deadlift"],
+      "result": "sumDone",
+      "formula": "reshelMcCullough",
+      "split": "weight"
+    },
+    {
+      "id": "monster",
+      "name": {
+        "pl": "MONSTER",
+        "en": "MONSTER"
+      },
+      "kind": "individual",
+      "membership": {
+        "kind": "all"
+      },
+      "liftIds": ["monster"],
+      "result": "best",
+      "formula": "reshelMcCullough",
       "split": "none"
     },
     {
-      "id": "open-curl",
+      "id": "curl",
       "name": {
-        "pl": "Open — uginanie ramion",
-        "en": "Open — curl"
+        "pl": "Strict curl",
+        "en": "Strict curl"
       },
       "kind": "individual",
       "membership": {
-        "kind": "divisions",
-        "ids": ["open"]
+        "kind": "all"
       },
       "liftIds": ["curl"],
       "result": "best",
-      "formula": "kilograms",
+      "formula": "reshelMcCullough",
       "split": "none"
     },
     {
+      "id": "mundurowi",
+      "name": {
+        "pl": "MUNDUROWI",
+        "en": "Uniformed services"
+      },
+      "kind": "individual",
+      "membership": {
+        "kind": "divisions",
+        "ids": ["mundurowi"]
+      },
+      "liftIds": ["bench", "deadlift"],
+      "result": "sumDone",
+      "formula": "reshelMcCullough",
+      "split": "none"
+    },
+    {
+      "id": "gornik",
+      "name": {
+        "pl": "GÓRNIK",
+        "en": "Miners"
+      },
+      "kind": "individual",
+      "membership": {
+        "kind": "divisions",
+        "ids": ["gornik"]
+      },
+      "liftIds": ["bench", "deadlift"],
+      "result": "sumDone",
+      "formula": "reshelMcCullough",
+      "split": "none"
+    },
+    {
+      "id": "niepelnosprawni",
+      "name": {
+        "pl": "NIEPEŁNOSPRAWNI",
+        "en": "Disabled"
+      },
+      "kind": "individual",
+      "membership": {
+        "kind": "divisions",
+        "ids": ["niepelnosprawni"]
+      },
+      "liftIds": ["bench", "deadlift"],
+      "result": "sumDone",
+      "formula": "reshelMcCullough",
+      "split": "none"
+    },
+    {
+      "id": "men-best",
       "name": {
         "pl": "Mężczyźni — najlepsza piątka",
         "en": "Men — best five"
       },
       "kind": "team",
       "membership": {
-        "kind": "divisions",
-        "ids": ["open"]
+        "kind": "all"
       },
       "liftIds": ["bench", "deadlift"],
       "result": "best",
@@ -152,18 +449,18 @@
         "kind": "any",
         "count": 5
       },
-      "id": "men-best",
+      "ageClassIds": ["k13-15", "t16", "t19", "junior", "senior", "m40", "m50", "m60"],
       "sex": "male"
     },
     {
+      "id": "women-best",
       "name": {
         "pl": "Kobiety — najlepsza piątka",
         "en": "Women — best five"
       },
       "kind": "team",
       "membership": {
-        "kind": "divisions",
-        "ids": ["open"]
+        "kind": "all"
       },
       "liftIds": ["bench", "deadlift"],
       "result": "best",
@@ -172,18 +469,18 @@
         "kind": "any",
         "count": 5
       },
-      "id": "women-best",
+      "ageClassIds": ["k13-15", "t16", "t19", "junior", "senior", "m40", "m50", "m60"],
       "sex": "female"
     },
     {
+      "id": "bench-mixed",
       "name": {
         "pl": "Wyciskanie — 4 mężczyzn i 1 kobieta",
         "en": "Bench — 4 men and 1 woman"
       },
       "kind": "team",
       "membership": {
-        "kind": "divisions",
-        "ids": ["open"]
+        "kind": "all"
       },
       "liftIds": ["bench"],
       "result": "best",
@@ -193,17 +490,17 @@
         "male": 4,
         "female": 1
       },
-      "id": "bench-mixed"
+      "ageClassIds": ["k13-15", "t16", "t19", "junior", "senior", "m40", "m50", "m60"]
     },
     {
+      "id": "deadlift-mixed",
       "name": {
         "pl": "Martwy ciąg — 4 mężczyzn i 1 kobieta",
         "en": "Deadlift — 4 men and 1 woman"
       },
       "kind": "team",
       "membership": {
-        "kind": "divisions",
-        "ids": ["open"]
+        "kind": "all"
       },
       "liftIds": ["deadlift"],
       "result": "best",
@@ -213,7 +510,7 @@
         "male": 4,
         "female": 1
       },
-      "id": "deadlift-mixed"
+      "ageClassIds": ["k13-15", "t16", "t19", "junior", "senior", "m40", "m50", "m60"]
     }
   ],
   "barbell": {
@@ -221,36 +518,37 @@
       "male": 20,
       "female": 15
     },
-    "clampsPerSide": 0,
+    "clampsPerSide": 2.5,
     "plates": [
       {
         "weight": 25,
-        "pairs": 8
+        "pairs": 4
       },
       {
         "weight": 20,
-        "pairs": 2
+        "pairs": 4
       },
       {
         "weight": 15,
-        "pairs": 2
+        "pairs": 4
       },
       {
         "weight": 10,
-        "pairs": 2
+        "pairs": 6
       },
       {
         "weight": 5,
-        "pairs": 2
+        "pairs": 6
       },
       {
         "weight": 2.5,
-        "pairs": 2
+        "pairs": 6
       },
       {
         "weight": 1.25,
-        "pairs": 2
+        "pairs": 4
       }
     ]
-  }
+  },
+  "clockSeconds": 60
 }

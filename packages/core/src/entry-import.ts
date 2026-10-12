@@ -118,7 +118,6 @@ export type RowProblem =
   | 'birthDateInvalid'
   | 'unknownLift'
   | 'unknownDivision'
-  | 'divisionMissing'
   | 'liftMissing'
   | 'bodyweightInvalid'
   | 'lotInvalid'
@@ -224,7 +223,6 @@ export function planImport(
       if (found) divisions.push(found.id)
       else problem('unknownDivision', label)
     }
-    if (divisions.length === 0 && divisionNames.length === 0) problem('divisionMissing')
     const liftNames = list(cell(row, 'lifts'))
     const lifts: Array<LiftId> = []
     for (const label of liftNames) {

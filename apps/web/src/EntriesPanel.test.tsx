@@ -19,6 +19,9 @@ afterEach(cleanup)
 const decode = Schema.decodeUnknownSync(Command)
 const book = Schema.decodeUnknownSync(Rulebook)({
   ...client2026Rulebook,
+  classifications: client2026Rulebook.classifications.map(
+    ({ ageClassIds: _ages, ...item }) => item,
+  ),
   ageClasses: [{ id: 'senior', name: { pl: 'Senior', en: 'Senior' }, from: 24, through: 39 }],
   weightClasses: [
     { id: 'w83', name: { pl: 'do 83 kg', en: 'to 83 kg' }, upperInclusive: 83 },
@@ -35,7 +38,7 @@ const start = Result.getOrThrow(
         id: 'a',
         lifter: { id: 'la', name: 'Anna Alpha', sex: 'female', birthDate: '1990-05-05' },
         lotNumber: 1,
-        divisions: ['open'],
+        divisions: [],
         lifts: [{ liftId: 'bench' }],
       },
     }),

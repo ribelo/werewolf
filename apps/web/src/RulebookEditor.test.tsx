@@ -32,7 +32,7 @@ it('ww-7s20: pasted broken JSON is rejected with a readable reason and the ruleb
   fireEvent.change(screen.getByLabelText('Regulamin jako JSON'), { target: { value: '{ nope' } })
   fireEvent.click(screen.getByRole('button', { name: 'Wczytaj JSON' }))
   expect(screen.getByRole('alert').textContent).toBe('The text is not valid JSON.')
-  expect(screen.getByTestId('lifts').textContent).toBe('3')
+  expect(screen.getByTestId('lifts').textContent).toBe('4')
 })
 
 it('ww-dwfd ww-7s20: a lift can be added and removed, and pasted exported JSON replaces the draft', () => {
@@ -40,9 +40,9 @@ it('ww-dwfd ww-7s20: a lift can be added and removed, and pasted exported JSON r
   const [addLift] = screen.getAllByRole('button', { name: 'Dodaj' })
   if (!addLift) throw new Error('add button missing')
   fireEvent.click(addLift)
-  expect(screen.getByTestId('lifts').textContent).toBe('4')
+  expect(screen.getByTestId('lifts').textContent).toBe('5')
   const single = rulebookToJson(client2026Rulebook)
   fireEvent.change(screen.getByLabelText('Regulamin jako JSON'), { target: { value: single } })
   fireEvent.click(screen.getByRole('button', { name: 'Wczytaj JSON' }))
-  expect(screen.getByTestId('lifts').textContent).toBe('3')
+  expect(screen.getByTestId('lifts').textContent).toBe('4')
 })

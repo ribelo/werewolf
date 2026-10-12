@@ -65,7 +65,7 @@ async function seed(cookie: string) {
         },
         bodyweight: 80,
         lotNumber: index + 1,
-        divisions: ['open'],
+        divisions: [],
         lifts: [{ liftId: 'bench', openingWeight: 60 + index * 20 }],
       },
     })

@@ -124,7 +124,7 @@ it('ww-bdzb ww-uewf: two workerd clients receive the ordered core log and capabi
           lifter: { id: 'lifter', name: 'Ada Example', sex: 'male', birthDate: '1990-01-01' },
           bodyweight: 80,
           lotNumber: 1,
-          divisions: ['open'],
+          divisions: [],
           lifts: [{ liftId: 'bench' }],
         },
       },
@@ -253,7 +253,7 @@ it('ww-mned ww-yo7x ww-gouf: offline queues converge by server order, not client
         lifter: { id: 'lifter', name: 'Offline Lifter', sex: 'male', birthDate: '1990-01-01' },
         bodyweight: 80,
         lotNumber: 1,
-        divisions: ['open'],
+        divisions: [],
         lifts: [{ liftId: 'bench' }],
       },
     }),
@@ -398,7 +398,7 @@ it('ww-bjq1: peers negotiate through the actor with server-stamped roles and hea
             lifter: { id: 'lifter', name: 'Peer Lifter', sex: 'male', birthDate: '1990-01-01' },
             bodyweight: 80,
             lotNumber: 1,
-            divisions: ['open'],
+            divisions: [],
             lifts: [{ liftId: 'bench' }],
           },
         }),
@@ -519,7 +519,7 @@ it('ww-l06a ww-8tai: a screen that connects late receives the pushed filter and 
         _tag: 'SetScoreboard',
         id: 'board',
         at: 1,
-        filter: { divisionId: 'monster' },
+        filter: { divisionId: 'mundurowi' },
         qrUrl: 'https://app.example/view/' + id + '/results?token=public',
       },
     }),
@@ -537,7 +537,7 @@ it('ww-l06a ww-8tai: a screen that connects late receives the pushed filter and 
       ContestReplica.restore({ snapshot: frame.snapshot, pending: [], heard: [], rejected: [] }),
     )
     const board = replica.journal.state.scoreboard
-    expect(board.filter).toEqual({ divisionId: 'monster' })
+    expect(board.filter).toEqual({ divisionId: 'mundurowi' })
     expect(board.qrUrl._tag).toBe('Some')
   } finally {
     late.socket.close()

@@ -59,7 +59,7 @@ function add(
         teamId: 'alpha',
       },
       bodyweight: 80,
-      divisions: ['open'],
+      divisions: [],
       lifts: [{ liftId: 'orbit', openingWeight: 100 }],
       ...fields,
     },
@@ -101,15 +101,8 @@ describe('rulebook team results', () => {
       }
     }
     commands.push(
-      add('monster', 100, {
-        divisions: ['monster'],
-        lifts: [
-          { liftId: 'bench', openingWeight: 500 },
-          { liftId: 'deadlift', openingWeight: 600 },
-        ],
-      }),
-      good('monster', 'bench'),
-      good('monster', 'deadlift'),
+      add('monster', 100, { lifts: [{ liftId: 'monster', openingWeight: 500 }] }),
+      good('monster', 'monster'),
       add('curl-only', 101, { lifts: [{ liftId: 'curl', openingWeight: 300 }] }),
       good('curl-only', 'curl'),
       add('unassigned', 102, {
@@ -296,7 +289,7 @@ describe('rulebook team results', () => {
             birthDate: '1995-03-01',
             teamId: 'alpha',
           },
-          divisions: ['open'],
+          divisions: [],
           lifts: [
             { liftId: 'bench', openingWeight: 100 },
             { liftId: 'deadlift', openingWeight: 150 },
