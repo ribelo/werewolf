@@ -12,6 +12,8 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useMessages, type MessageKey } from './i18n.ts'
 import { ContestCatalog } from './ContestCatalog.tsx'
 import { ContestDesk } from './ContestDesk.tsx'
+import { Settings } from './Settings.tsx'
+import { AppHeader } from './Layout.tsx'
 import { ViewerScreen } from './ViewerScreen.tsx'
 import { Wizard } from './Wizard.tsx'
 import { ContestId } from '@werewolf/sync'
@@ -30,7 +32,7 @@ type Auth =
 const authAtom = Atom.make<Auth>({ _tag: 'Checking' })
 
 export function App() {
-  const { locale, setLocale, t } = useMessages()
+  const { locale, t } = useMessages()
   const viewPath = new RegExp('^/view/([^/]+)/(stage|announcer|scoreboard|results)$').exec(
     location.pathname,
   )
@@ -146,32 +148,15 @@ export function App() {
   const viewing = Result.isSuccess(viewerId) && !!token
   return (
     <main className={viewing ? '' : 'min-h-screen bg-main-bg text-text-primary'}>
-      {!viewing && (auth._tag === 'Editor' || auth._tag === 'OfflineEditor') && (
-        <header className="border-b-2 border-border-color bg-main-bg">
-          <div className="container-full flex flex-wrap items-end justify-between gap-6 py-6">
-            <h1 className="text-display tracking-[0.25em] uppercase">{t('app.title')}</h1>
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2">
-                <span className="input-label mb-0">{t('language.label')}</span>
-                <select
-                  className="input-field"
-                  value={locale}
-                  onChange={(event) => setLocale(event.target.value === 'en' ? 'en' : 'pl')}
-                >
-                  <option value="pl">Polski</option>
-                  <option value="en">English</option>
-                </select>
-              </label>
-              {(auth._tag === 'Editor' || auth._tag === 'OfflineEditor') && (
-                <button className="btn-secondary" onClick={logout}>
-                  {t('auth.logout')}
-                </button>
-              )}
-            </div>
-          </div>
-        </header>
-      )}
-      <div className={viewing ? '' : 'container-full py-6'}>
+      <div
+        className={
+          viewing || auth._tag === 'Guest' || auth._tag === 'Checking'
+            ? viewing
+              ? ''
+              : 'container-full py-6'
+            : ''
+        }
+      >
         {Result.isSuccess(viewerId) && token ? (
           viewPath?.[2] === 'stage' ||
           viewPath?.[2] === 'announcer' ||
@@ -183,21 +168,20 @@ export function App() {
           )
         ) : auth._tag === 'Editor' || auth._tag === 'OfflineEditor' ? (
           auth._tag === 'OfflineEditor' ? (
-            <ContestDesk id={auth.id} access={{ _tag: 'Editor' }} />
+            <ContestDesk id={auth.id} access={{ _tag: 'Editor' }} onLogout={logout} />
           ) : location.pathname === '/new' ? (
-            <Wizard />
-          ) : Result.isSuccess(deskId) ? (
             <>
-              <a
-                className="mb-4 inline-block text-xs tracking-[0.3em] text-text-secondary uppercase hover:text-primary-red"
-                href="/"
-              >
-                {t('contests.back')}
-              </a>
-              <ContestDesk id={deskId.success} access={{ _tag: 'Editor' }} />
+              <AppHeader title={t('contests.create')} current="contests" onLogout={logout} />
+              <div className="container-full py-8">
+                <Wizard />
+              </div>
             </>
+          ) : location.pathname === '/settings' ? (
+            <Settings onLogout={logout} />
+          ) : Result.isSuccess(deskId) ? (
+            <ContestDesk id={deskId.success} access={{ _tag: 'Editor' }} onLogout={logout} />
           ) : (
-            <ContestCatalog />
+            <ContestCatalog onLogout={logout} />
           )
         ) : auth._tag === 'Checking' ? (
           <p role="status" className="text-text-secondary">
