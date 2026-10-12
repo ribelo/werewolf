@@ -24,6 +24,7 @@ import {
 } from './contest-table.ts'
 import { FilterBar } from './FilterBar.tsx'
 import { useLegacy } from './legacy-i18n.ts'
+import { filterFrom } from './TableScreens.tsx'
 import { downloadBlob, fileSlug, printTables, tablesToXlsx } from './table-export.ts'
 
 /** The table exactly as filtered and sorted on screen, as plain cells for print, Excel, PDF and JPG. */
@@ -218,6 +219,11 @@ export function LiftPanel({
   )
   const options = filterOptions(state, lifters, locale, lt)
   const title = lift ? lift.name[locale] : liftId
+  // "Synchronizuj" sends this lift and these filters to the announcer table, as in 2025.
+  const pushed = filterFrom(state, filters, liftId)
+  const canonical = (value: object) =>
+    JSON.stringify(Object.entries(value).toSorted(([a], [b]) => a.localeCompare(b)))
+  const synced = canonical(pushed) === canonical(state.scoreboard.filter)
   async function exportTable(format: 'csv' | 'pdf' | 'jpg' | 'xlsx' | 'print') {
     const model = visibleTableModel(state, rows, [liftId], title, lt, locale)
     const subtitle = contestName + ' — ' + state.date
@@ -274,6 +280,23 @@ export function LiftPanel({
         <header className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <h3 className="text-h3 text-text-primary">{title}</h3>
           <div className="flex items-center gap-2 md:gap-3">
+            <button
+              type="button"
+              className={(synced ? 'btn-secondary' : 'btn-primary') + ' px-3 py-1 text-xxs'}
+              disabled={rows.length === 0}
+              onClick={() =>
+                submit({
+                  _tag: 'SetScoreboard',
+                  filter: pushed,
+                  ...Option.match(state.scoreboard.qrUrl, {
+                    onNone: () => ({}),
+                    onSome: (qrUrl) => ({ qrUrl }),
+                  }),
+                })
+              }
+            >
+              {lt('contest_detail.sync.button')}
+            </button>
             {qr.available && (
               <button
                 type="button"

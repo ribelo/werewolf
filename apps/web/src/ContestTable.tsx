@@ -191,6 +191,7 @@ export interface ContestTableProps {
   /** Registration shows only the first attempt of each lift, as in 2025. */
   readonly attemptNumbers?: ReadonlyArray<number>
   readonly showRowNumbers?: boolean
+  readonly showAttemptGrid?: boolean
   readonly showPointsColumn?: boolean
   readonly showMaxColumn?: boolean
   readonly showLabelsColumn?: boolean
@@ -213,6 +214,7 @@ export function ContestTable({
   mode = 'attempts',
   attemptNumbers,
   showRowNumbers = false,
+  showAttemptGrid = true,
   showPointsColumn = true,
   showMaxColumn = true,
   showLabelsColumn = true,
@@ -224,15 +226,16 @@ export function ContestTable({
   onEditCompetitor,
 }: ContestTableProps) {
   const { lt, locale } = useLegacy()
-  const lifts = state.rulebook.lifts.filter((lift) => liftIds.includes(lift.id))
-  const [only] = lifts
-  const sole = lifts.length === 1 ? Option.fromUndefinedOr(only) : Option.none()
+  const chosen = state.rulebook.lifts.filter((lift) => liftIds.includes(lift.id))
+  const lifts = showAttemptGrid ? chosen : []
+  const [only] = chosen
+  const sole = chosen.length === 1 ? Option.fromUndefinedOr(only) : Option.none()
   const maxSortKey = Option.match(sole, { onNone: () => 'max', onSome: (lift) => 'max:' + lift.id })
   const pointsSortKey = Option.match(sole, {
     onNone: () => 'points',
     onSome: (lift) => 'points:' + lift.id,
   })
-  const rackLifts = lifts.filter((lift) => lift.rackHeight)
+  const rackLifts = chosen.filter((lift) => lift.rackHeight)
   const isSorted = (column: string) =>
     (column === pointsSortKey && (sortColumn.startsWith('points') || sortColumn === 'points')) ||
     (column === maxSortKey && (sortColumn.startsWith('max') || sortColumn === 'max')) ||

@@ -7,17 +7,31 @@ import type { FilterOption, FilterOptions, Filters } from './contest-table.ts'
 export const filterButtonClass = (active: boolean) =>
   'px-3 py-1 text-xxs ' + (active ? 'btn-primary text-black' : 'btn-secondary')
 
-type Target = 'weight' | 'age' | 'labels'
+type Target = 'weight' | 'age' | 'labels' | 'lift'
+
+export interface LiftChoice {
+  readonly options: ReadonlyArray<FilterOption>
+  /** ALL shows every lift. */
+  readonly selected: string
+  readonly onSelect: (liftId: string) => void
+}
 
 /** The weight, age and label dropdowns of the 2025 registration and lift tables. */
 export function FilterBar({
   options,
   filters,
   onChange,
+  disabled = false,
+  lift,
+  showLabels = true,
 }: {
   readonly options: FilterOptions
   readonly filters: Filters
   readonly onChange: (filters: Filters) => void
+  /** The 2025 announcer table locks its filters while it follows the desk. */
+  readonly disabled?: boolean
+  readonly lift?: LiftChoice
+  readonly showLabels?: boolean
 }) {
   const { lt } = useLegacy()
   const [opened, setOpen] = useState<Option.Option<Target>>(Option.none())
@@ -84,6 +98,7 @@ export function FilterBar({
       className={
         filterButtonClass(isActive) + ' flex ' + width + ' items-center justify-between gap-3'
       }
+      disabled={disabled}
       onClick={toggle(target)}
     >
       <div className="flex flex-col text-left leading-tight">
@@ -98,6 +113,40 @@ export function FilterBar({
   )
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {lift && lift.options.length > 1 && (
+        <div className="relative" onClick={(event) => event.stopPropagation()}>
+          {trigger(
+            'lift',
+            lt('contest_detail.registrations.filters.lift_button'),
+            lift.options.find((item) => item.id === lift.selected)?.label ??
+              lt('contest_detail.registrations.filters.lift_button_all'),
+            'min-w-[170px]',
+            lift.selected !== 'ALL',
+          )}
+          {open === 'lift' && (
+            <div className="absolute left-0 top-full z-40 mt-2 w-60 rounded border border-border-color bg-element-bg px-3 py-3 shadow-lg">
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { id: 'ALL', label: lt('contest_detail.registrations.filters.lift_button_all') },
+                  ...lift.options,
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={filterButtonClass(lift.selected === item.id) + ' w-full'}
+                    onClick={() => {
+                      lift.onSelect(item.id)
+                      setOpen(Option.none())
+                    }}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       {(options.female.length > 0 || options.male.length > 0) && (
         <div className="relative" onClick={(event) => event.stopPropagation()}>
           {trigger(
@@ -167,7 +216,10 @@ export function FilterBar({
           </div>
         )}
       </div>
-      <div className="relative" onClick={(event) => event.stopPropagation()}>
+      <div
+        className={showLabels ? 'relative' : 'hidden'}
+        onClick={(event) => event.stopPropagation()}
+      >
         {trigger(
           'labels',
           lt('contest_detail.registrations.filters.labels_button'),

@@ -18,6 +18,7 @@ export const SourceData = Schema.Struct({
     id: Schema.String,
     name: Schema.String,
     date: Schema.String,
+    location: Schema.optionalKey(Schema.String),
     mens_bar_weight: Schema.Number,
     womens_bar_weight: Schema.Number,
     clamp_weight: Schema.Number,
@@ -203,6 +204,17 @@ function buildRulebook(
       ...divisions
         .filter((item) => item.id !== 'open')
         .map((item) => classification(item.id, item.label, [item.id], 'none')),
+      // The 2025 team table: four best men and the best woman, each by the points of the best lift.
+      {
+        id: 'team-mixed',
+        name: { pl: 'Mieszane boje', en: 'Mixed lifts' },
+        kind: 'team',
+        membership: { kind: 'divisions', ids: ['open'] },
+        liftIds: ['bench', 'deadlift'],
+        result: 'best',
+        formula: 'reshelMcCullough',
+        quota: { kind: 'bySex', male: 4, female: 1 },
+      },
     ],
     barbell: {
       bars: { male: source.contest.mens_bar_weight, female: womensBar },
@@ -298,7 +310,8 @@ export function convertContest(source: SourceData): Conversion {
         id: registration.id,
         lifter: {
           id: registration.competitor_id,
-          name: clean(registration.first_name + ' ' + registration.last_name),
+          // Surname first, as the 2025 desk showed lifters.
+          name: clean(registration.last_name + ' ' + registration.first_name),
           sex: registration.gender === 'Female' ? 'female' : 'male',
           birthDate: registration.birth_date.slice(0, 10),
           ...(Option.isSome(teamId) ? { teamId: teamId.value } : {}),
@@ -408,6 +421,7 @@ export function convertContest(source: SourceData): Conversion {
         id: source.contest.id,
         name: clean(source.contest.name),
         date,
+        ...(source.contest.location ? { location: clean(source.contest.location) } : {}),
         rulebook: Schema.encodeSync(Rulebook)(rulebook),
       },
       commands: restored.success.commands.map((command, index) => ({

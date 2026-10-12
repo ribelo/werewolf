@@ -176,3 +176,52 @@
     @apply h-1 bg-gradient-to-r from-transparent via-primary-red to-transparent my-4;
   }
 }
+
+/* Glow of the current attempt tile on the stage screen, as in 2025. */
+@keyframes pulse-glow-pending {
+  0%,
+  100% {
+    box-shadow: 0 0 90px rgba(255, 255, 255, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 120px rgba(255, 255, 255, 0.75);
+  }
+}
+@keyframes pulse-glow-success {
+  0%,
+  100% {
+    box-shadow:
+      0 0 90px rgba(255, 255, 255, 0.55),
+      0 0 65px rgba(34, 197, 94, 0.65);
+  }
+  50% {
+    box-shadow:
+      0 0 120px rgba(255, 255, 255, 0.75),
+      0 0 85px rgba(34, 197, 94, 0.85);
+  }
+}
+@keyframes pulse-glow-failed {
+  0%,
+  100% {
+    box-shadow:
+      0 0 90px rgba(255, 255, 255, 0.55),
+      0 0 65px rgba(220, 20, 60, 0.65);
+  }
+  50% {
+    box-shadow:
+      0 0 120px rgba(255, 255, 255, 0.75),
+      0 0 85px rgba(220, 20, 60, 0.85);
+  }
+}
+.animate-pulse-glow-pending {
+  animation: pulse-glow-pending 2s ease-in-out infinite;
+}
+.animate-pulse-glow-success {
+  animation: pulse-glow-success 2s ease-in-out infinite;
+}
+.animate-pulse-glow-failed {
+  animation: pulse-glow-failed 2s ease-in-out infinite;
+}
+.attempt-tile {
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}

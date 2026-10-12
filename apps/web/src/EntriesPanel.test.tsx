@@ -101,7 +101,7 @@ it('ww-8pme ww-tzv6: a CSV file is previewed with row errors and only valid rows
   await waitFor(() => expect(screen.getAllByText('Gotowy')).toHaveLength(2))
   expect(screen.getByRole('alert', { name: '' }).textContent).toContain('Zła data urodzenia')
   fireEvent.click(screen.getByRole('button', { name: 'Importuj poprawne wiersze' }))
-  expect(screen.getByTestId('entries').textContent).toBe('Anna Alpha:|Jan Nowy:|Adam Drugi:')
+  expect(screen.getByTestId('entries').textContent).toBe('Anna Alpha:|Nowy Jan:|Drugi Adam:')
   // "Górnik" and "GÓRNIK" are one team.
   expect(screen.getByTestId('teams').textContent).toBe('Górnik')
 })

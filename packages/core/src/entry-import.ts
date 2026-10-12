@@ -210,7 +210,7 @@ export function planImport(
     const problems: Array<{ problem: RowProblem; detail: string }> = []
     const problem = (kind: RowProblem, detail = '') => problems.push({ problem: kind, detail })
     const name =
-      cell(row, 'name') || [cell(row, 'firstName'), cell(row, 'lastName')].filter(Boolean).join(' ')
+      cell(row, 'name') || [cell(row, 'lastName'), cell(row, 'firstName')].filter(Boolean).join(' ')
     if (name === '') problem('nameMissing')
     const sex = parseSex(cell(row, 'sex'))
     if (Option.isNone(sex)) problem('sexInvalid', cell(row, 'sex'))

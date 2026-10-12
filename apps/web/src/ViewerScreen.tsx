@@ -1,9 +1,9 @@
 import type { ContestId } from '@werewolf/sync'
-import { Announcer, Stage } from './LiveScreens.tsx'
-import { Results } from './Results.tsx'
-import { Scoreboard } from './Scoreboard.tsx'
 import { useMessages } from './i18n.ts'
 import { useLiveContest } from './live-contest.ts'
+import { PublicResults } from './PublicResults.tsx'
+import { StageScreen } from './StageScreen.tsx'
+import { AnnouncerTable, PublicTable } from './TableScreens.tsx'
 
 /** A read-only screen keeps the last known state on display and marks a lost connection. */
 export function ViewerScreen({
@@ -22,36 +22,25 @@ export function ViewerScreen({
       <p role="status">{t(live.view._tag === 'Invalid' ? 'request.invalid' : 'view.loading')}</p>
     )
   const state = live.view.replica.journal.state
+  const definition = live.view.replica.state.snapshot.definition
   return (
     <section className={'screen display-view ' + role}>
       {!live.connected && (
         <p
           role="status"
-          className="offline bg-status-warning px-4 py-1 text-center font-display text-sm tracking-widest text-black uppercase"
+          className="offline fixed inset-x-0 top-0 z-40 bg-status-warning px-4 py-1 text-center font-display text-sm tracking-widest text-black uppercase"
         >
           {t('view.offline')}
         </p>
       )}
       {role === 'stage' ? (
-        <Stage state={state} title={live.view.replica.state.snapshot.definition.name} />
+        <StageScreen state={state} title={definition.name} />
       ) : role === 'announcer' ? (
-        <Announcer state={state} />
+        <AnnouncerTable state={state} title={definition.name} connected={live.connected} />
       ) : role === 'results' ? (
-        <div className="container-full py-4">
-          <h1 className="text-h1 mb-1 uppercase">
-            {live.view.replica.state.snapshot.definition.name}
-          </h1>
-          <p className="text-caption mb-4 tracking-[0.3em] text-text-secondary uppercase">
-            {t('res.live')}
-          </p>
-          <Results
-            state={state}
-            title={live.view.replica.state.snapshot.definition.name}
-            exports={false}
-          />
-        </div>
+        <PublicResults state={state} definition={definition} />
       ) : (
-        <Scoreboard state={state} title={live.view.replica.state.snapshot.definition.name} />
+        <PublicTable state={state} title={definition.name} />
       )}
     </section>
   )

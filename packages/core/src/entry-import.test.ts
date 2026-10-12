@@ -62,8 +62,8 @@ describe('entry import', () => {
     )
     const { entries, teams } = applied.state
     expect(entries.map((entry) => entry.lifter.name)).toEqual([
-      'Anna Nowak',
-      'Jan Kowalski; junior',
+      'Nowak Anna',
+      'Kowalski; junior Jan',
     ])
     // "Górnik" and "GÓRNIK" are one team.
     expect(teams.map((team) => team.name)).toEqual(['Górnik'])
