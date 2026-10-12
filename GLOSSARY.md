@@ -13,15 +13,18 @@ The data that defines a contest: its lifts, divisions, classifications and scori
 _Avoid_: discipline, competition type, config
 
 **Lift**:
-One kind of exercise contested in a contest, e.g. bench press, deadlift, squat, biceps curl. All lifts behave the same; only their names differ.
+One kind of exercise contested in a contest, e.g. bench press, deadlift, squat, strict curl, MONSTER (bench press in a bench shirt). All lifts behave the same; only their names differ. One lifter has one entry, with all the lifts they take.
 _Avoid_: discipline, event, exercise
 
+**Open**:
+Everybody in the contest, without weight classes. Open is not a division; a classification for everybody has membership "all".
+
 **Division**:
-A group a lifter is explicitly entered into for ranking purposes, e.g. Open, MONSTER, Uniformed services, Kids. Membership is explicit; no lifter belongs to a division implicitly.
-_Avoid_: tag, label, category
+A tag on an entry for extra rankings, e.g. Uniformed services, Miners. An entry has zero or more divisions; the 2025 app called them tags (Etykiety).
+_Avoid_: category
 
 **Age class / Weight class**:
-A band of age (at contest date) or bodyweight used to split a division's ranking.
+A band of age (at contest date) or bodyweight used to split a ranking. Kids are the age classes 2–8, 9–12 and 13–15. A team classification can list the age classes that count for it.
 _Avoid_: age category, weight category
 
 **Team**:

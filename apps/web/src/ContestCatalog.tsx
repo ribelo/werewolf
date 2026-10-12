@@ -8,7 +8,7 @@ import { useMessages, type MessageKey } from './i18n.ts'
 import { AppHeader } from './Layout.tsx'
 
 export function ContestCatalog({ onLogout }: { readonly onLogout: () => void }) {
-  const { t } = useMessages()
+  const { t, locale } = useMessages()
   const [catalog, setCatalog] = useState<typeof Catalog.Type>({ contests: [] })
   const [error, setError] = useState<MessageKey | ''>('')
   useEffect(() => {
@@ -90,11 +90,21 @@ export function ContestCatalog({ onLogout }: { readonly onLogout: () => void }) 
                 >
                   <header className="card-header">
                     <h3 className="text-h2 text-text-primary">{contest.name}</h3>
+                    <p className="text-caption text-text-secondary">
+                      {(contest.location ?? '').toUpperCase() || '—'} •{' '}
+                      {new Date(contest.date + 'T00:00:00').toLocaleDateString(
+                        locale === 'pl' ? 'pl-PL' : 'en-US',
+                      )}
+                    </p>
                   </header>
                   <dl className="space-y-2 text-body text-text-secondary">
                     <div className="flex justify-between">
                       <dt className="text-label">{t('dashboard.contest.start')}</dt>
-                      <dd>{contest.date}</dd>
+                      <dd>
+                        {new Date(contest.date + 'T00:00:00').toLocaleDateString(
+                          locale === 'pl' ? 'pl-PL' : 'en-US',
+                        )}
+                      </dd>
                     </div>
                   </dl>
                 </a>

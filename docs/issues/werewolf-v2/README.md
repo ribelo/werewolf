@@ -23,3 +23,4 @@ Spec: [../werewolf-v2.md](../werewolf-v2.md)
 | 17 | [Rehearsal on real devices and cut-over](17-rehearsal-cutover.md) | 02–16 | prepared |
 | 18 | [Did not start (DNS)](18-did-not-start.md) | 08, 13, 15 | done |
 | 19 | [UI parity with the old app](19-ui-parity.md) | 18 | in-progress |
+| 20 | [Changes from the client meeting of 2026-10-12](20-client-meeting-2026.md) | 19 | done |
