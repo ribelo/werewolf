@@ -30,7 +30,7 @@ export function Settings({ onLogout }: { readonly onLogout: () => void }) {
         current="settings"
         onLogout={onLogout}
       />
-      <div className="container-full space-y-8 py-8">
+      <div className="space-y-3 px-4 py-3">
         <section className="card">
           <header className="card-header flex flex-col gap-2">
             <h2 className="text-h3">{t('settings.language.title')}</h2>
