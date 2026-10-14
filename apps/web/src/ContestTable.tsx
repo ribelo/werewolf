@@ -165,7 +165,15 @@ function AttemptCell({
           placeholder="—"
           aria-label={lt('contest_table.columns.lifter') + ' ' + attemptLabels[attempt.number - 1]}
           onBlur={(event) => {
-            Option.map(parseWeightInput(event.currentTarget.value), (parsed) => {
+            const input = event.currentTarget
+            // An emptied field takes the declaration back; a judged attempt keeps its weight.
+            if (input.value.trim() === '') {
+              if (attempt._tag === 'Declared')
+                submit({ _tag: 'ClearWeight', attempt: ref(attempt) })
+              else input.value = weight
+              return
+            }
+            Option.map(parseWeightInput(input.value), (parsed) => {
               if (parsed.toFixed(2) !== weight)
                 submit({ _tag: 'SetWeight', attempt: ref(attempt), weight: parsed })
             })

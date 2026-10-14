@@ -55,7 +55,26 @@ export type BarbellLoad =
       readonly platesPerSide: ReadonlyArray<PlateStack>
     }
 
-/** Find an exact bounded inventory load, or its nearest alternative; ties choose the lower load. */
+const plateCount = (stacks: ReadonlyArray<PlateStack>) =>
+  stacks.reduce((sum, stack) => sum + stack.count, 0)
+/** Fewer plates per side wins; among equal counts the plan with more heavy plates wins. */
+function fewerPlates(candidate: ReadonlyArray<PlateStack>, current: ReadonlyArray<PlateStack>) {
+  const difference = plateCount(candidate) - plateCount(current)
+  if (difference !== 0) return difference < 0
+  for (let index = 0; index < Math.max(candidate.length, current.length); index++) {
+    const left = candidate[index]
+    const right = current[index]
+    if (!left || !right) return Boolean(left)
+    if (left.weight !== right.weight) return left.weight > right.weight
+    if (left.count !== right.count) return left.count > right.count
+  }
+  return false
+}
+
+/**
+ * Find an exact bounded inventory load, or its nearest alternative; ties choose the lower load.
+ * Each load uses the fewest plates per side, so the loaders change as little as possible.
+ */
 export function loadBarbell(barbell: Barbell, sex: Sex, requested: Kilograms): BarbellLoad {
   const base = Math.round(barbell.bars[sex] * 1000) + Math.round(barbell.clampsPerSide * 2000)
   const requestedGrams = Math.round(requested * 1000)
@@ -87,7 +106,9 @@ export function loadBarbell(barbell: Barbell, sex: Sex, requested: Kilograms): B
         const available = Math.min(plate.pairs, Math.floor((limit - sum) / grams))
         for (let count = 1; count <= available; count++) {
           const total = sum + count * grams
-          if (!next.has(total)) next.set(total, [...prior, { weight: plate.weight, count }])
+          const candidate = [...prior, { weight: plate.weight, count }]
+          const found = next.get(total)
+          if (!found || fewerPlates(candidate, found)) next.set(total, candidate)
         }
       }
       reachable = next

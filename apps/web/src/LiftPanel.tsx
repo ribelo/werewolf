@@ -9,6 +9,7 @@ import * as Option from 'effect/Option'
 import { useEffect, useMemo, useState } from 'react'
 import { buildResultsJpg } from './export-jpg.ts'
 import { buildResultsPdf, loadPdfFonts } from './export-pdf.ts'
+import { ClockControl } from './ClockControl.tsx'
 import { ContestTable } from './ContestTable.tsx'
 import {
   buildRows,
@@ -309,6 +310,7 @@ export function LiftPanel({
             <ExportMenu disabled={rows.length === 0} onExport={exportTable} />
           </div>
         </header>
+        <ClockControl state={state} submit={submit} />
         <FilterBar options={options} filters={filters} onChange={setFilters} />
         {lifters.length === 0 ? (
           <div className="text-center py-8 text-text-secondary">

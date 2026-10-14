@@ -2,7 +2,7 @@ import { currentAttempt, liftingOrder, type Attempt, type ContestState } from '@
 import type { ContestDefinition, ReadLinks } from '@werewolf/sync'
 import * as Option from 'effect/Option'
 import { attemptStatus, attemptStatusClass } from './ContestTable.tsx'
-import { clockText, useCountdown } from './clock.ts'
+import { ClockControl } from './ClockControl.tsx'
 import { formatWeight } from './contest-table.ts'
 import { useLegacy } from './legacy-i18n.ts'
 
@@ -274,8 +274,6 @@ function CurrentAttemptCard({
 }) {
   const { lt } = useLegacy()
   const current = currentAttempt(state)
-  const remaining = useCountdown(state.clock)
-  const seconds = state.rulebook.clockSeconds ?? 60
   const connection = connected ? 'status-badge status-active' : 'status-badge status-error'
   const phase = Option.getOrUndefined(current) ?? queue[0]
   return (
@@ -361,38 +359,11 @@ function CurrentAttemptCard({
           <p className="text-caption mt-2">{lt('contest_detail.current.empty_hint')}</p>
         </div>
       )}
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-border-color pt-4">
-        <div>
-          <h4 className="text-label text-text-secondary">{lt('v2.clock.title')}</h4>
-          <p
-            className={
-              'weight-medium mt-1 ' +
-              (Option.isSome(remaining) && remaining.value <= 10
-                ? 'text-primary-red'
-                : 'text-text-primary')
-            }
-          >
-            {Option.match(remaining, { onNone: () => clockText(seconds), onSome: clockText })}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            className="btn-primary px-4 py-2 text-xxs"
-            onClick={() => submit({ _tag: 'StartClock', seconds })}
-          >
-            {lt('v2.clock.start')}
-          </button>
-          <button
-            type="button"
-            className="btn-secondary px-4 py-2 text-xxs"
-            disabled={Option.isNone(state.clock)}
-            onClick={() => submit({ _tag: 'StopClock' })}
-          >
-            {lt('v2.clock.stop')}
-          </button>
-        </div>
-      </div>
+      <ClockControl
+        state={state}
+        submit={submit}
+        className="mt-6 border-t border-border-color pt-4"
+      />
       <div className="mt-6 border-t border-border-color pt-4">
         <div className="flex items-center justify-between">
           <h4 className="text-label text-text-secondary">

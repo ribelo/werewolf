@@ -105,6 +105,8 @@ export const Command = Schema.Union([
     attempt: AttemptRef,
     weight: Kilograms,
   }),
+  /** Takes a declared weight back: the attempt is unannounced again. A judged attempt keeps its weight. */
+  Schema.TaggedStruct('ClearWeight', { ...commandMetadata, attempt: AttemptRef }),
   Schema.TaggedStruct('SetVerdict', {
     ...commandMetadata,
 
@@ -599,6 +601,28 @@ function applyMutation(
         ...state,
         attempts: state.attempts.map((item) =>
           sameAttempt(item, command.attempt) ? updated : item,
+        ),
+      })
+    }
+    case 'ClearWeight': {
+      const attempt = state.attempts.find((item) => sameAttempt(item, command.attempt))
+      if (!attempt)
+        return Result.fail(
+          new AttemptUnavailable({ attempt: command.attempt, reason: 'unknownAttempt' }),
+        )
+      if (attempt._tag === 'Judged')
+        return Result.fail(
+          new AttemptUnavailable({ attempt: command.attempt, reason: 'alreadyJudged' }),
+        )
+      const unannounced: Attempt = { ...command.attempt, _tag: 'Unannounced' }
+      return Result.succeed({
+        ...state,
+        selected:
+          Option.isSome(state.selected) && sameAttempt(state.selected.value, command.attempt)
+            ? Option.none()
+            : state.selected,
+        attempts: state.attempts.map((item) =>
+          sameAttempt(item, command.attempt) ? unannounced : item,
         ),
       })
     }

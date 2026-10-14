@@ -298,6 +298,58 @@ describe('portable contest core', () => {
     })
   })
 
+  it('ww-widg loads each weight with the fewest plates per side', () => {
+    const rulebook = book({
+      ...input,
+      barbell: {
+        bars: { male: 20, female: 15 },
+        clampsPerSide: 2.5,
+        plates: [
+          { weight: 25, pairs: 4 },
+          { weight: 20, pairs: 4 },
+          { weight: 15, pairs: 4 },
+          { weight: 10, pairs: 4 },
+          { weight: 5, pairs: 4 },
+          { weight: 2.5, pairs: 6 },
+          { weight: 1.25, pairs: 4 },
+        ],
+      },
+    })
+    expect(loadBarbell(rulebook.barbell, 'male', Schema.decodeSync(Kilograms)(170))).toEqual({
+      _tag: 'Loadable',
+      weight: 170,
+      platesPerSide: [
+        { weight: 25, count: 2 },
+        { weight: 20, count: 1 },
+        { weight: 2.5, count: 1 },
+      ],
+    })
+  })
+
+  it('ww-lcu1 takes a declared weight back, but not a judged one', () => {
+    const declared = [
+      add('a', 1),
+      command({ id: 'second', _tag: 'SetWeight', attempt: ref('a', 'upper', 2), weight: 110 }),
+      command({ id: 'pick', _tag: 'SetCurrent', attempt: ref('a', 'upper', 2) }),
+    ]
+    const cleared = state([
+      ...declared,
+      command({ id: 'clear', _tag: 'ClearWeight', attempt: ref('a', 'upper', 2) }),
+    ])
+    expect(cleared.attempts).toContainEqual({ ...ref('a', 'upper', 2), _tag: 'Unannounced' })
+    expect(cleared.selected).toEqual(Option.none())
+    expect(
+      replay(book(), date, [
+        add('a', 1),
+        command({ id: 'judge', _tag: 'SetVerdict', attempt: ref('a'), verdict: 'goodLift' }),
+        command({ id: 'clear', _tag: 'ClearWeight', attempt: ref('a') }),
+      ]),
+    ).toMatchObject({
+      _tag: 'Failure',
+      failure: { _tag: 'AttemptUnavailable', reason: 'alreadyJudged' },
+    })
+  })
+
   it('ww-8ta6 undoes exactly the last mutation, including corrections, selection and ordering', () => {
     const prefix = [
       add('a', 1),
