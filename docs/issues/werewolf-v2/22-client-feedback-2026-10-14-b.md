@@ -6,7 +6,7 @@
 
 **Blocked by:** 21
 
-**Status:** in-progress
+**Status:** done
 
 - [x] Attempt clock: one button walks start → stop (frozen on its second) → reset; core commands StartClock, StopClock, ResetClock; the clock is stamped and counted in server time (`/api/health` returns `now`), so devices with a wrong clock agree
 - [x] Lift tabs: title, filters, sync, QR, export, print and clock in one row; the table fills the screen; no frame around the table
@@ -21,9 +21,10 @@
 - [x] Tile "Filmy na telebim" opens the video library; the library left "Edytuj zawody"
 - [x] Stage screen redrawn: name decipher with a sweep, attempt tiles pop in, the weight counts up, plates slide onto a drawn bar, next lifters glide to their new places, a verdict flash
 - [x] Contest list: one toolbar with create and restore, no duplicated settings tile or contest counts
-- [ ] Bodyweights of the 2026 contest from the weight classes: waiting for the source file
+- [x] Bodyweights of the 2026 contest set from the weight classes of the registration file (limit of the class; "+125 kg" → 126, "+82,5 kg" → 83.5); a server backup was written first
 
 ## Verified
 
 - Core test for the clock states; `bun run check` passes.
 - Local Worker with a copy of the production contest, headless Chrome at 1650×990: desk tabs, stage, big screen, announcer, public table, results, contest list; the clock went 1:00 → 0:57 (stop) → 0:57 → 1:00 (reset); the announcer table scrolled by itself; the print output rendered to PDF as two A4 landscape pages without header and footer.
+- Production: all 116 entries matched the registration file by name (order-independent); 116 SetBodyweight commands accepted; the replayed snapshot has no entry without a bodyweight.
