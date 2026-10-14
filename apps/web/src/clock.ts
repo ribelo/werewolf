@@ -28,7 +28,8 @@ export function syncServerClock(): void {
         'now' in body &&
         typeof body.now === 'number'
       )
-        serverOffset = body.now - (sent + received) / 2
+        // Whole milliseconds: command timestamps are integers, a half millisecond is refused.
+        serverOffset = Math.round(body.now - (sent + received) / 2)
     })
     .catch(() => {
       synced = false
