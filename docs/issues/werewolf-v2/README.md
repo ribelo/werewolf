@@ -24,3 +24,4 @@ Spec: [../werewolf-v2.md](../werewolf-v2.md)
 | 18 | [Did not start (DNS)](18-did-not-start.md) | 08, 13, 15 | done |
 | 19 | [UI parity with the old app](19-ui-parity.md) | 18 | done |
 | 20 | [Changes from the client meeting of 2026-10-12](20-client-meeting-2026.md) | 19 | done |
+| 21 | [Client feedback of 2026-10-14](21-client-feedback-2026-10-14.md) | 20 | in-progress |

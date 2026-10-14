@@ -1,5 +1,5 @@
 import { formatVersion } from '@werewolf/core'
-import { ContestDefinition, ContestId, Snapshot } from '@werewolf/sync'
+import { ContestDefinition, ContestId, Snapshot, type StoredBackup } from '@werewolf/sync'
 import { editorHeader } from './contest-do.ts'
 export { ContestDO, ContestCatalogDO } from './contest-do.ts'
 import * as Data from 'effect/Data'
@@ -119,6 +119,65 @@ function route(
     const headers = new Headers(request.headers)
     headers.delete(editorHeader)
     if (authenticated && !url.searchParams.has('token')) headers.set(editorHeader, '1')
+    // Backups kept in R2: list them, write one now, or fetch one. Only the organizer.
+    const backupPath = new RegExp(
+      '^/api/contests/([^/]+)/backups(?:/([A-Za-z0-9._:-]+\\.json))?$',
+    ).exec(url.pathname)
+    if (backupPath) {
+      if (!authenticated) return Response.json({ error: 'auth.required' }, { status: 401 })
+      const id = yield* Schema.decodeUnknownEffect(ContestId)(backupPath[1]).pipe(
+        Effect.mapError((cause) => new InvalidRequest({ cause })),
+      )
+      const prefix = 'contests/' + id + '/'
+      const name = backupPath[2]
+      if (name && request.method === 'GET') {
+        const object = yield* Effect.tryPromise({
+          try: () => env.BACKUPS.get(prefix + name),
+          catch: (cause) => new WorkerFailure({ cause }),
+        })
+        if (!object) return Response.json({ error: 'request.notFound' }, { status: 404 })
+        return new Response(object.body, {
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store',
+            'Content-Disposition': 'attachment; filename="backup-' + id + '-' + name + '"',
+          },
+        })
+      }
+      if (!name && request.method === 'POST')
+        return yield* Effect.tryPromise({
+          try: () =>
+            env.CONTESTS.getByName(id).fetch(
+              new Request(url.origin + '/api/contests/' + id + '/backups', {
+                method: 'POST',
+                headers,
+              }),
+            ),
+          catch: (cause) => new WorkerFailure({ cause }),
+        })
+      if (!name && request.method === 'GET') {
+        const backups = yield* Effect.tryPromise({
+          try: async () => {
+            const found: Array<StoredBackup> = []
+            let cursor = ''
+            do {
+              const page = await env.BACKUPS.list({ prefix, ...(cursor ? { cursor } : {}) })
+              for (const object of page.objects) {
+                const file = object.key.slice(prefix.length)
+                const match = /^(\d+)-(.+)\.json$/.exec(file)
+                if (match)
+                  found.push({ name: file, commands: Number(match[1]), savedAt: match[2] ?? '' })
+              }
+              cursor = page.truncated ? page.cursor : ''
+            } while (cursor)
+            return found.toSorted((a, b) => b.savedAt.localeCompare(a.savedAt))
+          },
+          catch: (cause) => new WorkerFailure({ cause }),
+        })
+        return Response.json({ backups }, { headers: { 'Cache-Control': 'no-store' } })
+      }
+      return Response.json({ error: 'request.notFound' }, { status: 404 })
+    }
     const contestPath = new RegExp(
       '^/api/contests/([^/]+)/(snapshot|events|commands|links|backup|restore)$',
     ).exec(url.pathname)

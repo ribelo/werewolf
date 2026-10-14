@@ -6,7 +6,7 @@ import {
   replay,
   teamRankings,
 } from '@werewolf/core'
-import { ReadLinks, Snapshot } from '@werewolf/sync'
+import { ReadLinks, Snapshot, StoredBackups } from '@werewolf/sync'
 import * as Result from 'effect/Result'
 import * as Schema from 'effect/Schema'
 import { expect, it } from 'vitest'
@@ -240,4 +240,25 @@ it('ww-edqp: a backup is written to R2 within five minutes of the first command 
   ).not.toBeNull()
   await runDurableObjectAlarm(stub)
   expect((await env.BACKUPS.list({ prefix })).objects).toHaveLength(2)
+})
+
+it('ww-6ft3: the organizer creates a backup on the server, lists it and fetches it', async () => {
+  const cookie = await organizer()
+  const { id, headers } = await seed(cookie)
+  const base = origin + '/api/contests/' + id + '/backups'
+  expect((await SELF.fetch(base, { method: 'POST', headers: { Origin: origin } })).status).toBe(401)
+  const created = await SELF.fetch(base, { method: 'POST', headers })
+  expect(created.status).toBe(201)
+  const list = Schema.decodeUnknownSync(StoredBackups)(
+    await (await SELF.fetch(base, { headers: { Cookie: cookie } })).json(),
+  )
+  expect(list.backups).toHaveLength(1)
+  expect(list.backups[0]?.commands).toBe(5)
+  const fetched = await SELF.fetch(base + '/' + (list.backups[0]?.name ?? ''), {
+    headers: { Cookie: cookie },
+  })
+  expect(fetched.status).toBe(200)
+  expect(Schema.decodeUnknownSync(Snapshot)(await fetched.json())).toEqual(
+    await snapshotOf(id, cookie),
+  )
 })

@@ -33,6 +33,15 @@ export const Snapshot = Schema.Struct({
   ),
 )
 export type Snapshot = typeof Snapshot.Type
+/** A backup kept in R2: written automatically during the meet or on demand from the desk. */
+export const StoredBackup = Schema.Struct({
+  name: Schema.NonEmptyString,
+  /** Commands in the log when the backup was written. */
+  commands: Schema.Int,
+  savedAt: Schema.String,
+})
+export type StoredBackup = typeof StoredBackup.Type
+export const StoredBackups = Schema.Struct({ backups: Schema.Array(StoredBackup) })
 export const ReadLinks = Schema.Struct({
   stage: Schema.NonEmptyString,
   announcer: Schema.NonEmptyString,

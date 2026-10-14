@@ -110,25 +110,28 @@ export class ContestDO extends DurableObject<ContestEnv> {
       catch: (cause) => new ActorFailure({ cause }),
     })
   }
+  /** Write the contest to R2 as contests/<id>/<sequence>-<time>.json; the file name is returned. */
+  private async storeBackup(contest: LoadedContest): Promise<string> {
+    const snapshot = this.snapshot(contest)
+    const sequence = snapshot.commands.length
+    const name = String(sequence).padStart(8, '0') + '-' + new Date().toISOString() + '.json'
+    await this.env.BACKUPS.put(
+      'contests/' + contest.stored.definition.id + '/' + name,
+      JSON.stringify(snapshot),
+    )
+    this.ctx.storage.kv.put(
+      'backedUp',
+      Math.max(sequence, this.ctx.storage.kv.get<number>('backedUp') ?? 0),
+    )
+    return name
+  }
   override async alarm() {
     const loaded = this.load()
     if (Option.isNone(loaded)) return
-    const snapshot = this.snapshot(loaded.value)
-    const sequence = snapshot.commands.length
+    const sequence = loaded.value.journal.commands.length
     const saved = this.ctx.storage.kv.get<number>('backedUp') ?? 0
     if (sequence <= saved) return
-    const stamp = new Date().toISOString()
-    await this.env.BACKUPS.put(
-      'contests/' +
-        loaded.value.stored.definition.id +
-        '/' +
-        String(sequence).padStart(8, '0') +
-        '-' +
-        stamp +
-        '.json',
-      JSON.stringify(snapshot),
-    )
-    this.ctx.storage.kv.put('backedUp', sequence)
+    await this.storeBackup(loaded.value)
     // Commands that arrived while the file was written wait for the next interval.
     if (this.snapshot(this.load().pipe(Option.getOrThrow)).commands.length > sequence)
       await this.ctx.storage.setAlarm(Date.now() + backupIntervalMs)
@@ -329,6 +332,13 @@ export class ContestDO extends DurableObject<ContestEnv> {
                 'attachment; filename="backup-' + contest.stored.definition.id + '.json"',
             },
           })
+        }
+        if (url.pathname.endsWith('/backups') && request.method === 'POST') {
+          const name = yield* Effect.tryPromise({
+            try: () => this.storeBackup(contest),
+            catch: (cause) => new ActorFailure({ cause }),
+          })
+          return Response.json({ name }, { status: 201, headers: { 'Cache-Control': 'no-store' } })
         }
         if (url.pathname.endsWith('/links') && request.method === 'GET') {
           const link = (role: keyof typeof contest.stored.tokens) =>

@@ -1,5 +1,7 @@
+import { StoredBackups, type StoredBackup } from '@werewolf/sync'
 import * as Effect from 'effect/Effect'
-import { useState } from 'react'
+import * as Schema from 'effect/Schema'
+import { useEffect, useState } from 'react'
 import { useMessages } from './i18n.ts'
 
 type Outcome = 'idle' | 'done' | 'failed'
@@ -17,8 +19,45 @@ export async function sendBackup(path: string, file: File): Promise<Response> {
 }
 
 export function BackupPanel({ id, online }: { readonly id: string; readonly online: boolean }) {
-  const { t } = useMessages()
+  const { t, locale } = useMessages()
   const [outcome, setOutcome] = useState<Outcome>('idle')
+  const [stored, setStored] = useState<ReadonlyArray<StoredBackup>>([])
+  const [busy, setBusy] = useState(false)
+  const base = '/api/contests/' + id + '/backups'
+  async function refresh() {
+    const response = await fetch(base)
+    if (!response.ok) return
+    const decoded = Schema.decodeUnknownOption(StoredBackups)(await response.json())
+    if (decoded._tag === 'Some') setStored(decoded.value.backups)
+  }
+  useEffect(() => {
+    if (online) Effect.runFork(Effect.promise(refresh))
+    // refresh reads only the contest id, which keys this panel.
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, online])
+  async function create() {
+    setBusy(true)
+    const response = await fetch(base, { method: 'POST' })
+    setBusy(false)
+    setOutcome(response.ok ? 'done' : 'failed')
+    await refresh()
+  }
+  const when = (backup: StoredBackup) =>
+    new Date(backup.savedAt).toLocaleString(locale === 'pl' ? 'pl-PL' : 'en-GB')
+  async function restoreStored(backup: StoredBackup) {
+    if (!confirm(t('backup.confirmOne').replace('{time}', when(backup)))) return
+    const file = await fetch(base + '/' + backup.name)
+    if (!file.ok) {
+      setOutcome('failed')
+      return
+    }
+    const response = await fetch('/api/contests/' + id + '/restore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: await file.text(),
+    })
+    setOutcome(response.ok ? 'done' : 'failed')
+  }
   async function download() {
     const response = await fetch('/api/contests/' + id + '/backup')
     if (!response.ok) {
@@ -82,6 +121,50 @@ export function BackupPanel({ id, online }: { readonly id: string; readonly onli
           {t('backup.download')}
         </button>
       </p>
+      <h4 className="text-h3 mb-2">{t('backup.stored')}</h4>
+      <p className="mb-3 text-sm text-text-secondary">{t('backup.storedHelp')}</p>
+      <p className="mb-4">
+        <button
+          type="button"
+          className="btn-primary"
+          disabled={!online || busy}
+          onClick={run(create)}
+        >
+          {t('backup.create')}
+        </button>
+      </p>
+      {stored.length === 0 ? (
+        <p className="mb-6 text-sm text-text-secondary">{t('backup.none')}</p>
+      ) : (
+        <ul className="mb-6 max-h-64 space-y-2 overflow-y-auto">
+          {stored.map((backup) => (
+            <li
+              key={backup.name}
+              className="flex flex-wrap items-center justify-between gap-2 rounded border border-border-color px-3 py-2"
+            >
+              <span className="text-sm">
+                {when(backup)}{' '}
+                <span className="text-text-secondary">
+                  ({t('backup.changes').replace('{count}', String(backup.commands))})
+                </span>
+              </span>
+              <span className="flex gap-2">
+                <a className="btn-secondary px-3 py-1 text-xxs" href={base + '/' + backup.name}>
+                  {t('backup.downloadOne')}
+                </a>
+                <button
+                  type="button"
+                  className="btn-secondary px-3 py-1 text-xxs"
+                  disabled={!online}
+                  onClick={run(() => restoreStored(backup))}
+                >
+                  {t('backup.restoreOne')}
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
       <h4 className="text-h3 mb-2">{t('backup.restore')}</h4>
       {!online && <p className="mb-2 text-sm text-status-warning">{t('backup.needOnline')}</p>}
       {picker(t('backup.restoreHere'), 'here')}
