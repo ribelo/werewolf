@@ -110,6 +110,22 @@ function AttemptCell({
       : LIVE_BUTTON_BASE +
         ' border-border-color text-text-secondary hover:border-primary-red hover:text-primary-red'
   const weight = attempt._tag === 'Unannounced' ? '' : attempt.weight.toFixed(2)
+  // Read-only screens show one box per attempt, coloured by its verdict, to keep rows short.
+  if (readOnly)
+    return (
+      <span
+        className={
+          'inline-flex h-7 w-[4.25rem] items-center justify-center rounded px-1 font-mono text-xs ' +
+          attemptStatusClass(status) +
+          (live ? ' ring-2 ring-primary-red' : '') +
+          (status === 'failed' ? ' line-through' : '')
+        }
+        aria-label={statusLabel}
+        title={statusLabel}
+      >
+        {attempt._tag === 'Unannounced' ? '—' : attempt.weight}
+      </span>
+    )
   return (
     <div className="flex flex-col items-center gap-1">
       <div className="flex items-center gap-1">
@@ -256,7 +272,7 @@ export function ContestTable({
     !isSorted(column) ? 'none' : sortDirection === 'asc' ? 'ascending' : 'descending'
   const header = (column: string, label: string, extra = '') => (
     <th
-      className={'sticky top-0 z-10 bg-element-bg px-3 py-2 cursor-pointer ' + extra}
+      className={'sticky top-0 z-10 bg-element-bg px-2 py-1.5 cursor-pointer ' + extra}
       rowSpan={2}
       role="columnheader"
       aria-sort={aria(column)}
@@ -291,7 +307,7 @@ export function ContestTable({
           )}
           <th
             className={
-              'sticky top-0 z-20 bg-element-bg px-3 py-2 text-left border-r border-border-color cursor-pointer ' +
+              'sticky top-0 z-20 bg-element-bg px-2 py-1.5 text-left border-r border-border-color cursor-pointer ' +
               nameLeft
             }
             rowSpan={2}
@@ -315,14 +331,14 @@ export function ContestTable({
           {showReshelColumn && header('reshel', lt('contest_table.columns.reshel'))}
           {showMcculloughColumn && header('mccullough', lt('contest_table.columns.mccullough'))}
           {showRackColumn && rackLifts.length > 0 && (
-            <th className="sticky top-0 z-10 bg-element-bg px-3 py-2" rowSpan={2}>
+            <th className="sticky top-0 z-10 bg-element-bg px-2 py-1.5" rowSpan={2}>
               {lt('contest_table.columns.rack')}
             </th>
           )}
           {lifts.map((lift) => (
             <th
               key={lift.id}
-              className="px-3 py-2 text-center uppercase tracking-[0.3em]"
+              className="px-2 py-1.5 text-center uppercase tracking-[0.3em]"
               colSpan={numbers(lift.attempts).length}
             >
               {lift.name[locale]}
@@ -331,12 +347,12 @@ export function ContestTable({
           {showPointsColumn && header(pointsSortKey, lt('contest_table.columns.points'))}
           {showMaxColumn && header(maxSortKey, lt('contest_table.columns.max'))}
           {showLabelsColumn && (
-            <th className="sticky top-0 z-10 bg-element-bg px-3 py-2" rowSpan={2}>
+            <th className="sticky top-0 z-10 bg-element-bg px-2 py-1.5" rowSpan={2}>
               {lt('contest_table.columns.labels')}
             </th>
           )}
           {!readOnly && (
-            <th className="sticky top-0 z-10 bg-element-bg px-3 py-2" rowSpan={2}>
+            <th className="sticky top-0 z-10 bg-element-bg px-2 py-1.5" rowSpan={2}>
               {lt('contest_table.columns.actions')}
             </th>
           )}
@@ -392,7 +408,7 @@ export function ContestTable({
               )}
               <td
                 className={
-                  'sticky z-10 bg-main-bg/95 px-3 py-2 border-r border-border-color ' + nameLeft
+                  'sticky z-10 bg-main-bg/95 px-2 py-1.5 border-r border-border-color ' + nameLeft
                 }
                 style={{ minWidth: NAME_COLUMN_WIDTH, width: NAME_COLUMN_WIDTH }}
               >
@@ -405,28 +421,30 @@ export function ContestTable({
                   )}
                 </div>
               </td>
-              <td className="px-3 py-2 text-center text-xxs uppercase tracking-[0.2em]">
+              <td className="px-2 py-1.5 text-center text-xxs uppercase tracking-[0.2em]">
                 {entry.lifter.sex === 'male' ? 'M' : locale === 'pl' ? 'K' : 'F'}
               </td>
-              <td className="px-3 py-2 text-center">
-                <span className="block leading-tight">({entry.lifter.birthDate})</span>
+              <td className="px-2 py-1.5 text-center">
+                <span className="block whitespace-nowrap text-xxs leading-tight text-text-secondary">
+                  {entry.lifter.birthDate}
+                </span>
                 <span className="block leading-tight">{row.age}</span>
               </td>
-              <td className="px-3 py-2 text-center">
+              <td className="px-2 py-1.5 text-center">
                 {formatWeight(Option.fromUndefinedOr(entry.bodyweight))}
               </td>
-              <td className="px-3 py-2 text-center">{row.weightClass || '—'}</td>
-              <td className="px-3 py-2 text-center">
+              <td className="px-2 py-1.5 text-center">{row.weightClass || '—'}</td>
+              <td className="px-2 py-1.5 text-center">
                 <span className="block leading-tight">{row.ageClass || '—'}</span>
               </td>
               {showReshelColumn && (
-                <td className="px-3 py-2 text-center">{formatCoefficient(row.reshel)}</td>
+                <td className="px-2 py-1.5 text-center">{formatCoefficient(row.reshel)}</td>
               )}
               {showMcculloughColumn && (
-                <td className="px-3 py-2 text-center">{formatCoefficient(row.mccullough)}</td>
+                <td className="px-2 py-1.5 text-center">{formatCoefficient(row.mccullough)}</td>
               )}
               {showRackColumn && rackLifts.length > 0 && (
-                <td className="px-3 py-2 text-center">
+                <td className="px-2 py-1.5 text-center">
                   <div className="flex flex-col gap-1 text-xxs uppercase tracking-[0.2em]">
                     {rackLifts.map((lift) => (
                       <span key={lift.id}>
@@ -496,13 +514,13 @@ export function ContestTable({
                 }),
               )}
               {showPointsColumn && (
-                <td className="px-3 py-2 text-center">{formatCoefficient(value)}</td>
+                <td className="px-2 py-1.5 text-center">{formatCoefficient(value)}</td>
               )}
               {showMaxColumn && (
-                <td className="px-3 py-2 text-center">{max > 0 ? formatWeight(max) : '—'}</td>
+                <td className="px-2 py-1.5 text-center">{max > 0 ? formatWeight(max) : '—'}</td>
               )}
               {showLabelsColumn && (
-                <td className="px-3 py-2">
+                <td className="px-2 py-1.5">
                   <div className="flex flex-wrap items-center gap-2">
                     {row.labels.length > 0 ? (
                       row.labels.map((label) => (
@@ -522,7 +540,7 @@ export function ContestTable({
                 </td>
               )}
               {!readOnly && (
-                <td className="px-3 py-2">
+                <td className="px-2 py-1.5">
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"

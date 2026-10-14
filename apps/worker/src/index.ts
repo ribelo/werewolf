@@ -84,7 +84,10 @@ function route(
     )
       return Response.json({ error: 'auth.origin' }, { status: 403 })
     if (url.pathname === '/api/health')
-      return Response.json({ status: 'ok', application: 'WerewolfV2', formatVersion })
+      return Response.json(
+        { status: 'ok', application: 'WerewolfV2', formatVersion, now: Date.now() },
+        { headers: { 'Cache-Control': 'no-store' } },
+      )
     const auth = yield* Schema.decodeEffect(AuthEnv)(env).pipe(
       Effect.mapError((cause) => new WorkerFailure({ cause })),
     )

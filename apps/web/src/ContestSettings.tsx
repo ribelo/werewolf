@@ -8,7 +8,6 @@ import { useLegacy } from './legacy-i18n.ts'
 import { Modal } from './Modal.tsx'
 import { RulebookEditor } from './RulebookEditor.tsx'
 import { fromDraft, toDraft, type RulebookDraft } from './rulebook-draft.ts'
-import { VideoLibrary } from './Videos.tsx'
 
 /** "Edytuj zawody" of 2025: name, date and town, plus the attempt clock, team age classes and videos. */
 export function ContestSettings({
@@ -155,7 +154,6 @@ export function ContestSettings({
             </div>
           </section>
         )}
-        <VideoLibrary />
         {message && (
           <p role="status" className="text-text-secondary">
             {message}

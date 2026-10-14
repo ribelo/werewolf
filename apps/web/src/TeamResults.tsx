@@ -14,8 +14,8 @@ import { useState } from 'react'
 import { buildResultsJpg } from './export-jpg.ts'
 import { buildResultsPdf, loadPdfFonts } from './export-pdf.ts'
 import { useLegacy } from './legacy-i18n.ts'
-import { ExportMenu } from './LiftPanel.tsx'
-import { downloadBlob, fileSlug, printTables, tablesToXlsx } from './table-export.ts'
+import { ExportMenu, PrintButton } from './LiftPanel.tsx'
+import { downloadBlob, fileSlug, printTables, tablesToCsv, tablesToXlsx } from './table-export.ts'
 
 const formatLift = (value: number) => (value > 0 ? value.toFixed(1) + ' kg' : '–')
 const formatPoints = (value: number) => (value === 0 ? '0.00' : value.toFixed(2))
@@ -213,34 +213,14 @@ export function TeamResults({
         fonts: await loadPdfFonts(),
       })
       downloadBlob(doc.output('blob'), name + '.pdf')
-    } else {
-      const csv = [model.columns, ...model.rows]
-        .map((row) =>
-          row
-            .map((cell) => (/[";\n]/.test(cell) ? '"' + cell.replaceAll('"', '""') + '"' : cell))
-            .join(';'),
-        )
-        .join('\n')
-      downloadBlob(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' }), name + '.csv')
-    }
+    } else downloadBlob(tablesToCsv(model), name + '.csv')
   }
   const placeholder = (sex: Option.Option<'male' | 'female'>) =>
     lt('contest_detail.team_results.placeholder.' + Option.getOrElse(sex, () => 'generic'))
   return (
-    <section className="space-y-6">
-      <header className="space-y-2">
-        <p className="text-caption uppercase tracking-[0.35em] text-text-secondary">
-          {lt('contest_detail.team_results.header_label')}
-        </p>
-        <h1 className="text-h2 text-text-primary">{lt('contest_detail.team_results.title')}</h1>
-        <p className="text-body text-text-secondary">
-          {contestName
-            ? lt('contest_detail.team_results.subtitle_with_name', { contest: contestName })
-            : lt('contest_detail.team_results.subtitle')}
-        </p>
-      </header>
-      {rankings.length > 1 && (
-        <nav className="flex flex-wrap gap-3" role="tablist">
+    <section className="space-y-2">
+      <header className="flex flex-wrap items-center justify-between gap-2">
+        <nav className="flex flex-wrap items-center gap-2" role="tablist">
           {rankings.map((item, index) => {
             const name = state.rulebook.classifications.find((c) => c.id === item.classificationId)
               ?.name[locale]
@@ -252,7 +232,7 @@ export function TeamResults({
                 aria-selected={index === selected}
                 onClick={() => setSelected(index)}
                 className={
-                  'px-4 py-2 font-display text-xs uppercase tracking-[0.3em] border-2 transition ' +
+                  'px-3 py-1.5 font-display text-sm uppercase tracking-[0.15em] border transition ' +
                   (index === selected
                     ? 'bg-primary-red text-black border-primary-red'
                     : 'border-border-color text-text-secondary hover:text-text-primary hover:border-primary-red')
@@ -263,42 +243,40 @@ export function TeamResults({
             )
           })}
         </nav>
-      )}
-      <div className="card space-y-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="space-y-2">
-            <h2 className="text-h3 text-text-primary">
-              {title || lt('contest_detail.team_results.leaderboard_title')}
-            </h2>
-            <p className="max-w-2xl text-body text-text-secondary">
-              {lt('contest_detail.team_results.summary', { count: rows.length })}
-            </p>
-          </div>
-          {rows.length > 0 && <ExportMenu disabled={false} onExport={exportTable} />}
+        <div className="flex items-stretch gap-2">
+          <ExportMenu disabled={rows.length === 0} onExport={exportTable} />
+          <PrintButton
+            disabled={rows.length === 0}
+            onPrint={() => {
+              exportTable('print').catch(() => {})
+            }}
+          />
         </div>
-        {rows.length === 0 ? (
-          <p className="text-body text-text-secondary">{lt('contest_detail.team_results.empty')}</p>
-        ) : (
-          <div className="overflow-x-auto rounded-lg border border-border-color/60 bg-element-bg">
-            <table className="min-w-full border-separate border-spacing-0 text-left text-sm text-text-secondary">
-              <thead className="bg-element-bg text-xxs font-semibold uppercase tracking-[0.3em] text-text-secondary">
-                <tr>
-                  {modelOf(title, [], lt).columns.map((column) => (
-                    <th key={column} className="px-4 py-3 text-left">
-                      {column}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <TeamRows key={row.team} row={row} size={size} placeholder={placeholder} />
+      </header>
+      {rows.length === 0 ? (
+        <p className="py-8 text-center text-body text-text-secondary">
+          {lt('contest_detail.team_results.empty')}
+        </p>
+      ) : (
+        <div className="max-h-[calc(100vh-9.5rem)] overflow-auto border border-border-color">
+          <table className="w-full border-collapse text-sm">
+            <thead className="sticky top-0 z-10 bg-element-bg text-label">
+              <tr>
+                {modelOf(title, [], lt).columns.map((column) => (
+                  <th key={column} className="px-2 py-2 text-left">
+                    {column}
+                  </th>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <TeamRows key={row.team} row={row} size={size} placeholder={placeholder} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </section>
   )
 }
@@ -313,12 +291,12 @@ function TeamRows({
   readonly placeholder: (sex: Option.Option<'male' | 'female'>) => string
 }) {
   const { lt } = useLegacy()
-  const dash = <td className="px-4 py-4 align-top text-text-secondary">–</td>
+  const dash = <td className="px-2 py-1.5 align-top text-text-secondary">–</td>
   return (
     <>
-      <tr className="bg-main-bg/30 text-text-primary">
-        <td className="px-4 py-4 align-top font-semibold">{row.place}</td>
-        <td className="px-4 py-4 align-top">
+      <tr className="border-t-2 border-border-color bg-element-bg/70 text-text-primary">
+        <td className="px-2 py-1.5 align-top font-semibold">{row.place}</td>
+        <td className="px-2 py-1.5 align-top">
           <div className="flex flex-col gap-1">
             <span className="text-body font-semibold text-text-primary">{row.team}</span>
             <span className="text-xxs uppercase tracking-[0.3em] text-text-secondary">
@@ -335,7 +313,7 @@ function TeamRows({
         {dash}
         {dash}
         {dash}
-        <td className="px-4 py-4 align-top font-semibold text-text-primary">
+        <td className="px-2 py-1.5 align-top font-semibold text-text-primary">
           {formatPoints(row.points)}
         </td>
       </tr>
@@ -345,36 +323,36 @@ function TeamRows({
             key={index}
             className="border-t border-border-color/40 bg-main-bg/20 italic text-text-secondary"
           >
-            <td className="px-4 py-3 align-top text-text-secondary">–</td>
-            <td className="px-4 py-3 align-top">
+            <td className="px-2 py-1 align-top text-text-secondary">–</td>
+            <td className="px-2 py-1 align-top">
               <span>{placeholder(slot.sex)}</span>
             </td>
             {Array.from({ length: 10 }, (_, cell) => (
-              <td key={cell} className="px-4 py-3 align-top">
+              <td key={cell} className="px-2 py-1 align-top">
                 –
               </td>
             ))}
           </tr>
         ) : (
           <tr key={index} className="border-t border-border-color/40 text-text-primary">
-            <td className="px-4 py-3 align-top text-text-secondary">–</td>
-            <td className="px-4 py-3 align-top">
+            <td className="px-2 py-1 align-top text-text-secondary">–</td>
+            <td className="px-2 py-1 align-top">
               <span className="font-medium text-text-primary">{slot.name}</span>
             </td>
-            <td className="px-4 py-3 align-top">
+            <td className="px-2 py-1 align-top">
               {lt(
                 'contest_detail.team_results.labels.' + (slot.sex === 'male' ? 'sex_m' : 'sex_f'),
               )}
             </td>
-            <td className="px-4 py-3 align-top">{formatBodyweight(slot.bodyweight)}</td>
-            <td className="px-4 py-3 align-top">{slot.weightClass}</td>
-            <td className="px-4 py-3 align-top">{slot.age}</td>
-            <td className="px-4 py-3 align-top">{slot.ageClass}</td>
-            <td className="px-4 py-3 align-top">{slot.lift}</td>
-            <td className="px-4 py-3 align-top">{formatLift(slot.best)}</td>
-            <td className="px-4 py-3 align-top">{formatCoefficient(slot.reshel)}</td>
-            <td className="px-4 py-3 align-top">{formatCoefficient(Option.some(slot.mcc))}</td>
-            <td className="px-4 py-3 align-top">
+            <td className="px-2 py-1 align-top">{formatBodyweight(slot.bodyweight)}</td>
+            <td className="px-2 py-1 align-top">{slot.weightClass}</td>
+            <td className="px-2 py-1 align-top">{slot.age}</td>
+            <td className="px-2 py-1 align-top">{slot.ageClass}</td>
+            <td className="px-2 py-1 align-top">{slot.lift}</td>
+            <td className="px-2 py-1 align-top">{formatLift(slot.best)}</td>
+            <td className="px-2 py-1 align-top">{formatCoefficient(slot.reshel)}</td>
+            <td className="px-2 py-1 align-top">{formatCoefficient(Option.some(slot.mcc))}</td>
+            <td className="px-2 py-1 align-top">
               <span className="font-semibold text-text-primary">{formatPoints(slot.points)}</span>
             </td>
           </tr>

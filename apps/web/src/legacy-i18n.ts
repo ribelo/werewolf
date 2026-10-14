@@ -11,7 +11,7 @@ import { useMessages } from './i18n.ts'
 const extra = {
   pl: {
     v2: {
-      export: { xlsx: 'Eksport Excel (XLSX)', print: 'Drukuj tabelę' },
+      export: { xlsx: 'Eksport Excel (XLSX)', print: 'Drukuj' },
       columns: { team: 'Klub' },
       registrations: { import: 'Import i drużyny' },
       dns: { mark: 'Nie wystartował (DNS)', unmark: 'Cofnij DNS', short: 'DNS' },
@@ -19,6 +19,8 @@ const extra = {
         title: 'Zegar podejścia',
         start: 'Start zegara',
         stop: 'Stop zegara',
+        reset: 'Zeruj zegar',
+        short: 'Zegar',
         seconds: 'Czas na podejście (s)',
         idle: 'Zegar zatrzymany',
       },
@@ -26,7 +28,22 @@ const extra = {
         backups_title: 'Kopie zapasowe',
         backups_description: 'Pobierz lub przywróć kopię zawodów.',
         videos_title: 'Filmy na telebim',
-        videos_description: 'Filmy odtwarzane na ekranie scenicznym po werdykcie.',
+        videos_description:
+          'Klipy po zaliczonej i spalonej próbie na telebimie i ekranie scenicznym.',
+      },
+      hub: { screens: 'Ekrany', setup: 'Przygotowanie' },
+      screen: { next: 'Następni', good: 'Zaliczona', bad: 'Niezaliczona', lifter: 'Zawodnik' },
+      status: {
+        Setup: 'Przygotowanie',
+        InProgress: 'W trakcie',
+        Completed: 'Zakończone',
+        judged: 'Ocenione próby',
+      },
+      links: {
+        telebim: {
+          title: 'Telebim',
+          description: 'Duży ekran na sali: zawodnik, ciężar, zegar i filmy po werdykcie.',
+        },
       },
       team: { eligible: 'Kategorie wiekowe liczone do drużynówki', count: 'Liczba zawodników' },
       videos: {
@@ -50,7 +67,7 @@ const extra = {
   },
   en: {
     v2: {
-      export: { xlsx: 'Export Excel (XLSX)', print: 'Print table' },
+      export: { xlsx: 'Export Excel (XLSX)', print: 'Print' },
       columns: { team: 'Club' },
       registrations: { import: 'Import and teams' },
       dns: { mark: 'Did not start (DNS)', unmark: 'Undo DNS', short: 'DNS' },
@@ -58,6 +75,8 @@ const extra = {
         title: 'Attempt clock',
         start: 'Start clock',
         stop: 'Stop clock',
+        reset: 'Reset clock',
+        short: 'Clock',
         seconds: 'Attempt time (s)',
         idle: 'Clock stopped',
       },
@@ -65,7 +84,22 @@ const extra = {
         backups_title: 'Backups',
         backups_description: 'Download or restore a contest backup.',
         videos_title: 'Big screen videos',
-        videos_description: 'Videos played on the stage screen after a verdict.',
+        videos_description:
+          'Clips after good and failed lifts on the big screen and the stage screen.',
+      },
+      hub: { screens: 'Screens', setup: 'Setup' },
+      screen: { next: 'Up next', good: 'Good lift', bad: 'No lift', lifter: 'Lifter' },
+      status: {
+        Setup: 'Setup',
+        InProgress: 'In progress',
+        Completed: 'Completed',
+        judged: 'Judged attempts',
+      },
+      links: {
+        telebim: {
+          title: 'Big screen',
+          description: 'The hall screen: lifter, weight, clock and videos after a verdict.',
+        },
       },
       team: { eligible: 'Age classes counted in team results', count: 'Lifters' },
       videos: {

@@ -341,15 +341,16 @@ export class ContestDO extends DurableObject<ContestEnv> {
           return Response.json({ name }, { status: 201, headers: { 'Cache-Control': 'no-store' } })
         }
         if (url.pathname.endsWith('/links') && request.method === 'GET') {
-          const link = (role: keyof typeof contest.stored.tokens) =>
+          const link = (role: keyof typeof contest.stored.tokens, path: string = role) =>
             url.origin +
             '/view/' +
             contest.stored.definition.id +
             '/' +
-            role +
+            path +
             '?token=' +
             encodeURIComponent(contest.stored.tokens[role])
           const links: ReadLinks = {
+            telebim: link('stage', 'telebim'),
             stage: link('stage'),
             announcer: link('announcer'),
             scoreboard: link('scoreboard'),

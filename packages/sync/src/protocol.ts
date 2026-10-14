@@ -42,7 +42,9 @@ export const StoredBackup = Schema.Struct({
 })
 export type StoredBackup = typeof StoredBackup.Type
 export const StoredBackups = Schema.Struct({ backups: Schema.Array(StoredBackup) })
+/** Read-only links; the big screen (telebim) shares the stage token, so old contests need no new token. */
 export const ReadLinks = Schema.Struct({
+  telebim: Schema.NonEmptyString,
   stage: Schema.NonEmptyString,
   announcer: Schema.NonEmptyString,
   scoreboard: Schema.NonEmptyString,

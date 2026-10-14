@@ -1,100 +1,30 @@
-import {
-  ageOnDate,
-  currentAttempt,
-  entryAgeClass,
-  entryWeightClass,
-  loadBarbell,
-  type Attempt,
-  type ContestState,
-} from '@werewolf/core'
+import type { ContestState } from '@werewolf/core'
 import * as Option from 'effect/Option'
-import { useEffect, useRef, useState } from 'react'
 import { Barbell } from './Barbell.tsx'
-import { clockText, useCountdown } from './clock.ts'
 import { useLegacy } from './legacy-i18n.ts'
 import { QrCode } from './QrCode.tsx'
-import { useVideos, videoUrl, type VideoKind } from './Videos.tsx'
+import {
+  currentView,
+  ScreenClock,
+  statusOf,
+  upNext,
+  useDecipher,
+  useFlip,
+  useTween,
+  useVerdictVideo,
+  VerdictFlash,
+  VerdictVideo,
+  type CurrentView,
+} from './screen-parts.tsx'
 
-const STEP_MS = 30
-const GLYPHS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()'
-const LITERAL = new Set([' ', '•', ':', '.', ','])
+const tileTone = (status: string) =>
+  status === 'successful'
+    ? 'border-green-500 bg-green-900/50 text-green-50'
+    : status === 'failed'
+      ? 'border-red-600 bg-red-950/60 text-red-100'
+      : 'border-border-color bg-card-bg text-text-primary'
 
-/** The 2025 decipher effect: a new text is revealed left to right over scrambled characters. */
-function useDecipher(target: string): string {
-  const [text, setText] = useState(target)
-  const previous = useRef(target)
-  useEffect(() => {
-    if (previous.current === target) return
-    previous.current = target
-    let revealed = 0
-    const timer = window.setInterval(() => {
-      if (revealed >= target.length + 3) {
-        window.clearInterval(timer)
-        setText(target)
-        return
-      }
-      let next = ''
-      for (let index = 0; index < target.length; index++) {
-        const char = target.charAt(index)
-        next +=
-          index < revealed || LITERAL.has(char)
-            ? char
-            : GLYPHS.charAt(Math.floor(Math.random() * GLYPHS.length))
-      }
-      setText(next)
-      revealed++
-    }, STEP_MS)
-    return () => window.clearInterval(timer)
-  }, [target])
-  return text
-}
-
-function background(status: string): string {
-  if (status === 'successful') return 'bg-green-900/40 border border-green-600 text-green-100'
-  if (status === 'failed') return 'bg-red-900/40 border border-red-700 text-red-100'
-  return 'bg-element-bg border border-border-color text-text-secondary'
-}
-function glow(status: string): string {
-  if (status === 'successful')
-    return 'shadow-[0_0_90px_rgba(255,255,255,0.55),0_0_65px_rgba(34,197,94,0.65)] animate-pulse-glow-success'
-  if (status === 'failed')
-    return 'shadow-[0_0_90px_rgba(255,255,255,0.55),0_0_65px_rgba(220,20,60,0.65)] animate-pulse-glow-failed'
-  return 'shadow-[0_0_90px_rgba(255,255,255,0.55)] animate-pulse-glow-pending'
-}
-const statusOf = (attempt: Attempt) =>
-  attempt._tag === 'Judged' ? (attempt.verdict === 'goodLift' ? 'successful' : 'failed') : 'pending'
-
-/** After every new verdict the screen plays a random clip of that kind, then returns to the attempt. */
-function useVerdictVideo(state: ContestState): readonly [Option.Option<string>, () => void] {
-  const [videos] = useVideos()
-  const [playing, setPlaying] = useState<Option.Option<string>>(Option.none())
-  const last = state.attempts.reduce<Option.Option<Attempt & { readonly _tag: 'Judged' }>>(
-    (found, attempt) =>
-      attempt._tag === 'Judged' &&
-      Option.match(found, { onNone: () => true, onSome: (f) => attempt.sequence > f.sequence })
-        ? Option.some(attempt)
-        : found,
-    Option.none(),
-  )
-  const sequence = Option.match(last, { onNone: () => 0, onSome: (a) => a.sequence })
-  const seen = useRef(sequence)
-  useEffect(() => {
-    if (sequence <= seen.current) {
-      seen.current = sequence
-      return
-    }
-    seen.current = sequence
-    Option.map(last, (attempt) => {
-      const kind: VideoKind = attempt.verdict === 'goodLift' ? 'good' : 'bad'
-      const list = videos[kind]
-      const pick = list[Math.floor(Math.random() * list.length)]
-      if (pick) setPlaying(Option.some(videoUrl(kind, pick.name)))
-    })
-  }, [sequence, last, videos])
-  return [playing, () => setPlaying(Option.none())]
-}
-
-/** The 2025 stage screen ("Ekran sceniczny"), with the attempt clock, the WUAP logo and verdict videos. */
+/** The stage screen behind the platform: the lifter for the audience, the plates for the loaders. */
 export function StageScreen({
   state,
   title,
@@ -103,289 +33,225 @@ export function StageScreen({
   readonly title: string
 }) {
   const { lt, locale } = useLegacy()
-  const current = currentAttempt(state)
-  const remaining = useCountdown(state.clock)
-  const [video, stopVideo] = useVerdictVideo(state)
+  const view = currentView(state, locale)
+  const [video, stopVideo, verdict] = useVerdictVideo(state)
   const judgedAny = state.attempts.some((attempt) => attempt._tag === 'Judged')
-  const attempt = Option.getOrUndefined(current)
-  const entry = attempt
-    ? state.entries.find((item) => item.id === attempt.entryId)
-    : state.entries.find(() => false)
-  const lift = attempt
-    ? state.rulebook.lifts.find((item) => item.id === attempt.liftId)
-    : state.rulebook.lifts.find(() => false)
-  const name = useDecipher(entry ? entry.lifter.name.toUpperCase() : '')
-  const liftLabel = useDecipher(lift ? lift.name[locale] : '')
-  const team = entry?.lifter.teamId
-    ? state.teams.find((item) => item.id === entry.lifter.teamId)?.name
-    : ''
-  const ageClass = entry
-    ? Option.match(entryAgeClass(state, entry), {
-        onNone: () => '',
-        onSome: (id) => state.rulebook.ageClasses.find((c) => c.id === id)?.name[locale] ?? '',
-      })
-    : ''
-  const weightClass = entry
-    ? Option.match(entryWeightClass(state, entry), {
-        onNone: () => '—',
-        onSome: (id) => state.rulebook.weightClasses.find((c) => c.id === id)?.name[locale] ?? '—',
-      })
-    : '—'
-  const tiles = attempt
-    ? state.attempts
-        .filter((item) => item.entryId === attempt.entryId && item.liftId === attempt.liftId)
-        .toSorted((a, b) => a.number - b.number)
-    : []
-  const rack = entry?.lifts.find((item) => item.liftId === attempt?.liftId)?.rackHeight
-  const load =
-    attempt && entry
-      ? Option.some(loadBarbell(state.rulebook.barbell, entry.lifter.sex, attempt.weight))
-      : Option.none()
-  const colors = Object.fromEntries(
-    state.rulebook.barbell.plates.flatMap((plate) =>
-      plate.color ? [[plate.weight, plate.color] as const] : [],
-    ),
-  )
-  const barbell = state.rulebook.barbell
-  const clock = (
-    <div
-      className={
-        'font-mono leading-none tracking-[0.1em] ' +
-        Option.match(remaining, {
-          onNone: () => 'text-text-secondary',
-          onSome: (seconds) =>
-            seconds <= 10 ? 'text-primary-red animate-pulse' : 'text-text-primary',
-        })
-      }
-      aria-label={lt('v2.clock.title')}
-      style={{ fontSize: '5rem' }}
-    >
-      {Option.match(remaining, {
-        onNone: () => clockText(state.rulebook.clockSeconds ?? 60),
-        onSome: clockText,
-      })}
-    </div>
-  )
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col">
-      <header className="relative w-full bg-black px-4 sm:px-6 md:px-8 lg:px-10 py-6 sm:py-8 md:py-10 text-center">
-        <img
-          src="/wuap-logo.webp"
-          alt="WUAP"
-          className="absolute left-6 top-1/2 h-24 -translate-y-1/2 rounded-xl bg-white p-2"
-        />
+    <div className="flex h-screen flex-col overflow-hidden bg-black text-white">
+      <header className="flex items-center gap-6 border-b border-primary-red/40 px-8 py-3">
+        <img src="/wuap-logo.webp" alt="WUAP" className="h-14 rounded-lg bg-white p-1" />
         <h1
-          className="font-display text-2xl sm:text-3xl md:text-4xl lg:text-5xl uppercase tracking-[0.1rem] sm:tracking-[0.15rem] md:tracking-[0.2rem] text-white"
-          style={{
-            textShadow: '0 0 16px rgba(220, 20, 60, 0.55), 0 0 32px rgba(220, 20, 60, 0.35)',
-          }}
+          className="min-w-0 flex-1 truncate font-display text-4xl uppercase tracking-[0.12em]"
+          style={{ textShadow: '0 0 18px rgba(220, 20, 60, 0.6)' }}
         >
           {title}
         </h1>
-        <div className="absolute right-8 top-1/2 -translate-y-1/2">{clock}</div>
+        <ScreenClock state={state} className="text-7xl" />
       </header>
-      {!attempt || !entry ? (
-        <main className="flex-1 flex items-center justify-center px-6 py-12">
-          <div className="card max-w-3xl text-center space-y-4">
-            <h2 className="text-display text-text-primary">
+      {Option.match(view, {
+        onNone: () => (
+          <main className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
+            <h2 className="font-display text-7xl uppercase tracking-[0.15em] animate-rise">
               {lt(
                 judgedAny
                   ? 'display_current.waiting.next_title'
                   : 'display_current.waiting.first_title',
               )}
             </h2>
-            <p className="text-body text-text-secondary">
+            <p className="text-xl text-text-secondary">
               {lt(
                 judgedAny
                   ? 'display_current.waiting.next_hint'
                   : 'display_current.waiting.first_hint',
               )}
             </p>
-          </div>
-        </main>
-      ) : (
-        <main className="flex-1 container-full py-6 sm:py-8 md:py-10 lg:py-12 flex">
-          <section className="card flex-1 flex flex-col space-y-10">
-            <header className="space-y-4">
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-wrap items-baseline gap-4 justify-between w-full">
-                  <h2 className="text-display text-text-primary uppercase tracking-[0.3em] font-mono">
-                    {name}
-                  </h2>
-                  <h3 className="text-display text-text-secondary uppercase tracking-[0.3em] font-mono">
-                    {liftLabel}
-                  </h3>
-                </div>
-                <div className="flex flex-wrap items-center gap-4 text-caption uppercase tracking-[0.3em] text-text-secondary">
-                  <span className="font-mono">
-                    {team || lt('display_current.hero.club_placeholder')}
-                  </span>
-                  <span className="font-mono">
-                    • {lt('display_current.meta.age')}:{' '}
-                    <span className="text-text-primary">
-                      {ageOnDate(entry.lifter.birthDate, state.date)}
-                    </span>
-                  </span>
-                  <span className="font-mono">
-                    • {lt('display_current.meta.bodyweight')}:{' '}
-                    <span className="text-text-primary">
-                      {typeof entry.bodyweight === 'number' ? entry.bodyweight + ' kg' : '—'}
-                    </span>
-                  </span>
-                  {ageClass && (
-                    <span className="font-mono">
-                      • {lt('display_current.info.age_category')}:{' '}
-                      <span className="text-text-primary">{ageClass}</span>
-                    </span>
-                  )}
-                  <span className="font-mono">
-                    • {lt('display_current.info.weight_class')}:{' '}
-                    <span className="text-text-primary">{weightClass}</span>
-                  </span>
-                </div>
-              </div>
-            </header>
-            <section className="flex-1 flex flex-col space-y-6">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-stretch flex-1">
-                {tiles.map((tile) => {
-                  const status = statusOf(tile)
-                  const highlighted = tile.number === attempt.number
-                  return (
-                    <div
-                      key={tile.number}
-                      className={
-                        'attempt-tile flex-1 min-w-[120px] sm:min-w-[140px] md:min-w-[160px] px-3 sm:px-4 md:px-6 py-4 sm:py-5 md:py-6 flex flex-col tracking-[0.2em] sm:tracking-[0.3em] uppercase text-center shadow-inner transform ' +
-                        background(status) +
-                        ' ' +
-                        (highlighted ? 'border-2 border-white ' + glow(status) + ' scale-105' : '')
-                      }
-                    >
-                      <p className="text-h3 text-text-secondary">
-                        {lt('display_current.tiles.attempt', { number: tile.number })}
-                      </p>
-                      <div className="flex-1 flex items-center justify-center">
-                        <div className="flex items-baseline justify-center gap-2 md:gap-4">
-                          <span className="text-4xl sm:text-5xl md:text-6xl lg:text-[6rem] leading-none font-mono text-text-primary">
-                            {tile._tag === 'Unannounced' ? '—' : tile.weight}
-                          </span>
-                          {tile._tag !== 'Unannounced' && (
-                            <span className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-mono text-text-secondary uppercase tracking-[0.3em]">
-                              kg
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-              {typeof rack === 'number' && (
-                <div className="inline-flex items-center gap-3 text-label text-text-secondary uppercase tracking-[0.3em]">
-                  <span>{lt('display_current.footer.rack_height')}</span>
-                  <span className="text-h3 font-mono text-text-primary">{rack}</span>
-                </div>
-              )}
-              {Option.match(load, {
-                onNone: () => <></>,
-                onSome: (plan) => (
-                  <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:gap-8">
-                    {plan.platesPerSide.length > 0 && (
-                      <div className="w-full lg:w-auto flex justify-center lg:justify-start">
-                        <Barbell
-                          plates={plan.platesPerSide}
-                          colors={colors}
-                          heightPx={200}
-                          maxWidthPx={40}
-                        />
-                      </div>
-                    )}
-                    <div className="space-y-3 self-center lg:self-center">
-                      {plan.platesPerSide.length > 0 ? (
-                        <div className="flex flex-col gap-4">
-                          <div className="flex flex-wrap items-center gap-8 justify-center lg:justify-start">
-                            {plan.platesPerSide.map((plate) => (
-                              <div
-                                key={plate.weight}
-                                className="flex items-center gap-4 text-text-secondary uppercase tracking-[0.2em]"
-                              >
-                                <span className="text-text-primary font-mono text-4xl">
-                                  {plate.weight} kg
-                                </span>
-                                <span className="text-text-secondary font-mono text-2xl opacity-70">
-                                  {lt('display_current.sidebar.plates_per_side', {
-                                    count: plate.count,
-                                  })}
-                                </span>
-                              </div>
-                            ))}
-                          </div>
-                          <div className="flex flex-wrap items-center justify-center gap-6 text-text-secondary uppercase tracking-[0.2em] text-2xl">
-                            <span className="font-mono">
-                              {lt('display_current.sidebar.bar_weight', {
-                                weight: barbell.bars[entry.lifter.sex],
-                              })}
-                            </span>
-                            {barbell.clampsPerSide > 0 && (
-                              <span className="font-mono">
-                                {lt('display_current.sidebar.collar_weight', {
-                                  total: barbell.clampsPerSide * 2,
-                                  perClamp: barbell.clampsPerSide,
-                                })}
-                              </span>
-                            )}
-                            {plan._tag === 'Unloadable' && (
-                              <span className="text-status-warning">
-                                {lt('display_current.sidebar.target_weight', {
-                                  target: plan.requested,
-                                })}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-body text-text-secondary">
-                          {lt('display_current.sidebar.no_plates')}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ),
-              })}
-              {Option.match(state.scoreboard.qrUrl, {
-                onNone: () => <></>,
-                onSome: (url) => (
-                  <div className="self-end">
-                    <QrCode url={url} />
-                  </div>
-                ),
-              })}
-            </section>
-          </section>
-        </main>
-      )}
-      {Option.match(video, {
+          </main>
+        ),
+        onSome: (current) => <Current state={state} view={current} />,
+      })}
+      {Option.match(verdict, {
         onNone: () => <></>,
-        onSome: (src) => (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
-            <video
-              key={src}
-              src={src}
-              className="h-full w-full object-contain"
-              playsInline
-              onEnded={stopVideo}
-              onError={stopVideo}
-              onCanPlay={(event) => {
-                const player = event.currentTarget
-                // A browser may refuse sound before the first click on the screen; then play muted.
-                player.play().catch(() => {
-                  player.muted = true
-                  player.play().catch(stopVideo)
-                })
-              }}
-            />
-          </div>
+        onSome: (kind) => (
+          <VerdictFlash verdict={kind} good={lt('v2.screen.good')} bad={lt('v2.screen.bad')} />
         ),
       })}
+      {Option.match(video, {
+        onNone: () => <></>,
+        onSome: (src) => <VerdictVideo src={src} onEnd={stopVideo} />,
+      })}
     </div>
+  )
+}
+
+function Current({ state, view }: { readonly state: ContestState; readonly view: CurrentView }) {
+  const { lt } = useLegacy()
+  const name = useDecipher(view.name.toUpperCase())
+  const weight = useTween(view.attempt.weight)
+  const next = upNext(state, 4)
+  const list = useFlip(next.map((item) => item.key).join('|'))
+  const barbell = state.rulebook.barbell
+  const plates = view.load.platesPerSide
+  const meta = [
+    view.team || lt('display_current.hero.club_placeholder'),
+    lt('display_current.meta.age') + ' ' + view.age,
+    view.ageClass,
+    view.weightClass,
+    typeof view.entry.bodyweight === 'number' ? view.entry.bodyweight + ' kg' : '',
+  ].filter((item) => item !== '')
+  return (
+    <main className="grid min-h-0 flex-1 grid-cols-[1.25fr_1fr] gap-10 px-8 py-6">
+      <section key={view.key} className="flex min-h-0 flex-col gap-5">
+        <div className="relative overflow-hidden">
+          <h2
+            className="font-mono font-bold uppercase leading-[1.05] tracking-[0.06em]"
+            style={{ fontSize: 'clamp(2.5rem, 5vw, 6.5rem)' }}
+          >
+            {name}
+          </h2>
+          <span className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-primary-red/30 to-transparent animate-sweep" />
+        </div>
+        <p
+          className="flex flex-wrap gap-x-4 gap-y-1 text-xl uppercase tracking-[0.18em] text-text-secondary animate-rise"
+          style={{ animationDelay: '120ms' }}
+        >
+          {meta.map((item, index) => (
+            <span key={index} className={index === 0 ? 'text-text-primary' : ''}>
+              {index > 0 && <span className="mr-4 text-primary-red">•</span>}
+              {item}
+            </span>
+          ))}
+        </p>
+        <p
+          className="font-display text-5xl uppercase tracking-[0.15em] text-primary-red animate-rise"
+          style={{ animationDelay: '200ms' }}
+        >
+          {view.liftName} — {lt('display_current.tiles.attempt', { number: view.attempt.number })}
+        </p>
+        <div className="grid grid-cols-3 gap-4" style={{ perspective: '800px' }}>
+          {view.tiles.map((tile, index) => {
+            const status = statusOf(tile)
+            const highlighted = tile.number === view.attempt.number
+            return (
+              <div
+                key={tile.number}
+                className={
+                  'attempt-tile flex flex-col items-center gap-1 border-2 px-3 py-4 animate-pop ' +
+                  tileTone(status) +
+                  (highlighted ? ' border-white animate-pulse-glow-pending' : '')
+                }
+                style={{ animationDelay: 260 + index * 90 + 'ms' }}
+              >
+                <span className="text-sm uppercase tracking-[0.3em] text-text-secondary">
+                  {lt('display_current.tiles.attempt', { number: tile.number })}
+                </span>
+                <span className="font-mono text-6xl font-bold leading-none">
+                  {tile._tag === 'Unannounced' ? '—' : tile.weight}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+        {next.length > 0 && (
+          <div className="mt-auto space-y-2">
+            <h3 className="text-sm uppercase tracking-[0.4em] text-text-secondary">
+              {lt('v2.screen.next')}
+            </h3>
+            <div ref={list} className="space-y-1.5">
+              {next.map((item, index) => (
+                <div
+                  key={item.key}
+                  data-flip={item.key}
+                  className="flex items-center gap-4 border-l-4 border-primary-red/70 bg-card-bg px-4 py-2"
+                >
+                  <span className="w-6 font-mono text-text-secondary">{index + 1}</span>
+                  <span className="flex-1 truncate text-2xl uppercase tracking-[0.08em]">
+                    {item.name}
+                  </span>
+                  <span className="text-sm uppercase tracking-[0.2em] text-text-secondary">
+                    {lt('display_current.tiles.attempt', { number: item.attempt.number })}
+                  </span>
+                  <span className="w-32 text-right font-mono text-3xl font-bold">
+                    {item.attempt.weight}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+      <section className="flex min-h-0 flex-col gap-5">
+        <div className="flex items-baseline justify-end gap-4">
+          <span
+            className="font-mono font-bold leading-none tabular-nums"
+            style={{ fontSize: 'clamp(5rem, 11vw, 12rem)' }}
+          >
+            {Math.round(weight * 100) / 100}
+          </span>
+          <span className="font-display text-5xl text-text-secondary">KG</span>
+        </div>
+        <div className="flex items-center justify-center border border-border-color bg-card-bg px-4 py-6">
+          {plates.length > 0 ? (
+            <Barbell
+              key={view.key + ':' + view.attempt.weight}
+              plates={plates}
+              colors={view.colors}
+              heightPx={260}
+              maxWidthPx={52}
+              animated
+              showBar
+            />
+          ) : (
+            <p className="py-20 text-xl text-text-secondary">
+              {lt('display_current.sidebar.no_plates')}
+            </p>
+          )}
+        </div>
+        <div className="flex flex-wrap justify-center gap-3">
+          {plates.map((plate, index) => (
+            <span
+              key={view.key + plate.weight}
+              className="flex items-baseline gap-2 border border-border-color bg-card-bg px-4 py-2 animate-rise"
+              style={{ animationDelay: 300 + index * 60 + 'ms' }}
+            >
+              <span className="font-mono text-4xl font-bold">{plate.weight}</span>
+              <span className="text-xl text-text-secondary">× {plate.count}</span>
+            </span>
+          ))}
+        </div>
+        <p className="text-center text-xl uppercase tracking-[0.2em] text-text-secondary">
+          {lt('display_current.sidebar.bar_weight', {
+            weight: barbell.bars[view.entry.lifter.sex],
+          })}
+          {barbell.clampsPerSide > 0 &&
+            ' • ' +
+              lt('display_current.sidebar.collar_weight', {
+                total: barbell.clampsPerSide * 2,
+                perClamp: barbell.clampsPerSide,
+              })}
+          {view.load._tag === 'Unloadable' && (
+            <span className="ml-3 text-status-warning">
+              {lt('display_current.sidebar.target_weight', { target: view.load.requested })}
+            </span>
+          )}
+        </p>
+        <div className="mt-auto flex items-end justify-between">
+          {Option.match(view.rack, {
+            onNone: () => <span />,
+            onSome: (rack) => (
+              <div className="flex items-baseline gap-4">
+                <span className="text-xl uppercase tracking-[0.3em] text-text-secondary">
+                  {lt('display_current.footer.rack_height')}
+                </span>
+                <span className="font-mono text-7xl font-bold">{rack}</span>
+              </div>
+            ),
+          })}
+          {Option.match(state.scoreboard.qrUrl, {
+            onNone: () => <></>,
+            onSome: (url) => <QrCode url={url} />,
+          })}
+        </div>
+      </section>
+    </main>
   )
 }

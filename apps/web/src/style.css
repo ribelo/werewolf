@@ -87,7 +87,7 @@
   }
 
   .card {
-    @apply bg-card-bg border-2 border-border-color p-4 shadow-card relative mt-4;
+    @apply bg-card-bg border border-border-color p-3 relative;
   }
   .card::before {
     content: '';
@@ -224,4 +224,90 @@
 }
 .attempt-tile {
   transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Screen entrances: short, so a new lifter is readable within a second. */
+@keyframes screen-rise {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes screen-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.7) rotateX(60deg);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(1.06) rotateX(0deg);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes plate-slide {
+  0% {
+    opacity: 0;
+    transform: translateX(140px) scaleY(0.4);
+  }
+  70% {
+    opacity: 1;
+    transform: translateX(-6px) scaleY(1.04);
+  }
+  100% {
+    transform: none;
+  }
+}
+@keyframes verdict-flash {
+  0% {
+    opacity: 0;
+    transform: scale(1.6);
+  }
+  15% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+.animate-rise {
+  animation: screen-rise 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.animate-pop {
+  animation: screen-pop 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.animate-plate {
+  animation: plate-slide 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.animate-verdict {
+  animation: verdict-flash 2.2s ease-out both;
+}
+.animate-sweep {
+  animation: sweep 0.7s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise,
+  .animate-pop,
+  .animate-plate,
+  .animate-verdict,
+  .animate-sweep {
+    animation: none;
+  }
 }

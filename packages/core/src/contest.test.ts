@@ -326,6 +326,29 @@ describe('portable contest core', () => {
     })
   })
 
+  it('the attempt clock starts, freezes on its second when stopped and resets to idle', () => {
+    const start = command({ id: 'start', _tag: 'StartClock', at: 10_000, seconds: 60 })
+    expect(state([add('a', 1), start]).clock).toEqual({
+      _tag: 'Running',
+      startedAt: 10_000,
+      seconds: 60,
+    })
+    const stopped = state([
+      add('a', 1),
+      start,
+      command({ id: 'stop', _tag: 'StopClock', at: 10_000 + 17_400 }),
+    ])
+    expect(stopped.clock).toEqual({ _tag: 'Stopped', remaining: 43 })
+    expect(
+      state([
+        add('a', 1),
+        start,
+        command({ id: 'stop', _tag: 'StopClock', at: 20_000 }),
+        command({ id: 'reset', _tag: 'ResetClock', at: 30_000 }),
+      ]).clock,
+    ).toEqual({ _tag: 'Idle' })
+  })
+
   it('ww-lcu1 takes a declared weight back, but not a judged one', () => {
     const declared = [
       add('a', 1),

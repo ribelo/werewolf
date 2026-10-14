@@ -52,6 +52,20 @@ const escape = (text: string) =>
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
 
+export type ExportFormat = 'csv' | 'pdf' | 'jpg' | 'xlsx'
+
+/** Semicolon CSV with a BOM, the form Polish Excel opens without an import dialog. */
+export function tablesToCsv(model: TableModel): Blob {
+  const csv = [model.columns, ...model.rows]
+    .map((row) =>
+      row
+        .map((cell) => (/[";\n]/.test(cell) ? '"' + cell.replaceAll('"', '""') + '"' : cell))
+        .join(';'),
+    )
+    .join('\n')
+  return new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
+}
+
 /** Print the tables as they are filtered now, without a PDF step. */
 export function printTables(title: string, subtitle: string, models: ReadonlyArray<TableModel>) {
   const frame = document.createElement('iframe')
@@ -61,14 +75,18 @@ export function printTables(title: string, subtitle: string, models: ReadonlyArr
   frame.style.border = '0'
   document.body.appendChild(frame)
   const html =
-    '<!doctype html><html><head><meta charset="utf-8"><title>' +
-    escape(title) +
-    '</title><style>' +
-    'body{font-family:Inter,Arial,sans-serif;color:#000;margin:12mm}' +
-    'h1{font-size:18pt;margin:0 0 2mm}h2{font-size:13pt;margin:6mm 0 2mm}p{margin:0 0 4mm;color:#444}' +
-    'table{border-collapse:collapse;width:100%;font-size:9pt;page-break-inside:auto}' +
-    'th,td{border:1px solid #888;padding:2px 4px;text-align:left}th{background:#eee}' +
-    'tr{page-break-inside:avoid}@page{size:landscape;margin:10mm}' +
+    '<!doctype html><html><head><meta charset="utf-8"><title> </title><style>' +
+    // A zero page margin leaves the browser no room for its own header and footer (date, title,
+    // address); the body padding is the real margin and is repeated on every printed page.
+    '@page{size:A4 landscape;margin:0}' +
+    'html,body{margin:0}' +
+    'body{font-family:Inter,Arial,sans-serif;color:#000;padding:8mm 10mm;' +
+    'box-decoration-break:clone;-webkit-box-decoration-break:clone}' +
+    'h1{font-size:15pt;margin:0}h2{font-size:12pt;margin:4mm 0 1.5mm}p{margin:0.5mm 0 0;color:#444;font-size:9pt}' +
+    'table{border-collapse:collapse;width:100%;font-size:8.5pt;page-break-inside:auto}' +
+    'thead{display:table-header-group}' +
+    'th,td{border:1px solid #888;padding:1.5px 4px;text-align:left}th{background:#eee}' +
+    'tr{page-break-inside:avoid}h2{page-break-after:avoid}' +
     '</style></head><body><h1>' +
     escape(title) +
     '</h1><p>' +

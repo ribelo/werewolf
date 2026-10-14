@@ -17,6 +17,7 @@ import { Modal } from './Modal.tsx'
 import { PlatesPanel } from './PlatesPanel.tsx'
 import { Registrations } from './Registrations.tsx'
 import { TeamResults } from './TeamResults.tsx'
+import { VideoLibrary } from './Videos.tsx'
 
 type Tab = 'desk' | 'registrations' | 'team_results' | 'plates' | { readonly lift: string }
 const legacyLiftTab: Readonly<Record<string, string>> = {
@@ -25,7 +26,7 @@ const legacyLiftTab: Readonly<Record<string, string>> = {
   deadlift: 'contest_detail.tabs.deadlift_table',
 }
 const tabClass = (active: boolean) =>
-  'px-4 py-2 font-display text-xs uppercase tracking-[0.4em] border-2 transition ' +
+  'px-3 py-1.5 font-display text-sm uppercase tracking-[0.2em] border transition ' +
   (active
     ? 'bg-primary-red text-black border-primary-red'
     : 'border-border-color text-text-secondary hover:text-text-primary hover:border-primary-red')
@@ -115,15 +116,10 @@ export function ContestDesk({
   return (
     <section>
       {editor && onLogout && (
-        <AppHeader
-          title={definition.name}
-          subtitle={t('contest_detail.subtitle')}
-          current="contests"
-          onLogout={onLogout}
-        />
+        <AppHeader title={definition.name} current="contests" onLogout={onLogout} />
       )}
-      <div className="container-full py-8">
-        <div className="space-y-8">
+      <div className="px-4 py-3">
+        <div className="space-y-3">
           {live.error && <p role="alert">{t(live.error)}</p>}
           {live.rejection && (
             <p role="alert">
@@ -141,7 +137,7 @@ export function ContestDesk({
             </aside>
           )}
           {error && <p role="alert">{t(error)}</p>}
-          <nav className="flex flex-wrap gap-3 border-b-2 border-border-color pb-3" role="tablist">
+          <nav className="flex flex-wrap gap-2" role="tablist">
             {tabs.map(([key, label]) => (
               <button
                 key={typeof key === 'string' ? key : key.lift}
@@ -221,6 +217,11 @@ export function ContestDesk({
       )}
       {Option.contains(modal, 'categories') && (
         <CategorySettings state={state} submit={live.submit} onClose={closeModal} />
+      )}
+      {Option.contains(modal, 'videos') && (
+        <Modal title={lt('v2.tiles.videos_title')} onClose={closeModal}>
+          <VideoLibrary />
+        </Modal>
       )}
       {Option.contains(modal, 'backups') && (
         <Modal title={lt('v2.tiles.backups_title')} onClose={closeModal}>

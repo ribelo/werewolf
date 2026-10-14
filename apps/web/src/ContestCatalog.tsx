@@ -7,6 +7,7 @@ import { requestJson } from './live-contest.ts'
 import { useMessages, type MessageKey } from './i18n.ts'
 import { AppHeader } from './Layout.tsx'
 
+/** The start screen: the contests, newest first, with create and restore in one toolbar. */
 export function ContestCatalog({ onLogout }: { readonly onLogout: () => void }) {
   const { t, locale } = useMessages()
   const [catalog, setCatalog] = useState<typeof Catalog.Type>({ contests: [] })
@@ -21,102 +22,24 @@ export function ContestCatalog({ onLogout }: { readonly onLogout: () => void }) 
       Effect.runFork(Fiber.interrupt(fiber))
     }
   }, [])
-  const total = catalog.contests.length
+  const contests = catalog.contests.toSorted((a, b) => b.date.localeCompare(a.date))
+  const date = (value: string) =>
+    new Date(value + 'T00:00:00').toLocaleDateString(locale === 'pl' ? 'pl-PL' : 'en-GB')
   return (
     <>
-      <AppHeader
-        title={t('dashboard.title')}
-        subtitle={t('dashboard.subtitle')}
-        current="contests"
-        onLogout={onLogout}
-      />
-      <div className="container-full space-y-12 py-8">
-        <section className="grid gap-6 md:grid-cols-2">
-          <a href="/new" className="card group no-select">
-            <header className="card-header flex items-center justify-between">
-              <h2 className="text-h2 text-text-primary">{t('dashboard.tiles.create.title')}</h2>
-              <span className="btn-primary">{t('dashboard.tiles.create.cta')}</span>
-            </header>
-            <p className="text-body text-text-secondary">
-              {t('dashboard.tiles.create.description')}
-            </p>
+      <AppHeader title={t('dashboard.title')} current="contests" onLogout={onLogout} />
+      <div className="space-y-3 px-4 py-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="mr-auto font-display text-2xl uppercase tracking-[0.2em] text-text-primary">
+            {t('dashboard.active.heading')}
+          </h2>
+          <a href="/new" className="btn-primary px-4 py-2 text-xs">
+            {t('dashboard.tiles.create.title')}
           </a>
-          <a href="/settings" className="card group no-select">
-            <header className="card-header flex items-center justify-between">
-              <h2 className="text-h2 text-text-primary">{t('dashboard.tiles.settings.title')}</h2>
-              <span className="text-h3 text-text-secondary">
-                {t('dashboard.tiles.settings.cta')}
-              </span>
-            </header>
-            <p className="text-body text-text-secondary">
-              {t('dashboard.tiles.settings.description')}
-            </p>
-          </a>
-        </section>
-        <section className="grid gap-4 md:grid-cols-3">
-          <div className="card">
-            <h3 className="text-label text-text-secondary mb-2">
-              {t('dashboard.stats.contests.label')}
-            </h3>
-            <p className="text-h1 text-text-primary">{total}</p>
-            <p className="text-caption text-text-secondary mt-2">
-              {t('dashboard.stats.contests.description')}
-            </p>
-          </div>
-        </section>
-        <section>
-          <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 className="text-h2 text-text-primary uppercase tracking-[0.3em]">
-                {t('dashboard.active.heading')}
-              </h2>
-              <p className="text-body text-text-secondary">{t('dashboard.active.description')}</p>
-            </div>
-            <span className="text-caption text-text-secondary uppercase tracking-[0.4em]">
-              {total} {t('dashboard.active.total_suffix')}
-            </span>
-          </header>
-          {total === 0 ? (
-            <div className="card">
-              <p className="text-body text-text-secondary">{t('dashboard.active.empty')}</p>
-            </div>
-          ) : (
-            <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-              {catalog.contests.map((contest) => (
-                <a
-                  key={contest.id}
-                  href={'/desk/' + contest.id}
-                  className="card relative transition-colors hover:border-primary-red"
-                >
-                  <header className="card-header">
-                    <h3 className="text-h2 text-text-primary">{contest.name}</h3>
-                    <p className="text-caption text-text-secondary">
-                      {(contest.location ?? '').toUpperCase() || '—'} •{' '}
-                      {new Date(contest.date + 'T00:00:00').toLocaleDateString(
-                        locale === 'pl' ? 'pl-PL' : 'en-US',
-                      )}
-                    </p>
-                  </header>
-                  <dl className="space-y-2 text-body text-text-secondary">
-                    <div className="flex justify-between">
-                      <dt className="text-label">{t('dashboard.contest.start')}</dt>
-                      <dd>
-                        {new Date(contest.date + 'T00:00:00').toLocaleDateString(
-                          locale === 'pl' ? 'pl-PL' : 'en-US',
-                        )}
-                      </dd>
-                    </div>
-                  </dl>
-                </a>
-              ))}
-            </div>
-          )}
-        </section>
-        <p className="flex flex-wrap items-center gap-4">
-          <label className="flex items-center gap-2">
-            <span className="input-label mb-0">{t('contests.restore')}</span>
+          <label className="btn-secondary cursor-pointer px-4 py-2 text-xs">
+            {t('contests.restore')}
             <input
-              className="input-field"
+              className="sr-only"
               type="file"
               accept=".json,application/json"
               onChange={(event) => {
@@ -132,8 +55,34 @@ export function ContestCatalog({ onLogout }: { readonly onLogout: () => void }) 
               }}
             />
           </label>
-        </p>
+        </div>
         {error && <p role="alert">{t(error)}</p>}
+        {contests.length === 0 ? (
+          <p className="py-8 text-center text-body text-text-secondary">
+            {t('dashboard.active.empty')}
+          </p>
+        ) : (
+          <ul className="divide-y divide-border-color border border-border-color bg-card-bg">
+            {contests.map((contest) => (
+              <li key={contest.id}>
+                <a
+                  href={'/desk/' + contest.id}
+                  className="flex flex-wrap items-baseline gap-x-6 gap-y-1 px-4 py-3 transition-colors hover:bg-element-bg"
+                >
+                  <span className="mr-auto font-display text-xl uppercase tracking-[0.1em] text-text-primary">
+                    {contest.name}
+                  </span>
+                  <span className="text-caption uppercase tracking-[0.2em] text-text-secondary">
+                    {contest.location || '—'}
+                  </span>
+                  <span className="w-28 text-right font-mono text-sm text-text-primary">
+                    {date(contest.date)}
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </>
   )

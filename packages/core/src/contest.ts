@@ -85,7 +85,10 @@ export const Command = Schema.Union([
     ...commandMetadata,
     seconds: Schema.Int.check(Schema.isGreaterThan(0)),
   }),
+  /** Freezes a running clock on the second it shows. */
   Schema.TaggedStruct('StopClock', commandMetadata),
+  /** Puts the clock back to its full time. */
+  Schema.TaggedStruct('ResetClock', commandMetadata),
   /** Absent team clears the team. */
   Schema.TaggedStruct('SetEntryTeam', {
     ...commandMetadata,
@@ -208,6 +211,22 @@ type OrderOverride = Pick<
   Extract<Command, { readonly _tag: 'MoveAttempt' }>,
   'attempt' | 'position'
 >
+/**
+ * The attempt clock: idle shows the full time, running ends seconds after startedAt,
+ * stopped keeps the seconds that were left until the desk resets it.
+ */
+export type AttemptClock =
+  | { readonly _tag: 'Idle' }
+  | { readonly _tag: 'Running'; readonly startedAt: Timestamp; readonly seconds: number }
+  | { readonly _tag: 'Stopped'; readonly remaining: number }
+const idleClock: AttemptClock = { _tag: 'Idle' }
+/** Whole seconds left on a running clock at the given time, never below zero. */
+export function clockRemaining(
+  clock: Extract<AttemptClock, { readonly _tag: 'Running' }>,
+  now: number,
+): number {
+  return Math.max(0, Math.ceil((clock.startedAt + clock.seconds * 1000 - now) / 1000))
+}
 /** A derived state has no clock, storage handle or network dependency. Replay owns its values. */
 export interface ContestState {
   readonly rulebook: Rulebook
@@ -221,8 +240,7 @@ export interface ContestState {
   readonly didNotStart: ReadonlyArray<{ readonly entryId: EntryId; readonly liftId: LiftId }>
   readonly warnings: ReadonlyArray<EntryWarning>
   readonly scoreboard: ScoreboardView
-  /** A running attempt clock: it ends seconds after startedAt. */
-  readonly clock: Option.Option<{ readonly startedAt: Timestamp; readonly seconds: number }>
+  readonly clock: AttemptClock
 }
 
 /** Parse an external command without exceptions for malformed payloads. */
@@ -553,10 +571,18 @@ function applyMutation(
     case 'StartClock':
       return Result.succeed({
         ...state,
-        clock: Option.some({ startedAt: command.at, seconds: command.seconds }),
+        clock: { _tag: 'Running', startedAt: command.at, seconds: command.seconds },
       })
     case 'StopClock':
-      return Result.succeed({ ...state, clock: Option.none() })
+      return Result.succeed({
+        ...state,
+        clock:
+          state.clock._tag === 'Running'
+            ? { _tag: 'Stopped', remaining: clockRemaining(state.clock, command.at) }
+            : state.clock,
+      })
+    case 'ResetClock':
+      return Result.succeed({ ...state, clock: idleClock })
     case 'SetEntryTeam':
       return editEntry(state, command.entryId, (entry) => {
         const { teamId: _previous, ...lifter } = entry.lifter
@@ -651,7 +677,7 @@ function applyMutation(
       return Result.succeed({
         ...state,
         selected,
-        clock: Option.none(),
+        clock: idleClock,
         attempts: state.attempts.map((item) =>
           sameAttempt(item, command.attempt) ? updated : item,
         ),
@@ -796,7 +822,7 @@ export function replay(
     didNotStart: [],
     warnings: [],
     scoreboard: { filter: {}, qrUrl: Option.none() },
-    clock: Option.none(),
+    clock: idleClock,
   }
   let state = initial
   let active: ReadonlyArray<{ readonly command: Mutation; readonly sequence: number }> = []

@@ -170,7 +170,6 @@ export function ExportMenu({
       </button>
       {open && (
         <div className="absolute right-0 top-full z-40 mt-2 w-56 rounded border border-border-color bg-element-bg shadow-lg">
-          {item('print', lt('v2.export.print'))}
           {item('xlsx', lt('v2.export.xlsx'))}
           {item('csv', lt('contest_detail.export.csv'))}
           {item('pdf', lt('contest_detail.export.pdf'))}
@@ -178,6 +177,27 @@ export function ExportMenu({
         </div>
       )}
     </div>
+  )
+}
+
+/** Prints the table as shown, on its own button next to the export menu. */
+export function PrintButton({
+  disabled,
+  onPrint,
+}: {
+  readonly disabled: boolean
+  readonly onPrint: () => void
+}) {
+  const { lt } = useLegacy()
+  return (
+    <button
+      type="button"
+      className="btn-secondary px-3 py-1 text-xxs"
+      disabled={disabled}
+      onClick={onPrint}
+    >
+      {lt('v2.export.print')}
+    </button>
   )
 }
 
@@ -225,7 +245,7 @@ export function LiftPanel({
   const canonical = (value: object) =>
     JSON.stringify(Object.entries(value).toSorted(([a], [b]) => a.localeCompare(b)))
   const synced = canonical(pushed) === canonical(state.scoreboard.filter)
-  async function exportTable(format: 'csv' | 'pdf' | 'jpg' | 'xlsx' | 'print') {
+  async function exportTable(format: 'csv' | 'pdf' | 'jpg' | 'xlsx' | 'print'): Promise<void> {
     const model = visibleTableModel(state, rows, [liftId], title, lt, locale)
     const subtitle = contestName + ' — ' + state.date
     const name = fileSlug(contestName + '-' + title)
@@ -276,67 +296,71 @@ export function LiftPanel({
     }
   }
   return (
-    <section className="space-y-4">
-      <div className="card space-y-6">
-        <header className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <h3 className="text-h3 text-text-primary">{title}</h3>
-          <div className="flex items-center gap-2 md:gap-3">
-            <button
-              type="button"
-              className={(synced ? 'btn-secondary' : 'btn-primary') + ' px-3 py-1 text-xxs'}
-              disabled={rows.length === 0}
-              onClick={() =>
-                submit({
-                  _tag: 'SetScoreboard',
-                  filter: pushed,
-                  ...Option.match(state.scoreboard.qrUrl, {
-                    onNone: () => ({}),
-                    onSome: (qrUrl) => ({ qrUrl }),
-                  }),
-                })
-              }
-            >
-              {lt('contest_detail.sync.button')}
+    <section className="space-y-2">
+      <header className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="mr-2 font-display text-2xl uppercase tracking-[0.15em] text-text-primary">
+            {title}
+          </h3>
+          <FilterBar options={options} filters={filters} onChange={setFilters} />
+        </div>
+        <div className="flex flex-wrap items-stretch gap-2">
+          <button
+            type="button"
+            className={(synced ? 'btn-secondary' : 'btn-primary') + ' px-3 py-1 text-xxs'}
+            disabled={rows.length === 0}
+            onClick={() =>
+              submit({
+                _tag: 'SetScoreboard',
+                filter: pushed,
+                ...Option.match(state.scoreboard.qrUrl, {
+                  onNone: () => ({}),
+                  onSome: (qrUrl) => ({ qrUrl }),
+                }),
+              })
+            }
+          >
+            {lt('contest_detail.sync.button')}
+          </button>
+          {qr.available && (
+            <button type="button" className="btn-secondary px-3 py-1 text-xxs" onClick={qr.toggle}>
+              {lt(qr.visible ? 'display_table.actions.hide_qr' : 'display_table.actions.show_qr')}
             </button>
-            {qr.available && (
-              <button
-                type="button"
-                className="btn-secondary px-3 py-1 text-xxs"
-                onClick={qr.toggle}
-              >
-                {lt(qr.visible ? 'display_table.actions.hide_qr' : 'display_table.actions.show_qr')}
-              </button>
-            )}
-            <ExportMenu disabled={rows.length === 0} onExport={exportTable} />
-          </div>
-        </header>
-        <ClockControl state={state} submit={submit} />
-        <FilterBar options={options} filters={filters} onChange={setFilters} />
-        {lifters.length === 0 ? (
-          <div className="text-center py-8 text-text-secondary">
-            {lt('contest_detail.registrations.empty')}
-          </div>
-        ) : rows.length === 0 ? (
-          <div className="text-center py-8 text-text-secondary">
-            {lt('contest_detail.registrations.empty_filter')}
-          </div>
-        ) : (
-          <div className="max-h-[70vh] overflow-x-auto overflow-y-auto">
-            <ContestTable
-              state={state}
-              rows={rows}
-              liftIds={[liftId]}
-              sortColumn={sort.column}
-              sortDirection={sort.direction}
-              onSortChange={onSortChange}
-              showRowNumbers
-              current={current}
-              submit={submit}
-              onEditCompetitor={onEditCompetitor}
-            />
-          </div>
-        )}
-      </div>
+          )}
+          <ExportMenu disabled={rows.length === 0} onExport={exportTable} />
+          <PrintButton
+            disabled={rows.length === 0}
+            onPrint={() => {
+              exportTable('print').catch(() => {})
+            }}
+          />
+          <ClockControl state={state} submit={submit} />
+        </div>
+      </header>
+      {lifters.length === 0 ? (
+        <div className="text-center py-8 text-text-secondary">
+          {lt('contest_detail.registrations.empty')}
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="text-center py-8 text-text-secondary">
+          {lt('contest_detail.registrations.empty_filter')}
+        </div>
+      ) : (
+        <div className="max-h-[calc(100vh-9.5rem)] overflow-auto border border-border-color">
+          <ContestTable
+            state={state}
+            rows={rows}
+            liftIds={[liftId]}
+            sortColumn={sort.column}
+            sortDirection={sort.direction}
+            onSortChange={onSortChange}
+            showRowNumbers
+            current={current}
+            submit={submit}
+            onEditCompetitor={onEditCompetitor}
+          />
+        </div>
+      )}
     </section>
   )
 }

@@ -34,7 +34,7 @@ const authAtom = Atom.make<Auth>({ _tag: 'Checking' })
 
 export function App() {
   const { locale, t } = useMessages()
-  const viewPath = new RegExp('^/view/([^/]+)/(stage|announcer|scoreboard|results)$').exec(
+  const viewPath = new RegExp('^/view/([^/]+)/(stage|telebim|announcer|scoreboard|results)$').exec(
     location.pathname,
   )
   const viewerId = Schema.decodeUnknownResult(ContestId)(viewPath?.[1])
@@ -160,6 +160,7 @@ export function App() {
       >
         {Result.isSuccess(viewerId) && token ? (
           viewPath?.[2] === 'stage' ||
+          viewPath?.[2] === 'telebim' ||
           viewPath?.[2] === 'announcer' ||
           viewPath?.[2] === 'scoreboard' ||
           viewPath?.[2] === 'results' ? (
@@ -178,7 +179,7 @@ export function App() {
                 current="contests"
                 onLogout={logout}
               />
-              <div className="container-full py-8">
+              <div className="px-4 py-4">
                 <Wizard />
               </div>
             </>

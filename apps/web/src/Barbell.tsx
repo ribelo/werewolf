@@ -24,11 +24,17 @@ export function Barbell({
   colors = {},
   heightPx = 200,
   maxWidthPx = 40,
+  animated = false,
+  showBar = false,
 }: {
   readonly plates: ReadonlyArray<PlateStack>
   readonly colors?: Readonly<Record<number, string>>
   readonly heightPx?: number
   readonly maxWidthPx?: number
+  /** Plates slide onto the bar one after another when the component mounts. */
+  readonly animated?: boolean
+  /** Draws the bar, the collar and the sleeve end around the plates. */
+  readonly showBar?: boolean
 }) {
   const { t } = useMessages()
   const flat = plates.flatMap((stack) => Array.from({ length: stack.count }, () => stack.weight))
@@ -42,15 +48,22 @@ export function Barbell({
       className="flex items-center justify-center overflow-hidden"
       style={{ height: heightPx }}
     >
+      {showBar && (
+        <>
+          <div className="h-[7%] w-24 shrink-0 bg-gradient-to-b from-zinc-300 to-zinc-500" />
+          <div className="h-[22%] w-3 shrink-0 rounded-sm bg-gradient-to-b from-zinc-200 to-zinc-500" />
+        </>
+      )}
       {flat.map((weight, index) => {
         const ratio = Math.min(1, weight / heaviest)
         return (
           <div
             // The plate list is a plan, not data with identity.
             key={index}
-            className="plate shrink-0 border-white/90"
+            className={'plate shrink-0 border-white/90' + (animated ? ' animate-plate' : '')}
             data-weight={weight}
             style={{
+              ...(animated ? { animationDelay: index * 55 + 'ms' } : {}),
               borderWidth: BORDER_PX,
               backgroundColor: colors[weight] ?? colours[weight] ?? '#374151',
               width: minWidth + ratio * (maxWidthPx - minWidth),
@@ -59,6 +72,9 @@ export function Barbell({
           />
         )
       })}
+      {showBar && (
+        <div className="h-[11%] w-16 shrink-0 rounded-r-sm bg-gradient-to-b from-zinc-300 to-zinc-600" />
+      )}
     </div>
   )
 }

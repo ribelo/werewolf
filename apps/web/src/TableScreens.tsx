@@ -24,7 +24,11 @@ const SPEED_PIXELS_PER_SECOND: Readonly<Record<Speed, number>> = {
 }
 const isSpeed = (value: string): value is Speed => value in SPEED_PIXELS_PER_SECOND
 
-/** The 2025 auto-scroll: down and back up at a steady speed, bouncing at both ends. */
+/**
+ * The 2025 auto-scroll: down and back up at a steady speed, with a short pause at both ends.
+ * The position is kept as a fraction: a screen with a device pixel ratio of 1 rounds scrollTop
+ * to whole pixels, so adding less than a pixel per frame never moved the table there.
+ */
 function useAutoScroll(enabled: boolean, speed: Speed) {
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -32,24 +36,30 @@ function useAutoScroll(enabled: boolean, speed: Speed) {
     let frame = 0
     let last = 0
     let direction = 1
+    let position = -1
+    let pausedUntil = 0
     const step = (time: number) => {
       const element = ref.current
       if (element) {
-        const seconds = last === 0 ? 0 : (time - last) / 1000
+        const seconds = last === 0 ? 0 : Math.min(0.1, (time - last) / 1000)
         last = time
         const max = element.scrollHeight - element.clientHeight
-        if (max > 0) {
-          let next = element.scrollTop + SPEED_PIXELS_PER_SECOND[speed] * seconds * direction
-          if (next < 0) {
-            next = -next
+        // Follow a manual scroll or a table that changed under the screen.
+        if (position < 0 || Math.abs(element.scrollTop - position) > 2) position = element.scrollTop
+        if (max > 0 && time >= pausedUntil) {
+          position += SPEED_PIXELS_PER_SECOND[speed] * seconds * direction
+          if (position <= 0) {
+            position = 0
             direction = 1
-          } else if (next > max) {
-            next = max - (next - max)
+            pausedUntil = time + 2000
+          } else if (position >= max) {
+            position = max
             direction = -1
+            pausedUntil = time + 2000
           }
-          element.scrollTop = next
+          element.scrollTop = position
         }
-      }
+      } else last = 0
       frame = requestAnimationFrame(step)
     }
     frame = requestAnimationFrame(step)
@@ -147,120 +157,107 @@ export function AnnouncerTable({
   const minutes = Math.max(0, Math.floor((now - updated) / 60000))
   return (
     <div className="h-screen overflow-hidden bg-black text-white flex flex-col">
-      <header className="w-full bg-black px-3 sm:px-4 py-3 sm:py-4">
-        <div className="container-full flex items-start justify-between">
-          <div className="flex-1">
-            <img src="/wuap-logo.webp" alt="WUAP" className="h-16 rounded-lg bg-white p-1" />
-          </div>
-          <div className="flex-1 flex flex-col items-center gap-3 sm:gap-4 text-center">
-            <h1
-              className="font-display text-3xl md:text-4xl uppercase tracking-[0.15rem] text-white"
-              style={{
-                textShadow: '0 0 16px rgba(220, 20, 60, 0.5), 0 0 32px rgba(220, 20, 60, 0.3)',
-              }}
+      <header className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-primary-red/40 px-4 py-2">
+        <img src="/wuap-logo.webp" alt="WUAP" className="h-10 rounded bg-white p-0.5" />
+        <h1
+          className="font-display text-3xl uppercase tracking-[0.12em] text-white"
+          style={{ textShadow: '0 0 16px rgba(220, 20, 60, 0.5)' }}
+        >
+          {title}
+        </h1>
+        <div className="flex items-center gap-2 text-xxs uppercase tracking-[0.3em] text-text-secondary">
+          <span
+            className={'h-2.5 w-2.5 rounded-full ' + (connected ? 'bg-green-500' : 'bg-red-600')}
+            role="status"
+            aria-label={lt(
+              connected ? 'display_table.connection.live' : 'display_table.connection.offline',
+            )}
+          />
+          <span>{lt('display_table.metrics.last_update')}</span>
+          <span className="text-text-primary">
+            {lt('display_table.metrics.last_update_relative', { minutes })}
+          </span>
+        </div>
+        <div className="ml-auto flex flex-wrap items-center gap-4">
+          <label className="flex items-center gap-2 text-xxs uppercase tracking-[0.2em] text-text-secondary">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-primary-red"
+              checked={following}
+              onChange={(e) => setAutoSync(String(e.target.checked))}
+            />
+            <span className="text-text-primary">{lt('display_table.actions.auto_sync')}</span>
+          </label>
+          <label className="flex items-center gap-2 text-xxs uppercase tracking-[0.2em] text-text-secondary">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-primary-red"
+              checked={autoScroll === 'true'}
+              onChange={(e) => setAutoScroll(String(e.target.checked))}
+            />
+            <span className="text-text-primary">{lt('display_table.actions.auto_scroll')}</span>
+          </label>
+          {autoScroll === 'true' && (
+            <select
+              className="bg-black border border-white/30 text-text-primary px-2 py-1 text-xxs"
+              aria-label={lt('display_table.actions.speed')}
+              value={speed}
+              onChange={(e) => setSpeed(e.target.value)}
             >
-              {title}
-            </h1>
-            <div className="flex items-center gap-3 text-xxs uppercase tracking-[0.3em] text-text-secondary">
-              <span>{lt('layout.api_label')}</span>
-              <span
-                className={
-                  'h-2.5 w-2.5 rounded-full ' + (connected ? 'bg-green-500' : 'bg-red-600')
-                }
-                role="status"
-                aria-label={lt(
-                  connected ? 'display_table.connection.live' : 'display_table.connection.offline',
-                )}
-              />
-              <span className="text-text-secondary">{lt('display_table.metrics.last_update')}</span>
-              <span className="text-text-primary">
-                {lt('display_table.metrics.last_update_relative', { minutes })}
-              </span>
-            </div>
-          </div>
-          <div className="flex-1 flex justify-end items-start">
-            {Option.match(state.scoreboard.qrUrl, {
-              onNone: () => <></>,
-              onSome: (url) => <QrCode url={url} />,
-            })}
-          </div>
+              {(['very_slow', 'slow', 'normal', 'fast'] as const).map((value) => (
+                <option key={value} value={value}>
+                  {lt('display_table.actions.speed_' + value)}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       </header>
-      <main className="flex-1 flex flex-col overflow-hidden px-3 pb-3 sm:px-4 sm:pb-4">
-        <section className="card flex-1 min-h-0 flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-center gap-3 md:justify-end">
-            <label className="flex items-center gap-2 text-xxs uppercase tracking-[0.2em] text-text-secondary">
-              <input
-                type="checkbox"
-                className="h-4 w-4 accent-primary-red"
-                checked={following}
-                onChange={(e) => setAutoSync(String(e.target.checked))}
-              />
-              <span className="text-text-primary">{lt('display_table.actions.auto_sync')}</span>
-            </label>
-            <label className="flex items-center gap-2 text-xxs uppercase tracking-[0.2em] text-text-secondary">
-              <input
-                type="checkbox"
-                className="h-4 w-4 accent-primary-red"
-                checked={autoScroll === 'true'}
-                onChange={(e) => setAutoScroll(String(e.target.checked))}
-              />
-              <span className="text-text-primary">{lt('display_table.actions.auto_scroll')}</span>
-            </label>
-            {autoScroll === 'true' && (
-              <label className="flex items-center gap-2 text-xxs uppercase tracking-[0.2em] text-text-secondary">
-                <span>{lt('display_table.actions.speed')}</span>
-                <select
-                  className="bg-black border border-white/30 rounded text-text-primary px-2 py-1 text-xxs"
-                  value={speed}
-                  onChange={(e) => setSpeed(e.target.value)}
-                >
-                  {(['very_slow', 'slow', 'normal', 'fast'] as const).map((value) => (
-                    <option key={value} value={value}>
-                      {lt('display_table.actions.speed_' + value)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
+      {Option.match(state.scoreboard.qrUrl, {
+        onNone: () => <></>,
+        onSome: (url) => (
+          <div className="fixed bottom-3 right-3 z-30">
+            <QrCode url={url} />
           </div>
-          <FilterBar
-            options={filterOptions(state, all, locale, lt)}
-            filters={filters}
-            onChange={setLocalFilters}
-            disabled={following}
-            lift={{
-              options: state.rulebook.lifts.map((lift) => ({
-                id: lift.id as string,
-                label: lift.name[locale],
-              })),
-              selected: liftId,
-              onSelect: setLocalLift,
-            }}
-          />
-          {rows.length === 0 ? (
-            <div className="flex-1 min-h-0 flex items-center justify-center text-text-secondary text-caption">
-              {lt('contest_detail.registrations.empty_filter')}
-            </div>
-          ) : (
-            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-auto pr-1" ref={scroller}>
-              <ContestTable
-                state={state}
-                rows={rows}
-                liftIds={lifts.map((lift) => lift.id)}
-                readOnly
-                showRowNumbers
-                showLabelsColumn={false}
-                showRackColumn={false}
-                sortColumn={sort.column}
-                sortDirection={sort.direction}
-                onSortChange={onSortChange}
-                current={Option.map(currentAttempt(state), (attempt) => attempt)}
-                submit={() => {}}
-              />
-            </div>
-          )}
-        </section>
+        ),
+      })}
+      <main className="flex-1 flex flex-col gap-2 overflow-hidden px-4 py-2">
+        <FilterBar
+          options={filterOptions(state, all, locale, lt)}
+          filters={filters}
+          onChange={setLocalFilters}
+          disabled={following}
+          lift={{
+            options: state.rulebook.lifts.map((lift) => ({
+              id: lift.id as string,
+              label: lift.name[locale],
+            })),
+            selected: liftId,
+            onSelect: setLocalLift,
+          }}
+        />
+        {rows.length === 0 ? (
+          <div className="flex-1 min-h-0 flex items-center justify-center text-text-secondary text-caption">
+            {lt('contest_detail.registrations.empty_filter')}
+          </div>
+        ) : (
+          <div className="flex-1 min-h-0 overflow-auto border border-border-color" ref={scroller}>
+            <ContestTable
+              state={state}
+              rows={rows}
+              liftIds={lifts.map((lift) => lift.id)}
+              readOnly
+              showRowNumbers
+              showLabelsColumn={false}
+              showRackColumn={false}
+              sortColumn={sort.column}
+              sortDirection={sort.direction}
+              onSortChange={onSortChange}
+              current={Option.map(currentAttempt(state), (attempt) => attempt)}
+              submit={() => {}}
+            />
+          </div>
+        )}
       </main>
     </div>
   )
@@ -297,53 +294,40 @@ export function PublicTable({
   const scroller = useAutoScroll(autoScroll === 'true', 'slow')
   return (
     <div className="h-screen overflow-hidden bg-main-bg text-text-primary flex flex-col">
-      <header className="w-full px-3 sm:px-4 py-4 bg-main-bg border-b border-border-color">
-        <div className="relative flex flex-col items-center gap-2 text-center">
-          <img
-            src="/wuap-logo.webp"
-            alt="WUAP"
-            className="absolute left-0 top-0 h-14 rounded-lg bg-white p-1"
+      <header className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-border-color px-4 py-2">
+        <img src="/wuap-logo.webp" alt="WUAP" className="h-10 rounded bg-white p-0.5" />
+        <h1 className="font-display text-3xl uppercase tracking-[0.12em] text-text-primary">
+          {title}
+        </h1>
+        <p className="text-caption uppercase tracking-[0.3em] text-text-secondary">
+          {lt('contest_detail.registrations.total', { count: state.entries.length })}
+        </p>
+        <label className="ml-auto flex items-center gap-2 text-xxs uppercase tracking-[0.2em] text-text-secondary">
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-primary-red"
+            checked={autoScroll === 'true'}
+            onChange={(e) => setAutoScroll(String(e.target.checked))}
           />
-          <h1 className="font-display text-xl sm:text-2xl md:text-3xl uppercase tracking-[0.12rem] text-text-primary">
-            {title}
-          </h1>
-          <p className="text-caption text-text-secondary uppercase tracking-[0.3em]">
-            {lt('contest_detail.registrations.total', { count: state.entries.length })}
-          </p>
-        </div>
+          <span className="text-text-primary">{lt('display_table.actions.auto_scroll')}</span>
+        </label>
       </header>
-      <main className="flex-1 min-h-0 container-full py-4 flex flex-col gap-4">
-        <section className="card space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-label uppercase tracking-[0.3em] text-text-secondary">
-              {lt('contest_detail.registrations.filters.heading')}
-            </h2>
-            <label className="flex items-center gap-2 text-xxs uppercase tracking-[0.2em] text-text-secondary">
-              <input
-                type="checkbox"
-                className="h-4 w-4 accent-primary-red"
-                checked={autoScroll === 'true'}
-                onChange={(e) => setAutoScroll(String(e.target.checked))}
-              />
-              <span className="text-text-primary">{lt('display_table.actions.auto_scroll')}</span>
-            </label>
-          </div>
-          <FilterBar
-            options={filterOptions(state, all, locale, lt)}
-            filters={filters}
-            onChange={setFilters}
-            showLabels={false}
-            lift={{
-              options: state.rulebook.lifts.map((lift) => ({
-                id: lift.id as string,
-                label: lift.name[locale],
-              })),
-              selected: liftId,
-              onSelect: setLiftId,
-            }}
-          />
-        </section>
-        <section className="card flex-1 min-h-0 flex flex-col">
+      <main className="flex-1 min-h-0 flex flex-col gap-2 px-4 py-2">
+        <FilterBar
+          options={filterOptions(state, all, locale, lt)}
+          filters={filters}
+          onChange={setFilters}
+          showLabels={false}
+          lift={{
+            options: state.rulebook.lifts.map((lift) => ({
+              id: lift.id as string,
+              label: lift.name[locale],
+            })),
+            selected: liftId,
+            onSelect: setLiftId,
+          }}
+        />
+        <section className="flex-1 min-h-0 flex flex-col border border-border-color">
           {rows.length === 0 ? (
             <p className="text-caption text-text-secondary text-center py-6">
               {lt('contest_detail.registrations.empty')}

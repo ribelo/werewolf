@@ -18,6 +18,7 @@ import * as Queue from 'effect/Queue'
 import * as Result from 'effect/Result'
 import * as Schema from 'effect/Schema'
 import { useEffect, useRef, useState } from 'react'
+import { serverNow, syncServerClock } from './clock.ts'
 import { createMesh, type PeerMesh } from './peer-mesh.ts'
 import { deviceId, readReplica, saveReplica } from './replica-store.ts'
 import type { MessageKey } from './i18n.ts'
@@ -253,11 +254,12 @@ export function useLiveContest(id: ContestId, access: Access) {
         ),
       )
     }
+    syncServerClock()
     dispatch.current = (input) => {
       const parsed = Schema.decodeUnknownResult(Command)({
         ...input,
         id: crypto.randomUUID(),
-        at: Date.now(),
+        at: serverNow(),
       })
       if (Result.isFailure(parsed)) {
         setError('request.invalid')
