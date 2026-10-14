@@ -220,12 +220,16 @@ export type AttemptClock =
   | { readonly _tag: 'Running'; readonly startedAt: Timestamp; readonly seconds: number }
   | { readonly _tag: 'Stopped'; readonly remaining: number }
 const idleClock: AttemptClock = { _tag: 'Idle' }
-/** Whole seconds left on a running clock at the given time, never below zero. */
+/** Whole seconds left on a running clock at the given time, between zero and the full time. */
 export function clockRemaining(
   clock: Extract<AttemptClock, { readonly _tag: 'Running' }>,
   now: number,
 ): number {
-  return Math.max(0, Math.ceil((clock.startedAt + clock.seconds * 1000 - now) / 1000))
+  // A start stamped by a device whose clock runs a little ahead never shows more than the full time.
+  return Math.min(
+    clock.seconds,
+    Math.max(0, Math.ceil((clock.startedAt + clock.seconds * 1000 - now) / 1000)),
+  )
 }
 /** A derived state has no clock, storage handle or network dependency. Replay owns its values. */
 export interface ContestState {

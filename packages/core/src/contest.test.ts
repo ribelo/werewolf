@@ -339,6 +339,10 @@ describe('portable contest core', () => {
       command({ id: 'stop', _tag: 'StopClock', at: 10_000 + 17_400 }),
     ])
     expect(stopped.clock).toEqual({ _tag: 'Stopped', remaining: 43 })
+    // A stop stamped before the start (devices disagree) keeps the full time, not more.
+    expect(
+      state([add('a', 1), start, command({ id: 'early', _tag: 'StopClock', at: 7_000 })]).clock,
+    ).toEqual({ _tag: 'Stopped', remaining: 60 })
     expect(
       state([
         add('a', 1),
