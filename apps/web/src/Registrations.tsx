@@ -8,11 +8,10 @@ import { ImportPanel, TeamsPanel } from './EntriesPanel.tsx'
 import { FilterBar } from './FilterBar.tsx'
 import { useLegacy } from './legacy-i18n.ts'
 import { useTableState } from './LiftPanel.tsx'
-import { PlatesPanel } from './PlatesPanel.tsx'
 
 export const NEW_ENTRY = 'new'
 
-/** The 2025 "Rejestracja" tab: lifters with lift switches, the competitor dialog and the plates editor. */
+/** The "Rejestracja" tab: lifters with lift switches, the competitor dialog, import and teams. */
 export function Registrations({
   state,
   journal,
@@ -42,74 +41,69 @@ export function Registrations({
     order,
   )
   return (
-    <div className="space-y-8">
-      <section className="space-y-4">
-        <div className="card space-y-6">
-          <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h3 className="text-h3 text-text-primary">
-                {lt('contest_detail.registrations.title')}
-              </h3>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                className="btn-primary px-3 py-1"
-                onClick={() => onEdit(Option.some(NEW_ENTRY))}
-              >
-                {lt('contest_detail.registrations.add_competitor')}
-              </button>
-              <button
-                type="button"
-                className="btn-secondary px-3 py-1"
-                onClick={() => setExtras(!extras)}
-              >
-                {lt('v2.registrations.import')}
-              </button>
-            </div>
-          </header>
+    <div className="space-y-2">
+      <header className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="mr-2 font-display text-2xl uppercase tracking-[0.15em] text-text-primary">
+            {lt('contest_detail.registrations.title')}
+          </h3>
           <FilterBar
             options={filterOptions(state, all, locale, lt)}
             filters={filters}
             onChange={setFilters}
           />
-          {state.entries.length === 0 ? (
-            <div className="text-center py-8 text-text-secondary">
-              {lt('contest_detail.registrations.empty')}
-            </div>
-          ) : rows.length === 0 ? (
-            <div className="text-center py-8 text-text-secondary">
-              {lt('contest_detail.registrations.empty_filter')}
-            </div>
-          ) : (
-            <div className="max-h-[70vh] overflow-x-auto overflow-y-auto">
-              <ContestTable
-                state={state}
-                rows={rows}
-                liftIds={state.rulebook.lifts.map((lift) => lift.id)}
-                attemptNumbers={[1]}
-                mode="registration"
-                showRowNumbers
-                showPointsColumn={false}
-                showMaxColumn={false}
-                sortColumn={sort.column}
-                sortDirection={sort.direction}
-                onSortChange={onSortChange}
-                current={Option.none()}
-                submit={submit}
-                onEditCompetitor={(entryId) => onEdit(Option.some(entryId))}
-              />
-            </div>
-          )}
         </div>
-      </section>
+        <div className="flex flex-wrap items-stretch gap-2">
+          <button
+            type="button"
+            className="btn-primary px-3 py-1 text-xxs"
+            onClick={() => onEdit(Option.some(NEW_ENTRY))}
+          >
+            {lt('contest_detail.registrations.add_competitor')}
+          </button>
+          <button
+            type="button"
+            className={(extras ? 'btn-primary' : 'btn-secondary') + ' px-3 py-1 text-xxs'}
+            onClick={() => setExtras(!extras)}
+          >
+            {lt('v2.registrations.import')}
+          </button>
+        </div>
+      </header>
       {extras && (
-        <>
-          <TeamsPanel state={state} submit={submit} />
+        <div className="grid gap-2 xl:grid-cols-2">
           <ImportPanel state={state} journal={journal} submit={submit} />
-        </>
+          <TeamsPanel state={state} submit={submit} />
+        </div>
       )}
-      <PlatesPanel state={state} submit={submit} editor />
+      {state.entries.length === 0 ? (
+        <div className="text-center py-8 text-text-secondary">
+          {lt('contest_detail.registrations.empty')}
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="text-center py-8 text-text-secondary">
+          {lt('contest_detail.registrations.empty_filter')}
+        </div>
+      ) : (
+        <div className="max-h-[calc(100vh-9.5rem)] overflow-auto border border-border-color">
+          <ContestTable
+            state={state}
+            rows={rows}
+            liftIds={state.rulebook.lifts.map((lift) => lift.id)}
+            attemptNumbers={[1]}
+            mode="registration"
+            showRowNumbers
+            showPointsColumn={false}
+            showMaxColumn={false}
+            sortColumn={sort.column}
+            sortDirection={sort.direction}
+            onSortChange={onSortChange}
+            current={Option.none()}
+            submit={submit}
+            onEditCompetitor={(entryId) => onEdit(Option.some(entryId))}
+          />
+        </div>
+      )}
       {Option.match(editing, {
         onNone: () => <></>,
         onSome: (entryId) => (

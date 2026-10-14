@@ -27,8 +27,6 @@ const LIVE_BUTTON_BASE =
 const STATUS_BUTTON_BASE = LIVE_BUTTON_BASE
 const PLACEHOLDER_CLASS =
   'inline-flex h-7 w-[3.75rem] items-center justify-center rounded border border-border-color/40 bg-element-bg/60 text-xs text-text-tertiary'
-const WEIGHT_READONLY_CLASS =
-  'inline-flex h-7 w-[3.75rem] items-center justify-center rounded border border-border-color/60 bg-element-bg px-2 text-xs text-text-secondary'
 const TOGGLE_BUTTON_BASE =
   'inline-flex h-7 w-[3.75rem] items-center justify-center rounded border transition-colors duration-200'
 
@@ -129,76 +127,58 @@ function AttemptCell({
   return (
     <div className="flex flex-col items-center gap-1">
       <div className="flex items-center gap-1">
-        {!readOnly && (
-          <button
-            className={liveClass}
-            type="button"
-            aria-label={lt(
-              live ? 'contest_table.actions.live_now' : 'contest_table.actions.set_live',
-            )}
-            title={lt(live ? 'contest_table.actions.live_now' : 'contest_table.actions.set_live')}
-            aria-pressed={live}
-            disabled={liveDisabled}
-            onClick={() => submit({ _tag: 'SetCurrent', attempt: ref(attempt) })}
-          >
-            <Radio className="h-4 w-4" aria-hidden="true" />
-          </button>
-        )}
-        {readOnly ? (
-          <span
-            className={STATUS_BUTTON_BASE + ' ' + attemptStatusClass(status) + ' opacity-70'}
-            aria-label={statusLabel}
-          >
-            <Icon className="h-4 w-4" aria-hidden="true" />
-          </span>
-        ) : (
-          <button
-            className={
-              STATUS_BUTTON_BASE + ' ' + attemptStatusClass(status) + ' hover:brightness-110'
-            }
-            type="button"
-            aria-label={statusLabel}
-            title={statusLabel}
-            disabled={!declared}
-            onClick={() => cycleStatus(attempt, submit)}
-          >
-            <Icon className="h-4 w-4" aria-hidden="true" />
-          </button>
-        )}
+        <button
+          className={liveClass}
+          type="button"
+          aria-label={lt(
+            live ? 'contest_table.actions.live_now' : 'contest_table.actions.set_live',
+          )}
+          title={lt(live ? 'contest_table.actions.live_now' : 'contest_table.actions.set_live')}
+          aria-pressed={live}
+          disabled={liveDisabled}
+          onClick={() => submit({ _tag: 'SetCurrent', attempt: ref(attempt) })}
+        >
+          <Radio className="h-4 w-4" aria-hidden="true" />
+        </button>
+        <button
+          className={
+            STATUS_BUTTON_BASE + ' ' + attemptStatusClass(status) + ' hover:brightness-110'
+          }
+          type="button"
+          aria-label={statusLabel}
+          title={statusLabel}
+          disabled={!declared}
+          onClick={() => cycleStatus(attempt, submit)}
+        >
+          <Icon className="h-4 w-4" aria-hidden="true" />
+        </button>
       </div>
-      {readOnly ? (
-        <span className={WEIGHT_READONLY_CLASS}>
-          {attempt._tag === 'Unannounced' ? '—' : formatWeight(attempt.weight)}
-        </span>
-      ) : (
-        <input
-          key={weight}
-          className="h-7 w-[3.75rem] rounded border border-border-color bg-main-bg px-2 text-center text-xs"
-          type="text"
-          inputMode="decimal"
-          autoComplete="off"
-          defaultValue={weight}
-          placeholder="—"
-          aria-label={lt('contest_table.columns.lifter') + ' ' + attemptLabels[attempt.number - 1]}
-          onBlur={(event) => {
-            const input = event.currentTarget
-            // An emptied field takes the declaration back; a judged attempt keeps its weight.
-            if (input.value.trim() === '') {
-              if (attempt._tag === 'Declared')
-                submit({ _tag: 'ClearWeight', attempt: ref(attempt) })
-              else input.value = weight
-              return
-            }
-            Option.map(parseWeightInput(input.value), (parsed) => {
-              if (parsed.toFixed(2) !== weight)
-                submit({ _tag: 'SetWeight', attempt: ref(attempt), weight: parsed })
-            })
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') event.currentTarget.blur()
-          }}
-        />
-      )}
+      <input
+        key={weight}
+        className="h-7 w-[3.75rem] rounded border border-border-color bg-main-bg px-2 text-center text-xs"
+        type="text"
+        inputMode="decimal"
+        autoComplete="off"
+        defaultValue={weight}
+        placeholder="—"
+        aria-label={lt('contest_table.columns.lifter') + ' ' + attemptLabels[attempt.number - 1]}
+        onBlur={(event) => {
+          const input = event.currentTarget
+          // An emptied field takes the declaration back; a judged attempt keeps its weight.
+          if (input.value.trim() === '') {
+            if (attempt._tag === 'Declared') submit({ _tag: 'ClearWeight', attempt: ref(attempt) })
+            else input.value = weight
+            return
+          }
+          Option.map(parseWeightInput(input.value), (parsed) => {
+            if (parsed.toFixed(2) !== weight)
+              submit({ _tag: 'SetWeight', attempt: ref(attempt), weight: parsed })
+          })
+        }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') event.currentTarget.blur()
+        }}
+      />
     </div>
   )
 }
@@ -544,7 +524,7 @@ export function ContestTable({
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      className="btn-secondary px-3 py-1 text-xxs"
+                      className="btn-secondary whitespace-nowrap px-2 py-0.5 text-xxs"
                       onClick={() => onEditCompetitor?.(entry.id)}
                     >
                       {lt('contest_table.actions.edit_competitor')}
