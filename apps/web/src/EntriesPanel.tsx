@@ -410,6 +410,7 @@ const importFields: ReadonlyArray<ImportField> = [
   'lifts',
   'divisions',
   'bodyweight',
+  'weightClass',
   'lotNumber',
 ]
 const cellText = (cell: unknown): string =>

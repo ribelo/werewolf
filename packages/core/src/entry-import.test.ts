@@ -19,6 +19,36 @@ const csv =
   'Piotr;Nieznany;X;1980-01-01;Orzeł;70;\r\n'
 
 describe('entry import', () => {
+  it('ww-8pme ww-1mwv: the weight class limit stands in for the bodyweight before the weigh-in', () => {
+    const table = parseDelimited(
+      'NAZWISKO;IMIĘ;Płeć;Data urodzenia;KATEGORIA WAGOWA;Masa ciała\n' +
+        'Kocyła;Andrzej;M;1980-01-01;MĘŻCZYZNA DO 110 KG;\n' +
+        'Chwaliński;Hubert;M;1981-01-01;MĘŻCZYZNA DO 95 KG;93,4\n' +
+        'Ciężki;Adam;M;1982-01-01;MĘŻCZYZNA +120 KG;\n',
+    )
+    const mapping = suggestMapping(table[0] ?? [], { rulebook: client2026Rulebook })
+    expect(mapping.fields).toMatchObject({ lastName: 0, firstName: 1, weightClass: 4 })
+    const plan = planImport(
+      journal.state,
+      journal,
+      table.slice(1),
+      mapping,
+      { divisions: [], lifts: ['bench'] },
+      env,
+    )
+    expect(
+      plan.commands.flatMap((command) =>
+        command._tag === 'AddEntry'
+          ? [[command.entry.lifter.name, command.entry.bodyweight ?? 'none']]
+          : [],
+      ),
+    ).toEqual([
+      ['Kocyła Andrzej', 110],
+      ['Chwaliński Hubert', 93.4],
+      ['Ciężki Adam', 'none'],
+    ])
+  })
+
   it('ww-8pme: a semicolon file with Polish headers is mapped and previewed with per-row errors', () => {
     const table = parseDelimited(csv)
     expect(table[0]).toEqual([

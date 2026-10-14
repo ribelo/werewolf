@@ -54,6 +54,7 @@ export type ImportField =
   | 'lifts'
   | 'divisions'
   | 'bodyweight'
+  | 'weightClass'
   | 'lotNumber'
 /** A column index per field; per-lift opening weights have a column per lift. */
 export interface ImportMapping {
@@ -73,6 +74,10 @@ const synonyms: ReadonlyArray<readonly [ImportField, ReadonlyArray<string>]> = [
   ['lifts', ['konkurencje', 'boje', 'boj', 'lifts', 'events', 'lift']],
   ['divisions', ['dywizje', 'dywizja', 'kategoria', 'divisions', 'division', 'category']],
   ['bodyweight', ['waga', 'masa ciala', 'masa', 'bodyweight', 'weight', 'body weight']],
+  [
+    'weightClass',
+    ['kategoria wagowa', 'klasa wagowa', 'kat. wagowa', 'weight class', 'weight category'],
+  ],
   ['lotNumber', ['numer losowania', 'los', 'nr losowania', 'lot', 'lot number']],
 ]
 const fold = (value: string) =>
@@ -82,6 +87,7 @@ const fold = (value: string) =>
     .replace('ł', 'l')
     .replace('Ł', 'L')
     .toLowerCase()
+    .replace(/\s+/g, ' ')
     .trim()
 
 /** Guess a mapping from header names; the organizer corrects it in the preview. */
@@ -169,6 +175,19 @@ function list(value: string): ReadonlyArray<string> {
     .map((part) => part.trim())
     .filter((part) => part !== '')
 }
+/**
+ * The upper limit of a weight class written as text, such as "MĘŻCZYZNA DO 110 KG" → 110.
+ * Before the weigh-in the limit stands in for the bodyweight. An open class ("+120 kg") has no limit.
+ */
+export function weightClassLimit(value: string): Option.Option<number> {
+  const text = fold(value)
+  if (/\+|powyzej|ponad|over|>/.test(text)) return Option.none()
+  const numbers = text.match(/\d+(?:[.,]\d+)?/g)
+  const last = numbers?.at(-1)
+  if (!last) return Option.none()
+  const limit = Number(last.replace(',', '.'))
+  return limit > 0 ? Option.some(limit) : Option.none()
+}
 const canonicalTeam = (name: string) => name.trim().normalize('NFC').toLowerCase()
 
 /**
@@ -250,8 +269,12 @@ export function planImport(
         else problem('unknownLift', label)
       }
     if (lifts.length === 0) problem('liftMissing')
+    // Without a weighed bodyweight the upper limit of the declared weight class stands in for it.
     const bodyweightText = cell(row, 'bodyweight').replace(',', '.')
-    const bodyweight = bodyweightText === '' ? Number.NaN : Number(bodyweightText)
+    const bodyweight =
+      bodyweightText !== ''
+        ? Number(bodyweightText)
+        : Option.getOrElse(weightClassLimit(cell(row, 'weightClass')), () => Number.NaN)
     if (bodyweightText !== '' && !(bodyweight > 0)) problem('bodyweightInvalid', bodyweightText)
     const lotText = cell(row, 'lotNumber')
     let lot = Number(lotText)
