@@ -6,14 +6,14 @@
 
 **Blocked by:** 20
 
-**Status:** in-progress
+**Status:** done
 
 - [x] The barbell plan uses the fewest plates per side (170 kg was 3×20 + 5×2.5, now 2×25 + 20 + 2.5)
 - [x] An attempt weight can be taken back: an empty field makes a declared attempt unannounced (command ClearWeight)
 - [x] The attempt clock with start and stop is on every lift tab, not only on "Stanowisko"
 - [x] Entry import: a "Kategoria wagowa" column such as "MĘŻCZYZNA DO 110 KG" gives the bodyweight 110 until the weigh-in; an open class ("+120 kg") gives no bodyweight
 - [x] Backups on the server: "Utwórz kopię zapasową" writes a backup to R2 now; the list shows manual and automatic backups, each one can be downloaded or restored
-- [ ] Name order on the stage screen: waiting for the client's decision
+- [x] Name order on the stage screen stays surname first; the swapped names came from the client's spreadsheet, not from the app
 
 ## Verified
 
