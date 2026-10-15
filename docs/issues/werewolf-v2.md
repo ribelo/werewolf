@@ -112,7 +112,7 @@ Rewrite the app from scratch in a new worktree, keeping only the concepts that p
 
 ### Kids and the unknown
 
-63. As an organizer, I want kids age classes (2–8, 9–12, 13–15) and check boxes for the age classes that count in team classifications, so that kids can be kept out of team points without code changes ^ww-e1fo
+63. As an organizer, I want kids age classes (2–8, 9–12; ages 13–16 are T16, changed by the owner on 2026-10-15) and check boxes for the age classes that count in team classifications, so that kids can be kept out of team points without code changes ^ww-e1fo
 64. As an organizer, I want a contest whose only lift is biceps curl, or where some lifters do only curl, so that curl needs no special handling ^ww-03e1
 
 ## Implementation Decisions

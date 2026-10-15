@@ -99,21 +99,12 @@
       "through": 12
     },
     {
-      "id": "k13-15",
-      "name": {
-        "pl": "Dzieci 13–15",
-        "en": "Dzieci 13–15"
-      },
-      "from": 13,
-      "through": 15
-    },
-    {
       "id": "t16",
       "name": {
-        "pl": "T16 (16)",
-        "en": "T16 (16)"
+        "pl": "T16 (13-16)",
+        "en": "T16 (13-16)"
       },
-      "from": 16,
+      "from": 13,
       "through": 16
     },
     {
@@ -449,7 +440,7 @@
         "kind": "any",
         "count": 5
       },
-      "ageClassIds": ["k13-15", "t16", "t19", "junior", "senior", "m40", "m50", "m60"],
+      "ageClassIds": ["t16", "t19", "junior", "senior", "m40", "m50", "m60"],
       "sex": "male"
     },
     {
@@ -469,7 +460,7 @@
         "kind": "any",
         "count": 5
       },
-      "ageClassIds": ["k13-15", "t16", "t19", "junior", "senior", "m40", "m50", "m60"],
+      "ageClassIds": ["t16", "t19", "junior", "senior", "m40", "m50", "m60"],
       "sex": "female"
     },
     {
@@ -490,7 +481,7 @@
         "male": 4,
         "female": 1
       },
-      "ageClassIds": ["k13-15", "t16", "t19", "junior", "senior", "m40", "m50", "m60"]
+      "ageClassIds": ["t16", "t19", "junior", "senior", "m40", "m50", "m60"]
     },
     {
       "id": "deadlift-mixed",
@@ -510,7 +501,7 @@
         "male": 4,
         "female": 1
       },
-      "ageClassIds": ["k13-15", "t16", "t19", "junior", "senior", "m40", "m50", "m60"]
+      "ageClassIds": ["t16", "t19", "junior", "senior", "m40", "m50", "m60"]
     }
   ],
   "barbell": {

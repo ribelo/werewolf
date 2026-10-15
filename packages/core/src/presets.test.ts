@@ -36,16 +36,16 @@ describe('rulebook presets and JSON', () => {
     expect(Result.isFailure(reference) && reference.failure.detail).not.toContain('\n')
   })
 
-  it('ww-e1fo: kids are the age classes 2–8, 9–12 and 13–15, and teams leave out kids up to 12', () => {
+  it('ww-e1fo: kids are the age classes 2–8 and 9–12, T16 starts at 13, and teams leave out kids up to 12', () => {
     expect(
       client2026Rulebook.ageClasses.slice(0, 3).map((item) => [item.id, item.from, item.through]),
     ).toEqual([
       ['k2-8', 2, 8],
       ['k9-12', 9, 12],
-      ['k13-15', 13, 15],
+      ['t16', 13, 16],
     ])
     for (const team of client2026Rulebook.classifications.filter((c) => c.kind === 'team')) {
-      expect(team.ageClassIds).toContain('k13-15')
+      expect(team.ageClassIds).toContain('t16')
       expect(team.ageClassIds).not.toContain('k2-8')
       expect(team.ageClassIds).not.toContain('k9-12')
     }
