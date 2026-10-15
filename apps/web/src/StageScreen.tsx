@@ -2,7 +2,6 @@ import type { ContestState } from '@werewolf/core'
 import * as Option from 'effect/Option'
 import { Barbell } from './Barbell.tsx'
 import { useLegacy } from './legacy-i18n.ts'
-import { QrCode } from './QrCode.tsx'
 import {
   currentView,
   ScreenClock,
@@ -55,7 +54,7 @@ export function StageScreen({
           >
             {title}
           </h1>
-          <ScreenClock state={state} className="text-7xl" />
+          {Option.isNone(view) && <ScreenClock state={state} className="text-7xl" />}
         </header>
         {Option.match(view, {
           onNone: () => (
@@ -101,10 +100,11 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
     (words.length > 1 ? words.slice(0, -1) : words).join(' ').toUpperCase(),
   )
   const firstName = useDecipher(words.length > 1 ? (words.at(-1) ?? '').toUpperCase() : '')
-  const barbell = state.rulebook.barbell
   const plates = view.load.platesPerSide
+  const running = state.clock._tag !== 'Idle'
   const meta = [
     view.team || lt('display_current.hero.club_placeholder'),
+    ...view.divisions,
     lt('display_current.meta.age') + ' ' + view.age,
     view.ageClass,
     view.weightClass,
@@ -144,11 +144,22 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
             {view.liftName} — {lt('display_current.tiles.attempt', { number: view.attempt.number })}
           </p>
         </div>
-        <div className="flex shrink-0 items-start gap-8">
+        <div className="flex shrink-0 items-stretch gap-6">
+          <div
+            className={
+              'flex flex-col items-center justify-center border px-8 py-3 transition-colors ' +
+              (running ? 'border-primary-red bg-primary-red/10' : 'border-border-color bg-card-bg')
+            }
+          >
+            <span className="text-lg uppercase tracking-[0.3em] text-text-secondary">
+              {lt('v2.clock.short')}
+            </span>
+            <ScreenClock state={state} className={running ? 'text-[150px]' : 'text-[110px]'} />
+          </div>
           {Option.match(view.rack, {
-            onNone: () => <span />,
+            onNone: () => <></>,
             onSome: (rack) => (
-              <div className="flex flex-col items-center gap-1 border border-border-color bg-card-bg px-6 py-3">
+              <div className="flex flex-col items-center justify-center gap-1 border border-border-color bg-card-bg px-6 py-3">
                 <span className="text-lg uppercase tracking-[0.3em] text-text-secondary">
                   {lt('display_current.footer.rack_height')}
                 </span>
@@ -157,10 +168,6 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
                 </span>
               </div>
             ),
-          })}
-          {Option.match(state.scoreboard.qrUrl, {
-            onNone: () => <></>,
-            onSome: (url) => <QrCode url={url} />,
           })}
         </div>
       </section>
@@ -203,54 +210,86 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
           )
         })}
       </section>
-      <section className="flex min-h-0 flex-1 items-center gap-10 border border-border-color bg-card-bg px-10">
+      {view.places.length > 0 && (
+        <section className="flex flex-wrap gap-3 animate-rise">
+          {view.places.map((item) => (
+            <span
+              key={item.label}
+              className="flex items-baseline gap-3 border border-primary-red/60 bg-primary-red/10 px-4 py-1.5"
+            >
+              <span className="text-lg uppercase tracking-[0.25em] text-text-secondary">
+                {lt('v2.screen.place')}
+              </span>
+              <span className="font-mono text-4xl font-bold">{item.place}</span>
+              <span className="text-xl uppercase tracking-[0.15em] text-text-secondary">
+                {item.label}
+              </span>
+            </span>
+          ))}
+        </section>
+      )}
+      <section className="flex min-h-0 flex-1 items-center gap-8 border border-border-color bg-card-bg px-8">
+        <div className="flex flex-col gap-3">
+          <span className="text-lg uppercase tracking-[0.3em] text-text-secondary">
+            {lt('v2.screen.per_side')}
+          </span>
+          <div className="flex flex-wrap gap-3">
+            {plates.length > 0 ? (
+              plates.map((plate, index) => (
+                <span
+                  key={view.key + plate.weight}
+                  className="flex items-baseline gap-2 border-2 bg-black/40 px-5 py-2 animate-rise"
+                  style={{
+                    animationDelay: 300 + index * 60 + 'ms',
+                    borderColor: view.colors[plate.weight] ?? '#404040',
+                  }}
+                >
+                  <span className="font-mono text-6xl font-bold">{plate.weight}</span>
+                  <span className="text-3xl text-text-secondary">× {plate.count}</span>
+                </span>
+              ))
+            ) : (
+              <span className="text-2xl text-text-secondary">
+                {lt('display_current.sidebar.no_plates')}
+              </span>
+            )}
+          </div>
+          {view.load._tag === 'Unloadable' && (
+            <span className="text-xl text-status-warning">
+              {lt('display_current.sidebar.target_weight', { target: view.load.requested })}
+            </span>
+          )}
+        </div>
         <div className="flex flex-1 items-center justify-center">
-          {plates.length > 0 ? (
+          {plates.length > 0 && (
             <Barbell
               key={view.key + ':' + view.attempt.weight}
               plates={plates}
               colors={view.colors}
-              heightPx={250}
-              maxWidthPx={56}
+              heightPx={190}
+              maxWidthPx={44}
               animated
               showBar
             />
-          ) : (
-            <p className="text-2xl text-text-secondary">
-              {lt('display_current.sidebar.no_plates')}
-            </p>
           )}
         </div>
-        <div className="flex w-[640px] shrink-0 flex-col gap-4">
-          <div className="flex flex-wrap gap-3">
-            {plates.map((plate, index) => (
-              <span
-                key={view.key + plate.weight}
-                className="flex items-baseline gap-2 border border-border-color bg-black/40 px-5 py-2 animate-rise"
-                style={{ animationDelay: 300 + index * 60 + 'ms' }}
-              >
-                <span className="font-mono text-5xl font-bold">{plate.weight}</span>
-                <span className="text-2xl text-text-secondary">× {plate.count}</span>
+        {Option.match(view.next, {
+          onNone: () => <></>,
+          onSome: (next) => (
+            <div className="flex w-[430px] shrink-0 flex-col gap-2 border-l border-border-color pl-8">
+              <span className="text-lg uppercase tracking-[0.3em] text-text-secondary">
+                {lt('v2.screen.next_load')}
               </span>
-            ))}
-          </div>
-          <p className="text-xl uppercase tracking-[0.2em] text-text-secondary">
-            {lt('display_current.sidebar.bar_weight', {
-              weight: barbell.bars[view.entry.lifter.sex],
-            })}
-            {barbell.clampsPerSide > 0 &&
-              ' • ' +
-                lt('display_current.sidebar.collar_weight', {
-                  total: barbell.clampsPerSide * 2,
-                  perClamp: barbell.clampsPerSide,
-                })}
-            {view.load._tag === 'Unloadable' && (
-              <span className="ml-3 text-status-warning">
-                {lt('display_current.sidebar.target_weight', { target: view.load.requested })}
+              <span className="truncate text-2xl uppercase tracking-[0.08em]">{next.name}</span>
+              <span className="font-mono text-5xl font-bold">{next.weight.toFixed(2)}</span>
+              <span className="text-xl text-text-secondary">
+                {next.load.platesPerSide
+                  .map((plate) => plate.weight + '×' + plate.count)
+                  .join('  ')}
               </span>
-            )}
-          </p>
-        </div>
+            </div>
+          ),
+        })}
       </section>
     </main>
   )

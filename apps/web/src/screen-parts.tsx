@@ -3,6 +3,8 @@ import {
   currentAttempt,
   entryAgeClass,
   entryWeightClass,
+  individualRankings,
+  liftingOrder,
   loadBarbell,
   type Attempt,
   type BarbellLoad,
@@ -86,6 +88,16 @@ export interface CurrentView {
   readonly age: number
   readonly ageClass: string
   readonly weightClass: string
+  /** Names of the divisions (tags) of the entry, such as MUNDUROWI. */
+  readonly divisions: ReadonlyArray<string>
+  /** Places of the entry in the rankings of this lift alone (not totals), for example "2 • Senior". */
+  readonly places: ReadonlyArray<{ readonly place: number; readonly label: string }>
+  /** The next attempt in order, for the loaders: who, how much and which plates. */
+  readonly next: Option.Option<{
+    readonly name: string
+    readonly weight: number
+    readonly load: BarbellLoad
+  }>
   readonly tiles: ReadonlyArray<Attempt>
   readonly rack: Option.Option<number>
   readonly load: BarbellLoad
@@ -101,6 +113,54 @@ export function currentView(state: ContestState, locale: 'pl' | 'en'): Option.Op
       ? (state.teams.find((item) => item.id === entry.lifter.teamId)?.name ?? '')
       : ''
     const rack = entry.lifts.find((item) => item.liftId === attempt.liftId)?.rackHeight
+    const name = (
+      list: ReadonlyArray<{
+        readonly id: string
+        readonly name: { readonly pl: string; readonly en: string }
+      }>,
+      id: string,
+    ) => list.find((item) => item.id === id)?.name[locale] ?? ''
+    const places = individualRankings(state).flatMap((ranking) => {
+      const classification = state.rulebook.classifications.find(
+        (item) => item.id === ranking.classificationId,
+      )
+      if (
+        !classification ||
+        classification.kind !== 'individual' ||
+        !(classification.liftIds.length === 1 && classification.liftIds[0] === attempt.liftId)
+      )
+        return []
+      return ranking.groups.flatMap((group) =>
+        group.rows
+          .filter((row) => row.entry.id === entry.id)
+          .map((row) => {
+            const bucket =
+              group.bucket._tag === 'Age'
+                ? [name(state.rulebook.ageClasses, group.bucket.ageClassId)]
+                : group.bucket._tag === 'Weight'
+                  ? [name(state.rulebook.weightClasses, group.bucket.weightClassId)]
+                  : group.bucket._tag === 'AgeAndWeight'
+                    ? [
+                        name(state.rulebook.ageClasses, group.bucket.ageClassId),
+                        name(state.rulebook.weightClasses, group.bucket.weightClassId),
+                      ]
+                    : []
+            return {
+              place: row.place,
+              label: [classification.name[locale], ...bucket].filter(Boolean).join(' • '),
+            }
+          }),
+      )
+    })
+    const following = liftingOrder(state).find(
+      (item) =>
+        item.entryId !== attempt.entryId ||
+        item.liftId !== attempt.liftId ||
+        item.number !== attempt.number,
+    )
+    const nextEntry = following
+      ? state.entries.find((item) => item.id === following.entryId)
+      : state.entries.find(() => false)
     return Option.some({
       key: attempt.entryId + ':' + attempt.liftId + ':' + attempt.number,
       attempt,
@@ -117,6 +177,16 @@ export function currentView(state: ContestState, locale: 'pl' | 'en'): Option.Op
         onNone: () => '',
         onSome: (id) => state.rulebook.weightClasses.find((c) => c.id === id)?.name[locale] ?? '',
       }),
+      divisions: entry.divisions.map((id) => name(state.rulebook.divisions, id)).filter(Boolean),
+      places,
+      next:
+        following && nextEntry
+          ? Option.some({
+              name: nextEntry.lifter.name,
+              weight: following.weight,
+              load: loadBarbell(state.rulebook.barbell, nextEntry.lifter.sex, following.weight),
+            })
+          : Option.none(),
       tiles: state.attempts
         .filter((item) => item.entryId === attempt.entryId && item.liftId === attempt.liftId)
         .toSorted((a, b) => a.number - b.number),

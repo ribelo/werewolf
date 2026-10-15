@@ -1,6 +1,7 @@
 import type { ContestState } from '@werewolf/core'
 import * as Option from 'effect/Option'
 import { useLegacy } from './legacy-i18n.ts'
+import { QrCode } from './QrCode.tsx'
 import {
   currentView,
   ScreenClock,
@@ -15,7 +16,7 @@ import {
 
 /**
  * The big screen in the hall (telebim): read from far away, so only the lifter, the weight,
- * the three attempts and the clock, in very large type. Verdict clips play here.
+ * the three attempts, the clock and the current places, in very large type. Verdict clips play here.
  */
 export function TelebimScreen({
   state,
@@ -51,6 +52,14 @@ export function TelebimScreen({
           </main>
         ),
         onSome: (current) => <Current view={current} />,
+      })}
+      {Option.match(state.scoreboard.qrUrl, {
+        onNone: () => <></>,
+        onSome: (url) => (
+          <div className="fixed bottom-[2vh] right-[2vw] z-30">
+            <QrCode url={url} />
+          </div>
+        ),
       })}
       {Option.match(verdict, {
         onNone: () => <></>,
@@ -131,6 +140,26 @@ function Current({ view }: { readonly view: CurrentView }) {
             )
           })}
         </div>
+        {view.places.length > 0 && (
+          <div className="flex flex-wrap gap-[1.5vw] animate-rise">
+            {view.places.map((item) => (
+              <span
+                key={item.label}
+                className="flex items-baseline gap-[1vw] border-2 border-primary-red/70 bg-primary-red/10 px-[1.2vw] py-[0.6vh]"
+              >
+                <span className="font-mono font-bold" style={{ fontSize: '6vh' }}>
+                  {item.place}.
+                </span>
+                <span
+                  className="uppercase tracking-[0.12em] text-text-secondary"
+                  style={{ fontSize: '3vh' }}
+                >
+                  {item.label}
+                </span>
+              </span>
+            ))}
+          </div>
+        )}
       </section>
     </main>
   )

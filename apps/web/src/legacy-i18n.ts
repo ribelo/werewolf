@@ -32,7 +32,15 @@ const extra = {
           'Klipy po zaliczonej i spalonej próbie na telebimie i ekranie scenicznym.',
       },
       hub: { screens: 'Ekrany', setup: 'Przygotowanie' },
-      screen: { next: 'Następni', good: 'Zaliczona', bad: 'Niezaliczona', lifter: 'Zawodnik' },
+      screen: {
+        next: 'Następni',
+        good: 'Zaliczona',
+        bad: 'Niezaliczona',
+        lifter: 'Zawodnik',
+        place: 'Miejsce',
+        per_side: 'Na stronę',
+        next_load: 'Następny na gryf',
+      },
       status: {
         Setup: 'Przygotowanie',
         InProgress: 'W trakcie',
@@ -88,7 +96,15 @@ const extra = {
           'Clips after good and failed lifts on the big screen and the stage screen.',
       },
       hub: { screens: 'Screens', setup: 'Setup' },
-      screen: { next: 'Up next', good: 'Good lift', bad: 'No lift', lifter: 'Lifter' },
+      screen: {
+        next: 'Up next',
+        good: 'Good lift',
+        bad: 'No lift',
+        lifter: 'Lifter',
+        place: 'Place',
+        per_side: 'Per side',
+        next_load: 'Next on the bar',
+      },
       status: {
         Setup: 'Setup',
         InProgress: 'In progress',
