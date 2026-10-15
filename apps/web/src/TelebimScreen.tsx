@@ -8,6 +8,7 @@ import {
   statusOf,
   useDecipher,
   useTween,
+  useSettledVerdicts,
   useVerdictVideo,
   VerdictFlash,
   VerdictVideo,
@@ -19,13 +20,14 @@ import {
  * the three attempts, the clock and the current places, in very large type. Verdict clips play here.
  */
 export function TelebimScreen({
-  state,
+  state: live,
   title,
 }: {
   readonly state: ContestState
   readonly title: string
 }) {
   const { lt, locale } = useLegacy()
+  const state = useSettledVerdicts(live)
   const view = currentView(state, locale)
   const [video, stopVideo, verdict] = useVerdictVideo(state)
   return (

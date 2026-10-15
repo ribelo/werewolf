@@ -8,6 +8,7 @@ import {
   ScreenClock,
   statusOf,
   useDecipher,
+  useSettledVerdicts,
   useVerdictVideo,
   VerdictFlash,
   VerdictVideo,
@@ -34,13 +35,14 @@ const tileTone = (status: string) =>
 
 /** The stage screen behind the platform: the lifter for the audience, the plates for the loaders. */
 export function StageScreen({
-  state,
+  state: live,
   title,
 }: {
   readonly state: ContestState
   readonly title: string
 }) {
   const { lt, locale } = useLegacy()
+  const state = useSettledVerdicts(live)
   const view = currentView(state, locale)
   const [video, stopVideo, verdict] = useVerdictVideo(state)
   const judgedAny = state.attempts.some((attempt) => attempt._tag === 'Judged')

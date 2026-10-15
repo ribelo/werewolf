@@ -12,7 +12,7 @@ import {
   type Entry,
 } from '@werewolf/core'
 import * as Option from 'effect/Option'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { clockText, useClockSeconds } from './clock.ts'
 import { useLegacy } from './legacy-i18n.ts'
 import { useVideos, videoUrl, type VideoKind } from './Videos.tsx'
@@ -206,8 +206,56 @@ export function ScreenClock({
   )
 }
 
-/** The desk cycles the status button good → failed → pending, so a verdict settles before it shows. */
-const VERDICT_SETTLE_MS = 900
+/** The verdicts are already settled by useSettledVerdicts; this only lets the tiles repaint first. */
+const VERDICT_SETTLE_MS = 100
+
+/** How long a verdict must stay the same before the screens show it. */
+const SETTLE_MS = 1200
+const attemptKey = (attempt: Attempt) =>
+  attempt.entryId + ':' + attempt.liftId + ':' + attempt.number
+const verdictOf = (attempt: Attempt) => (attempt._tag === 'Judged' ? attempt.verdict : attempt._tag)
+
+/**
+ * The state as the screens should show it. The desk sets a failed lift by clicking the status
+ * button twice (good, then failed); the screens keep the previous verdict of every attempt until
+ * the clicks have stopped for a moment, so "good" never flashes on the way to "failed".
+ * Weights, the live lifter and the clock pass through at once.
+ */
+export function useSettledVerdicts(state: ContestState): ContestState {
+  const signature = state.attempts
+    .map((attempt) => attemptKey(attempt) + verdictOf(attempt))
+    .join('|')
+  const [settled, setSettled] = useState(
+    () => new Map(state.attempts.map((attempt) => [attemptKey(attempt), attempt] as const)),
+  )
+  const latest = useRef(state.attempts)
+  latest.current = state.attempts
+  useEffect(() => {
+    const timer = window.setTimeout(
+      () =>
+        setSettled(
+          new Map(latest.current.map((attempt) => [attemptKey(attempt), attempt] as const)),
+        ),
+      SETTLE_MS,
+    )
+    return () => window.clearTimeout(timer)
+  }, [signature])
+  return useMemo(
+    () => ({
+      ...state,
+      attempts: state.attempts.map((attempt): Attempt => {
+        const before = settled.get(attemptKey(attempt))
+        if (!before || verdictOf(before) === verdictOf(attempt) || attempt._tag === 'Unannounced')
+          return attempt
+        const ref = { entryId: attempt.entryId, liftId: attempt.liftId, number: attempt.number }
+        return before._tag === 'Judged'
+          ? { ...before, weight: attempt.weight }
+          : { ...ref, _tag: 'Declared', weight: attempt.weight }
+      }),
+    }),
+    [state, settled],
+  )
+}
 
 /**
  * After every new verdict a random clip of that kind plays; none when the library is empty.
