@@ -128,31 +128,11 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
             <span className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-primary-red/30 to-transparent animate-sweep" />
           </div>
         </div>
-        <div className="flex shrink-0 items-stretch gap-6">
-          <div
-            className={
-              'flex flex-col items-center justify-center border px-8 py-3 transition-colors ' +
-              (running ? 'border-primary-red bg-primary-red/10' : 'border-border-color bg-card-bg')
-            }
-          >
-            <span className="text-lg uppercase tracking-[0.3em] text-text-secondary">
-              {lt('v2.clock.short')}
-            </span>
-            <ScreenClock state={state} className={running ? 'text-[150px]' : 'text-[110px]'} />
-          </div>
-          {Option.match(view.rack, {
-            onNone: () => <></>,
-            onSome: (rack) => (
-              <div className="flex flex-col items-center justify-center gap-1 border border-border-color bg-card-bg px-6 py-3">
-                <span className="text-lg uppercase tracking-[0.3em] text-text-secondary">
-                  {lt('display_current.footer.rack_height')}
-                </span>
-                <span className="font-mono font-bold leading-none" style={{ fontSize: 110 }}>
-                  {rack}
-                </span>
-              </div>
-            ),
-          })}
+        <div className="flex shrink-0 flex-col items-end">
+          <span className="text-lg uppercase tracking-[0.3em] text-text-secondary">
+            {lt('v2.clock.short')}
+          </span>
+          <ScreenClock state={state} className={running ? 'text-[170px]' : 'text-[130px]'} />
         </div>
       </section>
       {/* Club, divisions, age and classes get the full width, so they stay on one line. */}
@@ -175,7 +155,7 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
           {view.liftName} — {lt('display_current.tiles.attempt', { number: view.attempt.number })}
         </p>
       </div>
-      <section className="grid grid-cols-3 gap-8" style={{ perspective: '900px' }}>
+      <section className="grid grid-cols-3 gap-8">
         {view.tiles.map((tile, index) => {
           const status = statusOf(tile)
           const highlighted = tile.number === view.attempt.number
@@ -188,7 +168,7 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
             >
               <div
                 className={
-                  'attempt-tile relative flex flex-col items-center gap-4 overflow-hidden border-4 px-4 py-10 ' +
+                  'attempt-tile tile-stable relative flex flex-col items-center gap-4 overflow-hidden border-4 px-4 py-10 ' +
                   tileTone(status) +
                   ' ' +
                   tileGlow(status, highlighted)
@@ -214,24 +194,6 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
           )
         })}
       </section>
-      {view.places.length > 0 && (
-        <section className="flex flex-wrap gap-3 animate-rise">
-          {view.places.map((item) => (
-            <span
-              key={item.label}
-              className="flex items-baseline gap-3 border border-primary-red/60 bg-primary-red/10 px-4 py-1.5"
-            >
-              <span className="text-lg uppercase tracking-[0.25em] text-text-secondary">
-                {lt('v2.screen.place')}
-              </span>
-              <span className="font-mono text-4xl font-bold">{item.place}</span>
-              <span className="text-xl uppercase tracking-[0.15em] text-text-secondary">
-                {item.label}
-              </span>
-            </span>
-          ))}
-        </section>
-      )}
       <section className="flex min-h-0 flex-1 items-center gap-8">
         <div className="flex flex-col gap-3">
           <span className="text-lg uppercase tracking-[0.3em] text-text-secondary">
@@ -269,6 +231,17 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
                   perClamp: state.rulebook.barbell.clampsPerSide,
                 })}
           </span>
+          {Option.match(view.rack, {
+            onNone: () => <></>,
+            onSome: (rack) => (
+              <div className="mt-2 flex items-baseline gap-4">
+                <span className="text-xl uppercase tracking-[0.3em] text-text-secondary">
+                  {lt('display_current.footer.rack_height')}
+                </span>
+                <span className="font-mono text-7xl font-bold leading-none">{rack}</span>
+              </div>
+            ),
+          })}
           {view.load._tag === 'Unloadable' && (
             <span className="text-xl text-status-warning">
               {lt('display_current.sidebar.target_weight', { target: view.load.requested })}
@@ -293,7 +266,7 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
           onNone: () => <></>,
           onSome: (url) => (
             <div className="shrink-0">
-              <QrCode url={url} />
+              <QrCode url={url} className="h-64 w-64" />
             </div>
           ),
         })}

@@ -245,6 +245,13 @@
   pointer-events: none;
 }
 
+/* A tile with endless glow and sheen gets its own composited layer, so the text in it is
+   rasterised once and does not shake under the scaled stage canvas. */
+.tile-stable {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
 /* Screen entrances: short, so a new lifter is readable within a second. */
 @keyframes screen-rise {
   from {
@@ -259,11 +266,11 @@
 @keyframes screen-pop {
   0% {
     opacity: 0;
-    transform: scale(0.7) rotateX(60deg);
+    transform: scale(0.7);
   }
   70% {
     opacity: 1;
-    transform: scale(1.06) rotateX(0deg);
+    transform: scale(1.04);
   }
   100% {
     transform: none;
