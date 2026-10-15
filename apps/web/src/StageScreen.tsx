@@ -2,6 +2,7 @@ import type { ContestState } from '@werewolf/core'
 import * as Option from 'effect/Option'
 import { Barbell } from './Barbell.tsx'
 import { useLegacy } from './legacy-i18n.ts'
+import { QrCode } from './QrCode.tsx'
 import {
   currentView,
   ScreenClock,
@@ -14,14 +15,14 @@ import {
   type CurrentView,
 } from './screen-parts.tsx'
 
-/** Every judged attempt pulses in its colour; the current one pulses white, larger. */
+/** Every judged attempt pulses in its colour; the current one pulses white. No scaling, so the edges line up. */
 const tileGlow = (status: string, highlighted: boolean) =>
   status === 'successful'
     ? 'animate-pulse-glow-success'
     : status === 'failed'
       ? 'animate-pulse-glow-failed'
       : highlighted
-        ? 'scale-105 border-white animate-pulse-glow-pending'
+        ? 'border-white animate-pulse-glow-pending'
         : ''
 
 const tileTone = (status: string) =>
@@ -228,7 +229,7 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
           ))}
         </section>
       )}
-      <section className="flex min-h-0 flex-1 items-center gap-8 border border-border-color bg-card-bg px-8">
+      <section className="flex min-h-0 flex-1 items-center gap-8">
         <div className="flex flex-col gap-3">
           <span className="text-lg uppercase tracking-[0.3em] text-text-secondary">
             {lt('v2.screen.per_side')}
@@ -238,7 +239,7 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
               plates.map((plate, index) => (
                 <span
                   key={view.key + plate.weight}
-                  className="flex items-baseline gap-2 border-2 bg-black/40 px-5 py-2 animate-rise"
+                  className="flex items-baseline gap-2 border-2 bg-card-bg px-5 py-2 animate-rise"
                   style={{
                     animationDelay: 300 + index * 60 + 'ms',
                     borderColor: view.colors[plate.weight] ?? '#404040',
@@ -254,6 +255,17 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
               </span>
             )}
           </div>
+          <span className="text-xl uppercase tracking-[0.2em] text-text-secondary">
+            {lt('display_current.sidebar.bar_weight', {
+              weight: state.rulebook.barbell.bars[view.entry.lifter.sex],
+            })}
+            {state.rulebook.barbell.clampsPerSide > 0 &&
+              ' • ' +
+                lt('display_current.sidebar.collar_weight', {
+                  total: state.rulebook.barbell.clampsPerSide * 2,
+                  perClamp: state.rulebook.barbell.clampsPerSide,
+                })}
+          </span>
           {view.load._tag === 'Unloadable' && (
             <span className="text-xl text-status-warning">
               {lt('display_current.sidebar.target_weight', { target: view.load.requested })}
@@ -266,27 +278,18 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
               key={view.key + ':' + view.attempt.weight}
               plates={plates}
               colors={view.colors}
-              heightPx={190}
-              maxWidthPx={44}
+              heightPx={260}
+              maxWidthPx={52}
               animated
               showBar
             />
           )}
         </div>
-        {Option.match(view.next, {
+        {Option.match(state.scoreboard.qrUrl, {
           onNone: () => <></>,
-          onSome: (next) => (
-            <div className="flex w-[430px] shrink-0 flex-col gap-2 border-l border-border-color pl-8">
-              <span className="text-lg uppercase tracking-[0.3em] text-text-secondary">
-                {lt('v2.screen.next_load')}
-              </span>
-              <span className="truncate text-2xl uppercase tracking-[0.08em]">{next.name}</span>
-              <span className="font-mono text-5xl font-bold">{next.weight.toFixed(2)}</span>
-              <span className="text-xl text-text-secondary">
-                {next.load.platesPerSide
-                  .map((plate) => plate.weight + '×' + plate.count)
-                  .join('  ')}
-              </span>
+          onSome: (url) => (
+            <div className="shrink-0">
+              <QrCode url={url} />
             </div>
           ),
         })}

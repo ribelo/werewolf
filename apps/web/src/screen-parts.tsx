@@ -4,7 +4,6 @@ import {
   entryAgeClass,
   entryWeightClass,
   individualRankings,
-  liftingOrder,
   loadBarbell,
   type Attempt,
   type BarbellLoad,
@@ -92,12 +91,6 @@ export interface CurrentView {
   readonly divisions: ReadonlyArray<string>
   /** Places of the entry in the rankings of this lift alone (not totals), for example "2 • Senior". */
   readonly places: ReadonlyArray<{ readonly place: number; readonly label: string }>
-  /** The next attempt in order, for the loaders: who, how much and which plates. */
-  readonly next: Option.Option<{
-    readonly name: string
-    readonly weight: number
-    readonly load: BarbellLoad
-  }>
   readonly tiles: ReadonlyArray<Attempt>
   readonly rack: Option.Option<number>
   readonly load: BarbellLoad
@@ -152,15 +145,6 @@ export function currentView(state: ContestState, locale: 'pl' | 'en'): Option.Op
           }),
       )
     })
-    const following = liftingOrder(state).find(
-      (item) =>
-        item.entryId !== attempt.entryId ||
-        item.liftId !== attempt.liftId ||
-        item.number !== attempt.number,
-    )
-    const nextEntry = following
-      ? state.entries.find((item) => item.id === following.entryId)
-      : state.entries.find(() => false)
     return Option.some({
       key: attempt.entryId + ':' + attempt.liftId + ':' + attempt.number,
       attempt,
@@ -179,14 +163,6 @@ export function currentView(state: ContestState, locale: 'pl' | 'en'): Option.Op
       }),
       divisions: entry.divisions.map((id) => name(state.rulebook.divisions, id)).filter(Boolean),
       places,
-      next:
-        following && nextEntry
-          ? Option.some({
-              name: nextEntry.lifter.name,
-              weight: following.weight,
-              load: loadBarbell(state.rulebook.barbell, nextEntry.lifter.sex, following.weight),
-            })
-          : Option.none(),
       tiles: state.attempts
         .filter((item) => item.entryId === attempt.entryId && item.liftId === attempt.liftId)
         .toSorted((a, b) => a.number - b.number),
