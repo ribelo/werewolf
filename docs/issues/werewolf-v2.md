@@ -67,7 +67,7 @@ Rewrite the app from scratch in a new worktree, keeping only the concepts that p
 28. As the desk, I want the lifting order computed automatically: lift by lift, round by round, lightest declared weight first, then lot number, so that I always know who is next ^ww-cdxd
 29. As the desk, I want to move a lifter manually in the order, so that real-life exceptions are handled ^ww-tds3
 30. As the desk, I want to set the current attempt with one click from the order, so that every screen shows it ^ww-u0ni
-31. As the desk, I want to record a verdict (good / no lift) in one click and have the next attempt become current, so that the flow during the meet needs minimal clicks ^ww-adgy
+31. As the desk, I want to record a verdict (good / no lift) in one click while the screens keep showing that attempt with its result until I set the next lifter live by hand, so that the hall sees each result (changed by the owner on 2026-10-15; before, the next attempt became current automatically) ^ww-adgy
 32. As the desk, I want to declare or change the next attempt's weight right after a verdict, so that declarations keep pace with the platform ^ww-z7vp
 33. As the desk, I want declared weights checked against the plate inventory and the bar + clamps minimum, with the nearest loadable weight suggested, so that impossible weights are not called ^ww-mq50
 34. As the desk, I want to correct any past attempt (weight or verdict), so that mistakes are fixable and rankings follow ^ww-lcu1

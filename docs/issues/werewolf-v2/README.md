@@ -26,3 +26,4 @@ Spec: [../werewolf-v2.md](../werewolf-v2.md)
 | 20 | [Changes from the client meeting of 2026-10-12](20-client-meeting-2026.md) | 19 | done |
 | 21 | [Client feedback of 2026-10-14](21-client-feedback-2026-10-14.md) | 20 | done |
 | 22 | [Client feedback of 2026-10-14, second round](22-client-feedback-2026-10-14-b.md) | 21 | done |
+| 23 | [Stage screen and live attempt, 2026-10-15](23-stage-screen-2026-10-15.md) | 22 | done |

@@ -5,9 +5,7 @@ import {
   currentView,
   ScreenClock,
   statusOf,
-  upNext,
   useDecipher,
-  useFlip,
   useTween,
   useVerdictVideo,
   VerdictFlash,
@@ -17,7 +15,7 @@ import {
 
 /**
  * The big screen in the hall (telebim): read from far away, so only the lifter, the weight,
- * the three attempts, the clock and who is next, in very large type. Verdict clips play here.
+ * the three attempts and the clock, in very large type. Verdict clips play here.
  */
 export function TelebimScreen({
   state,
@@ -52,7 +50,7 @@ export function TelebimScreen({
             </h2>
           </main>
         ),
-        onSome: (current) => <Current state={state} view={current} />,
+        onSome: (current) => <Current view={current} />,
       })}
       {Option.match(verdict, {
         onNone: () => <></>,
@@ -68,20 +66,24 @@ export function TelebimScreen({
   )
 }
 
-function Current({ state, view }: { readonly state: ContestState; readonly view: CurrentView }) {
+function Current({ view }: { readonly view: CurrentView }) {
   const { lt } = useLegacy()
-  const name = useDecipher(view.name.toUpperCase())
+  // Surname and first name on their own lines, so long names fit.
+  const words = view.name.trim().split(/\s+/)
+  const surname = useDecipher(
+    (words.length > 1 ? words.slice(0, -1) : words).join(' ').toUpperCase(),
+  )
+  const firstName = useDecipher(words.length > 1 ? (words.at(-1) ?? '').toUpperCase() : '')
   const weight = useTween(view.attempt.weight)
-  const next = upNext(state, 3)
-  const list = useFlip(next.map((item) => item.key).join('|'))
   return (
     <main className="flex min-h-0 flex-1 flex-col px-[3vw] pb-[2vh]">
       <section key={view.key} className="flex flex-1 flex-col justify-center gap-[2vh]">
         <h2
-          className="truncate font-display uppercase leading-none tracking-[0.05em]"
-          style={{ fontSize: '15vh' }}
+          className="font-display uppercase leading-[0.95] tracking-[0.05em]"
+          style={{ fontSize: '12vh' }}
         >
-          {name}
+          <span className="block break-words">{surname}</span>
+          {firstName && <span className="block break-words text-text-secondary">{firstName}</span>}
         </h2>
         <div className="flex items-end justify-between gap-8">
           <div className="space-y-[1vh] animate-rise" style={{ animationDelay: '150ms' }}>
@@ -93,14 +95,14 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
             </p>
             <p
               className="font-display uppercase tracking-[0.15em] text-primary-red"
-              style={{ fontSize: '7vh' }}
+              style={{ fontSize: '5.5vh' }}
             >
               {view.liftName} —{' '}
               {lt('display_current.tiles.attempt', { number: view.attempt.number })}
             </p>
           </div>
           <p className="flex items-baseline gap-4 font-mono font-bold leading-none tabular-nums">
-            <span style={{ fontSize: '24vh' }}>{Math.round(weight * 100) / 100}</span>
+            <span style={{ fontSize: '19vh' }}>{weight.toFixed(2)}</span>
             <span className="font-display text-text-secondary" style={{ fontSize: '8vh' }}>
               KG
             </span>
@@ -124,39 +126,12 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
                 }
                 style={{ fontSize: '8vh', animationDelay: 250 + index * 90 + 'ms' }}
               >
-                {tile._tag === 'Unannounced' ? '—' : tile.weight}
+                {tile._tag === 'Unannounced' ? '—' : tile.weight.toFixed(2)}
               </div>
             )
           })}
         </div>
       </section>
-      {next.length > 0 && (
-        <div
-          ref={list}
-          className="relative grid grid-cols-3 gap-[2vw] border-t border-primary-red/50 pt-[2.2vh]"
-        >
-          <span
-            className="absolute left-0 top-[0.4vh] uppercase tracking-[0.4em] text-primary-red"
-            style={{ fontSize: '1.6vh' }}
-          >
-            {lt('v2.screen.next')}
-          </span>
-          {next.map((item) => (
-            <div
-              key={item.key}
-              data-flip={item.key}
-              className="flex items-baseline justify-between gap-4"
-            >
-              <span className="truncate uppercase tracking-[0.06em]" style={{ fontSize: '3.6vh' }}>
-                {item.name}
-              </span>
-              <span className="font-mono font-bold" style={{ fontSize: '4vh' }}>
-                {item.attempt.weight}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
     </main>
   )
 }

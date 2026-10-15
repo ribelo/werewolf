@@ -169,7 +169,21 @@ describe('portable contest core', () => {
       ...selected,
       command({ id: 'judge-b', _tag: 'SetVerdict', attempt: ref('b'), verdict: 'noLift' }),
     ]
-    expect(Option.getOrThrow(currentAttempt(state(judged))).entryId).toBe('a')
+    // The judged attempt stays live until the desk sets the next one by hand.
+    expect(Option.getOrThrow(currentAttempt(state(judged))).entryId).toBe('b')
+    expect(
+      Option.getOrThrow(
+        currentAttempt(
+          state([...judged, command({ id: 'select-a', _tag: 'SetCurrent', attempt: ref('a') })]),
+        ),
+      ).entryId,
+    ).toBe('a')
+    // Without any choice the first in order is live, and its verdict pins it too.
+    const unpicked = state([
+      ...initial,
+      command({ id: 'judge-first', _tag: 'SetVerdict', attempt: ref('b'), verdict: 'goodLift' }),
+    ])
+    expect(Option.getOrThrow(currentAttempt(unpicked)).entryId).toBe('b')
     const corrected = [
       ...judged,
       command({ id: 'correct-b-weight', _tag: 'SetWeight', attempt: ref('b'), weight: 110 }),

@@ -7,15 +7,23 @@ import {
   currentView,
   ScreenClock,
   statusOf,
-  upNext,
   useDecipher,
-  useFlip,
   useTween,
   useVerdictVideo,
   VerdictFlash,
   VerdictVideo,
   type CurrentView,
 } from './screen-parts.tsx'
+
+/** Every judged attempt pulses in its colour; the current one pulses white, larger. */
+const tileGlow = (status: string, highlighted: boolean) =>
+  status === 'successful'
+    ? 'animate-pulse-glow-success'
+    : status === 'failed'
+      ? 'animate-pulse-glow-failed'
+      : highlighted
+        ? 'scale-105 border-white animate-pulse-glow-pending'
+        : ''
 
 const tileTone = (status: string) =>
   status === 'successful'
@@ -85,10 +93,13 @@ export function StageScreen({
 
 function Current({ state, view }: { readonly state: ContestState; readonly view: CurrentView }) {
   const { lt } = useLegacy()
-  const name = useDecipher(view.name.toUpperCase())
+  // Names are stored "Surname First name"; each part gets its own line so long names fit.
+  const words = view.name.trim().split(/\s+/)
+  const surname = useDecipher(
+    (words.length > 1 ? words.slice(0, -1) : words).join(' ').toUpperCase(),
+  )
+  const firstName = useDecipher(words.length > 1 ? (words.at(-1) ?? '').toUpperCase() : '')
   const weight = useTween(view.attempt.weight)
-  const next = upNext(state, 4)
-  const list = useFlip(next.map((item) => item.key).join('|'))
   const barbell = state.rulebook.barbell
   const plates = view.load.platesPerSide
   const meta = [
@@ -103,10 +114,13 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
       <section key={view.key} className="flex min-h-0 flex-col gap-5">
         <div className="relative overflow-hidden">
           <h2
-            className="font-mono font-bold uppercase leading-[1.05] tracking-[0.06em]"
-            style={{ fontSize: 'clamp(2.5rem, 5vw, 6.5rem)' }}
+            className="font-mono font-bold uppercase leading-[1.02] tracking-[0.05em]"
+            style={{ fontSize: 'clamp(2.5rem, 4.6vw, 6rem)' }}
           >
-            {name}
+            <span className="block break-words">{surname}</span>
+            {firstName && (
+              <span className="block break-words text-text-secondary">{firstName}</span>
+            )}
           </h2>
           <span className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-primary-red/30 to-transparent animate-sweep" />
         </div>
@@ -127,65 +141,52 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
         >
           {view.liftName} — {lt('display_current.tiles.attempt', { number: view.attempt.number })}
         </p>
-        <div className="grid grid-cols-3 gap-4" style={{ perspective: '800px' }}>
+        <div className="grid grid-cols-3 gap-5" style={{ perspective: '800px' }}>
           {view.tiles.map((tile, index) => {
             const status = statusOf(tile)
             const highlighted = tile.number === view.attempt.number
             return (
+              // The entrance runs on the wrapper; the endless glow runs on the tile itself.
               <div
                 key={tile.number}
-                className={
-                  'attempt-tile flex flex-col items-center gap-1 border-2 px-3 py-4 animate-pop ' +
-                  tileTone(status) +
-                  (highlighted ? ' border-white animate-pulse-glow-pending' : '')
-                }
+                className="animate-pop"
                 style={{ animationDelay: 260 + index * 90 + 'ms' }}
               >
-                <span className="text-sm uppercase tracking-[0.3em] text-text-secondary">
-                  {lt('display_current.tiles.attempt', { number: tile.number })}
-                </span>
-                <span className="font-mono text-6xl font-bold leading-none">
-                  {tile._tag === 'Unannounced' ? '—' : tile.weight}
-                </span>
+                <div
+                  className={
+                    'attempt-tile relative flex flex-col items-center gap-1 overflow-hidden border-2 px-3 py-4 ' +
+                    tileTone(status) +
+                    ' ' +
+                    tileGlow(status, highlighted)
+                  }
+                >
+                  {highlighted && <span className="tile-sheen" aria-hidden="true" />}
+                  <span className="text-sm uppercase tracking-[0.3em] text-text-secondary">
+                    {lt('display_current.tiles.attempt', { number: tile.number })}
+                  </span>
+                  <span
+                    className="font-mono text-5xl font-bold leading-none tabular-nums"
+                    style={
+                      highlighted || status !== 'pending'
+                        ? { textShadow: '0 0 18px currentColor' }
+                        : {}
+                    }
+                  >
+                    {tile._tag === 'Unannounced' ? '—' : tile.weight.toFixed(2)}
+                  </span>
+                </div>
               </div>
             )
           })}
         </div>
-        {next.length > 0 && (
-          <div className="mt-auto space-y-2">
-            <h3 className="text-sm uppercase tracking-[0.4em] text-text-secondary">
-              {lt('v2.screen.next')}
-            </h3>
-            <div ref={list} className="space-y-1.5">
-              {next.map((item, index) => (
-                <div
-                  key={item.key}
-                  data-flip={item.key}
-                  className="flex items-center gap-4 border-l-4 border-primary-red/70 bg-card-bg px-4 py-2"
-                >
-                  <span className="w-6 font-mono text-text-secondary">{index + 1}</span>
-                  <span className="flex-1 truncate text-2xl uppercase tracking-[0.08em]">
-                    {item.name}
-                  </span>
-                  <span className="text-sm uppercase tracking-[0.2em] text-text-secondary">
-                    {lt('display_current.tiles.attempt', { number: item.attempt.number })}
-                  </span>
-                  <span className="w-32 text-right font-mono text-3xl font-bold">
-                    {item.attempt.weight}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
       </section>
       <section className="flex min-h-0 flex-col gap-5">
         <div className="flex items-baseline justify-end gap-4">
           <span
             className="font-mono font-bold leading-none tabular-nums"
-            style={{ fontSize: 'clamp(5rem, 11vw, 12rem)' }}
+            style={{ fontSize: 'clamp(4.5rem, 9vw, 10.5rem)' }}
           >
-            {Math.round(weight * 100) / 100}
+            {weight.toFixed(2)}
           </span>
           <span className="font-display text-5xl text-text-secondary">KG</span>
         </div>

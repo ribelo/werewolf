@@ -45,7 +45,10 @@ const wrap = (node: ReactNode) => render(<RegistryProvider>{node}</RegistryProvi
 
 it('ww-widg: the stage shows the lifter, the weight and the plates of one side', () => {
   wrap(<StageScreen state={journal(base).state} title="Test" />)
-  expect(screen.getByText('Alpha Anna'.toUpperCase())).toBeDefined()
+  // Surname and first name on their own lines, so long names fit; weights with two decimals.
+  expect(screen.getByText('ALPHA')).toBeDefined()
+  expect(screen.getByText('ANNA')).toBeDefined()
+  expect(screen.getAllByText('100.00').length).toBeGreaterThan(0)
   // 100 kg on a 20 kg bar with two 2.5 kg clamps is 37.5 kg per side.
   const plates = (
     screen.getByRole('img', { name: 'Sztanga z talerzami' }).getAttribute('data-plates') ?? ''

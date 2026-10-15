@@ -3,15 +3,15 @@ import {
   currentAttempt,
   entryAgeClass,
   entryWeightClass,
-  liftingOrder,
   loadBarbell,
   type Attempt,
   type BarbellLoad,
   type ContestState,
+  type LiveAttempt,
   type Entry,
 } from '@werewolf/core'
 import * as Option from 'effect/Option'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { clockText, useClockSeconds } from './clock.ts'
 import { useLegacy } from './legacy-i18n.ts'
 import { useVideos, videoUrl, type VideoKind } from './Videos.tsx'
@@ -72,54 +72,13 @@ export function useTween(target: number, durationMs = 500): number {
   return value
 }
 
-/**
- * FLIP for a keyed list: when the order changes, each item glides from its old place to the new
- * one. Items mark themselves with data-flip set to their key.
- */
-export function useFlip(order: string) {
-  const container = useRef<HTMLDivElement>(null)
-  const last = useRef(new Map<string, DOMRect>())
-  useLayoutEffect(() => {
-    const root = container.current
-    if (!root) return
-    const items = Array.from(root.querySelectorAll<HTMLElement>('[data-flip]'))
-    const next = new Map<string, DOMRect>()
-    for (const item of items) {
-      // Older TV browsers lack the Web Animations API; the list then simply jumps.
-      if (typeof item.animate !== 'function') continue
-      const key = item.dataset['flip'] ?? ''
-      const rect = item.getBoundingClientRect()
-      next.set(key, rect)
-      const before = last.current.get(key)
-      if (before) {
-        const dx = before.left - rect.left
-        const dy = before.top - rect.top
-        if (dx !== 0 || dy !== 0)
-          item.animate(
-            [{ transform: 'translate(' + dx + 'px,' + dy + 'px)' }, { transform: 'none' }],
-            { duration: 450, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' },
-          )
-      } else
-        item.animate(
-          [
-            { opacity: 0, transform: 'translateX(40px)' },
-            { opacity: 1, transform: 'none' },
-          ],
-          { duration: 400, easing: 'ease-out' },
-        )
-    }
-    last.current = next
-  }, [order])
-  return container
-}
-
 export const statusOf = (attempt: Attempt) =>
   attempt._tag === 'Judged' ? (attempt.verdict === 'goodLift' ? 'successful' : 'failed') : 'pending'
 
 /** Everything the stage screen and the big screen show about the current attempt. */
 export interface CurrentView {
   readonly key: string
-  readonly attempt: Attempt & { readonly _tag: 'Declared' }
+  readonly attempt: LiveAttempt
   readonly entry: Entry
   readonly name: string
   readonly team: string
@@ -170,25 +129,6 @@ export function currentView(state: ContestState, locale: 'pl' | 'en'): Option.Op
       ),
     })
   })
-}
-
-/** The next lifters after the current one, in lifting order. */
-export function upNext(state: ContestState, count: number) {
-  const current = Option.getOrUndefined(currentAttempt(state))
-  return liftingOrder(state)
-    .filter(
-      (attempt) =>
-        !current ||
-        attempt.entryId !== current.entryId ||
-        attempt.liftId !== current.liftId ||
-        attempt.number !== current.number,
-    )
-    .slice(0, count)
-    .map((attempt) => ({
-      key: attempt.entryId + ':' + attempt.liftId + ':' + attempt.number,
-      attempt,
-      name: state.entries.find((entry) => entry.id === attempt.entryId)?.lifter.name ?? '',
-    }))
 }
 
 /** The attempt clock as screens show it; red in the last ten seconds, amber when stopped. */

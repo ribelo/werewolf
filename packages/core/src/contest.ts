@@ -416,17 +416,25 @@ export function liftingOrder(
   return order
 }
 
-/** Explicit selection wins until it receives a verdict; otherwise the first ordered attempt is current. */
-export function currentAttempt(
-  state: ContestState,
-): Option.Option<Attempt & { readonly _tag: 'Declared' }> {
-  const order = liftingOrder(state)
+export type LiveAttempt = Exclude<Attempt, { readonly _tag: 'Unannounced' }>
+
+/**
+ * The attempt on the screens. The desk chooses it by hand; it stays after its verdict, so the
+ * screens show the result until the desk puts the next lifter live. Before any choice, and when
+ * the chosen attempt lost its weight or its lift was marked DNS, the first ordered attempt is current.
+ */
+export function currentAttempt(state: ContestState): Option.Option<LiveAttempt> {
   if (Option.isSome(state.selected)) {
     const selected = state.selected.value
-    const attempt = order.find((item) => sameAttempt(item, selected))
-    if (attempt) return Option.some(attempt)
+    const attempt = state.attempts.find((item) => sameAttempt(item, selected))
+    if (
+      attempt &&
+      attempt._tag !== 'Unannounced' &&
+      !isDidNotStart(state, attempt.entryId, attempt.liftId)
+    )
+      return Option.some(attempt)
   }
-  const next = order[0]
+  const next = liftingOrder(state)[0]
   return next ? Option.some(next) : Option.none()
 }
 
@@ -674,10 +682,13 @@ function applyMutation(
         sequence: attempt._tag === 'Judged' ? attempt.sequence : sequence,
         achievedAt: attempt._tag === 'Judged' ? attempt.achievedAt : command.at,
       }
-      const selected =
-        Option.isSome(state.selected) && sameAttempt(state.selected.value, command.attempt)
-          ? Option.none<AttemptRef>()
-          : state.selected
+      // A verdict never moves the screens on: the judged live attempt stays live (and is pinned
+      // when it was live only as the first in order) until the desk sets the next one.
+      const live = Option.exists(currentAttempt(state), (item) =>
+        sameAttempt(item, command.attempt),
+      )
+      const selected: Option.Option<AttemptRef> =
+        Option.isNone(state.selected) && live ? Option.some(command.attempt) : state.selected
       return Result.succeed({
         ...state,
         selected,

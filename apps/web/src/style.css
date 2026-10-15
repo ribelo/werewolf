@@ -226,6 +226,25 @@
   transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* A light sweep that runs over the current attempt tile, like a gauge on a dashboard. */
+@keyframes tile-sheen {
+  0% {
+    transform: translateX(-120%) skewX(-20deg);
+  }
+  60%,
+  100% {
+    transform: translateX(220%) skewX(-20deg);
+  }
+}
+.tile-sheen {
+  position: absolute;
+  inset: 0;
+  width: 45%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.28), transparent);
+  animation: tile-sheen 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
 /* Screen entrances: short, so a new lifter is readable within a second. */
 @keyframes screen-rise {
   from {
