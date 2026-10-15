@@ -102,7 +102,6 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
   )
   const firstName = useDecipher(words.length > 1 ? (words.at(-1) ?? '').toUpperCase() : '')
   const plates = view.load.platesPerSide
-  const running = state.clock._tag !== 'Idle'
   const meta = [
     view.team || lt('display_current.hero.club_placeholder'),
     ...view.divisions,
@@ -132,7 +131,7 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
           <span className="text-lg uppercase tracking-[0.3em] text-text-secondary">
             {lt('v2.clock.short')}
           </span>
-          <ScreenClock state={state} className={running ? 'text-[170px]' : 'text-[130px]'} />
+          <ScreenClock state={state} className="text-[150px]" />
         </div>
       </section>
       {/* Club, divisions, age and classes get the full width, so they stay on one line. */}
