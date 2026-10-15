@@ -127,23 +127,6 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
             </h2>
             <span className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-primary-red/30 to-transparent animate-sweep" />
           </div>
-          <p
-            className="flex flex-wrap gap-x-4 gap-y-1 text-2xl uppercase tracking-[0.18em] text-text-secondary animate-rise"
-            style={{ animationDelay: '120ms' }}
-          >
-            {meta.map((item, index) => (
-              <span key={index} className={index === 0 ? 'text-text-primary' : ''}>
-                {index > 0 && <span className="mr-4 text-primary-red">•</span>}
-                {item}
-              </span>
-            ))}
-          </p>
-          <p
-            className="font-display text-6xl uppercase tracking-[0.15em] text-primary-red animate-rise"
-            style={{ animationDelay: '200ms' }}
-          >
-            {view.liftName} — {lt('display_current.tiles.attempt', { number: view.attempt.number })}
-          </p>
         </div>
         <div className="flex shrink-0 items-stretch gap-6">
           <div
@@ -172,6 +155,26 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
           })}
         </div>
       </section>
+      {/* Club, divisions, age and classes get the full width, so they stay on one line. */}
+      <div className="-mt-3 space-y-3">
+        <p
+          className="flex flex-wrap gap-x-4 gap-y-1 text-2xl uppercase tracking-[0.18em] text-text-secondary animate-rise"
+          style={{ animationDelay: '120ms' }}
+        >
+          {meta.map((item, index) => (
+            <span key={index} className={index === 0 ? 'text-text-primary' : ''}>
+              {index > 0 && <span className="mr-4 text-primary-red">•</span>}
+              {item}
+            </span>
+          ))}
+        </p>
+        <p
+          className="font-display text-6xl uppercase tracking-[0.15em] text-primary-red animate-rise"
+          style={{ animationDelay: '200ms' }}
+        >
+          {view.liftName} — {lt('display_current.tiles.attempt', { number: view.attempt.number })}
+        </p>
+      </div>
       <section className="grid grid-cols-3 gap-8" style={{ perspective: '900px' }}>
         {view.tiles.map((tile, index) => {
           const status = statusOf(tile)
