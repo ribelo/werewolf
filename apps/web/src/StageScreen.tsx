@@ -8,7 +8,6 @@ import {
   ScreenClock,
   statusOf,
   useDecipher,
-  useTween,
   useVerdictVideo,
   VerdictFlash,
   VerdictVideo,
@@ -102,7 +101,6 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
     (words.length > 1 ? words.slice(0, -1) : words).join(' ').toUpperCase(),
   )
   const firstName = useDecipher(words.length > 1 ? (words.at(-1) ?? '').toUpperCase() : '')
-  const weight = useTween(view.attempt.weight)
   const barbell = state.rulebook.barbell
   const plates = view.load.platesPerSide
   const meta = [
@@ -113,138 +111,50 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
     typeof view.entry.bodyweight === 'number' ? view.entry.bodyweight + ' kg' : '',
   ].filter((item) => item !== '')
   return (
-    <main className="grid min-h-0 flex-1 grid-cols-[1.2fr_1fr] gap-10 px-8 py-6">
-      <section key={view.key} className="flex min-h-0 flex-col gap-5">
-        <div className="relative overflow-hidden">
-          <h2
-            className="font-mono font-bold uppercase leading-[1.02] tracking-[0.05em]"
-            style={{ fontSize: 88 }}
-          >
-            <span className="block break-words">{surname}</span>
-            {firstName && (
-              <span className="block break-words text-text-secondary">{firstName}</span>
-            )}
-          </h2>
-          <span className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-primary-red/30 to-transparent animate-sweep" />
-        </div>
-        <p
-          className="flex flex-wrap gap-x-4 gap-y-1 text-xl uppercase tracking-[0.18em] text-text-secondary animate-rise"
-          style={{ animationDelay: '120ms' }}
-        >
-          {meta.map((item, index) => (
-            <span key={index} className={index === 0 ? 'text-text-primary' : ''}>
-              {index > 0 && <span className="mr-4 text-primary-red">•</span>}
-              {item}
-            </span>
-          ))}
-        </p>
-        <p
-          className="font-display text-5xl uppercase tracking-[0.15em] text-primary-red animate-rise"
-          style={{ animationDelay: '200ms' }}
-        >
-          {view.liftName} — {lt('display_current.tiles.attempt', { number: view.attempt.number })}
-        </p>
-        <div className="grid grid-cols-3 gap-5 pt-2" style={{ perspective: '800px' }}>
-          {view.tiles.map((tile, index) => {
-            const status = statusOf(tile)
-            const highlighted = tile.number === view.attempt.number
-            return (
-              // The entrance runs on the wrapper; the endless glow runs on the tile itself.
-              <div
-                key={tile.number}
-                className="animate-pop"
-                style={{ animationDelay: 260 + index * 90 + 'ms' }}
-              >
-                <div
-                  className={
-                    'attempt-tile relative flex flex-col items-center gap-4 overflow-hidden border-2 px-3 py-14 ' +
-                    tileTone(status) +
-                    ' ' +
-                    tileGlow(status, highlighted)
-                  }
-                >
-                  {highlighted && <span className="tile-sheen" aria-hidden="true" />}
-                  <span className="text-lg uppercase tracking-[0.3em] text-text-secondary">
-                    {lt('display_current.tiles.attempt', { number: tile.number })}
-                  </span>
-                  <span
-                    className="font-mono font-bold leading-none tabular-nums"
-                    style={{
-                      fontSize: 74,
-                      ...(highlighted || status !== 'pending'
-                        ? { textShadow: '0 0 18px currentColor' }
-                        : {}),
-                    }}
-                  >
-                    {tile._tag === 'Unannounced' ? '—' : tile.weight.toFixed(2)}
-                  </span>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-        <div className="mt-auto flex items-baseline gap-4">
-          <span className="font-mono font-bold leading-none tabular-nums" style={{ fontSize: 210 }}>
-            {weight.toFixed(2)}
-          </span>
-          <span className="font-display text-6xl text-text-secondary">KG</span>
-        </div>
-      </section>
-      <section className="flex min-h-0 flex-col gap-5">
-        <div className="flex min-h-0 flex-1 items-center justify-center border border-border-color bg-card-bg px-4 py-6">
-          {plates.length > 0 ? (
-            <Barbell
-              key={view.key + ':' + view.attempt.weight}
-              plates={plates}
-              colors={view.colors}
-              heightPx={400}
-              maxWidthPx={52}
-              animated
-              showBar
-            />
-          ) : (
-            <p className="py-20 text-xl text-text-secondary">
-              {lt('display_current.sidebar.no_plates')}
-            </p>
-          )}
-        </div>
-        <div className="flex flex-wrap justify-center gap-3">
-          {plates.map((plate, index) => (
-            <span
-              key={view.key + plate.weight}
-              className="flex items-baseline gap-2 border border-border-color bg-card-bg px-4 py-2 animate-rise"
-              style={{ animationDelay: 300 + index * 60 + 'ms' }}
+    <main key={view.key} className="flex min-h-0 flex-1 flex-col gap-6 px-8 py-5">
+      <section className="flex items-start justify-between gap-8">
+        <div className="min-w-0 space-y-3">
+          <div className="relative overflow-hidden">
+            <h2
+              className="font-mono font-bold uppercase leading-[1.02] tracking-[0.05em]"
+              style={{ fontSize: 84 }}
             >
-              <span className="font-mono text-4xl font-bold">{plate.weight}</span>
-              <span className="text-xl text-text-secondary">× {plate.count}</span>
-            </span>
-          ))}
+              <span className="block break-words">{surname}</span>
+              {firstName && (
+                <span className="block break-words text-text-secondary">{firstName}</span>
+              )}
+            </h2>
+            <span className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-primary-red/30 to-transparent animate-sweep" />
+          </div>
+          <p
+            className="flex flex-wrap gap-x-4 gap-y-1 text-2xl uppercase tracking-[0.18em] text-text-secondary animate-rise"
+            style={{ animationDelay: '120ms' }}
+          >
+            {meta.map((item, index) => (
+              <span key={index} className={index === 0 ? 'text-text-primary' : ''}>
+                {index > 0 && <span className="mr-4 text-primary-red">•</span>}
+                {item}
+              </span>
+            ))}
+          </p>
+          <p
+            className="font-display text-6xl uppercase tracking-[0.15em] text-primary-red animate-rise"
+            style={{ animationDelay: '200ms' }}
+          >
+            {view.liftName} — {lt('display_current.tiles.attempt', { number: view.attempt.number })}
+          </p>
         </div>
-        <p className="text-center text-xl uppercase tracking-[0.2em] text-text-secondary">
-          {lt('display_current.sidebar.bar_weight', {
-            weight: barbell.bars[view.entry.lifter.sex],
-          })}
-          {barbell.clampsPerSide > 0 &&
-            ' • ' +
-              lt('display_current.sidebar.collar_weight', {
-                total: barbell.clampsPerSide * 2,
-                perClamp: barbell.clampsPerSide,
-              })}
-          {view.load._tag === 'Unloadable' && (
-            <span className="ml-3 text-status-warning">
-              {lt('display_current.sidebar.target_weight', { target: view.load.requested })}
-            </span>
-          )}
-        </p>
-        <div className="mt-auto flex items-end justify-between">
+        <div className="flex shrink-0 items-start gap-8">
           {Option.match(view.rack, {
             onNone: () => <span />,
             onSome: (rack) => (
-              <div className="flex items-baseline gap-4">
-                <span className="text-xl uppercase tracking-[0.3em] text-text-secondary">
+              <div className="flex flex-col items-center gap-1 border border-border-color bg-card-bg px-6 py-3">
+                <span className="text-lg uppercase tracking-[0.3em] text-text-secondary">
                   {lt('display_current.footer.rack_height')}
                 </span>
-                <span className="font-mono text-7xl font-bold">{rack}</span>
+                <span className="font-mono font-bold leading-none" style={{ fontSize: 110 }}>
+                  {rack}
+                </span>
               </div>
             ),
           })}
@@ -252,6 +162,94 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
             onNone: () => <></>,
             onSome: (url) => <QrCode url={url} />,
           })}
+        </div>
+      </section>
+      <section className="grid grid-cols-3 gap-8" style={{ perspective: '900px' }}>
+        {view.tiles.map((tile, index) => {
+          const status = statusOf(tile)
+          const highlighted = tile.number === view.attempt.number
+          return (
+            // The entrance runs on the wrapper; the endless glow runs on the tile itself.
+            <div
+              key={tile.number}
+              className="animate-pop"
+              style={{ animationDelay: 260 + index * 90 + 'ms' }}
+            >
+              <div
+                className={
+                  'attempt-tile relative flex flex-col items-center gap-4 overflow-hidden border-4 px-4 py-10 ' +
+                  tileTone(status) +
+                  ' ' +
+                  tileGlow(status, highlighted)
+                }
+              >
+                {highlighted && <span className="tile-sheen" aria-hidden="true" />}
+                <span className="text-2xl uppercase tracking-[0.3em] text-text-secondary">
+                  {lt('display_current.tiles.attempt', { number: tile.number })}
+                </span>
+                <span
+                  className="font-mono font-bold leading-none tabular-nums"
+                  style={{
+                    fontSize: 128,
+                    ...(highlighted || status !== 'pending'
+                      ? { textShadow: '0 0 24px currentColor' }
+                      : {}),
+                  }}
+                >
+                  {tile._tag === 'Unannounced' ? '—' : tile.weight.toFixed(2)}
+                </span>
+              </div>
+            </div>
+          )
+        })}
+      </section>
+      <section className="flex min-h-0 flex-1 items-center gap-10 border border-border-color bg-card-bg px-10">
+        <div className="flex flex-1 items-center justify-center">
+          {plates.length > 0 ? (
+            <Barbell
+              key={view.key + ':' + view.attempt.weight}
+              plates={plates}
+              colors={view.colors}
+              heightPx={250}
+              maxWidthPx={56}
+              animated
+              showBar
+            />
+          ) : (
+            <p className="text-2xl text-text-secondary">
+              {lt('display_current.sidebar.no_plates')}
+            </p>
+          )}
+        </div>
+        <div className="flex w-[640px] shrink-0 flex-col gap-4">
+          <div className="flex flex-wrap gap-3">
+            {plates.map((plate, index) => (
+              <span
+                key={view.key + plate.weight}
+                className="flex items-baseline gap-2 border border-border-color bg-black/40 px-5 py-2 animate-rise"
+                style={{ animationDelay: 300 + index * 60 + 'ms' }}
+              >
+                <span className="font-mono text-5xl font-bold">{plate.weight}</span>
+                <span className="text-2xl text-text-secondary">× {plate.count}</span>
+              </span>
+            ))}
+          </div>
+          <p className="text-xl uppercase tracking-[0.2em] text-text-secondary">
+            {lt('display_current.sidebar.bar_weight', {
+              weight: barbell.bars[view.entry.lifter.sex],
+            })}
+            {barbell.clampsPerSide > 0 &&
+              ' • ' +
+                lt('display_current.sidebar.collar_weight', {
+                  total: barbell.clampsPerSide * 2,
+                  perClamp: barbell.clampsPerSide,
+                })}
+            {view.load._tag === 'Unloadable' && (
+              <span className="ml-3 text-status-warning">
+                {lt('display_current.sidebar.target_weight', { target: view.load.requested })}
+              </span>
+            )}
+          </p>
         </div>
       </section>
     </main>
