@@ -282,7 +282,10 @@ export function ContestTable({
               style={{ minWidth: 40, width: 40 }}
               role="columnheader"
             >
-              <span className="text-xs uppercase tracking-[0.3em]">#</span>
+              {/* The header of the number column counts the rows shown now. */}
+              <span className="font-mono text-xs" title={lt('v2.columns.count')}>
+                {rows.length}
+              </span>
             </th>
           )}
           <th

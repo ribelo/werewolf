@@ -12,6 +12,7 @@ import {
   useVerdictVideo,
   VerdictFlash,
   VerdictVideo,
+  FitCanvas,
   type CurrentView,
 } from './screen-parts.tsx'
 
@@ -45,49 +46,51 @@ export function StageScreen({
   const [video, stopVideo, verdict] = useVerdictVideo(state)
   const judgedAny = state.attempts.some((attempt) => attempt._tag === 'Judged')
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-black text-white">
-      <header className="flex items-center gap-6 border-b border-primary-red/40 px-8 py-3">
-        <img src="/wuap-logo.webp" alt="WUAP" className="h-14 rounded-lg bg-white p-1" />
-        <h1
-          className="min-w-0 flex-1 truncate font-display text-4xl uppercase tracking-[0.12em]"
-          style={{ textShadow: '0 0 18px rgba(220, 20, 60, 0.6)' }}
-        >
-          {title}
-        </h1>
-        <ScreenClock state={state} className="text-7xl" />
-      </header>
-      {Option.match(view, {
-        onNone: () => (
-          <main className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
-            <h2 className="font-display text-7xl uppercase tracking-[0.15em] animate-rise">
-              {lt(
-                judgedAny
-                  ? 'display_current.waiting.next_title'
-                  : 'display_current.waiting.first_title',
-              )}
-            </h2>
-            <p className="text-xl text-text-secondary">
-              {lt(
-                judgedAny
-                  ? 'display_current.waiting.next_hint'
-                  : 'display_current.waiting.first_hint',
-              )}
-            </p>
-          </main>
-        ),
-        onSome: (current) => <Current state={state} view={current} />,
-      })}
-      {Option.match(verdict, {
-        onNone: () => <></>,
-        onSome: (kind) => (
-          <VerdictFlash verdict={kind} good={lt('v2.screen.good')} bad={lt('v2.screen.bad')} />
-        ),
-      })}
-      {Option.match(video, {
-        onNone: () => <></>,
-        onSome: (src) => <VerdictVideo src={src} onEnd={stopVideo} />,
-      })}
-    </div>
+    <FitCanvas>
+      <div className="flex h-full w-full flex-col overflow-hidden bg-black text-white">
+        <header className="flex items-center gap-6 border-b border-primary-red/40 px-8 py-3">
+          <img src="/wuap-logo.webp" alt="WUAP" className="h-14 rounded-lg bg-white p-1" />
+          <h1
+            className="min-w-0 flex-1 truncate font-display text-4xl uppercase tracking-[0.12em]"
+            style={{ textShadow: '0 0 18px rgba(220, 20, 60, 0.6)' }}
+          >
+            {title}
+          </h1>
+          <ScreenClock state={state} className="text-7xl" />
+        </header>
+        {Option.match(view, {
+          onNone: () => (
+            <main className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
+              <h2 className="font-display text-7xl uppercase tracking-[0.15em] animate-rise">
+                {lt(
+                  judgedAny
+                    ? 'display_current.waiting.next_title'
+                    : 'display_current.waiting.first_title',
+                )}
+              </h2>
+              <p className="text-xl text-text-secondary">
+                {lt(
+                  judgedAny
+                    ? 'display_current.waiting.next_hint'
+                    : 'display_current.waiting.first_hint',
+                )}
+              </p>
+            </main>
+          ),
+          onSome: (current) => <Current state={state} view={current} />,
+        })}
+        {Option.match(verdict, {
+          onNone: () => <></>,
+          onSome: (kind) => (
+            <VerdictFlash verdict={kind} good={lt('v2.screen.good')} bad={lt('v2.screen.bad')} />
+          ),
+        })}
+        {Option.match(video, {
+          onNone: () => <></>,
+          onSome: (src) => <VerdictVideo src={src} onEnd={stopVideo} />,
+        })}
+      </div>
+    </FitCanvas>
   )
 }
 
@@ -110,12 +113,12 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
     typeof view.entry.bodyweight === 'number' ? view.entry.bodyweight + ' kg' : '',
   ].filter((item) => item !== '')
   return (
-    <main className="grid min-h-0 flex-1 grid-cols-[1.25fr_1fr] gap-10 px-8 py-6">
+    <main className="grid min-h-0 flex-1 grid-cols-[1.2fr_1fr] gap-10 px-8 py-6">
       <section key={view.key} className="flex min-h-0 flex-col gap-5">
         <div className="relative overflow-hidden">
           <h2
             className="font-mono font-bold uppercase leading-[1.02] tracking-[0.05em]"
-            style={{ fontSize: 'clamp(2.5rem, 4.6vw, 6rem)' }}
+            style={{ fontSize: 88 }}
           >
             <span className="block break-words">{surname}</span>
             {firstName && (
@@ -141,7 +144,7 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
         >
           {view.liftName} — {lt('display_current.tiles.attempt', { number: view.attempt.number })}
         </p>
-        <div className="grid grid-cols-3 gap-5" style={{ perspective: '800px' }}>
+        <div className="grid grid-cols-3 gap-5 pt-2" style={{ perspective: '800px' }}>
           {view.tiles.map((tile, index) => {
             const status = statusOf(tile)
             const highlighted = tile.number === view.attempt.number
@@ -154,23 +157,24 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
               >
                 <div
                   className={
-                    'attempt-tile relative flex flex-col items-center gap-1 overflow-hidden border-2 px-3 py-4 ' +
+                    'attempt-tile relative flex flex-col items-center gap-4 overflow-hidden border-2 px-3 py-14 ' +
                     tileTone(status) +
                     ' ' +
                     tileGlow(status, highlighted)
                   }
                 >
                   {highlighted && <span className="tile-sheen" aria-hidden="true" />}
-                  <span className="text-sm uppercase tracking-[0.3em] text-text-secondary">
+                  <span className="text-lg uppercase tracking-[0.3em] text-text-secondary">
                     {lt('display_current.tiles.attempt', { number: tile.number })}
                   </span>
                   <span
-                    className="font-mono text-5xl font-bold leading-none tabular-nums"
-                    style={
-                      highlighted || status !== 'pending'
+                    className="font-mono font-bold leading-none tabular-nums"
+                    style={{
+                      fontSize: 74,
+                      ...(highlighted || status !== 'pending'
                         ? { textShadow: '0 0 18px currentColor' }
-                        : {}
-                    }
+                        : {}),
+                    }}
                   >
                     {tile._tag === 'Unannounced' ? '—' : tile.weight.toFixed(2)}
                   </span>
@@ -179,24 +183,21 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
             )
           })}
         </div>
-      </section>
-      <section className="flex min-h-0 flex-col gap-5">
-        <div className="flex items-baseline justify-end gap-4">
-          <span
-            className="font-mono font-bold leading-none tabular-nums"
-            style={{ fontSize: 'clamp(4.5rem, 9vw, 10.5rem)' }}
-          >
+        <div className="mt-auto flex items-baseline gap-4">
+          <span className="font-mono font-bold leading-none tabular-nums" style={{ fontSize: 210 }}>
             {weight.toFixed(2)}
           </span>
-          <span className="font-display text-5xl text-text-secondary">KG</span>
+          <span className="font-display text-6xl text-text-secondary">KG</span>
         </div>
-        <div className="flex items-center justify-center border border-border-color bg-card-bg px-4 py-6">
+      </section>
+      <section className="flex min-h-0 flex-col gap-5">
+        <div className="flex min-h-0 flex-1 items-center justify-center border border-border-color bg-card-bg px-4 py-6">
           {plates.length > 0 ? (
             <Barbell
               key={view.key + ':' + view.attempt.weight}
               plates={plates}
               colors={view.colors}
-              heightPx={260}
+              heightPx={400}
               maxWidthPx={52}
               animated
               showBar

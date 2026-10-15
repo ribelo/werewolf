@@ -12,7 +12,7 @@ const extra = {
   pl: {
     v2: {
       export: { xlsx: 'Eksport Excel (XLSX)', print: 'Drukuj' },
-      columns: { team: 'Klub' },
+      columns: { team: 'Klub', count: 'Liczba zawodników w tabeli' },
       registrations: { import: 'Import i drużyny' },
       dns: { mark: 'Nie wystartował (DNS)', unmark: 'Cofnij DNS', short: 'DNS' },
       clock: {
@@ -68,7 +68,7 @@ const extra = {
   en: {
     v2: {
       export: { xlsx: 'Export Excel (XLSX)', print: 'Print' },
-      columns: { team: 'Club' },
+      columns: { team: 'Club', count: 'Lifters in the table' },
       registrations: { import: 'Import and teams' },
       dns: { mark: 'Did not start (DNS)', unmark: 'Undo DNS', short: 'DNS' },
       clock: {

@@ -11,7 +11,7 @@ import {
   type Entry,
 } from '@werewolf/core'
 import * as Option from 'effect/Option'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { clockText, useClockSeconds } from './clock.ts'
 import { useLegacy } from './legacy-i18n.ts'
 import { useVideos, videoUrl, type VideoKind } from './Videos.tsx'
@@ -244,6 +244,37 @@ export function VerdictFlash({
       >
         {verdict === 'good' ? good : bad}
       </span>
+    </div>
+  )
+}
+/**
+ * A fixed 1920×1080 stage scaled to fit the window, so a TV at 720p, 1080p or any other size
+ * shows exactly the same layout, letterboxed when the aspect ratio differs.
+ */
+export function FitCanvas({
+  children,
+  width = 1920,
+  height = 1080,
+}: {
+  readonly children: ReactNode
+  readonly width?: number
+  readonly height?: number
+}) {
+  const [scale, setScale] = useState(1)
+  useEffect(() => {
+    const fit = () => setScale(Math.min(window.innerWidth / width, window.innerHeight / height))
+    fit()
+    window.addEventListener('resize', fit)
+    return () => window.removeEventListener('resize', fit)
+  }, [width, height])
+  return (
+    <div className="fixed inset-0 overflow-hidden bg-black">
+      <div
+        className="absolute left-1/2 top-1/2"
+        style={{ width, height, transform: 'translate(-50%, -50%) scale(' + scale + ')' }}
+      >
+        {children}
+      </div>
     </div>
   )
 }
