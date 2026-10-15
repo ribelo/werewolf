@@ -26,6 +26,7 @@ export function Barbell({
   maxWidthPx = 40,
   animated = false,
   showBar = false,
+  minFillPx = MIN_FILL_PX,
 }: {
   readonly plates: ReadonlyArray<PlateStack>
   readonly colors?: Readonly<Record<number, string>>
@@ -35,11 +36,13 @@ export function Barbell({
   readonly animated?: boolean
   /** Draws the bar, the collar and the sleeve end around the plates. */
   readonly showBar?: boolean
+  /** Colour band of the thinnest plate; screens far from the loaders use a wider one. */
+  readonly minFillPx?: number
 }) {
   const { t } = useMessages()
   const flat = plates.flatMap((stack) => Array.from({ length: stack.count }, () => stack.weight))
   const heaviest = Math.max(25, ...flat)
-  const minWidth = MIN_FILL_PX + 2 * BORDER_PX
+  const minWidth = minFillPx + 2 * BORDER_PX
   return (
     <div
       role="img"

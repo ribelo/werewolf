@@ -282,7 +282,8 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
               plates={plates}
               colors={view.colors}
               heightPx={260}
-              maxWidthPx={52}
+              maxWidthPx={78}
+              minFillPx={20}
               animated
               showBar
             />
