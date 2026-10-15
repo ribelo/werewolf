@@ -206,7 +206,14 @@ export function ScreenClock({
   )
 }
 
-/** After every new verdict a random clip of that kind plays; none when the library is empty. */
+/** The desk cycles the status button good → failed → pending, so a verdict settles before it shows. */
+const VERDICT_SETTLE_MS = 900
+
+/**
+ * After every new verdict a random clip of that kind plays; none when the library is empty.
+ * The flash waits until the newest verdict has stayed the same for a moment: a click through
+ * "good" on the way to "failed" shows only "failed".
+ */
 export function useVerdictVideo(
   state: ContestState,
 ): readonly [Option.Option<string>, () => void, Option.Option<'good' | 'bad'>] {
@@ -222,22 +229,29 @@ export function useVerdictVideo(
     Option.none(),
   )
   const sequence = Option.match(last, { onNone: () => 0, onSome: (a) => a.sequence })
-  const seen = useRef(sequence)
+  const kind: VideoKind | '' = Option.match(last, {
+    onNone: (): VideoKind | '' => '',
+    onSome: (a): VideoKind => (a.verdict === 'goodLift' ? 'good' : 'bad'),
+  })
+  const seen = useRef({ sequence, kind })
+  const videosRef = useRef(videos)
+  videosRef.current = videos
   useEffect(() => {
-    if (sequence <= seen.current) {
-      seen.current = sequence
-      return
-    }
-    seen.current = sequence
-    Option.map(last, (attempt) => {
-      const kind: VideoKind = attempt.verdict === 'goodLift' ? 'good' : 'bad'
-      setVerdict(Option.some(kind))
+    const before = seen.current
+    seen.current = { sequence, kind }
+    // A verdict taken back or an older attempt: nothing new to celebrate.
+    if (kind === '' || sequence < before.sequence) return
+    if (sequence === before.sequence && kind === before.kind) return
+    const settled: VideoKind = kind
+    const timer = window.setTimeout(() => {
+      setVerdict(Option.some(settled))
       window.setTimeout(() => setVerdict(Option.none()), 2200)
-      const list = videos[kind]
+      const list = videosRef.current[settled]
       const pick = list[Math.floor(Math.random() * list.length)]
-      if (pick) setPlaying(Option.some(videoUrl(kind, pick.name)))
-    })
-  }, [sequence, last, videos])
+      if (pick) setPlaying(Option.some(videoUrl(settled, pick.name)))
+    }, VERDICT_SETTLE_MS)
+    return () => window.clearTimeout(timer)
+  }, [sequence, kind])
   return [playing, () => setPlaying(Option.none()), verdict]
 }
 
