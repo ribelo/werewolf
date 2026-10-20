@@ -7,8 +7,10 @@ import { buildRows, filterOptions, matches, sortRows, type TableRow } from './co
 import { ImportPanel, TeamsPanel } from './EntriesPanel.tsx'
 import { FilterBar } from './FilterBar.tsx'
 import { useLegacy } from './legacy-i18n.ts'
-import { PrintButton, useTableState } from './LiftPanel.tsx'
-import { printTables } from './table-export.ts'
+import { buildResultsJpg } from './export-jpg.ts'
+import { buildResultsPdf, loadPdfFonts } from './export-pdf.ts'
+import { ExportMenu, PrintButton, useTableState } from './LiftPanel.tsx'
+import { downloadBlob, fileSlug, printTables, tablesToCsv, tablesToXlsx } from './table-export.ts'
 
 export const NEW_ENTRY = 'new'
 
@@ -85,6 +87,24 @@ export function Registrations({
     sort.direction,
     order,
   )
+  async function exportTable(format: 'csv' | 'pdf' | 'jpg' | 'xlsx' | 'print'): Promise<void> {
+    const title = lt('contest_detail.registrations.title')
+    const model = registrationModel(state, rows, title, lt, locale)
+    const subtitle = contestName + ' — ' + state.date
+    const name = fileSlug(contestName + '-' + title)
+    if (format === 'print') printTables(contestName, subtitle, [model])
+    else if (format === 'xlsx') downloadBlob(await tablesToXlsx([model]), name + '.xlsx')
+    else if (format === 'csv') downloadBlob(tablesToCsv(model), name + '.csv')
+    else if (format === 'jpg') downloadBlob(await buildResultsJpg(model, subtitle), name + '.jpg')
+    else {
+      const doc = await buildResultsPdf([model], {
+        subtitle,
+        generatedAt: new Date().toISOString().slice(0, 16).replace('T', ' '),
+        fonts: await loadPdfFonts(),
+      })
+      downloadBlob(doc.output('blob'), name + '.pdf')
+    }
+  }
   return (
     <div className="space-y-2">
       <header className="flex flex-wrap items-center justify-between gap-2">
@@ -124,19 +144,12 @@ export function Registrations({
           >
             {lt('v2.registrations.teams')}
           </button>
+          <ExportMenu disabled={rows.length === 0} onExport={exportTable} />
           <PrintButton
             disabled={rows.length === 0}
-            onPrint={() =>
-              printTables(contestName, contestName + ' — ' + state.date, [
-                registrationModel(
-                  state,
-                  rows,
-                  lt('contest_detail.registrations.title'),
-                  lt,
-                  locale,
-                ),
-              ])
-            }
+            onPrint={() => {
+              exportTable('print').catch(() => {})
+            }}
           />
         </div>
       </header>
