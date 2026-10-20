@@ -15,6 +15,7 @@ interface LiftDraft {
 export interface DivisionDraft {
   id: string
   name: Name
+  byDefault?: boolean
   policy: 'reject' | 'warn'
   conditions: {
     sex?: 'male' | 'female'
@@ -31,6 +32,7 @@ interface AgeClassDraft {
   sex?: 'male' | 'female'
   from: number
   through?: number
+  kids?: boolean
 }
 interface WeightClassDraft {
   id: string

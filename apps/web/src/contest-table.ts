@@ -3,6 +3,7 @@ import {
   entryAgeClass,
   entryWeightClass,
   isDidNotStart,
+  isKid,
   mcCulloughCoefficient,
   reshelCoefficient,
   type Attempt,
@@ -22,6 +23,8 @@ export interface TableRow {
   readonly ageClass: string
   readonly weightClassId: string
   readonly weightClass: string
+  /** Kids never rank or show next to adults. */
+  readonly kid: boolean
   /** Known after weigh-in. */
   readonly reshel: Option.Option<number>
   readonly mccullough: number
@@ -94,6 +97,7 @@ export function buildRows(state: ContestState, locale: 'pl' | 'en'): ReadonlyArr
       weightClassId,
       weightClass:
         state.rulebook.weightClasses.find((item) => item.id === weightClassId)?.name[locale] ?? '',
+      kid: isKid(state, entry),
       reshel,
       mccullough,
       team: entry.lifter.teamId ? (teams.get(entry.lifter.teamId) ?? '') : '',
@@ -120,8 +124,8 @@ export function matches(row: TableRow, filters: Filters): boolean {
   const sex = row.entry.lifter.sex
   const weight =
     filters.weight === 'ALL' ||
-    (filters.weight === 'FEMALE_OPEN' && sex === 'female') ||
-    (filters.weight === 'MALE_OPEN' && sex === 'male') ||
+    (filters.weight === 'FEMALE_OPEN' && sex === 'female' && !row.kid) ||
+    (filters.weight === 'MALE_OPEN' && sex === 'male' && !row.kid) ||
     row.weightClassId === filters.weight
   const age =
     filters.age === 'ALL' ||

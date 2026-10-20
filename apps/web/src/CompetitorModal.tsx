@@ -1,4 +1,10 @@
-import { ageOnDate, CalendarDate, type ContestState, type Entry } from '@werewolf/core'
+import {
+  ageOnDate,
+  CalendarDate,
+  defaultDivisions,
+  type ContestState,
+  type Entry,
+} from '@werewolf/core'
 import * as Option from 'effect/Option'
 import * as Schema from 'effect/Schema'
 import { useState, type FormEvent } from 'react'
@@ -65,7 +71,9 @@ function Dialog({
   const [bodyweight, setBodyweight] = useState(
     typeof entry?.bodyweight === 'number' ? String(entry.bodyweight) : '',
   )
-  const [tags, setTags] = useState<ReadonlyArray<string>>(entry?.divisions ?? [])
+  const [tags, setTags] = useState<ReadonlyArray<string>>(
+    entry?.divisions ?? defaultDivisions(state.rulebook),
+  )
   const [lifts, setLifts] = useState<ReadonlyArray<string>>(
     entry?.lifts.map((item) => item.liftId) ?? [],
   )

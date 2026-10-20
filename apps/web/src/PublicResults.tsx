@@ -41,6 +41,9 @@ export function PublicResults({
     all.filter(
       (row) =>
         matches(row, filters) &&
+        // Kids are listed only when a kids age class is chosen, never among adults.
+        row.kid ===
+          state.rulebook.ageClasses.some((item) => item.id === filters.age && item.kids === true) &&
         (liftId === 'ALL' || row.entry.lifts.some((item) => item.liftId === liftId)),
     ),
     sort.column === 'order' ? (liftId === 'ALL' ? 'points' : 'points:' + liftId) : sort.column,

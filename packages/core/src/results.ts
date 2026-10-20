@@ -193,9 +193,18 @@ export function entryAgeClass(state: ContestState, entry: Entry): Option.Option<
   return group ? Option.some(group.id) : Option.none()
 }
 /** The rulebook weight class of an entry from its weigh-in, if it has one. */
+/** True when the entry's age class is a kids class. */
+export function isKid(state: ContestState, entry: Entry): boolean {
+  return Option.match(entryAgeClass(state, entry), {
+    onNone: () => false,
+    onSome: (id) => state.rulebook.ageClasses.find((item) => item.id === id)?.kids === true,
+  })
+}
+
+/** Kids have no weight class: weight classes are for adults. */
 export function entryWeightClass(state: ContestState, entry: Entry): Option.Option<WeightClassId> {
   const bodyweight = entry.bodyweight
-  if (!bodyweight) return Option.none()
+  if (!bodyweight || isKid(state, entry)) return Option.none()
   const group = state.rulebook.weightClasses.find(
     (item) =>
       (!item.sex || item.sex === entry.lifter.sex) &&
@@ -261,11 +270,12 @@ function belongsTo(
   const eligible = classification.ageClassIds
   return (
     (!classification.sex || classification.sex === entry.lifter.sex) &&
-    (!eligible ||
-      Option.match(entryAgeClass(state, entry), {
-        onNone: () => false,
-        onSome: (id) => eligible.includes(id),
-      })) &&
+    (eligible
+      ? Option.match(entryAgeClass(state, entry), {
+          onNone: () => false,
+          onSome: (id) => eligible.includes(id),
+        })
+      : !isKid(state, entry)) &&
     (classification.membership.kind === 'all' ||
       classification.membership.ids.some((id) => entry.divisions.includes(id)))
   )

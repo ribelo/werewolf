@@ -28,6 +28,8 @@ const Lift = Schema.Struct({
 const Division = Schema.Struct({
   id: DivisionId,
   name: LocalizedName,
+  /** Ticked for a new entry (Open); the organizer can untick it for a lifter who starts only elsewhere. */
+  byDefault: Schema.optionalKey(Schema.Boolean),
   policy: Schema.Literals(['warn', 'reject']),
   conditions: Schema.Struct({
     sex: Schema.optionalKey(Sex),
@@ -55,6 +57,11 @@ const AgeClass = Schema.Struct({
   sex: Schema.optionalKey(Sex),
   from: Natural,
   through: Schema.optionalKey(Natural),
+  /**
+   * Children: no weight class, and no classification counts them unless it lists this age class
+   * in ageClassIds, so they never rank next to adults.
+   */
+  kids: Schema.optionalKey(Schema.Boolean),
 })
 const WeightClass = Schema.Struct({
   id: WeightClassId,
@@ -77,7 +84,7 @@ const classificationFields = {
   result: Schema.Literals(['best', 'sum', 'sumDone']),
   formula: Formula,
   sex: Schema.optionalKey(Sex),
-  /** Only entries in these age classes count; absent means every entry. Kids are excluded this way. */
+  /** Only entries in these age classes count; absent means every adult entry (kids classes must be listed). */
   ageClassIds: Schema.optionalKey(Schema.Array(AgeClassId)),
 } as const
 export const IndividualClassification = Schema.Struct({
@@ -180,4 +187,10 @@ export function parseRulebook(input: unknown): Result.Result<Rulebook, InvalidRu
   return Schema.decodeUnknownResult(Rulebook)(input).pipe(
     Result.mapError((error) => new InvalidRulebook({ detail: error.message })),
   )
+}
+/** Divisions ticked for a new entry. */
+export function defaultDivisions(book: Rulebook): ReadonlyArray<DivisionId> {
+  return book.divisions
+    .filter((division) => division.byDefault === true)
+    .map((division) => division.id)
 }

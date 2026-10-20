@@ -17,14 +17,14 @@ One kind of exercise contested in a contest, e.g. bench press, deadlift, squat, 
 _Avoid_: discipline, event, exercise
 
 **Open**:
-Everybody in the contest, without weight classes. Open is not a division; a classification for everybody has membership "all".
+The main contest. Open is a division (tag) ticked by default for every new entry; the organizer unticks it for a lifter who starts only in MONSTER or only in another division. Kids are never in Open.
 
 **Division**:
 A tag on an entry for extra rankings, e.g. Uniformed services, Miners. An entry has zero or more divisions; the 2025 app called them tags (Etykiety).
 _Avoid_: category
 
 **Age class / Weight class**:
-A band of age (at contest date) or bodyweight used to split a ranking. Kids are the age classes 2–8, 9–12 and 13–15. A team classification can list the age classes that count for it.
+A band of age (at contest date) or bodyweight used to split a ranking. Kids are the age classes marked as kids (2–8 and 9–12); they have no weight class and count only in a classification that lists their age classes. A classification can list the age classes that count for it.
 _Avoid_: age category, weight category
 
 **Team**:

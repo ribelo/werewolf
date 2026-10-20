@@ -1,4 +1,5 @@
 import {
+  defaultDivisions,
   entryAgeClass,
   entryWeightClass,
   Kilograms,
@@ -119,13 +120,13 @@ function EntryForm({ state, submit }: { readonly state: ContestState; readonly s
       </label>
       <fieldset className="md:col-span-2">
         <legend className="input-label">{t('entries.divisions')}</legend>
-        {state.rulebook.divisions.map((division, index) => (
+        {state.rulebook.divisions.map((division) => (
           <label key={division.id} className="mr-4 inline-flex items-center gap-2 text-sm">
             <input
               type="checkbox"
               name="divisions"
               value={division.id}
-              defaultChecked={index === 0}
+              defaultChecked={division.byDefault === true}
             />
             {division.name[locale]}
           </label>
@@ -197,7 +198,7 @@ function EntryRow({
     const next = on
       ? [...entry.divisions, divisionId]
       : entry.divisions.filter((id) => id !== divisionId)
-    if (next.length > 0) submit({ _tag: 'SetDivisions', entryId: entry.id, divisions: next })
+    submit({ _tag: 'SetDivisions', entryId: entry.id, divisions: next })
   }
   return (
     <tr>
@@ -432,7 +433,7 @@ export function ImportPanel({
   const { locale, t, tx } = useMessages()
   const [table, setTable] = useState<ReadonlyArray<ReadonlyArray<string>>>([])
   const [mapping, setMapping] = useState<ImportMapping>({ fields: {}, openings: {} })
-  const [division, setDivision] = useState<string>(state.rulebook.divisions[0]?.id ?? '')
+  const [division, setDivision] = useState<string>('')
   const [failure, setFailure] = useState('')
   const header = table[0] ?? []
   async function load(file: File) {
@@ -457,7 +458,13 @@ export function ImportPanel({
             table.slice(1),
             mapping,
             {
-              divisions: division === '' ? [] : [division],
+              divisions: [
+                ...defaultDivisions(state.rulebook),
+                ...(division === '' ||
+                defaultDivisions(state.rulebook).some((id) => id === division)
+                  ? []
+                  : [division]),
+              ],
               lifts: state.rulebook.lifts.map((lift) => lift.id),
             },
             { newId: () => crypto.randomUUID(), now: Date.now(), random: Math.random },

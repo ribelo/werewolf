@@ -1,3 +1,4 @@
+import * as Option from 'effect/Option'
 import * as Result from 'effect/Result'
 import * as Schema from 'effect/Schema'
 import { describe, expect, it } from 'vitest'
@@ -5,6 +6,7 @@ import {
   CalendarDate,
   Kilograms,
   entryResults,
+  entryWeightClass,
   individualRankings,
   mcCulloughCoefficient,
   parseCommand,
@@ -108,6 +110,35 @@ function rows(contest: ContestState, id = 'open') {
 }
 
 describe('individual contest results', () => {
+  it('ww-e1fo: kids have no weight class and rank only where their age class is listed', () => {
+    const kidsBook = book({
+      ageClasses: [
+        { id: 'young', name, from: 7, through: 13, kids: true },
+        { id: 'adult', name, from: 14 },
+      ],
+      classifications: [
+        { ...classification, id: 'open', membership: { kind: 'all' } },
+        { ...classification, id: 'kids', membership: { kind: 'all' }, ageClassIds: ['young'] },
+      ],
+    })
+    const contest = state(
+      [
+        add('adult', 1),
+        add('kid', 2, {
+          lifter: { id: 'lifter-kid', name: 'kid', sex: 'male', birthDate: '2015-03-01' },
+        }),
+        judge('a', 10, 'adult'),
+        judge('k', 11, 'kid'),
+      ],
+      kidsBook,
+    )
+    expect(rows(contest, 'open').map((row) => row.entry.id)).toEqual(['adult'])
+    expect(rows(contest, 'kids').map((row) => row.entry.id)).toEqual(['kid'])
+    const kid = contest.entries.find((entry) => entry.id === 'kid')
+    if (!kid) throw new Error('kid missing')
+    expect(Option.isNone(entryWeightClass(contest, kid))).toBe(true)
+  })
+
   it('ww-m7xy retains best good attempts, requires all total lifts and replays corrections', () => {
     const commands = [
       add('both', 1, {

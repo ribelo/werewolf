@@ -248,6 +248,17 @@ export function RulebookEditor({
                     value={division.name.en}
                     onChange={(en) => update({ ...division, name: { ...division.name, en } })}
                   />
+                  <label className="flex items-center gap-2 pb-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={division.byDefault === true}
+                      onChange={(event) => {
+                        const { byDefault: _old, ...rest } = division
+                        update(event.target.checked ? { ...rest, byDefault: true } : rest)
+                      }}
+                    />
+                    {t('rb.byDefault')}
+                  </label>
                   <label className="block">
                     <span className="input-label">{t('rb.policy')}</span>
                     <select
@@ -389,6 +400,23 @@ export function RulebookEditor({
                     })
                   }}
                 />
+                <label className="flex items-center gap-2 pb-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={item.kids === true}
+                    onChange={(event) => {
+                      const { kids: _old, ...rest } = item
+                      set({
+                        ageClasses: replaceAt(
+                          draft.ageClasses,
+                          index,
+                          event.target.checked ? { ...rest, kids: true } : rest,
+                        ),
+                      })
+                    }}
+                  />
+                  {t('rb.kids')}
+                </label>
                 {removeButton(() => remove('ageClasses', index))}
               </div>
             ))}

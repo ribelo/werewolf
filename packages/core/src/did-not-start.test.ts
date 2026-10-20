@@ -25,7 +25,7 @@ const entry = (
       lifter: { id: 'l' + id, name, sex: 'male', birthDate: '1990-01-01' },
       bodyweight: 90,
       lotNumber: lot,
-      divisions: [],
+      divisions: ['open'],
       lifts: lifts.map(([liftId, openingWeight]) => ({ liftId, openingWeight })),
     },
   })

@@ -52,6 +52,16 @@
   ],
   "divisions": [
     {
+      "id": "open",
+      "name": {
+        "pl": "OPEN",
+        "en": "OPEN"
+      },
+      "byDefault": true,
+      "policy": "warn",
+      "conditions": {}
+    },
+    {
       "id": "mundurowi",
       "name": {
         "pl": "MUNDUROWI",
@@ -87,7 +97,8 @@
         "en": "Dzieci 2–8"
       },
       "from": 2,
-      "through": 8
+      "through": 8,
+      "kids": true
     },
     {
       "id": "k9-12",
@@ -96,7 +107,8 @@
         "en": "Dzieci 9–12"
       },
       "from": 9,
-      "through": 12
+      "through": 12,
+      "kids": true
     },
     {
       "id": "t16",
@@ -278,7 +290,8 @@
       },
       "kind": "individual",
       "membership": {
-        "kind": "all"
+        "kind": "divisions",
+        "ids": ["open"]
       },
       "liftIds": ["bench", "deadlift"],
       "result": "sumDone",
@@ -293,7 +306,8 @@
       },
       "kind": "individual",
       "membership": {
-        "kind": "all"
+        "kind": "divisions",
+        "ids": ["open"]
       },
       "liftIds": ["bench"],
       "result": "best",
@@ -308,7 +322,8 @@
       },
       "kind": "individual",
       "membership": {
-        "kind": "all"
+        "kind": "divisions",
+        "ids": ["open"]
       },
       "liftIds": ["deadlift"],
       "result": "best",
@@ -323,7 +338,8 @@
       },
       "kind": "individual",
       "membership": {
-        "kind": "all"
+        "kind": "divisions",
+        "ids": ["open"]
       },
       "liftIds": ["bench", "deadlift"],
       "result": "sumDone",
@@ -338,12 +354,29 @@
       },
       "kind": "individual",
       "membership": {
-        "kind": "all"
+        "kind": "divisions",
+        "ids": ["open"]
       },
       "liftIds": ["bench", "deadlift"],
       "result": "sumDone",
       "formula": "reshelMcCullough",
       "split": "weight"
+    },
+    {
+      "id": "kids",
+      "name": {
+        "pl": "Dzieci",
+        "en": "Kids"
+      },
+      "kind": "individual",
+      "membership": {
+        "kind": "all"
+      },
+      "liftIds": ["bench", "deadlift"],
+      "result": "sumDone",
+      "formula": "reshelMcCullough",
+      "split": "age",
+      "ageClassIds": ["k2-8", "k9-12"]
     },
     {
       "id": "monster",

@@ -167,6 +167,7 @@ export function ContestDesk({
             <Registrations
               state={state}
               journal={journal}
+              contestName={definition.name}
               submit={live.submit}
               editing={editing}
               onEdit={setEditing}

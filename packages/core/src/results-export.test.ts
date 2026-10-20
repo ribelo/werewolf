@@ -42,7 +42,7 @@ const entry = (
       lifter: { id: 'l' + id, name, sex, birthDate: birth },
       bodyweight: bw,
       lotNumber: lot,
-      divisions: [],
+      divisions: ['open'],
       lifts: [{ liftId: 'bench', openingWeight: open }],
     },
   })

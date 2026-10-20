@@ -20,7 +20,7 @@ Werewolf runs our client's strength meets (bench press and deadlift so far, ~190
 
 Rewrite the app from scratch in a new worktree, keeping only the concepts that proved useful, and run it beside the old app until a rehearsal passes, before the mid-November 2026 meet.
 
-- **Rulebook as data.** A contest is defined by a JSON rulebook: lifts (any name, all behaving the same), attempts per lift, divisions as tags (Open is everybody) with optional conditions, age/weight class templates, and individual and team classifications (division, lifts, formula, split, quota). The client's four team rankings, biceps curl and kids are configuration.
+- **Rulebook as data.** A contest is defined by a JSON rulebook: lifts (any name, all behaving the same), attempts per lift, divisions as tags (Open is a tag ticked by default) with optional conditions, age/weight class templates, and individual and team classifications (division, lifts, formula, split, quota). The client's four team rankings, biceps curl and kids are configuration.
 - **One pure contest core.** All rules live in one deterministic module: rulebook + ordered commands → state, lifting order and every classification.
 - **One Durable Object per contest** is the single source of truth, storing its commands in its own SQLite and pushing changes to every connected device over WebSocket.
 - **Offline-first devices.** Every device keeps a local replica; the desk keeps working with no internet and syncs when it returns. Devices that met while online keep syncing peer-to-peer over the shared Wi-Fi (WebRTC) when the internet drops.
@@ -34,7 +34,7 @@ Rewrite the app from scratch in a new worktree, keeping only the concepts that p
 1. As an organizer, I want to create a contest from a preset rulebook (bench + deadlift, powerlifting, single lift), so that a typical meet is ready in minutes ^ww-s8ny
 2. As an organizer, I want to define the contest's lifts freely (bench press, deadlift, squat, biceps curl or any named lift), so that a new lift never needs new code ^ww-dwfd
 3. As an organizer, I want to set the number of attempts per lift (default 3), so that the rulebook matches the federation ^ww-8fz8
-4. As an organizer, I want to define divisions (Uniformed services, Miners…) as tags for the contest, so that every group gets its own ranking; Open is everybody and MONSTER is a lift ^ww-ot23
+4. As an organizer, I want to define divisions (Uniformed services, Miners…) as tags for the contest, so that every group gets its own ranking; Open is a tag ticked by default that the organizer can untick for a lifter who starts only in MONSTER or only in a division (changed by the owner on 2026-10-20; before, Open was everybody), and MONSTER is a lift ^ww-ot23
 5. As an organizer, I want a division to carry optional conditions (sex, age range at contest date, bodyweight range, allowed lifts), so that the app refuses entries that do not belong there ^ww-lxn4
 6. As an organizer, I want age classes and weight classes from templates that I can edit per contest, so that rankings can be split the way the federation requires ^ww-ym25
 7. As an organizer, I want to define individual classifications (which division, which lifts, formula, split by age/weight class or not), so that every results table is a rule, not code ^ww-m7xy
@@ -112,7 +112,7 @@ Rewrite the app from scratch in a new worktree, keeping only the concepts that p
 
 ### Kids and the unknown
 
-63. As an organizer, I want kids age classes (2–8, 9–12; ages 13–16 are T16, changed by the owner on 2026-10-15) and check boxes for the age classes that count in team classifications, so that kids can be kept out of team points without code changes ^ww-e1fo
+63. As an organizer, I want kids age classes (2–8, 9–12; ages 13–16 are T16, changed by the owner on 2026-10-15) and check boxes for the age classes that count in team classifications, so that kids can be kept out of team points without code changes; kids have no weight class and rank only in a classification that lists their age classes, never next to adults (owner, 2026-10-20) ^ww-e1fo
 64. As an organizer, I want a contest whose only lift is biceps curl, or where some lifters do only curl, so that curl needs no special handling ^ww-03e1
 
 ## Implementation Decisions

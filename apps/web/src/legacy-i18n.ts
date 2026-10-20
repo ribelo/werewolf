@@ -13,7 +13,7 @@ const extra = {
     v2: {
       export: { xlsx: 'Eksport Excel (XLSX)', print: 'Drukuj' },
       columns: { team: 'Klub', count: 'Liczba zawodników w tabeli' },
-      registrations: { import: 'Import i drużyny' },
+      registrations: { import: 'Import i drużyny', import_only: 'Importuj', teams: 'Drużyny' },
       dns: { mark: 'Nie wystartował (DNS)', unmark: 'Cofnij DNS', short: 'DNS' },
       clock: {
         title: 'Zegar podejścia',
@@ -76,7 +76,7 @@ const extra = {
     v2: {
       export: { xlsx: 'Export Excel (XLSX)', print: 'Print' },
       columns: { team: 'Club', count: 'Lifters in the table' },
-      registrations: { import: 'Import and teams' },
+      registrations: { import: 'Import and teams', import_only: 'Import', teams: 'Teams' },
       dns: { mark: 'Did not start (DNS)', unmark: 'Undo DNS', short: 'DNS' },
       clock: {
         title: 'Attempt clock',
