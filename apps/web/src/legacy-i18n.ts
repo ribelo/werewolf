@@ -32,7 +32,7 @@ const extra = {
           'Klipy po zaliczonej i spalonej próbie na telebimie i ekranie scenicznym.',
       },
       // Not "Open": that is the tag; this filter is every weight of one sex.
-      filters: { all_weights: 'wszystkie wagi' },
+      filters: { all_weights: 'wszyscy' },
       hub: { screens: 'Ekrany', setup: 'Przygotowanie' },
       screen: {
         next: 'Następni',
@@ -96,7 +96,7 @@ const extra = {
         videos_description:
           'Clips after good and failed lifts on the big screen and the stage screen.',
       },
-      filters: { all_weights: 'all weights' },
+      filters: { all_weights: 'all' },
       hub: { screens: 'Screens', setup: 'Setup' },
       screen: {
         next: 'Up next',
