@@ -47,10 +47,8 @@ export function FilterBar({
   const weightLabel = (() => {
     if (filters.weight === 'ALL')
       return lt('contest_detail.registrations.filters.weight_button_all')
-    if (filters.weight === 'FEMALE_OPEN')
-      return female + ' ' + lt('contest_detail.registrations.filters.open')
-    if (filters.weight === 'MALE_OPEN')
-      return male + ' ' + lt('contest_detail.registrations.filters.open')
+    if (filters.weight === 'FEMALE_OPEN') return female + ' ' + lt('v2.filters.all_weights')
+    if (filters.weight === 'MALE_OPEN') return male + ' ' + lt('v2.filters.all_weights')
     const f = options.female.find((item) => item.id === filters.weight)
     if (f) return female + ' ' + f.label
     const m = options.male.find((item) => item.id === filters.weight)
@@ -180,19 +178,18 @@ export function FilterBar({
                         {lt('contest_detail.registrations.filters.' + key)}
                       </p>
                       <div className="grid grid-cols-2 gap-2">
-                        {[
-                          { id: open, label: lt('contest_detail.registrations.filters.open') },
-                          ...items,
-                        ].map((item) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            className={filterButtonClass(filters.weight === item.id) + ' w-full'}
-                            onClick={() => choose({ weight: item.id })}
-                          >
-                            {item.label}
-                          </button>
-                        ))}
+                        {[{ id: open, label: lt('v2.filters.all_weights') }, ...items].map(
+                          (item) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              className={filterButtonClass(filters.weight === item.id) + ' w-full'}
+                              onClick={() => choose({ weight: item.id })}
+                            >
+                              {item.label}
+                            </button>
+                          ),
+                        )}
                       </div>
                     </div>
                   ),
