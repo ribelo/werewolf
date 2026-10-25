@@ -125,6 +125,7 @@ describe('rulebook team results', () => {
       ['female1', 'female6', 'female5', 'female4', 'female3'],
       ['female1', 'male1', 'male6', 'male5', 'male4'],
       ['female1', 'male1', 'male6', 'male5', 'male4'],
+      [],
     ])
     expect(result[0]?.rows[0]?.counted.map((row) => row.points)).toEqual([
       274.04, 263.5, 252.96, 242.42, 231.88,
