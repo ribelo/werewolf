@@ -117,6 +117,8 @@ describe('rulebook team results', () => {
       ['women-best', 1243.375],
       ['bench-mixed', 999.695],
       ['deadlift-mixed', 1302.05],
+      // Nobody in this fixture is up to 19, so the youth team ranking has no points.
+      ['youth-four', 0],
     ])
     expect(result.map((ranking) => ranking.rows[0]?.counted.map((row) => row.entry.id))).toEqual([
       ['male1', 'male6', 'male5', 'male4', 'male3'],

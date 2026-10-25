@@ -535,6 +535,25 @@
         "female": 1
       },
       "ageClassIds": ["t16", "t19", "junior", "senior", "m40", "m50", "m60"]
+    },
+    {
+      "id": "youth-four",
+      "name": {
+        "pl": "Do 19 lat — najlepsza czwórka",
+        "en": "Up to 19 — best four"
+      },
+      "membership": {
+        "kind": "all"
+      },
+      "liftIds": ["bench", "deadlift"],
+      "result": "best",
+      "formula": "reshel",
+      "ageClassIds": ["t16", "t19"],
+      "kind": "team",
+      "quota": {
+        "kind": "any",
+        "count": 4
+      }
     }
   ],
   "barbell": {
