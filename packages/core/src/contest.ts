@@ -137,6 +137,8 @@ export const Command = Schema.Union([
     value: Schema.Boolean,
   }),
   Schema.TaggedStruct('UpsertTeam', { ...commandMetadata, team: Team }),
+  /** Deletes a club; its lifters are left without a club. */
+  Schema.TaggedStruct('RemoveTeam', { ...commandMetadata, teamId: Team.fields.id }),
   Schema.TaggedStruct('MergeTeams', {
     ...commandMetadata,
 
@@ -799,6 +801,19 @@ function applyMutation(
         ? state.teams.map((team) => (team.id === command.team.id ? command.team : team))
         : [...state.teams, command.team]
       return Result.succeed({ ...state, teams })
+    }
+    case 'RemoveTeam': {
+      if (!state.teams.some((team) => team.id === command.teamId))
+        return Result.fail(new TeamConflict({ teamId: command.teamId, reason: 'invalidMerge' }))
+      const entries = state.entries.map((entry) => {
+        if (entry.lifter.teamId !== command.teamId) return entry
+        const { teamId: _removed, ...lifter } = entry.lifter
+        return { ...entry, lifter }
+      })
+      return replaceEntries(
+        { ...state, teams: state.teams.filter((team) => team.id !== command.teamId) },
+        entries,
+      )
     }
     case 'MergeTeams': {
       if (

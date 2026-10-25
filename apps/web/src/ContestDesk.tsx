@@ -17,9 +17,16 @@ import { Modal } from './Modal.tsx'
 import { PlatesPanel } from './PlatesPanel.tsx'
 import { Registrations } from './Registrations.tsx'
 import { TeamResults } from './TeamResults.tsx'
+import { TeamsBoard } from './TeamsBoard.tsx'
 import { VideoLibrary } from './Videos.tsx'
 
-type Tab = 'desk' | 'registrations' | 'team_results' | 'plates' | { readonly lift: string }
+type Tab =
+  | 'desk'
+  | 'registrations'
+  | 'teams'
+  | 'team_results'
+  | 'plates'
+  | { readonly lift: string }
 const legacyLiftTab: Readonly<Record<string, string>> = {
   squat: 'contest_detail.tabs.squat_table',
   bench: 'contest_detail.tabs.bench_table',
@@ -101,6 +108,7 @@ export function ContestDesk({
   const tabs: ReadonlyArray<readonly [Tab, string]> = [
     ['desk', lt('contest_detail.tabs.desk')],
     ['registrations', lt('contest_detail.tabs.main_table')],
+    ['teams', lt('v2.teams_board.tab')],
     ['team_results', lt('contest_detail.tabs.team_results')],
     ['plates', lt('contest_detail.tabs.plates')],
     ...state.rulebook.lifts.map(
@@ -173,6 +181,7 @@ export function ContestDesk({
               onEdit={setEditing}
             />
           )}
+          {tab === 'teams' && <TeamsBoard state={state} submit={live.submit} />}
           {tab === 'team_results' && <TeamResults state={state} contestName={definition.name} />}
           {tab === 'plates' && <PlatesPanel state={state} submit={live.submit} editor={editor} />}
           {typeof tab !== 'string' && (

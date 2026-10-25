@@ -33,6 +33,13 @@ const extra = {
       },
       // Not "Open": that is the tag; this filter is every weight of one sex.
       filters: { all_weights: 'wszyscy' },
+      teams_board: {
+        tab: 'Drużyny',
+        title: 'Drużyny',
+        hint: 'Przeciągnij zawodnika do innej drużyny.',
+        no_team: 'Bez klubu',
+        years: 'l.',
+      },
       hub: { screens: 'Ekrany', setup: 'Przygotowanie' },
       screen: {
         next: 'Następni',
@@ -97,6 +104,13 @@ const extra = {
           'Clips after good and failed lifts on the big screen and the stage screen.',
       },
       filters: { all_weights: 'all' },
+      teams_board: {
+        tab: 'Teams',
+        title: 'Teams',
+        hint: 'Drag a lifter to another team.',
+        no_team: 'No club',
+        years: 'y',
+      },
       hub: { screens: 'Screens', setup: 'Setup' },
       screen: {
         next: 'Up next',

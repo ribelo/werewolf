@@ -382,6 +382,25 @@ export function TeamsPanel({
                   </option>
                 ))}
             </select>
+            <button
+              type="button"
+              className="btn-secondary px-3 py-1 text-xxs"
+              onClick={() => {
+                const members = state.entries.filter(
+                  (entry) => entry.lifter.teamId === team.id,
+                ).length
+                if (
+                  confirm(
+                    t('teams.removeConfirm')
+                      .replace('{name}', team.name)
+                      .replace('{count}', String(members)),
+                  )
+                )
+                  submit({ _tag: 'RemoveTeam', teamId: team.id })
+              }}
+            >
+              {t('teams.remove')}
+            </button>
           </li>
         ))}
       </ul>

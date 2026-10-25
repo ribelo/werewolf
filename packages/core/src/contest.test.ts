@@ -367,6 +367,18 @@ describe('portable contest core', () => {
     ).toEqual({ _tag: 'Idle' })
   })
 
+  it('removes a club and leaves its lifters without a club', () => {
+    const removed = state([
+      command({ id: 'team', _tag: 'UpsertTeam', team: { id: 't1', name: 'Klub' } }),
+      add('a', 1, [{ liftId: 'upper', openingWeight: 100 }], {
+        lifter: { id: 'lifter-a', name: 'A', sex: 'male', birthDate: '1990-01-01', teamId: 't1' },
+      }),
+      command({ id: 'remove', _tag: 'RemoveTeam', teamId: 't1' }),
+    ])
+    expect(removed.teams).toEqual([])
+    expect(removed.entries[0]?.lifter).not.toHaveProperty('teamId')
+  })
+
   it('ww-lcu1 takes a declared weight back, but not a judged one', () => {
     const declared = [
       add('a', 1),
