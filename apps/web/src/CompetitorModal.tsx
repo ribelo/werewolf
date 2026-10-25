@@ -144,8 +144,14 @@ function Dialog({
             ?.id ?? crypto.randomUUID(),
         )
       : Option.none()
-    if (Option.isSome(teamId) && !state.teams.some((item) => item.id === teamId.value))
-      submit({ _tag: 'UpsertTeam', team: { id: teamId.value, name: club.trim() } })
+    // A new club is created; the same club typed differently (capitals, spaces) is renamed,
+    // because it is matched by name regardless of case and would otherwise not change at all.
+    Option.map(teamId, (value) => {
+      const known = state.teams.find((item) => item.id === value)
+      // Joining another existing club never renames it; only the lifter's own club is renamed.
+      if (!known || (value === entry?.lifter.teamId && known.name !== club.trim()))
+        submit({ _tag: 'UpsertTeam', team: { id: value, name: club.trim() } })
+    })
     const team = Option.match(teamId, {
       onNone: () => ({}),
       onSome: (value) => ({ teamId: value }),
@@ -216,6 +222,9 @@ function Dialog({
       )
       if (opening > 0 && String(opening) !== firstAttempt(liftId) && attempt?._tag !== 'Judged')
         submit({ _tag: 'SetWeight', attempt: { entryId: id, liftId, number: 1 }, weight: opening })
+      // An emptied opening weight takes the declaration back, as in the lift tables.
+      if (openings[liftId]?.trim() === '' && attempt?._tag === 'Declared')
+        submit({ _tag: 'ClearWeight', attempt: { entryId: id, liftId, number: 1 } })
     }
     onClose()
   }
