@@ -61,7 +61,7 @@ export function TeamsBoard({
     <section className="space-y-2">
       <header className="flex flex-wrap items-baseline gap-4">
         <h3 className="font-display text-2xl uppercase tracking-[0.15em] text-text-primary">
-          {lt('v2.teams_board.title')}
+          {lt('v2.teams_board.title')} ({groups.filter((group) => group.id !== NO_TEAM).length})
         </h3>
         <span className="text-caption text-text-secondary">{lt('v2.teams_board.hint')}</span>
       </header>
