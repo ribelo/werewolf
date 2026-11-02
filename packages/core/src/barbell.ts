@@ -1,5 +1,4 @@
 import * as Schema from 'effect/Schema'
-import type { Sex } from './lifter.ts'
 
 /** Kilograms have exact gram precision. Inventory arithmetic uses integer grams. */
 export const Kilograms = Schema.Finite.check(
@@ -75,8 +74,8 @@ function fewerPlates(candidate: ReadonlyArray<PlateStack>, current: ReadonlyArra
  * Find an exact bounded inventory load, or its nearest alternative; ties choose the lower load.
  * Each load uses the fewest plates per side, so the loaders change as little as possible.
  */
-export function loadBarbell(barbell: Barbell, sex: Sex, requested: Kilograms): BarbellLoad {
-  const base = Math.round(barbell.bars[sex] * 1000) + Math.round(barbell.clampsPerSide * 2000)
+export function loadBarbell(barbell: Barbell, bar: Kilograms, requested: Kilograms): BarbellLoad {
+  const base = Math.round(bar * 1000) + Math.round(barbell.clampsPerSide * 2000)
   const requestedGrams = Math.round(requested * 1000)
   const inventory = barbell.plates.toSorted((a, b) => b.weight - a.weight)
   const maximumSide = inventory.reduce(

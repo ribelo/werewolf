@@ -33,6 +33,10 @@ const extra = {
       },
       // Not "Open": that is the tag; this filter is every weight of one sex.
       filters: { all_weights: 'wszyscy' },
+      plates: {
+        lift_bar: 'Gryf — {lift} (kg)',
+        lift_bar_default: 'jak dla płci',
+      },
       teams_board: {
         tab: 'Drużyny',
         title: 'Drużyny',
@@ -104,6 +108,10 @@ const extra = {
           'Clips after good and failed lifts on the big screen and the stage screen.',
       },
       filters: { all_weights: 'all' },
+      plates: {
+        lift_bar: 'Bar — {lift} (kg)',
+        lift_bar_default: 'by sex',
+      },
       teams_board: {
         tab: 'Teams',
         title: 'Teams',

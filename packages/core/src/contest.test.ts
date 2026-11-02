@@ -287,13 +287,15 @@ describe('portable contest core', () => {
     expect(
       replay(rulebook, date, [add('a', 1, [{ liftId: 'upper', openingWeight: 20 }])]),
     ).toMatchObject({ _tag: 'Failure', failure: { _tag: 'UnloadableWeight', nearest: 25 } })
-    expect(loadBarbell(rulebook.barbell, 'female', Schema.decodeSync(Kilograms)(0))).toMatchObject({
+    expect(
+      loadBarbell(rulebook.barbell, rulebook.barbell.bars.female, Schema.decodeSync(Kilograms)(0)),
+    ).toMatchObject({
       _tag: 'Unloadable',
       nearest: 20,
     })
-    expect(loadBarbell(rulebook.barbell, 'male', Schema.decodeSync(Kilograms)(1000))).toMatchObject(
-      { _tag: 'Unloadable', nearest: 410 },
-    )
+    expect(
+      loadBarbell(rulebook.barbell, rulebook.barbell.bars.male, Schema.decodeSync(Kilograms)(1000)),
+    ).toMatchObject({ _tag: 'Unloadable', nearest: 410 })
     const irregular = book({
       ...input,
       barbell: {
@@ -305,7 +307,9 @@ describe('portable contest core', () => {
         ],
       },
     })
-    expect(loadBarbell(irregular.barbell, 'male', Schema.decodeSync(Kilograms)(32))).toEqual({
+    expect(
+      loadBarbell(irregular.barbell, irregular.barbell.bars.male, Schema.decodeSync(Kilograms)(32)),
+    ).toEqual({
       _tag: 'Loadable',
       weight: 32,
       platesPerSide: [{ weight: 3, count: 2 }],
@@ -329,7 +333,9 @@ describe('portable contest core', () => {
         ],
       },
     })
-    expect(loadBarbell(rulebook.barbell, 'male', Schema.decodeSync(Kilograms)(170))).toEqual({
+    expect(
+      loadBarbell(rulebook.barbell, rulebook.barbell.bars.male, Schema.decodeSync(Kilograms)(170)),
+    ).toEqual({
       _tag: 'Loadable',
       weight: 170,
       platesPerSide: [
@@ -377,6 +383,20 @@ describe('portable contest core', () => {
     ])
     expect(removed.teams).toEqual([])
     expect(removed.entries[0]?.lifter).not.toHaveProperty('teamId')
+  })
+
+  it('ww-sy28 a lift with its own bar checks weights against that bar', () => {
+    const curlBook = book({
+      ...input,
+      lifts: input.lifts.map((lift) => (lift.id === 'lower' ? { ...lift, bar: 10 } : lift)),
+    })
+    // 10 kg bar + 2 × 2.5 kg clamps = 15 kg; the 20 kg bar by sex would refuse it.
+    expect(
+      replay(curlBook, date, [add('a', 1, [{ liftId: 'lower', openingWeight: 15 }])]),
+    ).toMatchObject({ _tag: 'Success' })
+    expect(
+      replay(book(), date, [add('a', 1, [{ liftId: 'lower', openingWeight: 15 }])]),
+    ).toMatchObject({ _tag: 'Failure', failure: { _tag: 'UnloadableWeight' } })
   })
 
   it('ww-lcu1 takes a declared weight back, but not a judged one', () => {

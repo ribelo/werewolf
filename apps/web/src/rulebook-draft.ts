@@ -11,6 +11,7 @@ interface LiftDraft {
   rackHeight: boolean
   code?: string
   exportName?: string
+  bar?: number
 }
 export interface DivisionDraft {
   id: string

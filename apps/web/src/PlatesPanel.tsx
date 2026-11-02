@@ -17,11 +17,17 @@ export function PlatesPanel({
   readonly submit: (input: object) => void
   readonly editor: boolean
 }) {
-  const { lt } = useLegacy()
+  const { lt, locale } = useLegacy()
   const barbell = state.rulebook.barbell
   const [men, setMen] = useState(String(barbell.bars.male))
   const [women, setWomen] = useState(String(barbell.bars.female))
   const [clamp, setClamp] = useState(String(barbell.clampsPerSide))
+  /** Own bar of a lift (the curl bar); empty uses the bar by sex. */
+  const [liftBars, setLiftBars] = useState<Readonly<Record<string, string>>>(() =>
+    Object.fromEntries(
+      state.rulebook.lifts.map((lift) => [lift.id, lift.bar ? String(lift.bar) : '']),
+    ),
+  )
   const [newWeight, setNewWeight] = useState('')
   const [newQuantity, setNewQuantity] = useState('')
   const [newColor, setNewColor] = useState('')
@@ -30,7 +36,12 @@ export function PlatesPanel({
     setMen(String(barbell.bars.male))
     setWomen(String(barbell.bars.female))
     setClamp(String(barbell.clampsPerSide))
-  }, [barbell])
+    setLiftBars(
+      Object.fromEntries(
+        state.rulebook.lifts.map((lift) => [lift.id, lift.bar ? String(lift.bar) : '']),
+      ),
+    )
+  }, [barbell, state.rulebook.lifts])
   function save(change: (book: Book) => Book) {
     const encoded = Schema.encodeSync(Rulebook)(state.rulebook)
     const next = Schema.decodeUnknownResult(Rulebook)(change(encoded))
@@ -40,6 +51,11 @@ export function PlatesPanel({
     }
     setError('')
     submit({ _tag: 'SetRulebook', rulebook: Schema.encodeSync(Rulebook)(next.success) })
+  }
+  const withBar = (lift: Book['lifts'][number]): Book['lifts'][number] => {
+    const { bar: _old, ...rest } = lift
+    const value = Number(liftBars[lift.id])
+    return liftBars[lift.id]?.trim() && value > 0 ? { ...rest, bar: value } : rest
   }
   const plates = barbell.plates.toSorted((a, b) => b.weight - a.weight)
   const display = (value: number) => String(value)
@@ -116,6 +132,23 @@ export function PlatesPanel({
                 {lt('contest_detail.plates.clamp_weight_hint')}
               </p>
             </div>
+            {state.rulebook.lifts.map((lift) => (
+              <div key={lift.id}>
+                <label className="input-label" htmlFor={'lift-bar-' + lift.id}>
+                  {lt('v2.plates.lift_bar', { lift: lift.name[locale] })}
+                </label>
+                <input
+                  id={'lift-bar-' + lift.id}
+                  className="input-field"
+                  type="number"
+                  step="0.25"
+                  placeholder={lt('v2.plates.lift_bar_default')}
+                  value={liftBars[lift.id] ?? ''}
+                  disabled={!editor}
+                  onChange={(e) => setLiftBars({ ...liftBars, [lift.id]: e.target.value })}
+                />
+              </div>
+            ))}
             {editor && (
               <div className="md:col-span-3">
                 <button
@@ -129,6 +162,7 @@ export function PlatesPanel({
                         bars: { male: Number(men), female: Number(women) },
                         clampsPerSide: Number(clamp),
                       },
+                      lifts: [withBar(book.lifts[0]), ...book.lifts.slice(1).map(withBar)],
                     }))
                   }
                 >

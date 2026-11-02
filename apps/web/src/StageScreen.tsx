@@ -1,4 +1,4 @@
-import type { ContestState } from '@werewolf/core'
+import { barWeight, type ContestState } from '@werewolf/core'
 import * as Option from 'effect/Option'
 import { Barbell } from './Barbell.tsx'
 import { useLegacy } from './legacy-i18n.ts'
@@ -223,7 +223,7 @@ function Current({ state, view }: { readonly state: ContestState; readonly view:
           </div>
           <span className="text-xl uppercase tracking-[0.2em] text-text-secondary">
             {lt('display_current.sidebar.bar_weight', {
-              weight: state.rulebook.barbell.bars[view.entry.lifter.sex],
+              weight: barWeight(state.rulebook, view.attempt.liftId, view.entry.lifter.sex),
             })}
             {state.rulebook.barbell.clampsPerSide > 0 &&
               ' • ' +

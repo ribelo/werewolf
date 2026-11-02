@@ -19,6 +19,7 @@ import {
 import { ageOnDate, CalendarDate, Lifter, Sex, type TeamId } from './lifter.ts'
 import {
   AgeClassId,
+  barWeight,
   DivisionId,
   LiftId,
   Rulebook,
@@ -318,7 +319,11 @@ function validateEntries(
       if (!lift) return reject('unknownLift')
       if ('rackHeight' in selected && !lift.rackHeight) return reject('rackHeightNotUsed')
       if (typeof selected.openingWeight === 'number') {
-        const load = loadBarbell(state.rulebook.barbell, entry.lifter.sex, selected.openingWeight)
+        const load = loadBarbell(
+          state.rulebook.barbell,
+          barWeight(state.rulebook, selected.liftId, entry.lifter.sex),
+          selected.openingWeight,
+        )
         if (load._tag === 'Unloadable')
           return Result.fail(
             new UnloadableWeight({ requested: load.requested, nearest: load.nearest }),
@@ -628,7 +633,11 @@ function applyMutation(
         return Result.fail(
           new AttemptUnavailable({ attempt: command.attempt, reason: 'unknownAttempt' }),
         )
-      const load = loadBarbell(state.rulebook.barbell, entry.lifter.sex, command.weight)
+      const load = loadBarbell(
+        state.rulebook.barbell,
+        barWeight(state.rulebook, command.attempt.liftId, entry.lifter.sex),
+        command.weight,
+      )
       if (load._tag === 'Unloadable')
         return Result.fail(
           new UnloadableWeight({ requested: load.requested, nearest: load.nearest }),

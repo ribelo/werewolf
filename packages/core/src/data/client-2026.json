@@ -47,7 +47,8 @@
       "attempts": 3,
       "rackHeight": false,
       "code": "SC",
-      "exportName": "Strict curl"
+      "exportName": "Strict curl",
+      "bar": 10
     }
   ],
   "divisions": [

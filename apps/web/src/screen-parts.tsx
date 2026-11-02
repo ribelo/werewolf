@@ -1,5 +1,6 @@
 import {
   ageOnDate,
+  barWeight,
   currentAttempt,
   entryAgeClass,
   entryWeightClass,
@@ -167,7 +168,11 @@ export function currentView(state: ContestState, locale: 'pl' | 'en'): Option.Op
         .filter((item) => item.entryId === attempt.entryId && item.liftId === attempt.liftId)
         .toSorted((a, b) => a.number - b.number),
       rack: typeof rack === 'number' ? Option.some(rack) : Option.none(),
-      load: loadBarbell(state.rulebook.barbell, entry.lifter.sex, attempt.weight),
+      load: loadBarbell(
+        state.rulebook.barbell,
+        barWeight(state.rulebook, attempt.liftId, entry.lifter.sex),
+        attempt.weight,
+      ),
       colors: Object.fromEntries(
         state.rulebook.barbell.plates.flatMap((plate) =>
           plate.color ? [[plate.weight, plate.color] as const] : [],

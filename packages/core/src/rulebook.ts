@@ -24,6 +24,8 @@ const Lift = Schema.Struct({
   code: Schema.optionalKey(Schema.NonEmptyString),
   /** Title word of a single-lift federation file, such as Bench; the English name when absent. */
   exportName: Schema.optionalKey(Schema.NonEmptyString),
+  /** Bar of this lift for every lifter, such as the 10 kg curl bar; the bar by sex when absent. */
+  bar: Schema.optionalKey(Kilograms.check(Schema.isGreaterThan(0))),
 })
 const Division = Schema.Struct({
   id: DivisionId,
@@ -193,4 +195,8 @@ export function defaultDivisions(book: Rulebook): ReadonlyArray<DivisionId> {
   return book.divisions
     .filter((division) => division.byDefault === true)
     .map((division) => division.id)
+}
+/** Bar weight for a lift and sex: the lift's own bar, otherwise the bar by sex. */
+export function barWeight(book: Rulebook, liftId: string, sex: Sex): Kilograms {
+  return book.lifts.find((lift) => lift.id === liftId)?.bar ?? book.barbell.bars[sex]
 }
