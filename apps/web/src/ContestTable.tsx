@@ -1,4 +1,5 @@
 import type { Attempt, AttemptRef, ContestState } from '@werewolf/core'
+import { useState } from 'react'
 import {
   ArrowUpDown,
   CheckCircle2,
@@ -230,6 +231,15 @@ export function ContestTable({
   onEditCompetitor,
 }: ContestTableProps) {
   const { lt, locale } = useLegacy()
+  /** Rows marked by a click on the lifter's name, to keep an eye on them; local to this screen. */
+  const [marked, setMarked] = useState<ReadonlySet<string>>(() => new Set())
+  const toggleMark = (entryId: string) =>
+    setMarked((previous) => {
+      const next = new Set(previous)
+      if (next.has(entryId)) next.delete(entryId)
+      else next.add(entryId)
+      return next
+    })
   const chosen = state.rulebook.lifts.filter((lift) => liftIds.includes(lift.id))
   const lifts = showAttemptGrid ? chosen : []
   const [only] = chosen
@@ -380,10 +390,22 @@ export function ContestTable({
             onSome: (lift) => row.best[lift.id] ?? 0,
           })
           return (
-            <tr key={entry.id} className="border-b border-border-color hover:bg-element-bg/50">
+            <tr
+              key={entry.id}
+              className={
+                'border-b border-border-color ' +
+                (marked.has(entry.id)
+                  ? 'bg-amber-400/20 outline outline-2 -outline-offset-2 outline-amber-400'
+                  : 'hover:bg-element-bg/50')
+              }
+              aria-selected={marked.has(entry.id)}
+            >
               {showRowNumbers && (
                 <td
-                  className="sticky left-0 z-10 bg-main-bg/95 px-2 py-2 text-center border-r border-border-color"
+                  className={
+                    'sticky left-0 z-10 px-2 py-2 text-center border-r border-border-color ' +
+                    (marked.has(entry.id) ? 'bg-amber-900/90' : 'bg-main-bg/95')
+                  }
                   style={{ minWidth: 40, width: 40 }}
                 >
                   <span className="text-sm text-text-secondary">{index + 1}</span>
@@ -391,9 +413,13 @@ export function ContestTable({
               )}
               <td
                 className={
-                  'sticky z-10 bg-main-bg/95 px-2 py-1.5 border-r border-border-color ' + nameLeft
+                  'sticky z-10 cursor-pointer select-none px-2 py-1.5 border-r border-border-color ' +
+                  (marked.has(entry.id) ? 'bg-amber-900/90 ' : 'bg-main-bg/95 ') +
+                  nameLeft
                 }
                 style={{ minWidth: NAME_COLUMN_WIDTH, width: NAME_COLUMN_WIDTH }}
+                title={lt('v2.table.mark')}
+                onClick={() => toggleMark(entry.id)}
               >
                 <div className="flex flex-col">
                   <span className="font-semibold text-text-primary">{entry.lifter.name}</span>

@@ -14,7 +14,8 @@
       "attempts": 3,
       "rackHeight": true,
       "code": "BP",
-      "exportName": "Bench"
+      "exportName": "Bench",
+      "bar": 20
     },
     {
       "id": "monster",
@@ -25,7 +26,8 @@
       "attempts": 3,
       "rackHeight": true,
       "code": "MB",
-      "exportName": "Monster bench"
+      "exportName": "Monster bench",
+      "bar": 20
     },
     {
       "id": "deadlift",
@@ -36,7 +38,8 @@
       "attempts": 3,
       "rackHeight": false,
       "code": "DL",
-      "exportName": "Deadlift"
+      "exportName": "Deadlift",
+      "bar": 20
     },
     {
       "id": "curl",

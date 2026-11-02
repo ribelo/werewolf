@@ -12,6 +12,7 @@ const extra = {
   pl: {
     v2: {
       export: { xlsx: 'Eksport Excel (XLSX)', print: 'Drukuj' },
+      table: { mark: 'Kliknij, aby podświetlić wiersz' },
       columns: { team: 'Klub', count: 'Liczba zawodników w tabeli' },
       registrations: { import: 'Import i drużyny', import_only: 'Importuj', teams: 'Drużyny' },
       dns: { mark: 'Nie wystartował (DNS)', unmark: 'Cofnij DNS', short: 'DNS' },
@@ -35,7 +36,6 @@ const extra = {
       filters: { all_weights: 'wszyscy' },
       plates: {
         lift_bar: 'Gryf — {lift} (kg)',
-        lift_bar_default: 'jak dla płci',
       },
       teams_board: {
         tab: 'Drużyny',
@@ -88,6 +88,7 @@ const extra = {
   en: {
     v2: {
       export: { xlsx: 'Export Excel (XLSX)', print: 'Print' },
+      table: { mark: 'Click to highlight the row' },
       columns: { team: 'Club', count: 'Lifters in the table' },
       registrations: { import: 'Import and teams', import_only: 'Import', teams: 'Teams' },
       dns: { mark: 'Did not start (DNS)', unmark: 'Undo DNS', short: 'DNS' },
@@ -110,7 +111,6 @@ const extra = {
       filters: { all_weights: 'all' },
       plates: {
         lift_bar: 'Bar — {lift} (kg)',
-        lift_bar_default: 'by sex',
       },
       teams_board: {
         tab: 'Teams',

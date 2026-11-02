@@ -1,4 +1,4 @@
-import { Rulebook, type ContestState } from '@werewolf/core'
+import { barWeight, Rulebook, type ContestState } from '@werewolf/core'
 import * as Result from 'effect/Result'
 import * as Schema from 'effect/Schema'
 import { useEffect, useState } from 'react'
@@ -19,13 +19,14 @@ export function PlatesPanel({
 }) {
   const { lt, locale } = useLegacy()
   const barbell = state.rulebook.barbell
-  const [men, setMen] = useState(String(barbell.bars.male))
-  const [women, setWomen] = useState(String(barbell.bars.female))
   const [clamp, setClamp] = useState(String(barbell.clampsPerSide))
-  /** Own bar of a lift (the curl bar); empty uses the bar by sex. */
+  /** One bar per lift, the same for men and women (the curl bar is lighter). */
   const [liftBars, setLiftBars] = useState<Readonly<Record<string, string>>>(() =>
     Object.fromEntries(
-      state.rulebook.lifts.map((lift) => [lift.id, lift.bar ? String(lift.bar) : '']),
+      state.rulebook.lifts.map((lift) => [
+        lift.id,
+        String(barWeight(state.rulebook, lift.id, 'male')),
+      ]),
     ),
   )
   const [newWeight, setNewWeight] = useState('')
@@ -33,15 +34,16 @@ export function PlatesPanel({
   const [newColor, setNewColor] = useState('')
   const [error, setError] = useState('')
   useEffect(() => {
-    setMen(String(barbell.bars.male))
-    setWomen(String(barbell.bars.female))
     setClamp(String(barbell.clampsPerSide))
     setLiftBars(
       Object.fromEntries(
-        state.rulebook.lifts.map((lift) => [lift.id, lift.bar ? String(lift.bar) : '']),
+        state.rulebook.lifts.map((lift) => [
+          lift.id,
+          String(barWeight(state.rulebook, lift.id, 'male')),
+        ]),
       ),
     )
-  }, [barbell, state.rulebook.lifts])
+  }, [barbell, state.rulebook])
   function save(change: (book: Book) => Book) {
     const encoded = Schema.encodeSync(Rulebook)(state.rulebook)
     const next = Schema.decodeUnknownResult(Rulebook)(change(encoded))
@@ -53,9 +55,8 @@ export function PlatesPanel({
     submit({ _tag: 'SetRulebook', rulebook: Schema.encodeSync(Rulebook)(next.success) })
   }
   const withBar = (lift: Book['lifts'][number]): Book['lifts'][number] => {
-    const { bar: _old, ...rest } = lift
     const value = Number(liftBars[lift.id])
-    return liftBars[lift.id]?.trim() && value > 0 ? { ...rest, bar: value } : rest
+    return value > 0 ? { ...lift, bar: value } : lift
   }
   const plates = barbell.plates.toSorted((a, b) => b.weight - a.weight)
   const display = (value: number) => String(value)
@@ -74,47 +75,9 @@ export function PlatesPanel({
             <h3 className="text-h3 text-text-primary">{lt('contest_detail.plates.title')}</h3>
             <p className="text-body text-text-secondary">{lt('contest_detail.plates.subtitle')}</p>
           </div>
-          <div className="grid gap-2 md:grid-cols-2 text-caption text-text-secondary uppercase tracking-[0.35em]">
-            <span>
-              {lt('contest_detail.plates.bar_weight_men', { weight: barbell.bars.male + ' kg' })}
-            </span>
-            <span>
-              {lt('contest_detail.plates.bar_weight_women', {
-                weight: barbell.bars.female + ' kg',
-              })}
-            </span>
-          </div>
         </header>
         <div className="space-y-4">
           <div className="grid gap-4 md:grid-cols-3">
-            <div>
-              <label className="input-label" htmlFor="mens-bar-weight-setting">
-                {lt('contest_detail.plates.bar_weight_men', { weight: '' })}
-              </label>
-              <input
-                id="mens-bar-weight-setting"
-                className="input-field"
-                type="number"
-                step="0.25"
-                value={men}
-                disabled={!editor}
-                onChange={(e) => setMen(e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="input-label" htmlFor="womens-bar-weight-setting">
-                {lt('contest_detail.plates.bar_weight_women', { weight: '' })}
-              </label>
-              <input
-                id="womens-bar-weight-setting"
-                className="input-field"
-                type="number"
-                step="0.25"
-                value={women}
-                disabled={!editor}
-                onChange={(e) => setWomen(e.target.value)}
-              />
-            </div>
             <div>
               <label className="input-label" htmlFor="clamp-weight-setting">
                 {lt('contest_detail.plates.clamp_weight_label')}
@@ -142,7 +105,6 @@ export function PlatesPanel({
                   className="input-field"
                   type="number"
                   step="0.25"
-                  placeholder={lt('v2.plates.lift_bar_default')}
                   value={liftBars[lift.id] ?? ''}
                   disabled={!editor}
                   onChange={(e) => setLiftBars({ ...liftBars, [lift.id]: e.target.value })}
@@ -159,7 +121,6 @@ export function PlatesPanel({
                       ...book,
                       barbell: {
                         ...book.barbell,
-                        bars: { male: Number(men), female: Number(women) },
                         clampsPerSide: Number(clamp),
                       },
                       lifts: [withBar(book.lifts[0]), ...book.lifts.slice(1).map(withBar)],

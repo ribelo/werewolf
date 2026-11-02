@@ -783,20 +783,16 @@ export function RulebookEditor({
         <>
           <Section title={t('rb.equipment')}>
             <div className="mb-3 flex flex-wrap gap-3">
-              <Num
-                label={t('rb.barMale')}
-                value={draft.barbell.bars.male}
-                onChange={(male) =>
-                  set({ barbell: { ...draft.barbell, bars: { ...draft.barbell.bars, male } } })
-                }
-              />
-              <Num
-                label={t('rb.barFemale')}
-                value={draft.barbell.bars.female}
-                onChange={(female) =>
-                  set({ barbell: { ...draft.barbell, bars: { ...draft.barbell.bars, female } } })
-                }
-              />
+              {draft.lifts.map((lift, index) => (
+                <Num
+                  key={index}
+                  label={t('rb.bar') + ' — ' + lift.name[locale]}
+                  value={lift.bar ?? draft.barbell.bars.male}
+                  onChange={(bar) =>
+                    set({ lifts: replaceAt(draft.lifts, index, { ...lift, bar }) })
+                  }
+                />
+              ))}
               <Num
                 label={t('rb.clamps')}
                 value={draft.barbell.clampsPerSide}
