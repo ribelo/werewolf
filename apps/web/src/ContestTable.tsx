@@ -231,15 +231,11 @@ export function ContestTable({
   onEditCompetitor,
 }: ContestTableProps) {
   const { lt, locale } = useLegacy()
-  /** Rows marked by a click on the lifter's name, to keep an eye on them; local to this screen. */
-  const [marked, setMarked] = useState<ReadonlySet<string>>(() => new Set())
+  /** The one row marked by a click on the lifter's name; a second click clears it. Local to this screen. */
+  const [marked, setMarked] = useState('')
   const toggleMark = (entryId: string) =>
-    setMarked((previous) => {
-      const next = new Set(previous)
-      if (next.has(entryId)) next.delete(entryId)
-      else next.add(entryId)
-      return next
-    })
+    setMarked((previous) => (previous === entryId ? '' : entryId))
+  const isMarked = (entryId: string) => marked === entryId
   const chosen = state.rulebook.lifts.filter((lift) => liftIds.includes(lift.id))
   const lifts = showAttemptGrid ? chosen : []
   const [only] = chosen
@@ -394,17 +390,17 @@ export function ContestTable({
               key={entry.id}
               className={
                 'border-b border-border-color ' +
-                (marked.has(entry.id)
+                (isMarked(entry.id)
                   ? 'bg-amber-400/20 outline outline-2 -outline-offset-2 outline-amber-400'
                   : 'hover:bg-element-bg/50')
               }
-              aria-selected={marked.has(entry.id)}
+              aria-selected={isMarked(entry.id)}
             >
               {showRowNumbers && (
                 <td
                   className={
                     'sticky left-0 z-10 px-2 py-2 text-center border-r border-border-color ' +
-                    (marked.has(entry.id) ? 'bg-amber-900/90' : 'bg-main-bg/95')
+                    (isMarked(entry.id) ? 'bg-amber-900/90' : 'bg-main-bg/95')
                   }
                   style={{ minWidth: 40, width: 40 }}
                 >
@@ -414,7 +410,7 @@ export function ContestTable({
               <td
                 className={
                   'sticky z-10 cursor-pointer select-none px-2 py-1.5 border-r border-border-color ' +
-                  (marked.has(entry.id) ? 'bg-amber-900/90 ' : 'bg-main-bg/95 ') +
+                  (isMarked(entry.id) ? 'bg-amber-900/90 ' : 'bg-main-bg/95 ') +
                   nameLeft
                 }
                 style={{ minWidth: NAME_COLUMN_WIDTH, width: NAME_COLUMN_WIDTH }}
