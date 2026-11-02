@@ -25,6 +25,7 @@ import {
 } from './contest-table.ts'
 import { FilterBar } from './FilterBar.tsx'
 import { useLegacy } from './legacy-i18n.ts'
+import { useFillHeight } from './fill-height.ts'
 import { filterFrom } from './TableScreens.tsx'
 import { downloadBlob, fileSlug, printTables, tablesToXlsx } from './table-export.ts'
 
@@ -224,6 +225,7 @@ export function LiftPanel({
   readonly onEditCompetitor: (entryId: string) => void
 }) {
   const { lt, locale } = useLegacy()
+  const scroller = useFillHeight<HTMLDivElement>()
   const lift = state.rulebook.lifts.find((item) => item.id === liftId)
   const { filters, setFilters, sort, onSortChange } = useTableState(liftId)
   const all = useMemo(() => buildRows(state, locale), [state, locale])
@@ -346,7 +348,7 @@ export function LiftPanel({
           {lt('contest_detail.registrations.empty_filter')}
         </div>
       ) : (
-        <div className="max-h-[calc(100vh-9.5rem)] overflow-auto border border-border-color">
+        <div ref={scroller} className="overflow-auto border border-border-color">
           <ContestTable
             state={state}
             rows={rows}

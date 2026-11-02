@@ -13,6 +13,7 @@ import {
 } from './contest-table.ts'
 import { FilterBar } from './FilterBar.tsx'
 import { useLegacy } from './legacy-i18n.ts'
+import { useFillHeight } from './fill-height.ts'
 import { ExportMenu, PrintButton, useTableState, visibleTableModel } from './LiftPanel.tsx'
 import { buildResultsJpg } from './export-jpg.ts'
 import { buildResultsPdf, loadPdfFonts } from './export-pdf.ts'
@@ -28,6 +29,7 @@ export function PublicResults({
   readonly definition: ContestDefinition
 }) {
   const { lt, locale } = useLegacy()
+  const scroller = useFillHeight<HTMLDivElement>()
   const [tab, setTab] = useState<'individual' | 'team'>('individual')
   const [filters, setFilters] = useState<Filters>(noFilters)
   const [liftId, setLiftId] = useState<string>(state.rulebook.lifts[0]?.id ?? 'ALL')
@@ -140,7 +142,7 @@ export function PublicResults({
                 />
               </div>
             </div>
-            <div className="max-h-[calc(100vh-8rem)] overflow-auto border border-border-color">
+            <div ref={scroller} className="overflow-auto border border-border-color">
               <ContestTable
                 state={state}
                 rows={rows}

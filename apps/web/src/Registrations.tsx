@@ -7,6 +7,7 @@ import { buildRows, filterOptions, matches, sortRows, type TableRow } from './co
 import { ImportPanel, TeamsPanel } from './EntriesPanel.tsx'
 import { FilterBar } from './FilterBar.tsx'
 import { useLegacy } from './legacy-i18n.ts'
+import { useFillHeight } from './fill-height.ts'
 import { buildResultsJpg } from './export-jpg.ts'
 import { buildResultsPdf, loadPdfFonts } from './export-pdf.ts'
 import { ExportMenu, PrintButton, useTableState } from './LiftPanel.tsx'
@@ -73,6 +74,7 @@ export function Registrations({
   readonly onEdit: (entryId: Option.Option<string>) => void
 }) {
   const { lt, locale } = useLegacy()
+  const scroller = useFillHeight<HTMLDivElement>()
   const { filters, setFilters, sort, onSortChange } = useTableState('registrations')
   const [panel, setPanel] = useState<'none' | 'import' | 'teams'>('none')
   const toggle = (next: 'import' | 'teams') => setPanel(panel === next ? 'none' : next)
@@ -164,7 +166,7 @@ export function Registrations({
           {lt('contest_detail.registrations.empty_filter')}
         </div>
       ) : (
-        <div className="max-h-[calc(100vh-9.5rem)] overflow-auto border border-border-color">
+        <div ref={scroller} className="overflow-auto border border-border-color">
           <ContestTable
             state={state}
             rows={rows}

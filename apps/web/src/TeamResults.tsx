@@ -14,6 +14,7 @@ import { useState } from 'react'
 import { buildResultsJpg } from './export-jpg.ts'
 import { buildResultsPdf, loadPdfFonts } from './export-pdf.ts'
 import { useLegacy } from './legacy-i18n.ts'
+import { useFillHeight } from './fill-height.ts'
 import { ExportMenu, PrintButton } from './LiftPanel.tsx'
 import { downloadBlob, fileSlug, printTables, tablesToCsv, tablesToXlsx } from './table-export.ts'
 
@@ -185,6 +186,7 @@ export function TeamResults({
   readonly contestName: string
 }) {
   const { lt, locale } = useLegacy()
+  const scroller = useFillHeight<HTMLDivElement>()
   const rankings = teamRankings(state)
   const [selected, setSelected] = useState(0)
   const ranking = rankings[selected] ?? rankings[0]
@@ -258,7 +260,7 @@ export function TeamResults({
           {lt('contest_detail.team_results.empty')}
         </p>
       ) : (
-        <div className="max-h-[calc(100vh-9.5rem)] overflow-auto border border-border-color">
+        <div ref={scroller} className="overflow-auto border border-border-color">
           <table className="w-full border-collapse text-sm">
             <thead className="sticky top-0 z-10 bg-element-bg text-label">
               <tr>
