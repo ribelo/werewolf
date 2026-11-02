@@ -434,12 +434,7 @@ export function currentAttempt(state: ContestState): Option.Option<LiveAttempt> 
   if (Option.isSome(state.selected)) {
     const selected = state.selected.value
     const attempt = state.attempts.find((item) => sameAttempt(item, selected))
-    if (
-      attempt &&
-      attempt._tag !== 'Unannounced' &&
-      !isDidNotStart(state, attempt.entryId, attempt.liftId)
-    )
-      return Option.some(attempt)
+    if (attempt && attempt._tag !== 'Unannounced') return Option.some(attempt)
   }
   const next = liftingOrder(state)[0]
   return next ? Option.some(next) : Option.none()
@@ -724,7 +719,9 @@ function applyMutation(
       })
     }
     case 'SetCurrent': {
-      if (!liftingOrder(state).some((attempt) => sameAttempt(attempt, command.attempt)))
+      // The desk may put any attempt live at any time, judged or not; it needs only a weight.
+      const target = state.attempts.find((attempt) => sameAttempt(attempt, command.attempt))
+      if (!target || target._tag === 'Unannounced')
         return Result.fail(
           new AttemptUnavailable({ attempt: command.attempt, reason: 'notPending' }),
         )

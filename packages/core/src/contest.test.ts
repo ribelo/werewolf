@@ -399,6 +399,23 @@ describe('portable contest core', () => {
     ).toMatchObject({ _tag: 'Failure', failure: { _tag: 'UnloadableWeight' } })
   })
 
+  it('ww-u0ni puts a judged attempt live again, but not one without a weight', () => {
+    const judged = [
+      add('a', 1),
+      add('b', 2),
+      command({ id: 'judge-a', _tag: 'SetVerdict', attempt: ref('a'), verdict: 'goodLift' }),
+      command({ id: 'live-b', _tag: 'SetCurrent', attempt: ref('b') }),
+      command({ id: 'live-a', _tag: 'SetCurrent', attempt: ref('a') }),
+    ]
+    expect(Option.getOrThrow(currentAttempt(state(judged))).entryId).toBe('a')
+    expect(
+      replay(book(), date, [
+        add('a', 1),
+        command({ id: 'x', _tag: 'SetCurrent', attempt: ref('a', 'upper', 2) }),
+      ]),
+    ).toMatchObject({ _tag: 'Failure', failure: { _tag: 'AttemptUnavailable' } })
+  })
+
   it('ww-lcu1 takes a declared weight back, but not a judged one', () => {
     const declared = [
       add('a', 1),

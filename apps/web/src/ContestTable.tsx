@@ -101,7 +101,8 @@ function AttemptCell({
   const Icon = statusIcon[status]
   const statusLabel = lt('attempt.status.' + status)
   const declared = attempt._tag !== 'Unannounced'
-  const liveDisabled = live || !declared || attempt._tag === 'Judged'
+  // Any attempt with a weight can go live, judged or not; only the live one and an empty one cannot.
+  const liveDisabled = live || !declared
   const liveClass = live
     ? LIVE_BUTTON_BASE + ' border-primary-red bg-primary-red/20 text-primary-red shadow-glow'
     : liveDisabled
