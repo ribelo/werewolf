@@ -468,7 +468,7 @@
       },
       "liftIds": ["bench", "deadlift"],
       "result": "best",
-      "formula": "reshel",
+      "formula": "reshelMcCullough",
       "quota": {
         "kind": "any",
         "count": 5
@@ -488,7 +488,7 @@
       },
       "liftIds": ["bench", "deadlift"],
       "result": "best",
-      "formula": "reshel",
+      "formula": "reshelMcCullough",
       "quota": {
         "kind": "any",
         "count": 5
@@ -508,7 +508,7 @@
       },
       "liftIds": ["bench"],
       "result": "best",
-      "formula": "reshel",
+      "formula": "reshelMcCullough",
       "quota": {
         "kind": "bySex",
         "male": 4,
@@ -528,7 +528,7 @@
       },
       "liftIds": ["deadlift"],
       "result": "best",
-      "formula": "reshel",
+      "formula": "reshelMcCullough",
       "quota": {
         "kind": "bySex",
         "male": 4,
@@ -547,7 +547,7 @@
       },
       "liftIds": ["bench", "deadlift"],
       "result": "best",
-      "formula": "reshel",
+      "formula": "reshelMcCullough",
       "ageClassIds": ["t16", "t19"],
       "kind": "team",
       "quota": {
