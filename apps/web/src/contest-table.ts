@@ -283,7 +283,9 @@ export function sortRows(
       if (cmp !== 0 && Number.isFinite(cmp)) return cmp
       if (weight(a) !== weight(b))
         return weight(a) === Number.NEGATIVE_INFINITY ? -modifier : modifier
-      return liftMaxTieBreak(a, b, direction, liftId)
+      // Equal weights keep the lot order: a verdict must not move a row in a weight column.
+      const lot = (order.get(a.entry.id) ?? 0) - (order.get(b.entry.id) ?? 0)
+      return lot || byName(a, b)
     }
     switch (column) {
       case 'name':
