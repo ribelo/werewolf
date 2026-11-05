@@ -14,7 +14,7 @@
     "@tailwindcss/vite": "4.3.3",
     "@werewolf/core": "workspace:*",
     "@werewolf/sync": "workspace:*",
-    "effect": "4.0.1",
+    "effect": "4.1.1",
     "html-to-image": "1.11.13",
     "jspdf": "4.2.1",
     "jspdf-autotable": "5.0.8",

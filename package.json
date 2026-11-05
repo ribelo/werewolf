@@ -24,20 +24,21 @@
     "cloudflare-login": "ALCHEMY_HOME=${ALCHEMY_HOME:-$HOME/.alchemy-werewolf} ALCHEMY_PROFILE=${ALCHEMY_PROFILE:-werewolf} alchemy profile edit --profile ${ALCHEMY_PROFILE:-werewolf} --add Cloudflare"
   },
   "dependencies": {
-    "effect": "4.0.1"
+    "effect": "4.1.1"
   },
   "devDependencies": {
+    "@alchemy.run/cloudflare": "2.0.0-beta.85",
     "@cloudflare/vitest-plugin": "1.3.6",
     "@cloudflare/workers-types": "5.20261006.1",
     "@effect/language-service": "0.87.4",
-    "@effect/platform-bun": "4.0.1",
-    "@effect/platform-node": "4.0.1",
+    "@effect/platform-bun": "4.1.1",
+    "@effect/platform-node": "4.1.1",
     "@effect/tsgo": "0.50.0",
     "@types/bun": "latest",
     "@types/node": "^24.19.1",
     "@werewolf/core": "workspace:*",
     "@werewolf/sync": "workspace:*",
-    "alchemy": "2.0.0-beta.81",
+    "alchemy": "2.0.0-beta.85",
     "knip": "6.12.2",
     "oxfmt": "latest",
     "oxlint": "1.56.0",
