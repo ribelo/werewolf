@@ -7,7 +7,7 @@
  * physical resources even if a declaration is ever removed from this file.
  */
 import * as Alchemy from 'alchemy'
-import * as Cloudflare from 'alchemy/Cloudflare'
+import * as Cloudflare from '@alchemy.run/cloudflare'
 import * as Command from 'alchemy/Command'
 import * as Config from 'effect/Config'
 import * as Effect from 'effect/Effect'
